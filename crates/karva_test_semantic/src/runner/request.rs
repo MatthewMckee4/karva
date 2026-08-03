@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyAttributeError, PyModuleNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple, PyType};
 
@@ -100,32 +100,12 @@ impl RequestState {
         parameter_id: Option<&str>,
     ) -> PyResult<()> {
         let path = test.name().module_path().path().as_str();
-        let package_path = std::path::Path::new(path)
+        let absolute_module_path = self.absolute_path(path);
+        let package_path = std::path::Path::new(&absolute_module_path)
             .parent()
-            .unwrap_or_else(|| std::path::Path::new(path))
-            .to_string_lossy()
-            .into_owned();
-        if !self.package_nodes.contains_key(&package_path) {
-            let absolute_path = self.absolute_path(&package_path);
-            let name = std::path::Path::new(&absolute_path)
-                .file_name()
-                .and_then(std::ffi::OsStr::to_str)
-                .unwrap_or_default()
-                .to_string();
-            let node = request_node(
-                py,
-                name.clone(),
-                name,
-                package_path.clone(),
-                python_path(py, &absolute_path)?,
-                self.config.clone_ref(py),
-                self.session.clone_ref(py),
-                Vec::new(),
-                None,
-                Some(self.session_node.clone_ref(py)),
-            )?;
-            self.package_nodes.insert(package_path.clone(), node);
-        }
+            .unwrap_or_else(|| std::path::Path::new(&self.root_path))
+            .to_path_buf();
+        let package_node = self.ensure_package_node(py, &package_path)?;
 
         if !self.module_nodes.contains_key(path) {
             let module = py.import(test.name().module_path().module_name())?;
@@ -136,21 +116,17 @@ impl RequestState {
                 .and_then(std::ffi::OsStr::to_str)
                 .unwrap_or_default()
                 .to_string();
-            let parent = self
-                .package_nodes
-                .get(&package_path)
-                .map(|node| node.clone_ref(py));
             let node = request_node(
                 py,
                 name.clone(),
                 name,
                 path.to_string(),
-                python_path(py, &self.absolute_path(path))?,
+                python_path(py, &absolute_module_path)?,
                 self.config.clone_ref(py),
                 self.session.clone_ref(py),
                 markers,
                 Some(globals),
-                parent,
+                Some(package_node),
             )?;
             self.module_nodes.insert(path.to_string(), node);
         }
@@ -200,6 +176,75 @@ impl RequestState {
         }
     }
 
+    fn ensure_package_node(
+        &mut self,
+        py: Python<'_>,
+        path: &std::path::Path,
+    ) -> PyResult<Py<RequestNode>> {
+        let key = path.to_string_lossy().into_owned();
+        if let Some(node) = self.package_nodes.get(&key) {
+            return Ok(node.clone_ref(py));
+        }
+
+        let root = std::path::PathBuf::from(&self.root_path);
+        let parent = if path != root && path.starts_with(&root) {
+            match path.parent() {
+                Some(parent) if parent.starts_with(&root) => {
+                    Some(self.ensure_package_node(py, parent)?)
+                }
+                _ => Some(self.session_node.clone_ref(py)),
+            }
+        } else {
+            Some(self.session_node.clone_ref(py))
+        };
+        let name = path
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .unwrap_or_default()
+            .to_string();
+        let node_id = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        let node = request_node(
+            py,
+            name.clone(),
+            name,
+            node_id,
+            python_path(py, &key)?,
+            self.config.clone_ref(py),
+            self.session.clone_ref(py),
+            Vec::new(),
+            None,
+            parent,
+        )?;
+        self.package_nodes.insert(key, node.clone_ref(py));
+        Ok(node)
+    }
+
+    fn package_node(
+        &self,
+        py: Python<'_>,
+        package_owner: &std::path::Path,
+    ) -> PyResult<Py<RequestNode>> {
+        let key = if package_owner.is_absolute() {
+            package_owner.to_string_lossy().into_owned()
+        } else {
+            self.absolute_path(&package_owner.to_string_lossy())
+        };
+        self.package_nodes.get(&key).map_or_else(
+            || {
+                Err(PyValueError::new_err(format!(
+                    "request package {key:?} missing"
+                )))
+            },
+            |node| Ok(node.clone_ref(py)),
+        )
+    }
+
     fn nodes(
         &self,
         py: Python<'_>,
@@ -212,10 +257,6 @@ impl RequestState {
             |parameter_id| format!("{test_name}[{parameter_id}]"),
         );
         let node_id = format!("{path}::{test_node_name}");
-        let package_path = std::path::Path::new(path)
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new(path))
-            .to_string_lossy();
         Ok(RequestNodes {
             function: self
                 .item_nodes
@@ -227,14 +268,6 @@ impl RequestState {
                 .get(path)
                 .ok_or_else(|| PyValueError::new_err(format!("request module {path:?} missing")))?
                 .clone_ref(py),
-            package: self
-                .package_nodes
-                .get(package_path.as_ref())
-                .ok_or_else(|| {
-                    PyValueError::new_err(format!("request package {package_path:?} missing"))
-                })?
-                .clone_ref(py),
-            session: self.session_node.clone_ref(py),
         })
     }
 
@@ -258,8 +291,6 @@ impl RequestState {
 struct RequestNodes {
     function: Py<RequestNode>,
     module: Py<RequestNode>,
-    package: Py<RequestNode>,
-    session: Py<RequestNode>,
 }
 
 /// Failure returned by runtime fixture lookup before Python exception conversion.
@@ -292,8 +323,7 @@ pub(super) struct RequestContext {
     function: Py<PyAny>,
     instance: Py<PyAny>,
     module: Py<PyAny>,
-    config: Py<RequestConfig>,
-    session: Py<RequestSession>,
+    state: Rc<RequestState>,
     fixture_names: RefCell<Vec<String>>,
     nodes: RequestNodes,
     node_id: String,
@@ -310,7 +340,7 @@ pub(super) struct RequestMetadata<'a> {
 impl RequestContext {
     pub(super) fn new(
         py: Python<'_>,
-        state: &RequestState,
+        state: Rc<RequestState>,
         function: Py<PyAny>,
         metadata: RequestMetadata<'_>,
     ) -> PyResult<Self> {
@@ -333,8 +363,7 @@ impl RequestContext {
             function,
             instance: py.None(),
             module,
-            config: state.config.clone_ref(py),
-            session: state.session.clone_ref(py),
+            state,
             fixture_names: RefCell::new(fixture_names),
             nodes,
             node_id,
@@ -352,12 +381,22 @@ impl RequestContext {
         self.nodes.function.borrow(py).all_applied_tags(py)
     }
 
-    fn node(&self, py: Python<'_>, scope: FixtureScope) -> Py<RequestNode> {
+    fn node(
+        &self,
+        py: Python<'_>,
+        scope: FixtureScope,
+        package_owner: Option<&std::path::Path>,
+    ) -> PyResult<Py<RequestNode>> {
         match scope {
-            FixtureScope::Function => self.nodes.function.clone_ref(py),
-            FixtureScope::Module => self.nodes.module.clone_ref(py),
-            FixtureScope::Package => self.nodes.package.clone_ref(py),
-            FixtureScope::Session => self.nodes.session.clone_ref(py),
+            FixtureScope::Function => Ok(self.nodes.function.clone_ref(py)),
+            FixtureScope::Module => Ok(self.nodes.module.clone_ref(py)),
+            FixtureScope::Package => self.state.package_node(
+                py,
+                package_owner.ok_or_else(|| {
+                    PyValueError::new_err("package-scoped request missing its package owner")
+                })?,
+            ),
+            FixtureScope::Session => Ok(self.state.session_node.clone_ref(py)),
         }
     }
 }
@@ -371,15 +410,15 @@ fn python_path(py: Python<'_>, path: &str) -> PyResult<Py<PyAny>> {
 
 fn object_markers(py: Python<'_>, object: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
     match object.getattr("pytestmark") {
-        Ok(markers) => {
-            if let Ok(markers) = markers.try_iter() {
-                markers
-                    .map(|marker| marker.and_then(|marker| normalize_marker(py, &marker)))
-                    .collect()
-            } else {
+        Ok(markers) => match markers.try_iter() {
+            Ok(markers) => markers
+                .map(|marker| marker.and_then(|marker| normalize_marker(py, &marker)))
+                .collect(),
+            Err(error) if error.is_instance_of::<PyTypeError>(py) => {
                 Ok(vec![normalize_marker(py, &markers)?])
             }
-        }
+            Err(error) => Err(error),
+        },
         Err(error) if error.is_instance_of::<PyAttributeError>(py) => Ok(Vec::new()),
         Err(error) => Err(error),
     }
@@ -794,10 +833,11 @@ fn normalize_marker(py: Python<'_>, marker: &Bound<'_, PyAny>) -> PyResult<Py<Py
             .getattr("mark")
             .map(Bound::unbind);
     }
-    marker
-        .getattr("mark")
-        .map(Bound::unbind)
-        .or_else(|_| Ok(marker.clone().unbind()))
+    match marker.getattr("mark") {
+        Ok(marker) => Ok(marker.unbind()),
+        Err(error) if error.is_instance_of::<PyAttributeError>(py) => Ok(marker.clone().unbind()),
+        Err(error) => Err(error),
+    }
 }
 
 fn marker_name(py: Python<'_>, marker: &Py<PyAny>) -> PyResult<String> {
@@ -824,11 +864,12 @@ impl FixtureRequest {
         runtime: RequestRuntime,
         fixture_name: Option<String>,
         scope: FixtureScope,
+        package_owner: Option<&std::path::Path>,
         param: Option<Py<PyAny>>,
         param_index: Option<usize>,
-    ) -> Self {
-        let node = context.node(py, scope);
-        Self {
+    ) -> PyResult<Self> {
+        let node = context.node(py, scope, package_owner)?;
+        Ok(Self {
             context,
             runtime,
             fixture_name,
@@ -837,13 +878,15 @@ impl FixtureRequest {
             param_index,
             node,
             fixture_stack: PyList::empty(py).unbind(),
-        }
+        })
     }
 }
 
 fn register_with_pytest(py: Python<'_>) -> PyResult<()> {
-    let Ok(pytest) = py.import("pytest") else {
-        return Ok(());
+    let pytest = match py.import("pytest") {
+        Ok(pytest) => pytest,
+        Err(error) if error.is_instance_of::<PyModuleNotFoundError>(py) => return Ok(()),
+        Err(error) => return Err(error),
     };
     pytest
         .getattr("FixtureRequest")?
@@ -889,7 +932,7 @@ impl FixtureRequest {
 
     #[getter]
     fn config(&self, py: Python<'_>) -> Py<RequestConfig> {
-        self.context.config.clone_ref(py)
+        self.context.state.config.clone_ref(py)
     }
 
     #[getter]
@@ -937,7 +980,7 @@ impl FixtureRequest {
                 "path not available in session-scoped context",
             ));
         }
-        Ok(self.node.borrow(py).path.clone_ref(py))
+        Ok(self.context.nodes.function.borrow(py).path.clone_ref(py))
     }
 
     #[getter]
@@ -947,7 +990,7 @@ impl FixtureRequest {
 
     #[getter]
     fn session(&self, py: Python<'_>) -> Py<RequestSession> {
-        self.context.session.clone_ref(py)
+        self.context.state.session.clone_ref(py)
     }
 
     fn addfinalizer(&self, py: Python<'_>, finalizer: Py<PyAny>) -> PyResult<()> {

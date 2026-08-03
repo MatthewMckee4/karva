@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{FixtureId, FixturePlan, FixtureScope};
 use crate::extensions::tags::parametrize::{
-    ParameterMetadata, ParameterPlan, ParameterPlanIterator, ParametrizationArgs, ScopedParameter,
+    ParameterPlan, ParameterPlanIterator, ParametrizationArgs, ScopedParameter,
     make_unique_parametrize_ids,
 };
 use crate::extensions::tags::{CompiledTags, RuntimeTags};
@@ -37,11 +37,8 @@ pub(super) struct TestVariant<'a> {
     /// caller can unwrap without a Python refcount bump.
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
 
-    /// Parameter values consumed by fixture `request.param` objects.
-    pub(super) fixture_params: HashMap<String, FixtureParameter>,
-
-    /// High-scope parameter cases used only when collection needs reordering.
-    pub(super) scoped_params: Option<Box<ScopedParameters>>,
+    /// Fixture-only parameter state, boxed off ordinary variants.
+    pub(super) fixture_metadata: Option<Box<FixtureVariantMetadata>>,
 
     /// Display and collection identity, boxed off unparametrized variants.
     pub(super) identity: Option<Box<ParameterIdentity>>,
@@ -70,8 +67,14 @@ pub(super) struct FixtureParameter {
     pub(super) scope: Option<FixtureScope>,
 }
 
-/// High-scope cases boxed off the ordinary variant execution path.
-pub(super) struct ScopedParameters(Vec<(String, ScopedParameter)>);
+/// Parameter routing and scheduling state used only by fixture-aware variants.
+pub(super) struct FixtureVariantMetadata {
+    /// Values consumed by fixture `request.param` objects.
+    pub(super) parameters: Option<Rc<HashMap<String, FixtureParameter>>>,
+
+    /// High-scope parameter cases used only when collection needs reordering.
+    pub(super) scoped: Vec<(String, ScopedParameter)>,
+}
 
 /// Parameter identity required by reporting and pytest collection nodes.
 pub(super) struct ParameterIdentity {
@@ -229,7 +232,7 @@ impl CompiledTestPlan {
             if indirectly_parametrized.contains(&fixture_id) {
                 continue;
             }
-            let Some(fixture_parameters) = fixture.parameters() else {
+            let Some(fixture_parameters) = fixture_plan.parameters(fixture_id) else {
                 continue;
             };
             let name = fixture.name().to_string();
@@ -310,10 +313,10 @@ pub(super) fn reorder_variant_ref_indices(variants: &[&TestVariant<'_>]) -> Vec<
         std::array::from_fn(|_| HashMap::new());
 
     for (item, variant) in variants.iter().copied().enumerate() {
-        let Some(parameters) = variant.scoped_params.as_deref() else {
+        let Some(metadata) = variant.fixture_metadata.as_deref() else {
             continue;
         };
-        for (name, parameter) in &parameters.0 {
+        for (name, parameter) in &metadata.scoped {
             let Some(scope_index) = HIGH_SCOPES
                 .iter()
                 .position(|scope| *scope == parameter.scope)
@@ -444,7 +447,7 @@ impl<'a> Iterator for TestVariantIterator<'a> {
     type Item = TestVariant<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let param_args = self.param_args.next()?;
+        let mut param_args = self.param_args.next()?;
         let identity = param_args.node_id().map(|node| {
             Box::new(ParameterIdentity {
                 display: param_args.id().map(str::to_string),
@@ -452,27 +455,22 @@ impl<'a> Iterator for TestVariantIterator<'a> {
             })
         });
 
+        let parameter_metadata = param_args.take_metadata();
         let mut params = param_args.values;
-        let (indirect_parameters, scoped_params) = param_args.metadata.map_or_else(
-            || (None, None),
-            |metadata| {
-                let ParameterMetadata { indirect, scoped } = *metadata;
-                (
-                    Some(indirect),
-                    (!scoped.is_empty()).then(|| Box::new(ScopedParameters(scoped))),
-                )
-            },
-        );
         let mut fixture_params = HashMap::new();
-        for (indirect_name, indirect_parameter) in indirect_parameters.into_iter().flatten() {
+        for (indirect_name, indirect_parameter) in parameter_metadata
+            .as_ref()
+            .into_iter()
+            .flat_map(|metadata| &metadata.indirect)
+        {
             let fixture_name = self
                 .fixture_plan
-                .dynamic_fixture(&indirect_name)
+                .dynamic_fixture(indirect_name)
                 .map_or_else(
                     || indirect_name.clone(),
                     |fixture_id| self.fixture_plan.fixture(fixture_id).name().to_string(),
                 );
-            if let Some(value) = params.remove(&indirect_name) {
+            if let Some(value) = params.remove(indirect_name) {
                 fixture_params.insert(
                     fixture_name,
                     FixtureParameter {
@@ -483,6 +481,12 @@ impl<'a> Iterator for TestVariantIterator<'a> {
                 );
             }
         }
+        let fixture_metadata = parameter_metadata.map(|metadata| {
+            Box::new(FixtureVariantMetadata {
+                parameters: (!fixture_params.is_empty()).then(|| Rc::new(fixture_params)),
+                scoped: metadata.scoped,
+            })
+        });
 
         let mut tags = self.runtime_tags.clone();
         tags.extend(&param_args.tags);
@@ -491,8 +495,7 @@ impl<'a> Iterator for TestVariantIterator<'a> {
             test: self.test,
             identity,
             params,
-            fixture_params,
-            scoped_params,
+            fixture_metadata,
             fixture_plan: Rc::clone(&self.fixture_plan),
             fixture_dependencies: Rc::clone(&self.fixture_dependencies),
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),

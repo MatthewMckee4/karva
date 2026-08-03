@@ -29,13 +29,14 @@ impl FixtureId {
 #[derive(Debug)]
 pub struct FixturePlan {
     fixtures: Vec<NormalizedFixture>,
-    dynamic: Option<Box<DynamicFixturePlan>>,
+    metadata: Option<Box<FixturePlanMetadata>>,
 }
 
-/// Runtime-only fixture lookup data omitted from ordinary test plans.
+/// Fixture parameter and runtime lookup data omitted from ordinary test plans.
 #[derive(Debug)]
-struct DynamicFixturePlan {
-    fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
+struct FixturePlanMetadata {
+    dynamic_fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
+    parameterizations: std::collections::HashMap<FixtureId, Option<Box<[Parametrization]>>>,
     variant_fixture_count: usize,
 }
 
@@ -43,16 +44,20 @@ impl FixturePlan {
     pub(crate) fn new(
         fixtures: Vec<NormalizedFixture>,
         dynamic_fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
+        parameterizations: std::collections::HashMap<FixtureId, Option<Box<[Parametrization]>>>,
         variant_fixture_count: usize,
     ) -> Self {
-        let dynamic = (variant_fixture_count < fixtures.len() || !dynamic_fixtures.is_empty())
-            .then(|| {
-                Box::new(DynamicFixturePlan {
-                    fixtures: dynamic_fixtures,
-                    variant_fixture_count,
-                })
-            });
-        Self { fixtures, dynamic }
+        let metadata = (variant_fixture_count < fixtures.len()
+            || !dynamic_fixtures.is_empty()
+            || !parameterizations.is_empty())
+        .then(|| {
+            Box::new(FixturePlanMetadata {
+                dynamic_fixtures,
+                parameterizations,
+                variant_fixture_count,
+            })
+        });
+        Self { fixtures, metadata }
     }
 
     pub(crate) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
@@ -60,7 +65,12 @@ impl FixturePlan {
     }
 
     pub(crate) fn dynamic_fixture(&self, name: &str) -> Option<FixtureId> {
-        self.dynamic.as_ref()?.fixtures.get(name)?.first().copied()
+        self.metadata
+            .as_ref()?
+            .dynamic_fixtures
+            .get(name)?
+            .first()
+            .copied()
     }
 
     /// Resolves a dynamic name, advancing through an overridden fixture chain.
@@ -69,7 +79,7 @@ impl FixturePlan {
         name: &str,
         requesting_fixture: Option<FixtureId>,
     ) -> Option<FixtureId> {
-        let fixtures = self.dynamic.as_ref()?.fixtures.get(name)?;
+        let fixtures = self.metadata.as_ref()?.dynamic_fixtures.get(name)?;
         let Some(requesting_fixture) = requesting_fixture else {
             return fixtures.first().copied();
         };
@@ -84,9 +94,11 @@ impl FixturePlan {
     }
 
     fn variant_fixture_count(&self) -> usize {
-        self.dynamic
+        self.metadata
             .as_ref()
-            .map_or(self.fixtures.len(), |dynamic| dynamic.variant_fixture_count)
+            .map_or(self.fixtures.len(), |metadata| {
+                metadata.variant_fixture_count
+            })
     }
 
     pub(crate) fn variant_fixtures(&self) -> impl Iterator<Item = (FixtureId, &NormalizedFixture)> {
@@ -108,9 +120,17 @@ impl FixturePlan {
             .any(NormalizedFixture::requests_request)
     }
 
+    pub(crate) fn parameters(&self, id: FixtureId) -> Option<&[Parametrization]> {
+        self.metadata
+            .as_ref()?
+            .parameterizations
+            .get(&id)?
+            .as_deref()
+    }
+
     pub(crate) fn requires_variant_execution(&self, id: FixtureId) -> bool {
         let fixture = self.fixture(id);
-        fixture.parameters().is_some()
+        self.parameters(id).is_some()
             || fixture.requests_request()
             || fixture
                 .dependencies()
@@ -143,12 +163,6 @@ pub struct NormalizedFixture {
 
     /// Reference to the Python callable that produces the fixture value.
     pub(crate) py_function: Py<PyAny>,
-
-    /// Parameter values declared by the fixture decorator.
-    pub(crate) parameters: Option<Box<[Parametrization]>>,
-
-    /// Whether this fixture's cache identity depends on fixture parameters.
-    pub(crate) is_parameterized: bool,
 }
 
 impl NormalizedFixture {
@@ -173,14 +187,6 @@ impl NormalizedFixture {
     /// Returns the fixture scope.
     pub(crate) fn scope(&self) -> FixtureScope {
         self.scope
-    }
-
-    pub(crate) fn parameters(&self) -> Option<&[Parametrization]> {
-        self.parameters.as_deref()
-    }
-
-    pub(crate) fn is_parameterized(&self) -> bool {
-        self.is_parameterized
     }
 
     pub(crate) fn requests_request(&self) -> bool {

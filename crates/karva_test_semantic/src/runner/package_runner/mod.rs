@@ -73,7 +73,7 @@ pub struct PackageRunner<'context, 'settings> {
     /// Fixture finalizers retained until their declared scope completes.
     finalizer_cache: Rc<RefCell<FinalizerCache>>,
     /// Shared request collection state, allocated only when one test uses it.
-    request_state: Option<Box<Result<RefCell<RequestState>, String>>>,
+    request_state: Option<Box<Result<Rc<RequestState>, String>>>,
     /// Active coverage session for this worker, when coverage is enabled.
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
@@ -335,7 +335,6 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let reorder_error = self.request_state.as_ref().and_then(|state| {
             state.as_ref().as_ref().ok().and_then(|state| {
                 state
-                    .borrow()
                     .reorder_items(
                         py,
                         order
@@ -472,7 +471,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 )
                 .and_then(|mut state| {
                     Self::add_request_items(py, session, &test_plans, &mut state)?;
-                    Ok(RefCell::new(state))
+                    Ok(Rc::new(state))
                 })
                 .map_err(|error| error.to_string()),
             ));

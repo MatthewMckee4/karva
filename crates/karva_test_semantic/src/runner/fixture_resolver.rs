@@ -12,6 +12,7 @@ use crate::extensions::fixtures::{
     DiscoveredFixture, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
     RejectedFixture, RequiresFixtures, get_auto_use_fixtures,
 };
+use crate::extensions::tags::parametrize::Parametrization;
 
 /// Compiles fixture lookup results into an arena for one request context.
 ///
@@ -33,6 +34,9 @@ pub(super) struct FixturePlanCompiler<'a> {
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
+
+    /// Parameter state keyed by fixtures whose cache identity is parameterized.
+    parameterizations: HashMap<FixtureId, Option<Box<[Parametrization]>>>,
 
     /// Runtime lookup table for `request.getfixturevalue(...)`.
     dynamic_fixtures: HashMap<String, Vec<FixtureId>>,
@@ -176,6 +180,7 @@ impl<'a> FixturePlanCompiler<'a> {
             current_package,
             fixture_ids: HashMap::new(),
             fixtures: Vec::new(),
+            parameterizations: HashMap::new(),
             dynamic_fixtures: HashMap::new(),
             variant_fixture_count: None,
             deferred_scope_validation: None,
@@ -206,7 +211,12 @@ impl<'a> FixturePlanCompiler<'a> {
     /// Finishes the immutable arena after all requested root groups are compiled.
     pub(super) fn finish(self) -> FixturePlan {
         let variant_fixture_count = self.variant_fixture_count.unwrap_or(self.fixtures.len());
-        FixturePlan::new(self.fixtures, self.dynamic_fixtures, variant_fixture_count)
+        FixturePlan::new(
+            self.fixtures,
+            self.dynamic_fixtures,
+            self.parameterizations,
+            variant_fixture_count,
+        )
     }
 
     pub(super) fn uses_request(&self) -> bool {
@@ -253,7 +263,7 @@ impl<'a> FixturePlanCompiler<'a> {
         let is_parameterized = parameters.is_some()
             || dependent_fixtures
                 .iter()
-                .any(|dependency| self.fixtures[dependency.index()].is_parameterized());
+                .any(|dependency| self.parameterizations.contains_key(dependency));
 
         let result = NormalizedFixture {
             definition: Rc::clone(fixture.definition()),
@@ -262,11 +272,12 @@ impl<'a> FixturePlanCompiler<'a> {
             package_owner: self.package_owner(fixture).to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
-            parameters,
-            is_parameterized,
         };
 
         let fixture_id = FixtureId::new(self.fixtures.len());
+        if is_parameterized {
+            self.parameterizations.insert(fixture_id, parameters);
+        }
         self.fixtures.push(result);
         self.fixture_ids.insert(cache_key, fixture_id);
 
@@ -310,7 +321,7 @@ impl<'a> FixturePlanCompiler<'a> {
 
     fn requires_variant_execution(&self, fixture_id: FixtureId) -> bool {
         let fixture = &self.fixtures[fixture_id.index()];
-        fixture.parameters().is_some()
+        self.parameterizations.contains_key(&fixture_id)
             || fixture.requests_request()
             || fixture
                 .dependencies()

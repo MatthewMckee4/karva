@@ -133,6 +133,23 @@ impl FixtureCache {
             .insert(dependent);
     }
 
+    /// Returns whether an active fixture cache key includes one parameter.
+    pub(super) fn uses_parameter(
+        &self,
+        fixture: &str,
+        parameter: &str,
+        scope: ScopeKey<'_>,
+    ) -> bool {
+        self.storage
+            .with(scope, |values| {
+                values
+                    .get(fixture)
+                    .and_then(|cached| cached.key.as_ref())
+                    .is_some_and(|key| key.parameters.iter().any(|(name, _)| name == parameter))
+            })
+            .is_some_and(|uses_parameter| uses_parameter)
+    }
+
     /// Returns active fixture definitions that depend on `fixture`.
     pub(super) fn dependents(&self, fixture: &str) -> Vec<String> {
         self.dependents

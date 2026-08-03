@@ -692,6 +692,51 @@ def test_scoped_marker_persists(module_context, request):
 }
 
 #[test]
+fn package_requests_use_the_defining_package_node() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import pytest
+
+
+@pytest.fixture(scope="package")
+def package_context(request):
+    assert request.node.path == request.config.rootpath
+    assert request.path.name == "test_request.py"
+    return request.node
+"#,
+        ),
+        (
+            "nested/test_request.py",
+            r#"
+def test_context(package_context, request):
+    module = request.node.parent
+    nested_package = module.parent
+    root_package = nested_package.parent
+
+    assert module.name == "test_request.py"
+    assert nested_package.name == "nested"
+    assert root_package is package_context
+    assert root_package.parent.nodeid == ""
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] nested.test_request::test_context(package_context=<Node >, request)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn indirect_parametrization_supports_scope_and_autouse_fixtures() {
     let context = TestContext::with_file(
         "test_request.py",
@@ -992,6 +1037,70 @@ def test_second(value, request):
             PASS [TIME] test_request::test_second(value=1, request)
             PASS [TIME] test_request::test_first(value=2, request)
             PASS [TIME] test_request::test_second(value=2, request)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn dynamic_lookup_returns_direct_parameters_and_tracks_their_scope() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture
+def value():
+    raise AssertionError("direct parametrization must shadow this fixture")
+
+
+@pytest.fixture(scope="module")
+def observed(request):
+    value = request.getfixturevalue("value")
+    events.append(f"setup {value}")
+    yield value
+    events.append(f"teardown {value}")
+
+
+@pytest.mark.parametrize("value", [1, 2], scope="module")
+def test_first(value, observed, request):
+    assert request.getfixturevalue("value") is value
+    assert observed == value
+    events.append(f"first {value}")
+
+
+@pytest.mark.parametrize("value", [1, 2], scope="module")
+def test_second(value, observed):
+    assert observed == value
+    events.append(f"second {value}")
+    if value == 2:
+        assert events == [
+            "setup 1",
+            "first 1",
+            "second 1",
+            "teardown 1",
+            "setup 2",
+            "first 2",
+            "second 2",
+        ]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_first(value=1, observed=1, request)
+            PASS [TIME] test_request::test_second(value=1, observed=1)
+            PASS [TIME] test_request::test_first(value=2, observed=2, request)
+            PASS [TIME] test_request::test_second(value=2, observed=2)
     ────────────
          Summary [TIME] 4 tests run: 4 passed, 0 skipped
 

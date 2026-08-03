@@ -277,7 +277,9 @@ jobs:
           cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-reports" \
             --output-markdown "${RUNNER_TEMP}/benchmark-report.md" \
-            --output-diagnostics-markdown "${RUNNER_TEMP}/diagnostic-report.md"
+            --output-html "${RUNNER_TEMP}/benchmark-report.html" \
+            --output-diagnostics-markdown "${RUNNER_TEMP}/diagnostic-report.md" \
+            --output-diagnostics-html "${RUNNER_TEMP}/diagnostic-report.html"
 
       - name: Merge memory benchmark reports
         env:
@@ -285,7 +287,8 @@ jobs:
         run: |
           cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-memory-reports" \
-            --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md"
+            --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md" \
+            --output-html "${RUNNER_TEMP}/benchmark-memory-report.html"
 
       - name: Publish full benchmark summary
         run: |
@@ -298,10 +301,13 @@ jobs:
       - name: Upload full benchmark reports
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-markdown-reports
+          name: benchmark-reports
           path: |
+            ${{ runner.temp }}/benchmark-report.html
             ${{ runner.temp }}/benchmark-report.md
+            ${{ runner.temp }}/benchmark-memory-report.html
             ${{ runner.temp }}/benchmark-memory-report.md
+            ${{ runner.temp }}/diagnostic-report.html
             ${{ runner.temp }}/diagnostic-report.md
 
       - name: Comment benchmark reports

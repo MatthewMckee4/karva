@@ -12,7 +12,7 @@ use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::{FixtureId, FixturePlan, NormalizedFixture};
+use crate::extensions::fixtures::{FixtureId, FixturePlan, FixtureScope, NormalizedFixture};
 use crate::extensions::functions::snapshot::SnapshotContext;
 use crate::extensions::tags::RuntimeTags;
 use crate::extensions::tags::expect_fail::ExpectFailTag;
@@ -20,7 +20,9 @@ use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
-use crate::runner::test_iterator::{FixtureParameter, ParameterIdentity, TestVariant};
+use crate::runner::test_iterator::{
+    FixtureParameter, FixtureVariantMetadata, ParameterIdentity, TestVariant,
+};
 use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
 
 use super::PackageRunner;
@@ -56,7 +58,9 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     /// Parameter values reused when a retry prepares fresh fixtures.
     params: HashMap<String, Arc<Py<PyAny>>>,
     /// Parameter values selected for fixture request objects.
-    fixture_params: HashMap<String, FixtureParameter>,
+    fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
+    /// Explicit scopes assigned to direct parametrization values.
+    parameter_scopes: Option<Rc<HashMap<String, FixtureScope>>>,
     /// Display and collection identity for a parametrized test.
     identity: Option<Box<ParameterIdentity>>,
     /// Compiled fixture arena for this test.
@@ -86,8 +90,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let TestVariant {
             test,
             params,
-            fixture_params,
-            scoped_params: _,
+            fixture_metadata,
             identity,
             fixture_plan,
             fixture_dependencies,
@@ -96,12 +99,29 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             tags,
         } = variant;
 
+        let (fixture_params, parameter_scopes) = fixture_metadata.map_or_else(
+            || (None, None),
+            |metadata| {
+                let FixtureVariantMetadata { parameters, scoped } = *metadata;
+                let parameter_scopes = (!scoped.is_empty()).then(|| {
+                    Rc::new(
+                        scoped
+                            .into_iter()
+                            .map(|(name, parameter)| (name, parameter.scope))
+                            .collect(),
+                    )
+                });
+                (parameters, parameter_scopes)
+            },
+        );
+
         Self {
             package_runner,
             py,
             test,
             params,
             fixture_params,
+            parameter_scopes,
             identity,
             fixture_plan,
             fixture_dependencies,
@@ -191,7 +211,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 use_fixture_dependencies: &self.use_fixture_dependencies,
                 auto_use_fixtures: &self.auto_use_fixtures,
                 params,
-                fixture_params: self.fixture_params.clone(),
+                fixture_params: self.fixture_params.as_ref().map(Rc::clone),
+                parameter_scopes: self.parameter_scopes.as_ref().map(Rc::clone),
                 parameter_id: self
                     .identity
                     .as_ref()

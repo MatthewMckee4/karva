@@ -63,6 +63,7 @@ impl PackageRunner<'_, '_> {
             Rc::clone(&self.finalizer_cache),
             None,
             None,
+            None,
         ));
 
         let failures = run_fixtures(py, &executor, &auto_use_fixtures, FixtureUsage::AutoUse);
@@ -122,6 +123,7 @@ impl PackageRunner<'_, '_> {
             auto_use_fixtures,
             params,
             fixture_params,
+            parameter_scopes,
             parameter_id,
         } = inputs;
         let test_requests_request = test
@@ -140,7 +142,7 @@ impl PackageRunner<'_, '_> {
                 |state| match state.as_ref() {
                     Ok(state) => RequestContext::new(
                         py,
-                        &state.borrow(),
+                        Rc::clone(state),
                         test.py_function.clone_ref(py),
                         RequestMetadata {
                             module_name: test.name().module_path().module_name(),
@@ -166,12 +168,35 @@ impl PackageRunner<'_, '_> {
         } else {
             None
         };
-        let fixture_params = (!fixture_params.is_empty()).then(|| Rc::new(fixture_params));
+        let direct_parameters = if request_context.is_some() && !params.is_empty() {
+            Some(Box::new(
+                params
+                    .iter()
+                    .map(|(name, value)| {
+                        (
+                            name.clone(),
+                            DirectParameter {
+                                value: value.as_ref().clone_ref(py),
+                                scope: parameter_scopes
+                                    .as_deref()
+                                    .and_then(|scopes| scopes.get(name))
+                                    .copied()
+                                    .unwrap_or(FixtureScope::Function),
+                                requesting_fixtures: RefCell::new(None),
+                            },
+                        )
+                    })
+                    .collect(),
+            ))
+        } else {
+            None
+        };
         let executor = Rc::new(FixtureExecutor::new(
             Rc::clone(fixture_plan),
             Rc::clone(&self.fixture_cache),
             Rc::clone(&self.finalizer_cache),
             fixture_params,
+            direct_parameters,
             request_context,
         ));
 
@@ -263,8 +288,16 @@ pub(super) struct TestFixtureInputs<'a> {
     pub(super) use_fixture_dependencies: &'a [FixtureId],
     pub(super) auto_use_fixtures: &'a [FixtureId],
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
-    pub(super) fixture_params: HashMap<String, FixtureParameter>,
+    pub(super) fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
+    pub(super) parameter_scopes: Option<Rc<HashMap<String, FixtureScope>>>,
     pub(super) parameter_id: Option<&'a str>,
+}
+
+/// Active value and effective scope of one direct parametrization argument.
+struct DirectParameter {
+    value: Py<PyAny>,
+    scope: FixtureScope,
+    requesting_fixtures: RefCell<Option<Box<HashSet<FixtureId>>>>,
 }
 
 /// Cloneable execution handle used by Python request objects during fixture calls.
@@ -273,6 +306,7 @@ struct FixtureExecutor {
     fixture_cache: Rc<RefCell<FixtureCache>>,
     finalizer_cache: Rc<RefCell<FinalizerCache>>,
     fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
+    direct_parameters: Option<Box<HashMap<String, DirectParameter>>>,
     request_context: Option<Rc<RequestContext>>,
     running: RefCell<Vec<FixtureId>>,
 }
@@ -283,6 +317,7 @@ impl FixtureExecutor {
         fixture_cache: Rc<RefCell<FixtureCache>>,
         finalizer_cache: Rc<RefCell<FinalizerCache>>,
         fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
+        direct_parameters: Option<Box<HashMap<String, DirectParameter>>>,
         request_context: Option<Rc<RequestContext>>,
     ) -> Self {
         Self {
@@ -290,6 +325,7 @@ impl FixtureExecutor {
             fixture_cache,
             finalizer_cache,
             fixture_params,
+            direct_parameters,
             request_context,
             running: RefCell::new(Vec::new()),
         }
@@ -330,8 +366,32 @@ impl FixtureExecutor {
         }
         let fixture = self.plan.fixture(fixture_id);
         let name = fixture.name().to_string();
+        if let Some(direct_parameters) = self.direct_parameters.as_deref() {
+            let scope = scope_key(self.fixture_scope(fixture_id), fixture.package_owner());
+            let fixture_cache = self.fixture_cache.borrow();
+            for (parameter_name, parameter) in direct_parameters {
+                let requested_here = parameter
+                    .requesting_fixtures
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|fixtures| fixtures.contains(&fixture_id));
+                if (requested_here || fixture_cache.uses_parameter(&name, parameter_name, scope))
+                    && !parameters
+                        .iter()
+                        .any(|(existing, _)| existing == parameter_name)
+                {
+                    parameters.push((parameter_name.clone(), parameter.value.clone_ref(py)));
+                }
+            }
+        }
         if let Some(parameter) = self.fixture_parameter(&name) {
-            parameters.push((name, parameter.value.clone_ref(py)));
+            let shadowed = self
+                .direct_parameters
+                .as_deref()
+                .is_some_and(|parameters| parameters.contains_key(&name));
+            if !shadowed {
+                parameters.push((name, parameter.value.clone_ref(py)));
+            }
         }
         for dependency in fixture.dependencies() {
             self.collect_parameters(py, *dependency, visited, parameters);
@@ -347,7 +407,7 @@ impl FixtureExecutor {
         let fixture = self.plan.fixture(fixture_id);
         let scope = scope_key(self.fixture_scope(fixture_id), fixture.package_owner());
         let fixture_cache_name = fixture.name().to_string();
-        let cache_key = self.cache_key(py, fixture_id);
+        let mut cache_key = self.cache_key(py, fixture_id);
         let cache_lookup = self
             .fixture_cache
             .borrow()
@@ -372,7 +432,7 @@ impl FixtureExecutor {
             ));
         }
         self.running.borrow_mut().push(fixture_id);
-        let result = self.call_fixture(py, fixture_id, cache_key, scope);
+        let result = self.call_fixture(py, fixture_id, &mut cache_key, scope);
         let _ = self.running.borrow_mut().pop();
         result
     }
@@ -436,7 +496,7 @@ impl FixtureExecutor {
         self: &Rc<Self>,
         py: Python<'_>,
         fixture_id: FixtureId,
-        cache_key: Option<FixtureCacheKey>,
+        cache_key: &mut Option<FixtureCacheKey>,
         scope: ScopeKey<'_>,
     ) -> Result<Py<PyAny>, FixtureCallError> {
         let fixture = self.plan.fixture(fixture_id);
@@ -495,6 +555,9 @@ impl FixtureExecutor {
             Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
         };
 
+        if self.direct_parameters.is_some() {
+            *cache_key = self.cache_key(py, fixture_id);
+        }
         let parameter_dependencies = cache_key.as_ref().map_or_else(Vec::new, |_| {
             fixture
                 .dependencies()
@@ -504,7 +567,7 @@ impl FixtureExecutor {
         });
         self.fixture_cache.borrow_mut().insert(
             fixture.name().to_string(),
-            cache_key,
+            cache_key.take(),
             value.clone_ref(py),
             scope,
             parameter_dependencies,
@@ -546,9 +609,10 @@ impl FixtureExecutor {
                 runtime,
                 Some(fixture.function_name().to_string()),
                 scope,
+                Some(fixture.package_owner().as_std_path()),
                 parameter.map(|parameter| parameter.value.clone_ref(py)),
                 Some(parameter.map_or(0, |parameter| parameter.index)),
-            ),
+            )?,
         )
     }
 
@@ -586,7 +650,8 @@ impl FixtureExecutor {
                 FixtureScope::Function,
                 None,
                 None,
-            ),
+                None,
+            )?,
         )
     }
 
@@ -626,6 +691,30 @@ impl FixtureExecutor {
         requesting_scope: FixtureScope,
         requesting_fixture: Option<FixtureId>,
     ) -> Result<Py<PyAny>, RequestFixtureError> {
+        if let Some(parameter) = self
+            .direct_parameters
+            .as_deref()
+            .and_then(|parameters| parameters.get(name))
+        {
+            if !requesting_scope.can_use(parameter.scope) {
+                return Err(RequestFixtureError::Lookup(format!(
+                    "ScopeMismatch: {}-scoped request cannot access {}-scoped fixture {name:?}",
+                    requesting_scope.name(),
+                    parameter.scope.name(),
+                )));
+            }
+            if let Some(context) = &self.request_context {
+                context.add_fixture_name(name);
+            }
+            if let Some(requesting_fixture) = requesting_fixture {
+                parameter
+                    .requesting_fixtures
+                    .borrow_mut()
+                    .get_or_insert_with(|| Box::new(HashSet::new()))
+                    .insert(requesting_fixture);
+            }
+            return Ok(parameter.value.clone_ref(py));
+        }
         let Some(fixture_id) = self.plan.dynamic_fixture_for(name, requesting_fixture) else {
             return Err(RequestFixtureError::Lookup(format!(
                 "fixture {name:?} not found"
@@ -640,7 +729,7 @@ impl FixtureExecutor {
                 fixture_scope.name(),
             )));
         }
-        if fixture.parameters().is_some()
+        if self.plan.parameters(fixture_id).is_some()
             && self
                 .fixture_parameter(&fixture.name().to_string())
                 .is_none()

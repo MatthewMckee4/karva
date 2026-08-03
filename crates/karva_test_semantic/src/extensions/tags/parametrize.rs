@@ -404,14 +404,100 @@ pub struct ParametrizationArgs {
     /// Mapping of parameter name to its value.
     pub(crate) values: HashMap<String, Arc<Py<PyAny>>>,
 
-    /// Fixture-routing and scope metadata omitted for ordinary parameters.
-    pub(crate) metadata: Option<Box<ParameterMetadata>>,
-
     /// Combined tags from all parameter sets.
     pub(crate) tags: Tags,
 
+    case: ParameterCase,
+}
+
+/// Display identity with fixture-only state boxed off ordinary parameters.
+#[derive(Debug, Clone)]
+enum ParameterCase {
+    Plain(ParameterIdentity),
+    Fixture(Box<FixtureParameterCase>),
+}
+
+impl Default for ParameterCase {
+    fn default() -> Self {
+        Self::Plain(ParameterIdentity::default())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ParameterIdentity {
     id: String,
     has_explicit_id: bool,
+}
+
+#[derive(Debug, Clone)]
+struct FixtureParameterCase {
+    identity: ParameterIdentity,
+    metadata: ParameterMetadata,
+}
+
+impl ParameterCase {
+    fn new(identity: ParameterIdentity, metadata: Option<ParameterMetadata>) -> Self {
+        match metadata {
+            Some(metadata) => Self::Fixture(Box::new(FixtureParameterCase { identity, metadata })),
+            None => Self::Plain(identity),
+        }
+    }
+
+    fn identity(&self) -> &ParameterIdentity {
+        match self {
+            Self::Plain(identity) => identity,
+            Self::Fixture(case) => &case.identity,
+        }
+    }
+
+    fn identity_mut(&mut self) -> &mut ParameterIdentity {
+        match self {
+            Self::Plain(identity) => identity,
+            Self::Fixture(case) => &mut case.identity,
+        }
+    }
+
+    fn metadata(&self) -> Option<&ParameterMetadata> {
+        match self {
+            Self::Plain(_) => None,
+            Self::Fixture(case) => Some(&case.metadata),
+        }
+    }
+
+    fn metadata_mut(&mut self) -> Option<&mut ParameterMetadata> {
+        match self {
+            Self::Plain(_) => None,
+            Self::Fixture(case) => Some(&mut case.metadata),
+        }
+    }
+
+    fn ensure_metadata(&mut self) -> &mut ParameterMetadata {
+        match self {
+            Self::Fixture(case) => &mut case.metadata,
+            Self::Plain(identity) => {
+                let identity = std::mem::take(identity);
+                *self = Self::Fixture(Box::new(FixtureParameterCase {
+                    identity,
+                    metadata: ParameterMetadata::default(),
+                }));
+                self.ensure_metadata()
+            }
+        }
+    }
+
+    fn take_metadata(&mut self) -> Option<ParameterMetadata> {
+        match std::mem::take(self) {
+            Self::Plain(_) => None,
+            Self::Fixture(case) => Some(case.metadata),
+        }
+    }
+
+    fn into_parts(self) -> (ParameterIdentity, Option<ParameterMetadata>) {
+        match self {
+            Self::Plain(identity) => (identity, None),
+            Self::Fixture(case) => (case.identity, Some(case.metadata)),
+        }
+    }
 }
 
 /// Names and source indices for one indirect parametrization case.
@@ -454,47 +540,59 @@ impl ParametrizationArgs {
             .collect();
         Self {
             values,
-            metadata: Some(Box::new(ParameterMetadata {
-                indirect: std::iter::once((
-                    name,
-                    IndirectParameter {
-                        index,
-                        scope: Some(scope),
-                    },
-                ))
-                .collect(),
-                scoped: vec![(argument_name.to_string(), ScopedParameter { index, scope })],
-            })),
+            case: ParameterCase::new(
+                ParameterIdentity {
+                    id: parametrization
+                        .id
+                        .clone()
+                        .unwrap_or_else(|| parametrization.default_id.clone()),
+                    has_explicit_id: true,
+                },
+                Some(ParameterMetadata {
+                    indirect: std::iter::once((
+                        name,
+                        IndirectParameter {
+                            index,
+                            scope: Some(scope),
+                        },
+                    ))
+                    .collect(),
+                    scoped: vec![(argument_name.to_string(), ScopedParameter { index, scope })],
+                }),
+            ),
             tags: parametrization.tags.clone(),
-            id: parametrization
-                .id
-                .clone()
-                .unwrap_or_else(|| parametrization.default_id.clone()),
-            has_explicit_id: true,
         }
     }
 
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
-        if let Some(other_metadata) = other.metadata {
-            let metadata = self.metadata.get_or_insert_with(Default::default);
+        let (other_identity, other_metadata) = other.case.into_parts();
+        if let Some(other_metadata) = other_metadata {
+            let metadata = self.case.ensure_metadata();
             metadata.indirect.extend(other_metadata.indirect);
             metadata.scoped.extend(other_metadata.scoped);
         }
         self.tags.extend(&other.tags);
-        if !self.id.is_empty() && !other.id.is_empty() {
-            self.id.push('-');
+        let identity = self.case.identity_mut();
+        if !identity.id.is_empty() && !other_identity.id.is_empty() {
+            identity.id.push('-');
         }
-        self.id.push_str(&other.id);
-        self.has_explicit_id |= other.has_explicit_id;
+        identity.id.push_str(&other_identity.id);
+        identity.has_explicit_id |= other_identity.has_explicit_id;
     }
 
     pub(crate) fn id(&self) -> Option<&str> {
-        self.has_explicit_id.then_some(self.id.as_str())
+        let identity = self.case.identity();
+        identity.has_explicit_id.then_some(identity.id.as_str())
     }
 
     pub(crate) fn node_id(&self) -> Option<&str> {
-        (!self.id.is_empty()).then_some(self.id.as_str())
+        let id = &self.case.identity().id;
+        (!id.is_empty()).then_some(id.as_str())
+    }
+
+    pub(crate) fn take_metadata(&mut self) -> Option<ParameterMetadata> {
+        self.case.take_metadata()
     }
 }
 
@@ -517,13 +615,13 @@ impl ParameterPlan {
         self.dimensions
             .iter()
             .flatten()
-            .filter_map(|args| args.metadata.as_deref())
+            .filter_map(|args| args.case.metadata())
             .flat_map(|metadata| metadata.indirect.keys().map(String::as_str))
     }
 
     pub(crate) fn resolve_indirect_scope(&mut self, name: &str, fixture_scope: FixtureScope) {
         for args in self.dimensions.iter_mut().flatten() {
-            let Some(metadata) = args.metadata.as_deref_mut() else {
+            let Some(metadata) = args.case.metadata_mut() else {
                 continue;
             };
             let Some(indirect) = metadata.indirect.get_mut(name) else {
@@ -554,7 +652,7 @@ impl ParameterPlan {
             .dimensions
             .iter()
             .flatten()
-            .filter_map(|args| args.metadata.as_deref())
+            .filter_map(|args| args.case.metadata())
             .flat_map(|metadata| metadata.scoped.iter().map(|(_, parameter)| parameter))
         {
             requires_reordering |= parameter.scope != FixtureScope::Function;
@@ -582,7 +680,7 @@ impl ParameterPlan {
         loop {
             let mut id = String::new();
             for (dimension, index) in self.dimensions.iter().zip(&indices) {
-                let part = &dimension[*index].id;
+                let part = &dimension[*index].case.identity().id;
                 if !id.is_empty() && !part.is_empty() {
                     id.push('-');
                 }
@@ -668,22 +766,23 @@ impl ParameterPlanIterator {
 pub fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
     let mut id_counts = HashMap::new();
     for parametrization in &*parametrizations {
-        if !parametrization.id.is_empty() {
-            *id_counts.entry(parametrization.id.clone()).or_insert(0) += 1;
+        let id = &parametrization.case.identity().id;
+        if !id.is_empty() {
+            *id_counts.entry(id.clone()).or_insert(0) += 1;
         }
     }
 
     let mut used_ids = parametrizations
         .iter()
-        .map(|parametrization| parametrization.id.clone())
+        .map(|parametrization| parametrization.case.identity().id.clone())
         .collect::<HashSet<_>>();
     let mut id_suffixes = HashMap::new();
     for parametrization in parametrizations {
-        if id_counts.get(&parametrization.id).copied().unwrap_or(0) < 2 {
+        let id = &parametrization.case.identity().id;
+        if id_counts.get(id).copied().unwrap_or(0) < 2 {
             continue;
         }
 
-        let id = &parametrization.id;
         let separator = if id.ends_with(|character: char| character.is_ascii_digit()) {
             "_"
         } else {
@@ -694,7 +793,7 @@ pub fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs])
             let candidate = format!("{id}{separator}{counter}");
             *counter += 1;
             if used_ids.insert(candidate.clone()) {
-                parametrization.id = candidate;
+                parametrization.case.identity_mut().id = candidate;
                 break;
             }
         }
@@ -1086,8 +1185,8 @@ impl ParametrizeTag {
             for (arg_name, arg_value) in self.names.iter().zip(parametrization.values.iter()) {
                 current_parameratisation.insert(arg_name.clone(), Arc::clone(arg_value));
             }
-            let metadata = (!self.indirect.is_empty() || self.scope.is_some()).then(|| {
-                Box::new(ParameterMetadata {
+            let metadata =
+                (!self.indirect.is_empty() || self.scope.is_some()).then(|| ParameterMetadata {
                     indirect: self
                         .indirect
                         .iter()
@@ -1117,17 +1216,20 @@ impl ParametrizeTag {
                             })
                             .collect()
                     }),
-                })
-            });
+                });
             let current_param_args = ParametrizationArgs {
                 values: current_parameratisation,
-                metadata,
                 tags: parametrization.tags().clone(),
-                id: parametrization
-                    .id
-                    .clone()
-                    .unwrap_or_else(|| parametrization.default_id.clone()),
-                has_explicit_id: parametrization.id.is_some(),
+                case: ParameterCase::new(
+                    ParameterIdentity {
+                        id: parametrization
+                            .id
+                            .clone()
+                            .unwrap_or_else(|| parametrization.default_id.clone()),
+                        has_explicit_id: parametrization.id.is_some(),
+                    },
+                    metadata,
+                ),
             };
             param_args.push(current_param_args);
         }
@@ -1222,12 +1324,14 @@ pub(super) fn handle_custom_parametrize_param(
 
 #[cfg(test)]
 mod tests {
-    use super::{ParameterPlan, ParametrizationArgs};
+    use super::{ParameterCase, ParameterIdentity, ParameterPlan, ParametrizationArgs};
 
     fn args(id: &str) -> ParametrizationArgs {
         ParametrizationArgs {
-            id: id.to_string(),
-            has_explicit_id: true,
+            case: ParameterCase::Plain(ParameterIdentity {
+                id: id.to_string(),
+                has_explicit_id: true,
+            }),
             ..ParametrizationArgs::default()
         }
     }
