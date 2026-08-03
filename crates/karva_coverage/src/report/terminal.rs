@@ -7,7 +7,7 @@ use fs_err as fs;
 
 use super::combined_rows;
 use super::html::{HtmlReportOptions, build_html_report};
-use super::json::build_json_report;
+use super::json::{JsonReportOptions, build_json_report};
 use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
 use super::{CoverageAnalysis, CoverageFilters};
@@ -176,8 +176,23 @@ impl CoverageAnalysis {
 
     /// Writes a coverage.py-compatible JSON report and returns total coverage.
     pub fn write_json(&self, output: &Utf8Path) -> Result<f64> {
+        self.write_json_with_options(
+            output,
+            &JsonReportOptions {
+                pretty_print: true,
+                show_contexts: self.rows.iter().any(|row| !row.contexts.is_empty()),
+            },
+        )
+    }
+
+    /// Writes configured exported JSON coverage data and returns total coverage.
+    pub fn write_json_with_options(
+        &self,
+        output: &Utf8Path,
+        options: &JsonReportOptions,
+    ) -> Result<f64> {
         create_output_parent(output)?;
-        let json = build_json_report(&self.rows)?;
+        let json = build_json_report(&self.rows, options)?;
         fs::write(output.as_std_path(), json)
             .with_context(|| format!("failed to write coverage json {output}"))?;
         Ok(self.total_percent())

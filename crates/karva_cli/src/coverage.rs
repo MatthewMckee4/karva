@@ -105,6 +105,25 @@ pub enum CoverageAction {
 
     /// Generate a Cobertura-compatible XML coverage report.
     Xml(CoverageXmlCommand),
+
+    /// Export documented JSON coverage data.
+    Json(CoverageJsonCommand),
+}
+
+#[derive(Debug, Args)]
+/// Options specific to exported JSON coverage data.
+pub struct CoverageJsonCommand {
+    /// Path receiving the JSON report.
+    #[arg(long, value_name = "PATH", default_value = "coverage.json")]
+    pub output: Utf8PathBuf,
+
+    /// Format output with indentation and line breaks.
+    #[arg(long)]
+    pub pretty_print: bool,
+
+    /// Include per-line execution contexts.
+    #[arg(long)]
+    pub show_contexts: bool,
 }
 
 #[derive(Debug, Args)]

@@ -73,6 +73,15 @@ struct JsonMeta {
     show_contexts: bool,
 }
 
+/// Presentation settings for exported JSON coverage data.
+#[derive(Debug, Default)]
+pub struct JsonReportOptions {
+    /// Whether output uses indentation and line breaks.
+    pub pretty_print: bool,
+    /// Whether per-line execution contexts are included.
+    pub show_contexts: bool,
+}
+
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "serde skip_serializing_if passes a reference to the field"
@@ -81,7 +90,7 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
+pub(super) fn build_json_report(rows: &[FileRow], options: &JsonReportOptions) -> Result<String> {
     let files = rows
         .iter()
         .map(|row| {
@@ -92,7 +101,11 @@ pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
                     summary: json_summary(row),
                     missing_lines: missing_lines(row),
                     excluded_lines: row.excluded.clone(),
-                    contexts: row.contexts.clone(),
+                    contexts: if options.show_contexts {
+                        row.contexts.clone()
+                    } else {
+                        BTreeMap::new()
+                    },
                     executed_branches: row
                         .branches_enabled
                         .then(|| branch_pairs(&row.branch_executed)),
@@ -105,18 +118,22 @@ pub(super) fn build_json_report(rows: &[FileRow]) -> Result<String> {
         .collect();
 
     let totals_row = totals_row(rows);
-    let show_contexts = rows.iter().any(|row| !row.contexts.is_empty());
     let report = JsonReport {
         meta: JsonMeta {
             format: 2,
             version: "karva",
-            show_contexts,
+            show_contexts: options.show_contexts,
         },
         files,
         totals: json_totals_summary(&totals_row),
     };
 
-    serde_json::to_string_pretty(&report).context("failed to serialize coverage json")
+    if options.pretty_print {
+        serde_json::to_string_pretty(&report)
+    } else {
+        serde_json::to_string(&report)
+    }
+    .context("failed to serialize coverage json")
 }
 
 fn json_summary(row: &FileRow) -> JsonFileSummary {

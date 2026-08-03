@@ -13,6 +13,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::RegexSet;
 
 pub use html::HtmlReportOptions;
+pub use json::JsonReportOptions;
 pub use terminal::combine_and_report;
 pub use terminal::write_cobertura_xml;
 pub use terminal::write_html_report;
