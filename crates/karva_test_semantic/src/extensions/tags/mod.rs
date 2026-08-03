@@ -272,6 +272,23 @@ impl RuntimeTags {
         }
     }
 
+    /// Merges policy discovered during fixture setup after static test policy.
+    pub(crate) fn extend_runtime(&mut self, other: &Self) {
+        if matches!(self.skip, SkipPolicy::Run) {
+            self.skip = other.skip.clone();
+        }
+        if self.expect_fail.is_none() {
+            self.expect_fail.clone_from(&other.expect_fail);
+        }
+        if self.timeout.is_none() {
+            self.timeout = other.timeout;
+        }
+        if self.fail_slow.is_none() {
+            self.fail_slow = other.fail_slow;
+        }
+        self.custom_names.extend(other.custom_names.iter().cloned());
+    }
+
     pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
         match &self.skip {
             SkipPolicy::Run => (false, None),
@@ -313,7 +330,7 @@ impl CompiledTags {
         for tag in &tags.inner {
             match tag {
                 Tag::Parametrize(parametrize) => {
-                    parameter_names.extend(parametrize.names().iter().cloned());
+                    parameter_names.extend(parametrize.direct_names().cloned());
                     dimensions.push(parametrize.each_arg_value());
                 }
                 Tag::UseFixtures(use_fixtures) => {
@@ -333,6 +350,10 @@ impl CompiledTags {
 
     pub(crate) fn parameter_names(&self) -> HashSet<&str> {
         self.parameter_names.iter().map(String::as_str).collect()
+    }
+
+    pub(crate) fn indirect_names(&self) -> impl Iterator<Item = &str> {
+        self.parameters.indirect_names()
     }
 
     pub(crate) fn required_fixtures(&self) -> &[String] {

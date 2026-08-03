@@ -20,7 +20,7 @@ use crate::runner::package_runner::outcome::{
 impl VariantRunner<'_, '_, '_, '_, '_> {
     /// Runs one setup/call/teardown lifecycle and decides retry eligibility.
     pub(super) fn execute_attempt(
-        &mut self,
+        &self,
         settings: &VariantSettings,
         function: &Py<PyAny>,
         test_name_env_result: &PyResult<()>,
@@ -33,7 +33,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 PreparedFixtures {
                     function_arguments,
                     setup_result,
-                    test_finalizers,
+                    request_tags: _,
                 },
             setup_duration,
             output_capture,
@@ -59,9 +59,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
-        let finalizer_diagnostics = self
-            .package_runner
-            .clean_up_test_attempt(self.py, test_finalizers);
+        let finalizer_diagnostics = self.package_runner.clean_up_test_attempt(self.py);
         let teardown_failed = !finalizer_diagnostics.is_empty();
         let phases = PhaseDurations {
             setup: setup_duration,

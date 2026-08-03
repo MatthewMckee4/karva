@@ -25,6 +25,7 @@ use crate::discovery::DiscoveredPackage;
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
+use crate::extensions::tags::parametrize::{Parametrization, parse_fixture_params};
 
 /// Represents a pytest-style fixture discovered from Python source code.
 ///
@@ -49,6 +50,16 @@ pub struct DiscoveredFixture {
 
     /// Whether this fixture is a generator (uses yield for teardown).
     is_generator: bool,
+
+    /// Parameters that create distinct instances of this fixture.
+    parameters: Option<Vec<Parametrization>>,
+}
+
+struct FixtureOptions {
+    scope: FixtureScope,
+    auto_use: bool,
+    is_generator: bool,
+    parameters: Option<Vec<Parametrization>>,
 }
 
 /// Fixture definition rejected during discovery.
@@ -103,14 +114,12 @@ impl RejectedFixture {
 }
 
 impl DiscoveredFixture {
-    pub(crate) fn new(
+    fn new(
         name: QualifiedFunctionName,
         stmt_function_def: Rc<StmtFunctionDef>,
         source_file: SourceFile,
-        scope: FixtureScope,
-        auto_use: bool,
         function: Py<PyAny>,
-        is_generator: bool,
+        options: FixtureOptions,
     ) -> Self {
         Self {
             definition: Rc::new(FunctionDefinition::new(
@@ -118,10 +127,11 @@ impl DiscoveredFixture {
                 stmt_function_def,
                 source_file,
             )),
-            scope,
-            auto_use,
+            scope: options.scope,
+            auto_use: options.auto_use,
             function: Rc::new(function),
-            is_generator,
+            is_generator: options.is_generator,
+            parameters: options.parameters,
         }
     }
 
@@ -147,6 +157,10 @@ impl DiscoveredFixture {
 
     pub(crate) fn function(&self) -> &Py<PyAny> {
         &self.function
+    }
+
+    pub(crate) fn parameters(&self) -> Option<&[Parametrization]> {
+        self.parameters.as_deref()
     }
 
     pub(crate) fn stmt_function_def(&self) -> &Rc<StmtFunctionDef> {
@@ -202,7 +216,26 @@ impl DiscoveredFixture {
 
         let auto_use = fixture_function_marker.getattr("autouse")?;
 
+        let params = fixture_function_marker.getattr("params")?;
+
+        let ids = fixture_function_marker.getattr("ids").ok();
+
         let fixture_function = get_fixture_function(function)?;
+
+        let globals = fixture_function
+            .getattr("__globals__")
+            .ok()
+            .and_then(|globals| globals.cast_into::<pyo3::types::PyDict>().ok());
+
+        let parameters = if params.is_none() {
+            None
+        } else {
+            Some(parse_fixture_params(
+                &params,
+                ids.as_ref(),
+                globals.as_ref(),
+            )?)
+        };
 
         let name = if found_name.is_none() {
             stmt_function_def.name.to_string()
@@ -217,10 +250,13 @@ impl DiscoveredFixture {
             QualifiedFunctionName::new(name, module_name),
             stmt_function_def,
             source_file,
-            fixture_scope,
-            auto_use.extract::<bool>()?,
             fixture_function.into(),
-            is_generator_function,
+            FixtureOptions {
+                scope: fixture_scope,
+                auto_use: auto_use.extract::<bool>()?,
+                is_generator: is_generator_function,
+                parameters,
+            },
         ))
     }
 
@@ -241,6 +277,7 @@ impl DiscoveredFixture {
         let scope_obj = py_function_borrow.scope.clone_ref(py);
         let name = py_function_borrow.name.clone();
         let auto_use = py_function_borrow.auto_use;
+        let parameters = py_function_borrow.parameters.clone();
 
         let fixture_scope =
             fixture_scope(py, scope_obj.bind(py), &name).map_err(InvalidFixtureError::new_err)?;
@@ -249,10 +286,13 @@ impl DiscoveredFixture {
             QualifiedFunctionName::new(name, module_path),
             stmt_function_def,
             source_file,
-            fixture_scope,
-            auto_use,
             py_function.into(),
-            is_generator_function,
+            FixtureOptions {
+                scope: fixture_scope,
+                auto_use,
+                is_generator: is_generator_function,
+                parameters,
+            },
         ))
     }
 }
@@ -295,6 +335,7 @@ pub fn get_auto_use_fixtures<'a>(
     let current_fixtures = current.auto_use_fixtures(scope.scopes_above());
     let parent_fixtures = parents
         .iter()
+        .rev()
         .flat_map(|parent| parent.auto_use_fixtures(&[scope]));
 
     let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();

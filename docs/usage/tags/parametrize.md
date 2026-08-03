@@ -134,3 +134,20 @@ import pytest
 def test_function(a: int):
     assert a > 0
 ```
+
+Pytest's `indirect=True` and `indirect=[...]` forms route parameter values
+through fixtures and expose them as `request.param`:
+
+```python title="test.py"
+import pytest
+
+
+@pytest.fixture
+def database(request):
+    return connect(request.param)
+
+
+@pytest.mark.parametrize("database", ["sqlite", "postgres"], indirect=True)
+def test_query(database):
+    assert database.query("select 1") == 1
+```

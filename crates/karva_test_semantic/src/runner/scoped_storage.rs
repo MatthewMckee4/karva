@@ -55,4 +55,14 @@ impl<T: Default> ScopedStorage<T> {
             ScopeKey::Function => std::mem::take(&mut self.function),
         }
     }
+
+    /// Mutates every populated lifetime bucket.
+    pub(super) fn for_each_mut(&mut self, mut update: impl FnMut(&mut T)) {
+        update(&mut self.session);
+        for value in self.packages.values_mut() {
+            update(value);
+        }
+        update(&mut self.module);
+        update(&mut self.function);
+    }
 }

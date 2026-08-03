@@ -258,6 +258,53 @@ def test_admin_user(username):
     assert username == "admin_default_user"
 ```
 
-## Limitations
+## Parametrized Fixtures
 
-Karva does not support the `request` fixture. This is an intentional design decision and there are no plans to add support for it.
+Pass `params` to either `@karva.fixture` or `@pytest.fixture`. The fixture runs
+once for each value and reads the active value from `request.param`:
+
+```py title="test.py"
+import pytest
+
+
+@pytest.fixture(params=["sqlite", "postgres"], ids=["local", "server"])
+def database(request):
+    return connect(request.param)
+
+
+def test_query(database):
+    assert database.query("select 1") == 1
+```
+
+Fixture parameters combine with test parameters as a Cartesian product.
+`pytest.param` marks and IDs are supported.
+
+## Request Fixture
+
+Declare `request` in a test or fixture to receive a pytest-compatible
+`FixtureRequest` implemented by Karva's Rust fixture runtime:
+
+```py title="test.py"
+import pytest
+
+
+@pytest.fixture
+def resource(request):
+    value = request.getfixturevalue("database")
+    request.addfinalizer(value.close)
+    return value
+
+
+def test_resource(resource, request):
+    assert request.function is test_resource
+    assert request.node.name == "test_resource"
+```
+
+Karva supports the public request properties `fixturename`, `scope`,
+`fixturenames`, `node`, `config`, `function`, `cls`, `instance`, `module`,
+`path`, `keywords`, and `session`. Parametrized fixture requests also expose
+`param` and `param_index`.
+
+The methods `getfixturevalue`, `addfinalizer`, `applymarker`, and `raiseerror`
+follow pytest's fixture request behavior. Dynamic fixture lookup uses normal
+Karva resolution, scope checks, caching, and teardown.

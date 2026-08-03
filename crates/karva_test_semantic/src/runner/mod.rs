@@ -10,11 +10,12 @@ mod fixture_arguments;
 mod fixture_cache;
 mod fixture_resolver;
 mod package_runner;
+mod request;
 mod scoped_storage;
 mod test_iterator;
 
 use finalizer_cache::FinalizerCache;
 pub use fixture_arguments::FixtureArguments;
-use fixture_cache::FixtureCache;
+use fixture_cache::{FixtureCache, FixtureCacheKey, FixtureCacheLookup};
 pub use fixture_resolver::{FixtureResolutionEntry, FixtureResolutionError};
 pub use package_runner::{FixtureCallError, FixtureChainEntry, PackageRunner};

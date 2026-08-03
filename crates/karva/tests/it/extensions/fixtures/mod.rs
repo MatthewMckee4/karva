@@ -9,4 +9,5 @@ pub mod invalid;
 pub mod more_builtins;
 pub mod parametrized;
 pub mod pytest_monkeypatch;
+pub mod request;
 pub mod retries;

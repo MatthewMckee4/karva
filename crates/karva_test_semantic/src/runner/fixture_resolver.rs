@@ -12,6 +12,7 @@ use crate::extensions::fixtures::{
     DiscoveredFixture, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
     RejectedFixture, RequiresFixtures, get_auto_use_fixtures,
 };
+use crate::extensions::tags::parametrize::Parametrization;
 
 /// Compiles fixture lookup results into an arena for one request context.
 ///
@@ -33,6 +34,18 @@ pub(super) struct FixturePlanCompiler<'a> {
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
+
+    /// Parameter state keyed by fixtures whose cache identity is parameterized.
+    parameterizations: HashMap<FixtureId, Option<Box<[Parametrization]>>>,
+
+    /// Runtime lookup table for `request.getfixturevalue(...)`.
+    dynamic_fixtures: HashMap<String, Vec<FixtureId>>,
+
+    /// Arena prefix participating in static test variant expansion.
+    variant_fixture_count: Option<usize>,
+
+    /// Indirect fixtures whose effective scope is selected per parameter case.
+    deferred_scope_validation: Option<Box<[String]>>,
 }
 
 /// Source-backed fixture metadata retained for resolution diagnostics.
@@ -167,6 +180,10 @@ impl<'a> FixturePlanCompiler<'a> {
             current_package,
             fixture_ids: HashMap::new(),
             fixtures: Vec::new(),
+            parameterizations: HashMap::new(),
+            dynamic_fixtures: HashMap::new(),
+            variant_fixture_count: None,
+            deferred_scope_validation: None,
         }
     }
 
@@ -193,7 +210,31 @@ impl<'a> FixturePlanCompiler<'a> {
 
     /// Finishes the immutable arena after all requested root groups are compiled.
     pub(super) fn finish(self) -> FixturePlan {
-        FixturePlan::new(self.fixtures)
+        let variant_fixture_count = self.variant_fixture_count.unwrap_or(self.fixtures.len());
+        FixturePlan::new(
+            self.fixtures,
+            self.dynamic_fixtures,
+            self.parameterizations,
+            variant_fixture_count,
+        )
+    }
+
+    pub(super) fn uses_request(&self) -> bool {
+        self.fixtures
+            .iter()
+            .any(NormalizedFixture::requests_request)
+    }
+
+    pub(super) fn defer_scope_validation<'name>(
+        &mut self,
+        fixture_names: impl IntoIterator<Item = &'name str>,
+    ) {
+        let fixture_names = fixture_names
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        self.deferred_scope_validation =
+            (!fixture_names.is_empty()).then(|| fixture_names.into_boxed_slice());
     }
 
     /// Normalizes a fixture and its dependencies recursively.
@@ -216,6 +257,13 @@ impl<'a> FixturePlanCompiler<'a> {
             let required_fixtures: Vec<String> = fixture.required_fixtures(py);
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
+        let parameters = fixture
+            .parameters()
+            .map(|parameters| parameters.to_vec().into_boxed_slice());
+        let is_parameterized = parameters.is_some()
+            || dependent_fixtures
+                .iter()
+                .any(|dependency| self.parameterizations.contains_key(dependency));
 
         let result = NormalizedFixture {
             definition: Rc::clone(fixture.definition()),
@@ -227,6 +275,9 @@ impl<'a> FixturePlanCompiler<'a> {
         };
 
         let fixture_id = FixtureId::new(self.fixtures.len());
+        if is_parameterized {
+            self.parameterizations.insert(fixture_id, parameters);
+        }
         self.fixtures.push(result);
         self.fixture_ids.insert(cache_key, fixture_id);
 
@@ -241,11 +292,41 @@ impl<'a> FixturePlanCompiler<'a> {
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let auto_use_fixtures = get_auto_use_fixtures(self.parents, self.current, scope);
         let mut path = FixturePath::default();
-
-        auto_use_fixtures
+        let mut normalized = auto_use_fixtures
             .into_iter()
             .map(|fixture| self.normalize_fixture(py, fixture, &mut path))
-            .collect()
+            .collect::<FixtureResolutionResult<Vec<_>>>()?;
+
+        let mut seen = normalized
+            .iter()
+            .map(|fixture| self.fixtures[fixture.index()].function_name().to_string())
+            .collect::<HashSet<_>>();
+        let broader_scopes = scope.scopes_above().get(1..).unwrap_or_default();
+        let deferred = self
+            .parents
+            .iter()
+            .rev()
+            .flat_map(|parent| parent.auto_use_fixtures(broader_scopes))
+            .filter(|fixture| seen.insert(fixture.name().function_name().to_string()))
+            .collect::<Vec<_>>();
+        for fixture in deferred {
+            let fixture_id = self.normalize_fixture(py, fixture, &mut path)?;
+            if self.requires_variant_execution(fixture_id) {
+                normalized.push(fixture_id);
+            }
+        }
+
+        Ok(normalized)
+    }
+
+    fn requires_variant_execution(&self, fixture_id: FixtureId) -> bool {
+        let fixture = &self.fixtures[fixture_id.index()];
+        self.parameterizations.contains_key(&fixture_id)
+            || fixture.requests_request()
+            || fixture
+                .dependencies()
+                .iter()
+                .any(|dependency| self.requires_variant_execution(*dependency))
     }
 
     /// Resolves test dependencies, excluding names supplied by parametrization.
@@ -258,7 +339,9 @@ impl<'a> FixturePlanCompiler<'a> {
         let fixture_names = test.statement().required_fixtures(py);
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
-            .filter(|name| !parametrize_param_names.contains(name.as_str()))
+            .filter(|name| {
+                name.as_str() != "request" && !parametrize_param_names.contains(name.as_str())
+            })
             .cloned()
             .collect();
 
@@ -309,11 +392,23 @@ impl<'a> FixturePlanCompiler<'a> {
         let mut rejected_fixtures = Vec::new();
 
         for dep_name in fixture_names {
+            if dep_name == "request" {
+                continue;
+            }
             if let Some(fixture) =
                 find_fixture(current_fixture, dep_name, self.parents, self.current)
             {
                 if let Some(current_fixture) = current_fixture
                     && !current_fixture.scope().can_use(fixture.scope())
+                    && !self
+                        .deferred_scope_validation
+                        .as_deref()
+                        .is_some_and(|names| {
+                            names.iter().any(|name| {
+                                name == current_fixture.name().function_name()
+                                    || name == fixture.name().function_name()
+                            })
+                        })
                 {
                     let dependency_path = path
                         .fixtures
@@ -354,6 +449,39 @@ impl<'a> FixturePlanCompiler<'a> {
 
         Ok(normalized_fixtures)
     }
+
+    /// Compiles every visible fixture as a deferred dynamic lookup target.
+    ///
+    /// Invalid dynamic roots stay absent and fail only if Python requests them.
+    pub(super) fn compile_dynamic_fixtures(&mut self, py: Python<'_>) {
+        self.variant_fixture_count = Some(self.fixtures.len());
+
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+        for name in self
+            .current
+            .fixture_names()
+            .into_iter()
+            .chain(self.parents.iter().flat_map(HasFixtures::fixture_names))
+        {
+            if seen.insert(name.to_string()) {
+                names.push(name.to_string());
+            }
+        }
+
+        for name in names {
+            let mut fixture_ids = Vec::new();
+            for fixture in find_fixtures(&name, self.parents, self.current) {
+                let mut path = FixturePath::default();
+                if let Ok(fixture_id) = self.normalize_fixture(py, fixture, &mut path) {
+                    fixture_ids.push(fixture_id);
+                }
+            }
+            if !fixture_ids.is_empty() {
+                self.dynamic_fixtures.insert(name, fixture_ids);
+            }
+        }
+    }
 }
 
 /// Finds a fixture by name, searching in the current node and parent packages.
@@ -366,28 +494,37 @@ fn find_fixture<'a>(
     parents: &'a [&'a DiscoveredPackage],
     current: &'a (dyn HasFixtures<'a> + 'a),
 ) -> Option<&'a DiscoveredFixture> {
-    if let Some(fixture) = current.get_fixture(name)
-        && current_fixture.is_none_or(|current_fixture| current_fixture.name() != fixture.name())
-    {
-        return Some(fixture);
+    find_fixtures(name, parents, current)
+        .into_iter()
+        .find(|fixture| {
+            current_fixture.is_none_or(|current_fixture| current_fixture.name() != fixture.name())
+        })
+}
+
+/// Finds every visible definition of one name from nearest to furthest.
+fn find_fixtures<'a>(
+    name: &str,
+    parents: &'a [&'a DiscoveredPackage],
+    current: &'a (dyn HasFixtures<'a> + 'a),
+) -> Vec<&'a DiscoveredFixture> {
+    let mut fixtures = Vec::new();
+    if let Some(fixture) = current.get_fixture(name) {
+        fixtures.push(fixture);
     }
     if current.get_rejected_fixture(name).is_some() {
-        return None;
+        return fixtures;
     }
 
-    for parent in parents {
-        if let Some(fixture) = parent.get_fixture(name)
-            && current_fixture
-                .is_none_or(|current_fixture| current_fixture.name() != fixture.name())
-        {
-            return Some(fixture);
+    for parent in parents.iter().rev() {
+        if let Some(fixture) = parent.get_fixture(name) {
+            fixtures.push(fixture);
         }
         if parent.get_rejected_fixture(name).is_some() {
-            return None;
+            break;
         }
     }
 
-    None
+    fixtures
 }
 
 /// Finds rejected fixture metadata using the same provider precedence as fixture lookup.
@@ -402,5 +539,6 @@ fn find_rejected_fixture<'a>(
 
     parents
         .iter()
+        .rev()
         .find_map(|parent| parent.get_rejected_fixture(name))
 }

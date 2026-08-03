@@ -12,7 +12,7 @@ use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::{FixtureId, FixturePlan, NormalizedFixture};
+use crate::extensions::fixtures::{FixtureId, FixturePlan, FixtureScope, NormalizedFixture};
 use crate::extensions::functions::snapshot::SnapshotContext;
 use crate::extensions::tags::RuntimeTags;
 use crate::extensions::tags::expect_fail::ExpectFailTag;
@@ -20,10 +20,13 @@ use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
-use crate::runner::test_iterator::TestVariant;
+use crate::runner::test_iterator::{
+    FixtureParameter, FixtureVariantMetadata, ParameterIdentity, TestVariant,
+};
 use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
 
 use super::PackageRunner;
+use super::fixture::TestFixtureInputs;
 
 mod attempt;
 
@@ -54,8 +57,12 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     test: &'test crate::discovery::DiscoveredTestFunction,
     /// Parameter values reused when a retry prepares fresh fixtures.
     params: HashMap<String, Arc<Py<PyAny>>>,
-    /// User-defined parameter ID used in the displayed test name.
-    id: Option<String>,
+    /// Parameter values selected for fixture request objects.
+    fixture_params: Option<Rc<HashMap<String, FixtureParameter>>>,
+    /// Explicit scopes assigned to direct parametrization values.
+    parameter_scopes: Option<Rc<HashMap<String, FixtureScope>>>,
+    /// Display and collection identity for a parametrized test.
+    identity: Option<Box<ParameterIdentity>>,
     /// Compiled fixture arena for this test.
     fixture_plan: Rc<FixturePlan>,
     /// Fixtures passed as Python keyword arguments.
@@ -83,7 +90,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let TestVariant {
             test,
             params,
-            id,
+            fixture_metadata,
+            identity,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -91,12 +99,30 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             tags,
         } = variant;
 
+        let (fixture_params, parameter_scopes) = fixture_metadata.map_or_else(
+            || (None, None),
+            |metadata| {
+                let FixtureVariantMetadata { parameters, scoped } = *metadata;
+                let parameter_scopes = (!scoped.is_empty()).then(|| {
+                    Rc::new(
+                        scoped
+                            .into_iter()
+                            .map(|(name, parameter)| (name, parameter.scope))
+                            .collect(),
+                    )
+                });
+                (parameters, parameter_scopes)
+            },
+        );
+
         Self {
             package_runner,
             py,
             test,
             params,
-            id,
+            fixture_params,
+            parameter_scopes,
+            identity,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -116,7 +142,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let first_params = std::mem::take(&mut self.params);
         self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
-        let settings = self.settings(&first_attempt.fixtures.function_arguments);
+        let settings = self.settings(
+            &first_attempt.fixtures.function_arguments,
+            &first_attempt.fixtures.request_tags,
+        );
         self.resolve_pending_coverage_setup(&settings.qualified_name);
         let function = self.test.py_function.clone_ref(self.py);
         let test_name_env_result =
@@ -168,18 +197,27 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Prepares fixture values and records setup duration for one attempt.
     fn prepare_attempt(
-        &mut self,
+        &self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         output_capture: Option<PythonOutputCapture>,
     ) -> PreparedTestAttempt {
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
-            &self.fixture_plan,
-            &self.fixture_dependencies,
-            &self.use_fixture_dependencies,
-            &self.auto_use_fixtures,
-            params,
+            self.test,
+            TestFixtureInputs {
+                fixture_plan: &self.fixture_plan,
+                fixture_dependencies: &self.fixture_dependencies,
+                use_fixture_dependencies: &self.use_fixture_dependencies,
+                auto_use_fixtures: &self.auto_use_fixtures,
+                params,
+                fixture_params: self.fixture_params.as_ref().map(Rc::clone),
+                parameter_scopes: self.parameter_scopes.as_ref().map(Rc::clone),
+                parameter_id: self
+                    .identity
+                    .as_ref()
+                    .map(|identity| identity.node.as_str()),
+            },
         );
         PreparedTestAttempt {
             fixtures,
@@ -190,7 +228,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Prepares a retry under its setup coverage context.
     fn prepare_retry(
-        &mut self,
+        &self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
@@ -199,21 +237,30 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Derives identity and execution policy after first fixture setup.
-    fn settings(&self, function_arguments: &FixtureArguments) -> VariantSettings {
+    fn settings(
+        &self,
+        function_arguments: &FixtureArguments,
+        request_tags: &RuntimeTags,
+    ) -> VariantSettings {
         let name = self.test.name();
         let fixture_names = self
             .fixture_dependencies
             .iter()
             .map(|fixture_id| self.fixture_plan.fixture(*fixture_id).function_name())
             .collect::<Vec<_>>();
-        let framework_fixture_names = self
+        let mut framework_fixture_names = self
             .fixture_dependencies
             .iter()
             .map(|fixture_id| self.fixture_plan.fixture(*fixture_id))
             .filter(|fixture| fixture.name().module_path().module_name() == "karva._builtins")
             .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
-        let parameters = if let Some(id) = &self.id {
+        framework_fixture_names.push("request");
+        let parameters = if let Some(id) = self
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.display.as_ref())
+        {
             Some(id.clone())
         } else {
             test_parameters(
@@ -229,13 +276,14 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             QualifiedTestName::new(name.clone())
         };
         let qualified_name = qualified_test_name.to_string();
-        let custom_tag_names = self.tags.custom_tag_names();
+        let mut tags = self.tags.clone();
+        tags.extend_runtime(request_tags);
+        let custom_tag_names = tags.custom_tag_names();
         let evaluation_context = EvalContext {
             test_name: &qualified_name,
             tags: &custom_tag_names,
         };
-        let fail_slow_budget = self
-            .tags
+        let fail_slow_budget = tags
             .fail_slow_tag()
             .map(FailSlowTag::seconds)
             .and_then(|seconds| Duration::try_from_secs_f64(seconds).ok())
@@ -250,17 +298,13 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .context
             .settings()
             .slow_timeout_for(&evaluation_context);
-        let timeout_seconds = self
-            .tags
-            .timeout_tag()
-            .map(TimeoutTag::seconds)
-            .or_else(|| {
-                self.package_runner
-                    .context
-                    .settings()
-                    .timeout_for(&evaluation_context)
-                    .map(|duration| duration.as_secs_f64())
-            });
+        let timeout_seconds = tags.timeout_tag().map(TimeoutTag::seconds).or_else(|| {
+            self.package_runner
+                .context
+                .settings()
+                .timeout_for(&evaluation_context)
+                .map(|duration| duration.as_secs_f64())
+        });
         let max_attempts = self
             .package_runner
             .context
@@ -277,7 +321,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .context
             .settings()
             .junit_flaky_fail_status_for(&evaluation_context);
-        let expect_fail_tag = self.tags.expect_fail_tag();
+        let expect_fail_tag = tags.expect_fail_tag();
         let async_patch_result = if self.test.statement().is_async {
             crate::utils::patch_async_test_function(self.py, &self.test.py_function)
         } else {

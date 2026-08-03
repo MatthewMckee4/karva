@@ -10,6 +10,7 @@ use ruff_python_stdlib::identifiers::is_identifier;
 use ruff_text_size::{Ranged, TextRange};
 use thiserror::Error;
 
+use crate::extensions::fixtures::FixtureScope;
 use crate::extensions::functions::Param;
 use crate::extensions::tags::Tags;
 use crate::utils::display_value;
@@ -406,23 +407,192 @@ pub struct ParametrizationArgs {
     /// Combined tags from all parameter sets.
     pub(crate) tags: Tags,
 
+    case: ParameterCase,
+}
+
+/// Display identity with fixture-only state boxed off ordinary parameters.
+#[derive(Debug, Clone)]
+enum ParameterCase {
+    Plain(ParameterIdentity),
+    Fixture(Box<FixtureParameterCase>),
+}
+
+impl Default for ParameterCase {
+    fn default() -> Self {
+        Self::Plain(ParameterIdentity::default())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ParameterIdentity {
     id: String,
     has_explicit_id: bool,
 }
 
+#[derive(Debug, Clone)]
+struct FixtureParameterCase {
+    identity: ParameterIdentity,
+    metadata: ParameterMetadata,
+}
+
+impl ParameterCase {
+    fn new(identity: ParameterIdentity, metadata: Option<ParameterMetadata>) -> Self {
+        match metadata {
+            Some(metadata) => Self::Fixture(Box::new(FixtureParameterCase { identity, metadata })),
+            None => Self::Plain(identity),
+        }
+    }
+
+    fn identity(&self) -> &ParameterIdentity {
+        match self {
+            Self::Plain(identity) => identity,
+            Self::Fixture(case) => &case.identity,
+        }
+    }
+
+    fn identity_mut(&mut self) -> &mut ParameterIdentity {
+        match self {
+            Self::Plain(identity) => identity,
+            Self::Fixture(case) => &mut case.identity,
+        }
+    }
+
+    fn metadata(&self) -> Option<&ParameterMetadata> {
+        match self {
+            Self::Plain(_) => None,
+            Self::Fixture(case) => Some(&case.metadata),
+        }
+    }
+
+    fn metadata_mut(&mut self) -> Option<&mut ParameterMetadata> {
+        match self {
+            Self::Plain(_) => None,
+            Self::Fixture(case) => Some(&mut case.metadata),
+        }
+    }
+
+    fn ensure_metadata(&mut self) -> &mut ParameterMetadata {
+        match self {
+            Self::Fixture(case) => &mut case.metadata,
+            Self::Plain(identity) => {
+                let identity = std::mem::take(identity);
+                *self = Self::Fixture(Box::new(FixtureParameterCase {
+                    identity,
+                    metadata: ParameterMetadata::default(),
+                }));
+                self.ensure_metadata()
+            }
+        }
+    }
+
+    fn take_metadata(&mut self) -> Option<ParameterMetadata> {
+        match std::mem::take(self) {
+            Self::Plain(_) => None,
+            Self::Fixture(case) => Some(case.metadata),
+        }
+    }
+
+    fn into_parts(self) -> (ParameterIdentity, Option<ParameterMetadata>) {
+        match self {
+            Self::Plain(identity) => (identity, None),
+            Self::Fixture(case) => (case.identity, Some(case.metadata)),
+        }
+    }
+}
+
+/// Names and source indices for one indirect parametrization case.
+#[derive(Debug, Clone, Default)]
+pub struct ParameterMetadata {
+    /// Values routed into fixtures, keyed by their parameter name.
+    pub(crate) indirect: HashMap<String, IndirectParameter>,
+
+    /// High-scope cases used by pytest-compatible scheduling.
+    pub(crate) scoped: Vec<(String, ScopedParameter)>,
+}
+
+/// Source identity and effective scope for one routed fixture value.
+#[derive(Clone, Copy, Debug)]
+pub struct IndirectParameter {
+    pub(crate) index: usize,
+    pub(crate) scope: Option<FixtureScope>,
+}
+
+/// Parameter source case and lifetime used by pytest-compatible scheduling.
+#[derive(Clone, Copy, Debug)]
+pub struct ScopedParameter {
+    pub(crate) index: usize,
+    pub(crate) scope: FixtureScope,
+}
+
 impl ParametrizationArgs {
+    pub(crate) fn fixture(
+        name: String,
+        argument_name: &str,
+        parametrization: &Parametrization,
+        index: usize,
+        scope: FixtureScope,
+    ) -> Self {
+        let values = parametrization
+            .values
+            .first()
+            .map(|value| (name.clone(), Arc::clone(value)))
+            .into_iter()
+            .collect();
+        Self {
+            values,
+            case: ParameterCase::new(
+                ParameterIdentity {
+                    id: parametrization
+                        .id
+                        .clone()
+                        .unwrap_or_else(|| parametrization.default_id.clone()),
+                    has_explicit_id: true,
+                },
+                Some(ParameterMetadata {
+                    indirect: std::iter::once((
+                        name,
+                        IndirectParameter {
+                            index,
+                            scope: Some(scope),
+                        },
+                    ))
+                    .collect(),
+                    scoped: vec![(argument_name.to_string(), ScopedParameter { index, scope })],
+                }),
+            ),
+            tags: parametrization.tags.clone(),
+        }
+    }
+
     pub(crate) fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
-        self.tags.extend(&other.tags);
-        if !self.id.is_empty() && !other.id.is_empty() {
-            self.id.push('-');
+        let (other_identity, other_metadata) = other.case.into_parts();
+        if let Some(other_metadata) = other_metadata {
+            let metadata = self.case.ensure_metadata();
+            metadata.indirect.extend(other_metadata.indirect);
+            metadata.scoped.extend(other_metadata.scoped);
         }
-        self.id.push_str(&other.id);
-        self.has_explicit_id |= other.has_explicit_id;
+        self.tags.extend(&other.tags);
+        let identity = self.case.identity_mut();
+        if !identity.id.is_empty() && !other_identity.id.is_empty() {
+            identity.id.push('-');
+        }
+        identity.id.push_str(&other_identity.id);
+        identity.has_explicit_id |= other_identity.has_explicit_id;
     }
 
     pub(crate) fn id(&self) -> Option<&str> {
-        self.has_explicit_id.then_some(self.id.as_str())
+        let identity = self.case.identity();
+        identity.has_explicit_id.then_some(identity.id.as_str())
+    }
+
+    pub(crate) fn node_id(&self) -> Option<&str> {
+        let id = &self.case.identity().id;
+        (!id.is_empty()).then_some(id.as_str())
+    }
+
+    pub(crate) fn take_metadata(&mut self) -> Option<ParameterMetadata> {
+        self.case.take_metadata()
     }
 }
 
@@ -435,6 +605,103 @@ pub struct ParameterPlan {
 impl ParameterPlan {
     pub(crate) fn new(dimensions: Vec<Vec<ParametrizationArgs>>) -> Self {
         Self { dimensions }
+    }
+
+    pub(crate) fn push_dimension(&mut self, dimension: Vec<ParametrizationArgs>) {
+        self.dimensions.push(dimension);
+    }
+
+    pub(crate) fn indirect_names(&self) -> impl Iterator<Item = &str> {
+        self.dimensions
+            .iter()
+            .flatten()
+            .filter_map(|args| args.case.metadata())
+            .flat_map(|metadata| metadata.indirect.keys().map(String::as_str))
+    }
+
+    pub(crate) fn resolve_indirect_scope(&mut self, name: &str, fixture_scope: FixtureScope) {
+        for args in self.dimensions.iter_mut().flatten() {
+            let Some(metadata) = args.case.metadata_mut() else {
+                continue;
+            };
+            let Some(indirect) = metadata.indirect.get_mut(name) else {
+                continue;
+            };
+            indirect.scope.get_or_insert(fixture_scope);
+            if metadata
+                .scoped
+                .iter()
+                .any(|(parameter_name, _)| parameter_name == name)
+            {
+                continue;
+            }
+            metadata.scoped.push((
+                name.to_string(),
+                ScopedParameter {
+                    index: indirect.index,
+                    scope: fixture_scope,
+                },
+            ));
+        }
+    }
+
+    pub(crate) fn reordering_requirements(&self) -> (bool, bool) {
+        let mut requires_reordering = false;
+        let mut requires_cross_module_reordering = false;
+        for parameter in self
+            .dimensions
+            .iter()
+            .flatten()
+            .filter_map(|args| args.case.metadata())
+            .flat_map(|metadata| metadata.scoped.iter().map(|(_, parameter)| parameter))
+        {
+            requires_reordering |= parameter.scope != FixtureScope::Function;
+            requires_cross_module_reordering |= matches!(
+                parameter.scope,
+                FixtureScope::Session | FixtureScope::Package
+            );
+            if requires_reordering && requires_cross_module_reordering {
+                break;
+            }
+        }
+        (requires_reordering, requires_cross_module_reordering)
+    }
+
+    pub(crate) fn variant_ids(&self) -> Vec<Option<String>> {
+        if self.dimensions.iter().any(Vec::is_empty) {
+            return Vec::new();
+        }
+        if self.dimensions.is_empty() {
+            return vec![None];
+        }
+
+        let mut indices = vec![0; self.dimensions.len()];
+        let mut ids = Vec::new();
+        loop {
+            let mut id = String::new();
+            for (dimension, index) in self.dimensions.iter().zip(&indices) {
+                let part = &dimension[*index].case.identity().id;
+                if !id.is_empty() && !part.is_empty() {
+                    id.push('-');
+                }
+                id.push_str(part);
+            }
+            ids.push((!id.is_empty()).then_some(id));
+
+            let mut complete = true;
+            for dimension_index in (0..indices.len()).rev() {
+                indices[dimension_index] += 1;
+                if indices[dimension_index] < self.dimensions[dimension_index].len() {
+                    complete = false;
+                    break;
+                }
+                indices[dimension_index] = 0;
+            }
+            if complete {
+                break;
+            }
+        }
+        ids
     }
 }
 
@@ -496,25 +763,26 @@ impl ParameterPlanIterator {
     }
 }
 
-fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
+pub fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
     let mut id_counts = HashMap::new();
     for parametrization in &*parametrizations {
-        if !parametrization.id.is_empty() {
-            *id_counts.entry(parametrization.id.clone()).or_insert(0) += 1;
+        let id = &parametrization.case.identity().id;
+        if !id.is_empty() {
+            *id_counts.entry(id.clone()).or_insert(0) += 1;
         }
     }
 
     let mut used_ids = parametrizations
         .iter()
-        .map(|parametrization| parametrization.id.clone())
+        .map(|parametrization| parametrization.case.identity().id.clone())
         .collect::<HashSet<_>>();
     let mut id_suffixes = HashMap::new();
     for parametrization in parametrizations {
-        if id_counts.get(&parametrization.id).copied().unwrap_or(0) < 2 {
+        let id = &parametrization.case.identity().id;
+        if id_counts.get(id).copied().unwrap_or(0) < 2 {
             continue;
         }
 
-        let id = &parametrization.id;
         let separator = if id.ends_with(|character: char| character.is_ascii_digit()) {
             "_"
         } else {
@@ -525,7 +793,7 @@ fn make_unique_parametrize_ids(parametrizations: &mut [ParametrizationArgs]) {
             let candidate = format!("{id}{separator}{counter}");
             *counter += 1;
             if used_ids.insert(candidate.clone()) {
-                parametrization.id = candidate;
+                parametrization.case.identity_mut().id = candidate;
                 break;
             }
         }
@@ -567,7 +835,7 @@ fn normalize_arg_names(arg_names: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 /// - `(["arg1", "arg2"], [(1, 2), (3, 4)])` - list of arg names with tuple values
 /// - `(["arg1", "arg2"], [pytest.param(1, 2), ...])` - list of arg names with param values
 /// - `(["arg1"], [pytest.param(1), ...])` - single-element list with param values
-pub(super) fn parse_parametrize_args(
+pub fn parse_parametrize_args(
     arg_names: &Bound<'_, PyAny>,
     arg_values: &Bound<'_, PyAny>,
     globals: Option<&Bound<'_, PyDict>>,
@@ -589,8 +857,27 @@ pub(super) fn parse_parametrize_args(
     Ok((names, parametrizations))
 }
 
+/// Parses one value per fixture invocation from pytest-compatible fixture metadata.
+pub fn parse_fixture_params(
+    params: &Bound<'_, PyAny>,
+    ids: Option<&Bound<'_, PyAny>>,
+    globals: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Vec<Parametrization>> {
+    let py = params.py();
+    let mut parametrizations = params
+        .try_iter()
+        .map_err(|_| PyValueError::new_err("fixture params must be an iterable"))?
+        .map(|value| value.map(Bound::unbind))
+        .map(|value| {
+            value.and_then(|value| handle_custom_parametrize_param(py, value, false, globals))
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    apply_parametrize_ids(ids, &mut parametrizations)?;
+    Ok(parametrizations)
+}
+
 /// Applies an ID sequence or callable without replacing IDs embedded in `param(...)` values.
-pub(super) fn apply_parametrize_ids(
+pub fn apply_parametrize_ids(
     ids: Option<&Bound<'_, PyAny>>,
     parametrizations: &mut [Parametrization],
 ) -> PyResult<()> {
@@ -650,6 +937,8 @@ pub struct ParametrizeTag {
     /// These are used as keyword argument names for the test function.
     names: Vec<String>,
     parametrizations: Vec<Parametrization>,
+    indirect: HashSet<String>,
+    scope: Option<FixtureScope>,
 }
 
 /// Extract argnames and argvalues from a pytest parametrize mark.
@@ -662,7 +951,9 @@ pub struct ParametrizeTag {
 struct ExtractedParametrizeArgs<'py> {
     names: Bound<'py, PyAny>,
     values: Bound<'py, PyAny>,
+    indirect: Option<Bound<'py, PyAny>>,
     ids: Option<Bound<'py, PyAny>>,
+    scope: Option<Bound<'py, PyAny>>,
 }
 
 fn extract_parametrize_args<'py>(
@@ -700,22 +991,53 @@ fn extract_parametrize_args<'py>(
         })
         .ok();
 
+    let indirect = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(2))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("indirect"))
+        })
+        .ok();
+
+    let scope = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(4))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("scope"))
+        })
+        .ok();
+
     Ok(ExtractedParametrizeArgs {
         names: arg_names,
         values: arg_values,
+        indirect,
         ids,
+        scope,
     })
 }
 
 impl ParametrizeTag {
-    pub(crate) fn names(&self) -> &[String] {
-        &self.names
+    pub(crate) fn direct_names(&self) -> impl Iterator<Item = &String> {
+        self.names
+            .iter()
+            .filter(|name| !self.indirect.contains(name.as_str()))
     }
 
-    pub(crate) fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
+    pub(crate) fn new(
+        names: Vec<String>,
+        parametrizations: Vec<Parametrization>,
+        indirect: HashSet<String>,
+        scope: Option<FixtureScope>,
+    ) -> Self {
         Self {
             names,
             parametrizations,
+            indirect,
+            scope,
         }
     }
 
@@ -738,6 +1060,8 @@ impl ParametrizeTag {
                     },
                 )
                 .collect(),
+            HashSet::new(),
+            None,
         )
     }
 
@@ -745,12 +1069,62 @@ impl ParametrizeTag {
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {
-        let ExtractedParametrizeArgs { names, values, ids } = extract_parametrize_args(py_mark)?;
+        let ExtractedParametrizeArgs {
+            names,
+            values,
+            indirect,
+            ids,
+            scope,
+        } = extract_parametrize_args(py_mark)?;
 
         let (arg_names, mut parametrizations) = parse_parametrize_args(&names, &values, globals)?;
         apply_parametrize_ids(ids.as_ref(), &mut parametrizations)?;
 
-        Ok(Some(Self::new(arg_names, parametrizations)))
+        let indirect = match indirect {
+            None => HashSet::new(),
+            Some(indirect) => {
+                if let Ok(indirect) = indirect.extract::<bool>() {
+                    if indirect {
+                        arg_names.iter().cloned().collect()
+                    } else {
+                        HashSet::new()
+                    }
+                } else {
+                    indirect
+                        .extract::<Vec<String>>()
+                        .map_err(|_| {
+                            PyValueError::new_err(
+                                "indirect must be a boolean or a sequence of argument names",
+                            )
+                        })?
+                        .into_iter()
+                        .collect()
+                }
+            }
+        };
+        if let Some(name) = indirect
+            .iter()
+            .find(|name| !arg_names.iter().any(|arg_name| arg_name == *name))
+        {
+            return Err(PyValueError::new_err(format!(
+                "indirect fixture {name:?} doesn't exist"
+            )));
+        }
+
+        let scope = scope
+            .filter(|scope| !scope.is_none())
+            .map(|scope| scope.extract::<String>())
+            .transpose()?
+            .map(FixtureScope::try_from)
+            .transpose()
+            .map_err(PyValueError::new_err)?;
+
+        Ok(Some(Self::new(
+            arg_names,
+            parametrizations,
+            indirect,
+            scope,
+        )))
     }
 
     pub(crate) fn validate<'a>(
@@ -790,7 +1164,7 @@ impl ParametrizeTag {
             }
         }
 
-        for name in &self.names {
+        for name in self.direct_names() {
             if !function_parameter_names.contains(name.as_str()) {
                 return Err(InvalidParametrizeError::UnknownName { name: name.clone() });
             }
@@ -811,14 +1185,51 @@ impl ParametrizeTag {
             for (arg_name, arg_value) in self.names.iter().zip(parametrization.values.iter()) {
                 current_parameratisation.insert(arg_name.clone(), Arc::clone(arg_value));
             }
+            let metadata =
+                (!self.indirect.is_empty() || self.scope.is_some()).then(|| ParameterMetadata {
+                    indirect: self
+                        .indirect
+                        .iter()
+                        .cloned()
+                        .map(|name| {
+                            (
+                                name,
+                                IndirectParameter {
+                                    index: param_args.len(),
+                                    scope: self.scope,
+                                },
+                            )
+                        })
+                        .collect(),
+                    scoped: self.scope.map_or_else(Vec::new, |scope| {
+                        self.names
+                            .iter()
+                            .cloned()
+                            .map(|name| {
+                                (
+                                    name,
+                                    ScopedParameter {
+                                        index: param_args.len(),
+                                        scope,
+                                    },
+                                )
+                            })
+                            .collect()
+                    }),
+                });
             let current_param_args = ParametrizationArgs {
                 values: current_parameratisation,
                 tags: parametrization.tags().clone(),
-                id: parametrization
-                    .id
-                    .clone()
-                    .unwrap_or_else(|| parametrization.default_id.clone()),
-                has_explicit_id: parametrization.id.is_some(),
+                case: ParameterCase::new(
+                    ParameterIdentity {
+                        id: parametrization
+                            .id
+                            .clone()
+                            .unwrap_or_else(|| parametrization.default_id.clone()),
+                        has_explicit_id: parametrization.id.is_some(),
+                    },
+                    metadata,
+                ),
             };
             param_args.push(current_param_args);
         }
@@ -913,12 +1324,14 @@ pub(super) fn handle_custom_parametrize_param(
 
 #[cfg(test)]
 mod tests {
-    use super::{ParameterPlan, ParametrizationArgs};
+    use super::{ParameterCase, ParameterIdentity, ParameterPlan, ParametrizationArgs};
 
     fn args(id: &str) -> ParametrizationArgs {
         ParametrizationArgs {
-            id: id.to_string(),
-            has_explicit_id: true,
+            case: ParameterCase::Plain(ParameterIdentity {
+                id: id.to_string(),
+                has_explicit_id: true,
+            }),
             ..ParametrizationArgs::default()
         }
     }
