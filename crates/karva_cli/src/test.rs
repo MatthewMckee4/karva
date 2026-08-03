@@ -367,11 +367,11 @@ pub struct TestCommand {
 
     /// Use seeded randomized ordering instead of duration-aware scheduling.
     #[clap(long, default_missing_value = "true", require_equals = true, num_args = 0..=1, help_heading = "Runner options")]
-    pub shuffle: Option<bool>,
+    shuffle: Option<bool>,
 
     /// Seed used by `--shuffle`. Does not enable shuffling by itself.
     #[clap(long, value_name = "SEED", help_heading = "Runner options")]
-    pub random_seed: Option<u64>,
+    random_seed: Option<u64>,
 
     /// Number of parallel workers (default: number of CPU cores)
     #[clap(short = 'n', long, help_heading = "Runner options")]
