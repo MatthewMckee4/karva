@@ -2,6 +2,7 @@
 
 use std::time::{Duration, Instant};
 
+use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
@@ -56,6 +57,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         };
 
         let skipped = body.outcome.is_skipped();
+        self.set_coverage_context(&settings.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
         let finalizer_diagnostics = self
             .package_runner

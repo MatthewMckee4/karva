@@ -1217,19 +1217,28 @@ def test_two():
           "missing_lines": [],
           "excluded_lines": [],
           "contexts": {
+            "1": [
+              "session"
+            ],
             "2": [
-              "test_context::test_one",
-              "test_context::test_two"
+              "test_context::test_one|run",
+              "test_context::test_two|run"
             ],
             "3": [
-              "test_context::test_one",
-              "test_context::test_two"
+              "test_context::test_one|run",
+              "test_context::test_two|run"
+            ],
+            "5": [
+              "session"
             ],
             "6": [
-              "test_context::test_one"
+              "test_context::test_one|run"
+            ],
+            "8": [
+              "session"
             ],
             "9": [
-              "test_context::test_two"
+              "test_context::test_two|run"
             ]
           }
         }
@@ -1241,6 +1250,146 @@ def test_two():
       }
     }
     "#);
+}
+
+#[test]
+fn test_cov_context_records_static_test_phases_and_filters_reports() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = ["src"]
+context = "python=3.14"
+"#,
+        ),
+        (
+            "src/app.py",
+            r"
+def setup_value():
+    return 1
+
+def run_value(value):
+    return value
+
+def teardown_value():
+    return None
+",
+        ),
+        (
+            "test_context_phases.py",
+            r#"
+import karva
+import pytest
+from src.app import run_value, setup_value, teardown_value
+
+@karva.fixture
+def lifecycle():
+    setup_value()
+    yield
+    teardown_value()
+
+@karva.tags.parametrize("value", [
+    pytest.param(1, id="one"),
+    pytest.param(2, id="two"),
+])
+def test_phase(lifecycle, value):
+    assert run_value(value) == value
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command().args([
+            "--num-workers=2",
+            "--cov-context=test",
+            "--cov-report=json",
+            "--status-level=none",
+            "test_context_phases.py",
+        ]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    insta::assert_snapshot!(context.read_file("coverage.json"), @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva",
+        "show_contexts": true
+      },
+      "files": {
+        "src/app.py": {
+          "executed_lines": [
+            2,
+            3,
+            5,
+            6,
+            8,
+            9
+          ],
+          "summary": {
+            "covered_lines": 6,
+            "num_statements": 6,
+            "percent_covered": 100.0,
+            "missing_lines": [],
+            "excluded_lines": []
+          },
+          "missing_lines": [],
+          "excluded_lines": [],
+          "contexts": {
+            "2": [
+              "python=3.14|session"
+            ],
+            "3": [
+              "python=3.14|test_context_phases::test_phase(one)|setup",
+              "python=3.14|test_context_phases::test_phase(two)|setup"
+            ],
+            "5": [
+              "python=3.14|session"
+            ],
+            "6": [
+              "python=3.14|test_context_phases::test_phase(one)|run",
+              "python=3.14|test_context_phases::test_phase(two)|run"
+            ],
+            "8": [
+              "python=3.14|session"
+            ],
+            "9": [
+              "python=3.14|test_context_phases::test_phase(one)|teardown",
+              "python=3.14|test_context_phases::test_phase(two)|teardown"
+            ]
+          }
+        }
+      },
+      "totals": {
+        "covered_lines": 6,
+        "num_statements": 6,
+        "percent_covered": 100.0
+      }
+    }
+    "#);
+
+    assert_cmd_snapshot!(
+        context
+            .coverage("report")
+            .args(["--contexts", r"\|setup$", "--format", "total"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    17
+
+    ----- stderr -----
+    "
+    );
 }
 
 #[test]
@@ -1313,11 +1462,17 @@ def test_flaky():
           "missing_lines": [],
           "excluded_lines": [],
           "contexts": {
+            "1": [
+              "session"
+            ],
             "2": [
-              "test_retry::test_flaky"
+              "test_retry::test_flaky|run"
+            ],
+            "4": [
+              "session"
             ],
             "5": [
-              "test_retry::test_flaky"
+              "test_retry::test_flaky|run"
             ]
           }
         }

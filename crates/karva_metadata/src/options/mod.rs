@@ -686,6 +686,17 @@ pub struct CoverageOptions {
     )]
     pub partial_branches: Option<Vec<CoveragePartialPattern>>,
 
+    /// Static context component attached to every observation in the run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"str"#,
+        example = r#"
+            context = "python=3.14"
+        "#
+    )]
+    pub context: Option<String>,
+
     /// Include execution attributed to contexts matching these regular expressions.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
@@ -799,6 +810,7 @@ impl Combine for CoverageOptions {
         self.omit = self.omit.take().combine(other.omit);
         self.exclude_lines = self.exclude_lines.take().combine(other.exclude_lines);
         self.partial_branches = self.partial_branches.take().combine(other.partial_branches);
+        self.context = self.context.take().combine(other.context);
         self.contexts = self.contexts.take().combine(other.contexts);
         self.precision = self.precision.combine(other.precision);
         self.append = self.append.combine(other.append);
@@ -833,6 +845,7 @@ impl CoverageOptions {
             omit: self.omit.clone().unwrap_or_default(),
             exclude_lines: self.exclude_lines.clone().unwrap_or_default(),
             partial_branches: self.partial_branches.clone().unwrap_or_default(),
+            context: self.context.clone(),
             contexts: self.contexts.clone().unwrap_or_default(),
             precision: self.precision.unwrap_or_default(),
             append: self.append.unwrap_or_default(),
@@ -1471,6 +1484,7 @@ path-aliases = ["/workspace=."]
 sources = ["src", "tests"]
 include = ["src/**"]
 omit = ["**/generated.py"]
+context = "python=3.14"
 contexts = ["python=3\\.14"]
 precision = 2
 report = "term-missing"
@@ -1509,6 +1523,9 @@ report-path = "build/coverage.xml"
                 ),
                 exclude_lines: None,
                 partial_branches: None,
+                context: Some(
+                    "python=3.14",
+                ),
                 contexts: Some(
                     [
                         "python=3\\.14",
@@ -1607,6 +1624,7 @@ store-failure-output = false
             omit: None,
             exclude_lines: None,
             partial_branches: None,
+            context: None,
             contexts: None,
             precision: None,
             append: None,
@@ -1653,6 +1671,7 @@ store-failure-output = false
             ),
             exclude_lines: None,
             partial_branches: None,
+            context: None,
             contexts: None,
             precision: None,
             append: None,
@@ -1720,6 +1739,7 @@ store-failure-output = false
             omit: None,
             exclude_lines: None,
             partial_branches: None,
+            context: None,
             contexts: None,
             precision: None,
             append: None,
@@ -1764,7 +1784,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `context`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }
@@ -1783,7 +1803,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `nonsense`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `context`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

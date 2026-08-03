@@ -111,10 +111,27 @@ karva test --cov=src --cov-report=json
 karva test --cov=src --cov-report=json:build/coverage.json
 ```
 
-Pass `--cov-context=test` with JSON reports to include a `contexts` map from executed source lines to the qualified test names that covered them:
+Pass `--cov-context=test` to record qualified test names and lifecycle phases. Execution outside a test uses `session`; test execution uses `setup`, `run`, or `teardown`:
 
 ```bash
-karva test --cov=src --cov-context=test --cov-report=json
+uv run karva test --cov=src --cov-context=test --cov-report=json
+```
+
+Add a static run context in configuration when reports must distinguish environments or shards:
+
+```toml
+[tool.karva.profile.ci.coverage]
+context = "python=3.14"
+```
+
+Contexts compose as `<static>|<qualified-test>|<phase>`, for example `python=3.14|test_checkout::test_card(visa)|run`. Karva escapes `\` and `|` within each component as `\\` and `\|` so names remain unambiguous.
+
+Filter every report to one or more context regular expressions. Any matching context includes its observation, and totals are recalculated from those observations:
+
+```bash
+uv run karva coverage report --contexts 'test_checkout'
+uv run karva coverage html --contexts 'python=3\.14' --show-contexts
+uv run karva coverage json --contexts '\|setup$' --show-contexts
 ```
 
 Persisted native coverage data can be exported independently. Output is compact by default:
