@@ -15,6 +15,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::branches::{CoveragePartials, branch_analysis_with_exclusions};
+use crate::context::{PENDING_SETUP_CONTEXT, SESSION_CONTEXT, compose_context};
 use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
 use crate::executable::{CoverageExclusions, executable_lines_with_exclusions};
 
@@ -31,6 +32,9 @@ pub struct CoverageConfig {
     /// Whether to record the current test context for each executed line.
     pub contexts: bool,
 
+    /// User-provided context attached to every observation in this run.
+    pub static_context: Option<String>,
+
     /// Whether to record branch arcs in addition to executed lines.
     pub branches: bool,
 
@@ -39,6 +43,27 @@ pub struct CoverageConfig {
 
     /// Regular expressions suppressing missing arcs from matched branch lines.
     pub partial_branches: Vec<String>,
+}
+
+/// Test lifecycle phase recorded in a dynamic coverage context.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CoveragePhase {
+    /// Function-scoped fixture setup.
+    Setup,
+    /// Test function execution.
+    Run,
+    /// Function-scoped fixture teardown.
+    Teardown,
+}
+
+impl CoveragePhase {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Setup => "setup",
+            Self::Run => "run",
+            Self::Teardown => "teardown",
+        }
+    }
 }
 
 /// Path components inside a source root that suppress tracking. These match
@@ -63,14 +88,25 @@ impl CoverageSession {
         let partials = CoveragePartials::new(&config.partial_branches)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let roots = resolve_source_roots(py, cwd, &config.sources)?;
+        let record_contexts = config.contexts || config.static_context.is_some();
+        let initial_context = if config.contexts {
+            compose_context(config.static_context.as_deref(), &[SESSION_CONTEXT])
+        } else {
+            compose_context(config.static_context.as_deref(), &[])
+        };
 
         let tracer = Py::new(
             py,
             CoverageTracer {
                 roots,
-                contexts: config.contexts,
+                contexts: record_contexts,
+                test_contexts: config.contexts,
+                static_context: config.static_context.clone(),
                 branches: config.branches,
-                state: Mutex::new(TracerState::default()),
+                state: Mutex::new(TracerState {
+                    current_context: initial_context,
+                    ..TracerState::default()
+                }),
                 monitoring_tool_id: OnceLock::new(),
                 monitoring_disable: OnceLock::new(),
             },
@@ -155,9 +191,27 @@ impl CoverageSession {
         Ok(())
     }
 
-    /// Attributes subsequent observations to a test, or clears attribution between tests.
-    pub fn set_current_context(&self, py: Python<'_>, context: Option<&str>) {
-        self.tracer.bind(py).borrow().set_current_context(context);
+    /// Starts first-attempt setup before fixture-derived test identity is available.
+    pub fn begin_pending_test_setup(&self, py: Python<'_>) {
+        self.tracer.bind(py).borrow().begin_pending_test_setup();
+    }
+
+    /// Reattributes first-attempt setup after fixture-derived test identity is available.
+    pub fn resolve_pending_test_setup(&self, py: Python<'_>, test: &str) {
+        self.tracer
+            .bind(py)
+            .borrow()
+            .resolve_pending_test_setup(test);
+    }
+
+    /// Attributes subsequent observations to one test lifecycle phase.
+    pub fn set_test_context(&self, py: Python<'_>, test: &str, phase: CoveragePhase) {
+        self.tracer.bind(py).borrow().set_test_context(test, phase);
+    }
+
+    /// Restores attribution for execution outside a concrete test lifecycle.
+    pub fn clear_test_context(&self, py: Python<'_>) {
+        self.tracer.bind(py).borrow().clear_test_context();
     }
 }
 
@@ -173,6 +227,12 @@ struct TracerState {
     arc_contexts: HashMap<TrackedPath, HashMap<BranchArc, HashSet<String>>>,
     /// Current test context, if `--cov-context=test` is active and a test is running.
     current_context: Option<String>,
+    /// Temporary setup context awaiting fixture-derived test identity.
+    pending_context: Option<String>,
+    /// Lines observed while [`Self::pending_context`] is active.
+    pending_lines: HashMap<TrackedPath, HashSet<u32>>,
+    /// Branches observed while [`Self::pending_context`] is active.
+    pending_arcs: HashMap<TrackedPath, HashSet<BranchArc>>,
     /// Memoized result of [`compute_tracked_path`] per filename string.
     track_cache: HashMap<String, Option<TrackedPath>>,
     /// Memoized result of [`compute_tracked_path`] per live Python code object.
@@ -209,6 +269,8 @@ struct CodeLineRange {
 struct CoverageTracer {
     roots: Vec<PathBuf>,
     contexts: bool,
+    test_contexts: bool,
+    static_context: Option<String>,
     branches: bool,
     state: Mutex<TracerState>,
     monitoring_tool_id: OnceLock<u8>,
@@ -340,12 +402,64 @@ impl CoverageTracer {
 }
 
 impl CoverageTracer {
-    fn set_current_context(&self, context: Option<&str>) {
-        if !self.contexts {
+    fn begin_pending_test_setup(&self) {
+        if !self.test_contexts {
             return;
         }
         if let Ok(mut state) = self.state.lock() {
-            state.current_context = context.map(ToOwned::to_owned);
+            let pending = compose_context(self.static_context.as_deref(), &[PENDING_SETUP_CONTEXT]);
+            state.current_context.clone_from(&pending);
+            state.pending_context = pending;
+            state.pending_lines.clear();
+            state.pending_arcs.clear();
+        }
+    }
+
+    fn resolve_pending_test_setup(&self, test: &str) {
+        if !self.test_contexts {
+            return;
+        }
+        let Some(resolved) = compose_context(
+            self.static_context.as_deref(),
+            &[test, CoveragePhase::Setup.as_str()],
+        ) else {
+            return;
+        };
+        if let Ok(mut state) = self.state.lock() {
+            let Some(pending) = state.pending_context.take() else {
+                return;
+            };
+            let pending_lines = std::mem::take(&mut state.pending_lines);
+            let pending_arcs = std::mem::take(&mut state.pending_arcs);
+            replace_pending_context(&mut state.contexts, pending_lines, &pending, &resolved);
+            replace_pending_context(&mut state.arc_contexts, pending_arcs, &pending, &resolved);
+            state.current_context = Some(resolved);
+        }
+    }
+
+    fn set_test_context(&self, test: &str, phase: CoveragePhase) {
+        if !self.test_contexts {
+            return;
+        }
+        if let Ok(mut state) = self.state.lock() {
+            state.pending_context = None;
+            state.pending_lines.clear();
+            state.pending_arcs.clear();
+            state.current_context =
+                compose_context(self.static_context.as_deref(), &[test, phase.as_str()]);
+        }
+    }
+
+    fn clear_test_context(&self) {
+        if !self.test_contexts {
+            return;
+        }
+        if let Ok(mut state) = self.state.lock() {
+            state.pending_context = None;
+            state.pending_lines.clear();
+            state.pending_arcs.clear();
+            state.current_context =
+                compose_context(self.static_context.as_deref(), &[SESSION_CONTEXT]);
         }
     }
 
@@ -498,6 +612,26 @@ impl CoverageTracer {
     }
 }
 
+fn replace_pending_context<K: Copy + Eq + std::hash::Hash>(
+    contexts: &mut HashMap<TrackedPath, HashMap<K, HashSet<String>>>,
+    pending: HashMap<TrackedPath, HashSet<K>>,
+    old: &str,
+    new: &str,
+) {
+    for (path, keys) in pending {
+        let Some(observations) = contexts.get_mut(&path) else {
+            continue;
+        };
+        for key in keys {
+            if let Some(values) = observations.get_mut(&key)
+                && values.remove(old)
+            {
+                values.insert(new.to_owned());
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 struct TrackedCodeInfo {
     path: TrackedPath,
@@ -512,6 +646,13 @@ fn record_line_in_state(
     lineno: u32,
 ) {
     if contexts_enabled && let Some(context) = state.current_context.clone() {
+        if state.pending_context.is_some() {
+            state
+                .pending_lines
+                .entry(path.clone())
+                .or_default()
+                .insert(lineno);
+        }
         state
             .executed
             .entry(path.clone())
@@ -539,6 +680,13 @@ fn record_arc_in_state(
         return;
     }
     if contexts_enabled && let Some(context) = state.current_context.clone() {
+        if state.pending_context.is_some() {
+            state
+                .pending_arcs
+                .entry(path.clone())
+                .or_default()
+                .insert(arc);
+        }
         state.arcs.entry(path.clone()).or_default().insert(arc);
         state
             .arc_contexts
@@ -1023,6 +1171,8 @@ mod tests {
             let tracer = CoverageTracer {
                 roots: vec![root],
                 contexts: false,
+                test_contexts: false,
+                static_context: None,
                 branches: false,
                 state: Mutex::new(TracerState::default()),
                 monitoring_tool_id: OnceLock::new(),
@@ -1106,6 +1256,8 @@ code = Code()
             let tracer = CoverageTracer {
                 roots: Vec::new(),
                 contexts: false,
+                test_contexts: false,
+                static_context: None,
                 branches: false,
                 state: Mutex::new(TracerState::default()),
                 monitoring_tool_id: OnceLock::new(),

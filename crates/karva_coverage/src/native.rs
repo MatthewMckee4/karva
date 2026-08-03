@@ -16,10 +16,11 @@ use serde::{Deserialize, Serialize};
 use siphasher::sip128::{Hasher128, SipHasher13};
 use tempfile::NamedTempFile;
 
+use crate::context::{compose_context, prefix_context};
 use crate::data::{BranchArc, WorkerFile};
 
 /// Current native coverage schema version.
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 
 /// Karva coverage data retained after one or more test runs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -165,7 +166,7 @@ impl NativeCoverage {
     }
 
     /// Unions compatible observations into this artifact.
-    pub fn merge(&mut self, other: Self) -> Result<()> {
+    pub fn merge(&mut self, mut other: Self) -> Result<()> {
         if self.mode != other.mode {
             bail!(
                 "cannot append coverage collected in {:?} mode to coverage collected in {:?} mode",
@@ -177,7 +178,8 @@ impl NativeCoverage {
             bail!("cannot append coverage collected from different source roots");
         }
         if self.run_context != other.run_context {
-            bail!("cannot append coverage collected with different run contexts");
+            self.materialize_run_context();
+            other.materialize_run_context();
         }
 
         for (path, incoming) in other.files {
@@ -188,6 +190,37 @@ impl NativeCoverage {
             }
         }
         Ok(())
+    }
+
+    /// Moves a whole-run context onto every observed line and branch before merging runs.
+    fn materialize_run_context(&mut self) {
+        let Some(run_context) = self.run_context.take() else {
+            return;
+        };
+        for file in self.files.values_mut() {
+            for line in &file.executed {
+                prefix_observation_contexts(
+                    file.line_contexts.entry(*line).or_default(),
+                    &run_context,
+                );
+            }
+            if let Some(branches) = &mut file.branches {
+                for arc in &branches.executed {
+                    let mut entry = branches
+                        .contexts
+                        .iter()
+                        .find(|entry| entry.arc == *arc)
+                        .cloned()
+                        .unwrap_or_else(|| NativeArcContexts {
+                            arc: *arc,
+                            contexts: BTreeSet::new(),
+                        });
+                    branches.contexts.remove(&entry);
+                    prefix_observation_contexts(&mut entry.contexts, &run_context);
+                    branches.contexts.insert(entry);
+                }
+            }
+        }
     }
 
     /// Rewrites source identities and merges compatible paths that become equal.
@@ -208,6 +241,17 @@ impl NativeCoverage {
         }
         self.files = files;
         Ok(self)
+    }
+}
+
+fn prefix_observation_contexts(contexts: &mut BTreeSet<String>, run_context: &str) {
+    if contexts.is_empty() {
+        contexts.extend(compose_context(Some(run_context), &[]));
+    } else {
+        *contexts = contexts
+            .iter()
+            .map(|context| prefix_context(run_context, context))
+            .collect();
     }
 }
 
@@ -518,18 +562,55 @@ mod tests {
     }
 
     #[test]
+    fn merge_preserves_different_run_contexts() {
+        let mut first = artifact();
+        let mut second = artifact();
+        second.run_context = Some("windows-py313".to_owned());
+
+        first.merge(second).expect("merge static contexts");
+
+        assert_eq!(first.run_context, None);
+        let file = first
+            .files
+            .get(Utf8Path::new("src/package.py"))
+            .expect("fixture file");
+        assert_eq!(
+            file.line_contexts.get(&1),
+            Some(&BTreeSet::from([
+                "linux-py313|tests/test_package.py::test_ready".to_owned(),
+                "windows-py313|tests/test_package.py::test_ready".to_owned(),
+            ]))
+        );
+        let branch_contexts = &file
+            .branches
+            .as_ref()
+            .expect("branch coverage")
+            .contexts
+            .first()
+            .expect("branch context")
+            .contexts;
+        assert_eq!(
+            branch_contexts,
+            &BTreeSet::from([
+                "linux-py313|tests/test_package.py::test_ready".to_owned(),
+                "windows-py313|tests/test_package.py::test_ready".to_owned(),
+            ])
+        );
+    }
+
+    #[test]
     fn unsupported_version_names_path_and_versions() {
         let directory = tempfile::tempdir().expect("create temp directory");
         let path = Utf8PathBuf::from_path_buf(directory.path().join("data.json"))
             .expect("UTF-8 temp path");
-        fs::write(&path, br#"{"format_version":4}"#).expect("write artifact");
+        fs::write(&path, br#"{"format_version":5}"#).expect("write artifact");
 
         let error = NativeCoverage::read(&path).expect_err("reject future version");
         let message = error.to_string();
 
         assert!(message.contains(path.as_str()));
-        assert!(message.contains("found format version 4"));
-        assert!(message.contains("supported version is 3"));
+        assert!(message.contains("found format version 5"));
+        assert!(message.contains("supported version is 4"));
     }
 
     #[test]

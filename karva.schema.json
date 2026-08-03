@@ -94,6 +94,13 @@
             "null"
           ]
         },
+        "context": {
+          "description": "Static context component attached to every observation in the run.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "contexts": {
           "description": "Include execution attributed to contexts matching these regular expressions.",
           "type": [
