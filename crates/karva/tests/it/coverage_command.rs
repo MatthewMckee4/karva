@@ -185,6 +185,28 @@ fn json_exports_pretty_report_with_contexts() {
 }
 
 #[test]
+fn lcov_writes_portable_tracefile() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(context.coverage("lcov"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    insta::assert_snapshot!(context.read_file("coverage.lcov"), @r"
+    SF:src/app.py
+    DA:1,1
+    DA:2,0
+    LF:2
+    LH:1
+    end_of_record
+    ");
+}
+
+#[test]
 fn report_auto_combines_pending_shards() {
     let context = TestContext::new();
     write_coverage(

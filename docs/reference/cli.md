@@ -366,6 +366,7 @@ karva coverage [OPTIONS] <COMMAND>
 <dt><a href="#karva-coverage-html"><code>karva coverage html</code></a></dt><dd><p>Generate a navigable annotated HTML coverage report</p></dd>
 <dt><a href="#karva-coverage-xml"><code>karva coverage xml</code></a></dt><dd><p>Generate a Cobertura-compatible XML coverage report</p></dd>
 <dt><a href="#karva-coverage-json"><code>karva coverage json</code></a></dt><dd><p>Export documented JSON coverage data</p></dd>
+<dt><a href="#karva-coverage-lcov"><code>karva coverage lcov</code></a></dt><dd><p>Generate an LCOV tracefile</p></dd>
 <dt><a href="#karva-coverage-help"><code>karva coverage help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
 
@@ -498,6 +499,30 @@ karva coverage json [OPTIONS]
 </dd><dt id="karva-coverage-json--profile"><a href="#karva-coverage-json--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
 <p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-coverage-json--show-contexts"><a href="#karva-coverage-json--show-contexts"><code>--show-contexts</code></a></dt><dd><p>Include per-line execution contexts</p>
 </dd></dl>
+
+### karva coverage lcov
+
+Generate an LCOV tracefile
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva coverage lcov [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-coverage-lcov--config-file"><a href="#karva-coverage-lcov--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-coverage-lcov--contexts"><a href="#karva-coverage-lcov--contexts"><code>--contexts</code></a> <i>regex</i></dt><dd><p>Include execution attributed to a matching context regular expression</p>
+</dd><dt id="karva-coverage-lcov--data-file"><a href="#karva-coverage-lcov--data-file"><code>--data-file</code></a> <i>path</i></dt><dd><p>Native coverage artifact path, relative to the project root</p>
+</dd><dt id="karva-coverage-lcov--fail-under"><a href="#karva-coverage-lcov--fail-under"><code>--fail-under</code></a> <i>percent</i></dt><dd><p>Fail when total coverage is below this percentage</p>
+</dd><dt id="karva-coverage-lcov--help"><a href="#karva-coverage-lcov--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-coverage-lcov--include"><a href="#karva-coverage-lcov--include"><code>--include</code></a> <i>glob</i></dt><dd><p>Include only report paths matching this glob</p>
+</dd><dt id="karva-coverage-lcov--omit"><a href="#karva-coverage-lcov--omit"><code>--omit</code></a> <i>glob</i></dt><dd><p>Exclude report paths matching this glob after inclusion</p>
+</dd><dt id="karva-coverage-lcov--output"><a href="#karva-coverage-lcov--output"><code>--output</code></a> <i>path</i></dt><dd><p>Path receiving the LCOV tracefile</p>
+<p>&#91;default: coverage.lcov&#93;</p></dd><dt id="karva-coverage-lcov--precision"><a href="#karva-coverage-lcov--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
+</dd><dt id="karva-coverage-lcov--profile"><a href="#karva-coverage-lcov--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
 
 ### karva coverage help
 

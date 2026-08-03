@@ -17,7 +17,7 @@ mod verbosity;
 pub use cache::{CacheAction, CacheCommand};
 pub use coverage::{
     CoverageAction, CoverageCommand, CoverageFormat, CoverageHtmlCommand, CoverageJsonCommand,
-    CoverageReportCommand, CoverageSort, CoverageXmlCommand,
+    CoverageLcovCommand, CoverageReportCommand, CoverageSort, CoverageXmlCommand,
 };
 pub use enums::{
     CovContext, CovReport, FlakyResult, JunitFlakyFailStatus, NoTests, OutputFormat, ResultFormat,

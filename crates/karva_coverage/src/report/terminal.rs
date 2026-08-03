@@ -8,6 +8,7 @@ use fs_err as fs;
 use super::combined_rows;
 use super::html::{HtmlReportOptions, build_html_report};
 use super::json::{JsonReportOptions, build_json_report};
+use super::lcov::build_lcov_report;
 use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
 use super::{CoverageAnalysis, CoverageFilters};
@@ -195,6 +196,15 @@ impl CoverageAnalysis {
         let json = build_json_report(&self.rows, options)?;
         fs::write(output.as_std_path(), json)
             .with_context(|| format!("failed to write coverage json {output}"))?;
+        Ok(self.total_percent())
+    }
+
+    /// Writes an LCOV tracefile and returns total coverage.
+    pub fn write_lcov(&self, output: &Utf8Path) -> Result<f64> {
+        create_output_parent(output)?;
+        let lcov = build_lcov_report(&self.rows)?;
+        fs::write(output.as_std_path(), lcov)
+            .with_context(|| format!("failed to write coverage lcov {output}"))?;
         Ok(self.total_percent())
     }
 
