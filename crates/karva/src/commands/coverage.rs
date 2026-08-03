@@ -11,6 +11,8 @@ use karva_python_semantic::current_python_version;
 use crate::ExitStatus;
 use crate::utils::cwd;
 
+mod combine;
+
 pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     let cwd = cwd()?;
     let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
@@ -28,11 +30,14 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     let settings = project.settings().coverage();
     let data_file = absolute(&settings.data_file, project.cwd());
 
-    let data_files = coverage_data_files(&data_file)?;
-
     let filters = karva_coverage::CoverageFilters::new(&settings.include, &settings.omit)?
         .with_contexts(&settings.contexts)?
         .with_path_aliases(&settings.path_aliases)?;
+    if let CoverageAction::Combine(combine) = &args.action {
+        combine::combine(combine, project.cwd(), &data_file, &filters)?;
+        return Ok(ExitStatus::Success);
+    }
+    let data_files = coverage_data_files(&data_file)?;
     let analysis =
         karva_coverage::CoverageAnalysis::load_native(project.cwd(), &data_files, &filters)?
             .with_context(|| format!("coverage data at `{data_file}` contains no source files"))?;
@@ -116,6 +121,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
             let output = absolute(&lcov.output, project.cwd());
             analysis.write_lcov(&output)?
         }
+        CoverageAction::Combine(_) => return Ok(ExitStatus::Success),
     };
     if let Some(threshold) = settings.fail_under
         && total < threshold
