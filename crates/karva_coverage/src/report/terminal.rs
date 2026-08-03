@@ -12,6 +12,49 @@ use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
 use super::{CoverageAnalysis, CoverageFilters};
 
+/// Terminal coverage report representation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CoverageReportFormat {
+    /// Human-readable aligned text table.
+    #[default]
+    Text,
+    /// GitHub-flavored Markdown table.
+    Markdown,
+    /// Numeric total percentage only.
+    Total,
+}
+
+/// Column used to order displayed coverage rows.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CoverageReportSort {
+    #[default]
+    Name,
+    Statements,
+    Misses,
+    Branches,
+    PartialBranches,
+    Coverage,
+}
+
+/// Selection and presentation settings for a terminal coverage report.
+#[derive(Debug, Default)]
+pub struct CoverageReportOptions {
+    /// File paths, directories, or dotted module names to include.
+    pub selectors: Vec<String>,
+    /// Whether to show missing lines and branch arcs.
+    pub show_missing: bool,
+    /// Whether to hide fully covered rows without changing totals.
+    pub skip_covered: bool,
+    /// Whether to hide rows with no statements or branches without changing totals.
+    pub skip_empty: bool,
+    /// Column used to order displayed rows.
+    pub sort: CoverageReportSort,
+    /// Decimal places shown for percentages.
+    pub precision: usize,
+    /// Output representation.
+    pub format: CoverageReportFormat,
+}
+
 /// Prints the terminal coverage table and returns its total percentage.
 ///
 /// Returns `None` when no worker coverage artifacts contain source data.
@@ -74,12 +117,52 @@ impl CoverageAnalysis {
 
     /// Prints the compact terminal report using `precision` decimal places.
     pub fn report_with_precision(&self, show_missing: bool, precision: usize) -> Result<f64> {
-        print_report(
-            &self.rows,
-            show_missing,
-            precision,
+        self.write_report(
+            &CoverageReportOptions {
+                show_missing,
+                precision,
+                ..CoverageReportOptions::default()
+            },
             &mut std::io::stdout().lock(),
         )
+    }
+
+    /// Writes a selected and formatted terminal report and returns total coverage.
+    pub fn write_report(
+        &self,
+        options: &CoverageReportOptions,
+        out: &mut dyn Write,
+    ) -> Result<f64> {
+        let selected = select_rows(&self.rows, &options.selectors)?;
+        let mut displayed = selected.clone();
+        if options.skip_covered {
+            displayed.retain(|row| row_percent(row) < 100.0);
+        }
+        if options.skip_empty {
+            displayed.retain(|row| row.stmts > 0 || row.branches > 0);
+        }
+        sort_rows(&mut displayed, options.sort);
+        match options.format {
+            CoverageReportFormat::Text => print_report(
+                &displayed,
+                &selected,
+                options.show_missing,
+                options.precision,
+                out,
+            ),
+            CoverageReportFormat::Markdown => print_markdown_report(
+                &displayed,
+                &selected,
+                options.show_missing,
+                options.precision,
+                out,
+            ),
+            CoverageReportFormat::Total => {
+                let total = total_percent(&selected);
+                writeln!(out, "{:.*}", options.precision, total)?;
+                Ok(total)
+            }
+        }
     }
 
     /// Writes a Cobertura-compatible XML report and returns total coverage.
@@ -134,11 +217,12 @@ struct Row<'a> {
 
 fn print_report(
     rows: &[FileRow],
+    total_rows: &[FileRow],
     show_missing: bool,
     precision: usize,
     out: &mut dyn Write,
 ) -> Result<f64> {
-    let show_branches = rows.iter().any(|row| row.branches_enabled);
+    let show_branches = total_rows.iter().any(|row| row.branches_enabled);
     let name_width = rows
         .iter()
         .map(|row| row.name.len())
@@ -174,6 +258,7 @@ fn print_report(
         let miss_str = row.miss.to_string();
         let branches_str = row.branches.to_string();
         let branch_partial_str = row.branch_partial.to_string();
+        let missing = missing_display(row);
         writeln!(
             out,
             "{}",
@@ -188,15 +273,15 @@ fn print_report(
                     branches: &branches_str,
                     branch_partial: &branch_partial_str,
                     cover: &cover,
-                    missing: &row.missing,
+                    missing: &missing,
                 },
             )
         )?;
     }
 
     writeln!(out, "{rule}")?;
-    let total_pct = total_percent(rows);
-    let total = totals_row(rows);
+    let total_pct = total_percent(total_rows);
+    let total = totals_row(total_rows);
     let total_cover = format!("{:.*}%", precision, row_percent(&total));
     let total_stmts_str = total.stmts.to_string();
     let total_miss_str = total.miss.to_string();
@@ -222,6 +307,128 @@ fn print_report(
     )?;
 
     Ok(total_pct)
+}
+
+fn print_markdown_report(
+    rows: &[FileRow],
+    total_rows: &[FileRow],
+    show_missing: bool,
+    precision: usize,
+    out: &mut dyn Write,
+) -> Result<f64> {
+    let show_branches = total_rows.iter().any(|row| row.branches_enabled);
+    write!(out, "| Name | Stmts | Miss")?;
+    if show_branches {
+        write!(out, " | Branch | BrPart")?;
+    }
+    write!(out, " | Cover")?;
+    if show_missing {
+        write!(out, " | Missing")?;
+    }
+    writeln!(out, " |")?;
+    write!(out, "| --- | ---: | ---:")?;
+    if show_branches {
+        write!(out, " | ---: | ---:")?;
+    }
+    write!(out, " | ---:")?;
+    if show_missing {
+        write!(out, " | ---")?;
+    }
+    writeln!(out, " |")?;
+    for row in rows {
+        write!(out, "| {} | {} | {}", row.name, row.stmts, row.miss)?;
+        if show_branches {
+            write!(out, " | {} | {}", row.branches, row.branch_partial)?;
+        }
+        write!(out, " | {:.*}%", precision, row_percent(row))?;
+        if show_missing {
+            write!(out, " | {}", missing_display(row))?;
+        }
+        writeln!(out, " |")?;
+    }
+    let total = totals_row(total_rows);
+    write!(out, "| **TOTAL** | {} | {}", total.stmts, total.miss)?;
+    if show_branches {
+        write!(out, " | {} | {}", total.branches, total.branch_partial)?;
+    }
+    let total_percent = total_percent(total_rows);
+    write!(out, " | **{total_percent:.precision$}%**")?;
+    if show_missing {
+        write!(out, " | ")?;
+    }
+    writeln!(out, " |")?;
+    Ok(total_percent)
+}
+
+fn select_rows(rows: &[FileRow], selectors: &[String]) -> Result<Vec<FileRow>> {
+    if selectors.is_empty() {
+        return Ok(rows.to_vec());
+    }
+    let mut matched = vec![false; selectors.len()];
+    let selected = rows
+        .iter()
+        .filter(|row| {
+            let mut include = false;
+            for (index, selector) in selectors.iter().enumerate() {
+                if selector_matches(&row.name, selector) {
+                    matched[index] = true;
+                    include = true;
+                }
+            }
+            include
+        })
+        .cloned()
+        .collect();
+    if let Some((index, _)) = matched.iter().enumerate().find(|(_, matched)| !**matched) {
+        anyhow::bail!(
+            "coverage selector `{}` matched no source files",
+            selectors[index]
+        );
+    }
+    Ok(selected)
+}
+
+fn selector_matches(name: &str, selector: &str) -> bool {
+    let selector_path = selector.replace('.', "/");
+    name == selector
+        || name == format!("{selector_path}.py")
+        || name.starts_with(&format!("{}/", selector.trim_end_matches('/')))
+        || name.starts_with(&format!("{selector_path}/"))
+}
+
+fn sort_rows(rows: &mut [FileRow], sort: CoverageReportSort) {
+    rows.sort_by(|left, right| match sort {
+        CoverageReportSort::Name => left.name.cmp(&right.name),
+        CoverageReportSort::Statements => left
+            .stmts
+            .cmp(&right.stmts)
+            .then(left.name.cmp(&right.name)),
+        CoverageReportSort::Misses => left.miss.cmp(&right.miss).then(left.name.cmp(&right.name)),
+        CoverageReportSort::Branches => left
+            .branches
+            .cmp(&right.branches)
+            .then(left.name.cmp(&right.name)),
+        CoverageReportSort::PartialBranches => left
+            .branch_partial
+            .cmp(&right.branch_partial)
+            .then(left.name.cmp(&right.name)),
+        CoverageReportSort::Coverage => row_percent(left)
+            .total_cmp(&row_percent(right))
+            .then(left.name.cmp(&right.name)),
+    });
+}
+
+fn missing_display(row: &FileRow) -> String {
+    let mut missing = row.missing.clone();
+    for arc in &row.branch_missing {
+        if !missing.is_empty() {
+            missing.push_str(", ");
+        }
+        missing.push_str(&arc.from.to_string());
+        missing.push_str("->");
+        missing.push_str(&arc.to.to_string());
+    }
+    missing
 }
 
 fn format_row(name_width: usize, show_missing: bool, show_branches: bool, row: &Row<'_>) -> String {
@@ -294,7 +501,7 @@ mod tests {
         let rows = [row("a.py", 4, 2, 2, ""), row("b.py", 2, 2, 0, "")];
 
         let mut buf: Vec<u8> = Vec::new();
-        let total = print_report(&rows, false, 0, &mut buf).unwrap();
+        let total = print_report(&rows, &rows, false, 0, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
         assert!(out.contains("a.py"));
@@ -310,10 +517,86 @@ mod tests {
         let rows = [row("a.py", 9, 3, 6, "2-4, 6-8")];
 
         let mut buf: Vec<u8> = Vec::new();
-        print_report(&rows, true, 0, &mut buf).unwrap();
+        print_report(&rows, &rows, true, 0, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
         assert!(out.contains("Missing"));
         assert!(out.contains("2-4, 6-8"));
+    }
+
+    #[test]
+    fn skip_covered_hides_row_without_changing_total() {
+        let analysis = CoverageAnalysis {
+            coverage_root: camino::Utf8PathBuf::from("/proj"),
+            cwd_real: std::path::PathBuf::from("/proj"),
+            rows: vec![
+                row("empty.py", 0, 0, 0, ""),
+                row("covered.py", 2, 2, 0, ""),
+                row("partial.py", 2, 1, 1, "2"),
+            ],
+        };
+        let mut output = Vec::new();
+
+        let total = analysis
+            .write_report(
+                &CoverageReportOptions {
+                    skip_covered: true,
+                    skip_empty: true,
+                    format: CoverageReportFormat::Markdown,
+                    ..CoverageReportOptions::default()
+                },
+                &mut output,
+            )
+            .expect("write report");
+
+        insta::assert_snapshot!(String::from_utf8(output).expect("UTF-8 report"), @r"
+        | Name | Stmts | Miss | Cover |
+        | --- | ---: | ---: | ---: |
+        | partial.py | 2 | 1 | 50% |
+        | **TOTAL** | 4 | 1 | **75%** |
+        ");
+        assert!((total - 75.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn missing_display_includes_branch_arcs() {
+        let mut branch_row = row("branch.py", 2, 1, 1, "2");
+        branch_row.branch_missing = vec![
+            crate::data::BranchArc { from: 1, to: 2 },
+            crate::data::BranchArc { from: 1, to: 3 },
+        ];
+
+        assert_eq!(missing_display(&branch_row), "2, 1->2, 1->3");
+    }
+
+    #[test]
+    fn selectors_accept_dotted_modules_and_name_failures() {
+        let rows = vec![row("src/package/module.py", 1, 1, 0, "")];
+
+        assert_eq!(
+            select_rows(&rows, &["src.package.module".to_owned()])
+                .expect("select module")
+                .len(),
+            1
+        );
+        let error = select_rows(&rows, &["missing.module".to_owned()])
+            .expect_err("reject unmatched selector");
+        assert!(error.to_string().contains("missing.module"));
+    }
+
+    #[test]
+    fn rows_sort_by_requested_metric_then_name() {
+        let mut rows = vec![
+            row("b.py", 4, 3, 1, "4"),
+            row("a.py", 2, 1, 1, "2"),
+            row("c.py", 2, 2, 0, ""),
+        ];
+
+        sort_rows(&mut rows, CoverageReportSort::Coverage);
+
+        assert_eq!(
+            rows.iter().map(|row| row.name.as_str()).collect::<Vec<_>>(),
+            ["a.py", "b.py", "c.py"]
+        );
     }
 }

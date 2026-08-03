@@ -26,7 +26,8 @@ pub mod report;
 pub mod tracer;
 
 pub use report::{
-    CoverageAnalysis, CoverageFilters, combine_and_report, write_cobertura_xml, write_html_report,
+    CoverageAnalysis, CoverageFilters, CoverageReportFormat, CoverageReportOptions,
+    CoverageReportSort, combine_and_report, write_cobertura_xml, write_html_report,
     write_json_report,
 };
 pub use tracer::{CoverageConfig, CoverageSession};

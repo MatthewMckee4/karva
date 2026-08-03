@@ -373,21 +373,50 @@ Print the compact terminal coverage report
 <h3 class="cli-reference">Usage</h3>
 
 ```
-karva coverage report [OPTIONS]
+karva coverage report [OPTIONS] [SELECTOR]...
 ```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-coverage-report--selectors"><a href="#karva-coverage-report--selectors"><code>SELECTORS</code></a></dt><dd><p>File paths, directories, or dotted module names to include</p>
+</dd></dl>
 
 <h3 class="cli-reference">Options</h3>
 
-<dl class="cli-reference"><dt id="karva-coverage-report--config-file"><a href="#karva-coverage-report--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<dl class="cli-reference"><dt id="karva-coverage-report--append"><a href="#karva-coverage-report--append"><code>--append</code></a> <i>append</i></dt><dd><p>Append to the output file instead of replacing it</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-coverage-report--config-file"><a href="#karva-coverage-report--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
 <p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-coverage-report--contexts"><a href="#karva-coverage-report--contexts"><code>--contexts</code></a> <i>regex</i></dt><dd><p>Include execution attributed to a matching context regular expression</p>
 </dd><dt id="karva-coverage-report--data-file"><a href="#karva-coverage-report--data-file"><code>--data-file</code></a> <i>path</i></dt><dd><p>Native coverage artifact path, relative to the project root</p>
 </dd><dt id="karva-coverage-report--fail-under"><a href="#karva-coverage-report--fail-under"><code>--fail-under</code></a> <i>percent</i></dt><dd><p>Fail when total coverage is below this percentage</p>
-</dd><dt id="karva-coverage-report--help"><a href="#karva-coverage-report--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-coverage-report--format"><a href="#karva-coverage-report--format"><code>--format</code></a> <i>format</i></dt><dd><p>Report representation</p>
+<p>&#91;default: text&#93;</p><p>Possible values:</p>
+<ul>
+<li><code>text</code>:  Human-readable aligned table</li>
+<li><code>markdown</code>:  GitHub-flavored Markdown table</li>
+<li><code>total</code>:  Numeric total percentage only</li>
+</ul></dd><dt id="karva-coverage-report--help"><a href="#karva-coverage-report--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
 </dd><dt id="karva-coverage-report--include"><a href="#karva-coverage-report--include"><code>--include</code></a> <i>glob</i></dt><dd><p>Include only report paths matching this glob</p>
 </dd><dt id="karva-coverage-report--omit"><a href="#karva-coverage-report--omit"><code>--omit</code></a> <i>glob</i></dt><dd><p>Exclude report paths matching this glob after inclusion</p>
+</dd><dt id="karva-coverage-report--output"><a href="#karva-coverage-report--output"><code>--output</code></a> <i>path</i></dt><dd><p>Write the report to this path instead of stdout</p>
 </dd><dt id="karva-coverage-report--precision"><a href="#karva-coverage-report--precision"><code>--precision</code></a> <i>n</i></dt><dd><p>Decimal places shown in coverage percentages</p>
 </dd><dt id="karva-coverage-report--profile"><a href="#karva-coverage-report--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve</p>
-<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-coverage-report--show-missing"><a href="#karva-coverage-report--show-missing"><code>--show-missing</code></a></dt><dd><p>Show missing line ranges and branch arcs</p>
+</dd><dt id="karva-coverage-report--skip-covered"><a href="#karva-coverage-report--skip-covered"><code>--skip-covered</code></a></dt><dd><p>Hide files with complete coverage without changing totals</p>
+</dd><dt id="karva-coverage-report--skip-empty"><a href="#karva-coverage-report--skip-empty"><code>--skip-empty</code></a></dt><dd><p>Hide files with no statements or branches without changing totals</p>
+</dd><dt id="karva-coverage-report--sort"><a href="#karva-coverage-report--sort"><code>--sort</code></a> <i>sort</i></dt><dd><p>Column used to order displayed files</p>
+<p>&#91;default: name&#93;</p><p>Possible values:</p>
+<ul>
+<li><code>name</code>:  Source path</li>
+<li><code>statements</code>:  Statement count</li>
+<li><code>misses</code>:  Missing statement count</li>
+<li><code>branches</code>:  Branch count</li>
+<li><code>partial-branches</code>:  Partial branch count</li>
+<li><code>coverage</code>:  Coverage percentage</li>
+</ul></dd></dl>
 
 ### karva coverage help
 

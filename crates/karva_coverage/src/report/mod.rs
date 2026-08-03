@@ -16,6 +16,7 @@ pub use terminal::combine_and_report;
 pub use terminal::write_cobertura_xml;
 pub use terminal::write_html_report;
 pub use terminal::write_json_report;
+pub use terminal::{CoverageReportFormat, CoverageReportOptions, CoverageReportSort};
 
 use self::shared::{FileRow, combine, combine_native, total_percent, verify_combined_sources};
 
