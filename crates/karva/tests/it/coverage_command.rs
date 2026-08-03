@@ -53,6 +53,36 @@ fn report_reads_default_native_data() {
 }
 
 #[test]
+fn html_writes_navigable_annotated_report() {
+    let context = TestContext::new();
+    write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
+
+    assert_cmd_snapshot!(
+        context.coverage("html").args([
+            "--directory",
+            "coverage-site",
+            "--title",
+            "Karva <coverage>",
+        ]),
+        @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    "
+    );
+    insta::assert_snapshot!(
+        "coverage_html_index",
+        context.read_file("coverage-site/index.html")
+    );
+    insta::assert_snapshot!(
+        "coverage_html_source",
+        context.read_file("coverage-site/source-7372632f6170702e7079.html")
+    );
+}
+
+#[test]
 fn report_auto_combines_pending_shards() {
     let context = TestContext::new();
     write_coverage(

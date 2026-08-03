@@ -37,7 +37,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
         karva_coverage::CoverageAnalysis::load_native(project.cwd(), &data_files, &filters)?
             .with_context(|| format!("coverage data at `{data_file}` contains no source files"))?;
 
-    match &args.action {
+    let total = match &args.action {
         CoverageAction::Report(report) => {
             if report.append == Some(true) && report.format != CoverageFormat::Markdown {
                 bail!("`--append` requires `--format markdown`");
@@ -64,7 +64,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
                     CoverageFormat::Total => karva_coverage::CoverageReportFormat::Total,
                 },
             };
-            let total = if let Some(output) = &report.output {
+            if let Some(output) = &report.output {
                 let output = absolute(output, project.cwd());
                 if let Some(parent) = output.parent()
                     && !parent.as_str().is_empty()
@@ -83,19 +83,32 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
                 analysis.write_report(&options, &mut file)?
             } else {
                 analysis.write_report(&options, &mut std::io::stdout().lock())?
-            };
-            if let Some(threshold) = settings.fail_under
-                && total < threshold
-            {
-                let mut stderr = std::io::stderr().lock();
-                writeln!(
-                    stderr,
-                    "coverage failure: required total coverage of {threshold}% not reached, total coverage was {:.*}%",
-                    settings.precision.0, total
-                )?;
-                return Ok(ExitStatus::Error);
             }
         }
+        CoverageAction::Html(html) => {
+            let output = absolute(&html.directory, project.cwd());
+            analysis.write_html_with_options(
+                &output,
+                &karva_coverage::HtmlReportOptions {
+                    title: html.title.clone(),
+                    show_contexts: html.show_contexts,
+                    skip_covered: html.skip_covered,
+                    skip_empty: html.skip_empty,
+                    precision: settings.precision.0,
+                },
+            )?
+        }
+    };
+    if let Some(threshold) = settings.fail_under
+        && total < threshold
+    {
+        let mut stderr = std::io::stderr().lock();
+        writeln!(
+            stderr,
+            "coverage failure: required total coverage of {threshold}% not reached, total coverage was {:.*}%",
+            settings.precision.0, total
+        )?;
+        return Ok(ExitStatus::Error);
     }
 
     Ok(ExitStatus::Success)

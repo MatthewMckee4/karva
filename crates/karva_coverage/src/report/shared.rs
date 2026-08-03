@@ -447,11 +447,6 @@ pub(super) fn row_percent(row: &FileRow) -> f64 {
     )
 }
 
-pub(super) fn format_percent(total: u32, miss: u32) -> String {
-    let pct = percent(total, miss);
-    format!("{pct:.0}%")
-}
-
 pub(super) fn collapse_ranges(lines: &BTreeSet<u32>) -> String {
     let mut parts: Vec<String> = Vec::new();
     let mut iter = lines.iter().copied();
@@ -564,17 +559,17 @@ mod tests {
 
     #[test]
     fn percent_full_coverage() {
-        assert_eq!(format_percent(10, 0), "100%");
+        assert!((percent(10, 0) - 100.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn percent_partial() {
-        assert_eq!(format_percent(10, 3), "70%");
+        assert!((percent(10, 3) - 70.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn percent_zero_stmts() {
-        assert_eq!(format_percent(0, 0), "100%");
+        assert!((percent(0, 0) - 100.0).abs() < f64::EPSILON);
     }
 
     #[test]

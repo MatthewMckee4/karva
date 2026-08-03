@@ -1,0 +1,24 @@
+---
+source: crates/karva_coverage/src/report/html.rs
+expression: page
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>src/&lt;app&gt;.py — Coverage &lt;report&gt;</title>
+  <style>body{font-family:system-ui,sans-serif;margin:2rem;color:#202124}table{border-collapse:collapse;width:100%}th,td{padding:.5rem;border-bottom:1px solid #ddd;text-align:left}td.num{text-align:right;font-variant-numeric:tabular-nums}code,.source{font-family:ui-monospace,SFMono-Regular,monospace}thead{background:#f5f5f5}h1{margin-top:0}a{color:#0969da}.source{display:block;overflow:auto;background:#f6f8fa;padding:1rem}.line{display:block;min-height:1.35em}.number{display:inline-block;width:3rem;text-align:right;color:#6e7781;text-decoration:none}.executed{background:#dafbe1}.missing{background:#ffebe9}.excluded{background:#f0f0f0;color:#6e7781}.partial{background:#fff8c5}.branches{color:#9a6700}.contexts{float:right;color:#57606a;font-size:.85em}</style>
+</head>
+<body>
+  <p><a href="index.html">← Index</a></p>
+  <h1><code>src/&lt;app&gt;.py</code></h1>
+  <p>Coverage: <strong>60%</strong></p>
+  <pre class="source">
+<span class="line executed"><a id="L1" href="#L1" class="number">    1</a> <code>hit = &#39;&lt;&amp;&gt;&#39;</code> <span class="contexts">test&lt;&amp;&gt;</span></span>
+<span class="line missing"><a id="L2" href="#L2" class="number">    2</a> <code>miss = 2</code></span>
+<span class="line partial"><a id="L3" href="#L3" class="number">    3</a> <code>if hit:</code> <span class="branches">missing → 5</span></span>
+<span class="line excluded"><a id="L4" href="#L4" class="number">    4</a> <code>    excluded = 4</code></span>
+  </pre>
+</body>
+</html>
