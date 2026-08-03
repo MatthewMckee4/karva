@@ -159,6 +159,13 @@
   display: none;
 }
 
+[data-md-toggle="drawer"]:checked
+  ~ .md-container
+  .md-main:has(.home-hero)
+  .md-sidebar--primary {
+  display: block;
+}
+
 .md-main:has(.home-hero) .md-main__inner {
   display: block;
   max-width: 74rem;
