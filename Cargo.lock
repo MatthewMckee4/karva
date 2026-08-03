@@ -1140,6 +1140,7 @@ dependencies = [
  "karva_project",
  "karva_runner",
  "karva_static",
+ "markdown",
  "regex",
  "ruff_python_ast",
  "serde",
