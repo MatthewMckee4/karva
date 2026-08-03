@@ -335,7 +335,6 @@ fn persist_coverage(
     };
     let current = karva_coverage::native::NativeCoverage::from_worker_files(
         project.cwd(),
-        &settings.sources,
         mode,
         worker_files,
     )?;

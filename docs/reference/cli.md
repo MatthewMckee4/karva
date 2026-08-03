@@ -48,7 +48,7 @@ karva test [OPTIONS] [PATH]...
 <li><code>never</code>:  Never display colors</li>
 </ul></dd><dt id="karva-test--config-file"><a href="#karva-test--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration.</p>
 <p>While karva configuration can be included in a <code>pyproject.toml</code> file, it is not allowed in this context.</p>
-<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--cov"><a href="#karva-test--cov"><code>--cov</code></a> <i>source</i></dt><dd><p>Measure code coverage for the given source path.</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--cov"><a href="#karva-test--cov"><code>--cov</code></a> <i>source</i></dt><dd><p>Measure code coverage for a source path or importable Python name.</p>
 <p>May be passed multiple times to measure several sources. Pass without a value (<code>--cov</code>) to measure the current working directory.</p>
 </dd><dt id="karva-test--cov-append"><a href="#karva-test--cov-append"><code>--cov-append</code></a> <i>cov-append</i></dt><dd><p>Add this run to compatible native coverage data instead of replacing it</p>
 <p>Possible values:</p>

@@ -20,11 +20,12 @@ test_control.py      18      3     83%
 TOTAL                18      3     83%
 ```
 
-Pass a path to limit measurement to specific source roots, or pass `--cov` multiple times to measure several:
+Pass a path or importable module or package name to limit measurement to specific source roots. Pass `--cov` multiple times to measure several:
 
 ```bash
-karva test --cov=src
-karva test --cov=pkg_a --cov=pkg_b
+uv run karva test --cov=src
+uv run karva test --cov=example_package
+uv run karva test --cov=pkg_a --cov=pkg_b
 ```
 
 Equivalent configuration:
@@ -226,7 +227,9 @@ The match is case-insensitive (`# PRAGMA: NO COVER` works) and is only recognise
 
 ## Source roots
 
-Every `--cov` value is canonicalised to an absolute path. A file is included in the report if its path lives under at least one source root and does not contain any of `site-packages`, `dist-packages`, `.venv`, or `.tox` — installed third-party code is filtered automatically.
+Karva first treats each `--cov` value as a path relative to the project root. If that path does not exist, Karva resolves it as a module, regular package, or namespace package using the selected Python environment. Existing paths therefore take precedence over importable names. Modules without Python source and unresolved names produce an error naming both attempted interpretations.
+
+Files under explicitly selected importable packages are measured even when they live in `site-packages` or a virtual environment. Broad path sources still skip nested `site-packages`, `dist-packages`, `.venv`, and `.tox` directories.
 
 ## Parallel runs
 

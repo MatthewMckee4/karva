@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 /// Coverage payload persisted by one worker, keyed by normalized source path.
 pub struct WorkerFile {
+    /// Canonical source roots resolved by the worker's Python environment.
+    #[serde(default)]
+    pub source_roots: BTreeSet<String>,
+
     /// Per-source coverage collected by the worker.
     pub files: BTreeMap<String, FileEntry>,
 }

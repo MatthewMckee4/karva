@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::branches::branch_arcs_with_exclusions;
@@ -55,18 +56,7 @@ impl CoverageSession {
     pub fn start(py: Python<'_>, cwd: &Utf8Path, config: &CoverageConfig) -> PyResult<Self> {
         let exclusions = CoverageExclusions::new(&config.exclude_lines)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        let roots: Vec<PathBuf> = config
-            .sources
-            .iter()
-            .map(|s| {
-                let raw = if s.is_empty() {
-                    cwd.as_str()
-                } else {
-                    s.as_str()
-                };
-                fs::canonicalize(raw).unwrap_or_else(|_| PathBuf::from(raw))
-            })
-            .collect();
+        let roots = resolve_source_roots(py, cwd, &config.sources)?;
 
         let tracer = Py::new(
             py,
@@ -579,18 +569,86 @@ fn compute_tracked_path(filename: &str, roots: &[PathBuf]) -> Option<PathBuf> {
         return None;
     }
     let canonical = fs::canonicalize(filename).ok()?;
-    if canonical
-        .components()
-        .any(|c| PATH_EXCLUDES.contains(&c.as_os_str().to_str().unwrap_or("")))
-    {
-        return None;
-    }
     for root in roots {
-        if canonical == *root || canonical.starts_with(root) {
+        if canonical == *root {
+            return Some(canonical);
+        }
+        let Ok(relative) = canonical.strip_prefix(root) else {
+            continue;
+        };
+        if !relative
+            .components()
+            .any(|component| PATH_EXCLUDES.contains(&component.as_os_str().to_str().unwrap_or("")))
+        {
             return Some(canonical);
         }
     }
     None
+}
+
+fn resolve_source_roots(
+    py: Python<'_>,
+    cwd: &Utf8Path,
+    sources: &[String],
+) -> PyResult<Vec<PathBuf>> {
+    let importlib = py.import("importlib.util")?;
+    let mut roots = BTreeSet::new();
+
+    for source in sources {
+        let candidate = if source.is_empty() {
+            cwd.to_path_buf()
+        } else {
+            cwd.join(source)
+        };
+        if candidate.exists() {
+            roots.insert(fs::canonicalize(candidate)?);
+            continue;
+        }
+
+        let spec = importlib.call_method1("find_spec", (source,)).map_err(|error| {
+            PyValueError::new_err(format!(
+                "coverage source `{source}` was not found as path `{candidate}` and import lookup failed: {error}"
+            ))
+        })?;
+        if spec.is_none() {
+            return Err(PyValueError::new_err(format!(
+                "coverage source `{source}` was not found as path `{candidate}` or as an importable module"
+            )));
+        }
+
+        let locations = spec.getattr("submodule_search_locations")?;
+        if !locations.is_none() {
+            for location in locations.try_iter()? {
+                let location: String = location?.extract()?;
+                roots.insert(fs::canonicalize(&location).map_err(|error| {
+                    PyValueError::new_err(format!(
+                        "failed to resolve imported coverage source `{source}` at `{location}`: {error}"
+                    ))
+                })?);
+            }
+            continue;
+        }
+
+        let origin: Option<String> = spec.getattr("origin")?.extract()?;
+        let Some(origin) = origin else {
+            return Err(PyValueError::new_err(format!(
+                "importable coverage source `{source}` has no Python source file"
+            )));
+        };
+        let origin_path = PathBuf::from(&origin);
+        if !is_python_source(&origin_path) {
+            return Err(PyValueError::new_err(format!(
+                "importable coverage source `{source}` has no Python source file (origin: `{origin}`)"
+            )));
+        }
+        roots.insert(fs::canonicalize(&origin_path).map_err(|error| {
+            PyValueError::new_err(format!(
+                "failed to resolve imported coverage source `{source}` at `{origin}`: {error}"
+            ))
+        })?);
+    }
+
+    Ok(roots.into_iter().collect())
 }
 
 fn py_version_at_least(py: Python<'_>, major: u8, minor: u8) -> PyResult<bool> {
@@ -870,7 +928,14 @@ fn save_data(
     {
         fs::create_dir_all(parent.as_std_path())?;
     }
-    let bytes = serde_json::to_vec(&WorkerFile { files })?;
+    let source_roots = roots
+        .iter()
+        .map(|root| root.to_string_lossy().into_owned())
+        .collect();
+    let bytes = serde_json::to_vec(&WorkerFile {
+        source_roots,
+        files,
+    })?;
     fs::write(data_file.as_std_path(), bytes)
 }
 
@@ -880,6 +945,38 @@ mod tests {
     use pyo3::types::PyDict;
 
     use super::*;
+
+    #[test]
+    fn source_path_takes_precedence_over_import_lookup() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cwd = Utf8Path::from_path(directory.path()).expect("UTF-8 path");
+        fs::create_dir(cwd.join("ambiguous")).expect("source directory");
+
+        Python::initialize();
+        let roots = Python::attach(|py| resolve_source_roots(py, cwd, &["ambiguous".to_string()]))
+            .expect("resolved source");
+
+        assert_eq!(
+            roots,
+            vec![fs::canonicalize(cwd.join("ambiguous")).expect("canonical source")]
+        );
+    }
+
+    #[test]
+    fn sourceless_import_is_rejected() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cwd = Utf8Path::from_path(directory.path()).expect("UTF-8 path");
+
+        Python::initialize();
+        let error = Python::attach(|py| resolve_source_roots(py, cwd, &["sys".to_string()]))
+            .expect_err("built-in module has no source");
+
+        assert!(
+            error
+                .to_string()
+                .contains("importable coverage source `sys` has no Python source file")
+        );
+    }
 
     #[test]
     fn record_arc_attributes_the_current_context() {

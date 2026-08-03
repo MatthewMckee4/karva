@@ -192,7 +192,7 @@
           ]
         },
         "sources": {
-          "description": "Source paths to measure coverage for.\n\nEquivalent to passing `--cov=<path>` on the command line; may be\nlisted multiple times. An empty entry (`\"\"`) measures the current\nworking directory, matching pytest-cov's bare `--cov`.",
+          "description": "Source paths or importable Python names to measure coverage for.\n\nEquivalent to passing `--cov=<source>` on the command line; may be\nlisted multiple times. An empty entry (`\"\"`) measures the current\nworking directory, matching pytest-cov's bare `--cov`.",
           "type": [
             "array",
             "null"

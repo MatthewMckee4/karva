@@ -120,7 +120,6 @@ impl NativeCoverage {
     /// Builds one durable artifact by unioning transient worker payloads.
     pub fn from_worker_files(
         project_root: &Utf8Path,
-        source_roots: &[String],
         mode: CoverageMode,
         files: &[impl AsRef<Utf8Path>],
     ) -> Result<Self> {
@@ -133,6 +132,7 @@ impl NativeCoverage {
             )
         })?;
         let mut native_files = BTreeMap::new();
+        let mut source_roots = BTreeSet::new();
 
         for worker_path in files {
             let worker_path = worker_path.as_ref();
@@ -140,6 +140,7 @@ impl NativeCoverage {
                 .with_context(|| format!("failed to read coverage file `{worker_path}`"))?;
             let worker: WorkerFile = serde_json::from_slice(&bytes)
                 .with_context(|| format!("failed to parse coverage file `{worker_path}`"))?;
+            source_roots.extend(worker.source_roots);
             for (source, file) in worker.files {
                 merge_worker_file(
                     &canonical_root,
@@ -154,7 +155,10 @@ impl NativeCoverage {
 
         Ok(Self::new(
             mode,
-            normalize_source_roots(&canonical_root, source_roots)?,
+            normalize_source_roots(
+                &canonical_root,
+                &source_roots.into_iter().collect::<Vec<_>>(),
+            )?,
             None,
             native_files,
         ))
@@ -561,6 +565,7 @@ mod tests {
         let first_worker = project_root.join("first-worker.json");
         let second_worker = project_root.join("second-worker.json");
         let worker = |executed, context: &str| WorkerFile {
+            source_roots: BTreeSet::from([source.to_string()]),
             files: BTreeMap::from([(
                 source.to_string(),
                 crate::data::FileEntry {
@@ -583,20 +588,12 @@ mod tests {
         )
         .expect("write second worker");
 
-        let mut first = NativeCoverage::from_worker_files(
-            &project_root,
-            &["app.py".to_owned()],
-            CoverageMode::Line,
-            &[first_worker],
-        )
-        .expect("build first artifact");
-        let second = NativeCoverage::from_worker_files(
-            &project_root,
-            &["app.py".to_owned()],
-            CoverageMode::Line,
-            &[second_worker],
-        )
-        .expect("build second artifact");
+        let mut first =
+            NativeCoverage::from_worker_files(&project_root, CoverageMode::Line, &[first_worker])
+                .expect("build first artifact");
+        let second =
+            NativeCoverage::from_worker_files(&project_root, CoverageMode::Line, &[second_worker])
+                .expect("build second artifact");
 
         first.merge(second).expect("append compatible artifact");
 
