@@ -677,7 +677,7 @@ fn diagnostic_comparison(
 
 fn test_workload(output: &str) -> Vec<&str> {
     static TEST_RESULT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?m)^\s+(?:PASS|FAIL|ERROR|FLAKY \d+/\d+) \[TIME\] (?P<test>.+)$")
+        Regex::new(r"(?m)^\s+(?:PASS|FAIL|ERROR|SKIP|FLAKY \d+/\d+) \[TIME\] (?P<test>.+)$")
             .expect("test result regex should be valid")
     });
 
@@ -1444,6 +1444,18 @@ mod tests {
             "    PASS [TIME] test_first\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
         let candidate =
             "    PASS [TIME] test_second\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
+
+        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
+            .expect("diagnostics should be available");
+
+        assert_eq!(comparison.baseline, comparison.candidate);
+        assert!(comparison.workload_changed);
+    }
+
+    #[test]
+    fn diagnostic_comparison_detects_equal_sized_skipped_workload_changes() {
+        let baseline = "    SKIP [TIME] test_first: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
+        let candidate = "    SKIP [TIME] test_second: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
 
         let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
             .expect("diagnostics should be available");
