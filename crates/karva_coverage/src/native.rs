@@ -20,22 +20,22 @@ use crate::context::{compose_context, prefix_context};
 use crate::data::{BranchArc, WorkerFile};
 
 /// Current native coverage schema version.
-pub const FORMAT_VERSION: u32 = 4;
+const FORMAT_VERSION: u32 = 4;
 
 /// Karva coverage data retained after one or more test runs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NativeCoverage {
     /// Native artifact schema version.
-    pub format_version: u32,
+    format_version: u32,
     /// Karva version that produced this artifact.
-    pub karva_version: String,
+    karva_version: String,
     /// Whether collection measured statements alone or statements and branches.
-    pub mode: CoverageMode,
+    pub(super) mode: CoverageMode,
     /// Portable project-relative source roots, or absolute roots outside the project.
     pub source_roots: BTreeSet<Utf8PathBuf>,
     /// User-provided context attached to the whole run.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub run_context: Option<String>,
+    pub(super) run_context: Option<String>,
     /// Coverage keyed by `/`-separated project-relative paths.
     ///
     /// Sources outside the project retain normalized absolute paths and require
@@ -106,7 +106,8 @@ impl NativeCoverage {
     }
 
     /// Fails when any source differs from the bytes measured during collection.
-    pub fn verify_sources(&self, project_root: &Utf8Path) -> Result<()> {
+    #[cfg(test)]
+    fn verify_sources(&self, project_root: &Utf8Path) -> Result<()> {
         for (source_path, coverage) in &self.files {
             let path = project_root.join(source_path);
             let source = fs::read(&path)
@@ -224,7 +225,7 @@ impl NativeCoverage {
     }
 
     /// Rewrites source identities and merges compatible paths that become equal.
-    pub(crate) fn map_paths(mut self, map: impl Fn(&str) -> String) -> Result<Self> {
+    pub(super) fn map_paths(mut self, map: impl Fn(&str) -> String) -> Result<Self> {
         self.source_roots = self
             .source_roots
             .iter()
@@ -432,24 +433,24 @@ pub struct NativeFileCoverage {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NativeBranchCoverage {
     /// Statically discovered control-flow edges.
-    pub possible: BTreeSet<BranchArc>,
+    pub(super) possible: BTreeSet<BranchArc>,
     /// Control-flow edges observed at runtime.
-    pub executed: BTreeSet<BranchArc>,
+    pub(super) executed: BTreeSet<BranchArc>,
     /// Branch source lines whose unobserved destinations are intentional.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub partial: BTreeSet<u32>,
+    pub(super) partial: BTreeSet<u32>,
     /// Contexts grouped by executed edge, sorted by edge.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub contexts: BTreeSet<NativeArcContexts>,
+    pub(super) contexts: BTreeSet<NativeArcContexts>,
 }
 
 /// Contexts that traversed one branch edge.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct NativeArcContexts {
     /// Executed control-flow edge.
-    pub arc: BranchArc,
+    pub(super) arc: BranchArc,
     /// Context names that traversed the edge.
-    pub contexts: BTreeSet<String>,
+    pub(super) contexts: BTreeSet<String>,
 }
 
 /// Stable 128-bit fingerprint of source content.
@@ -467,12 +468,12 @@ impl SourceFingerprint {
     }
 
     /// Returns the lowercase hexadecimal fingerprint.
-    pub fn as_str(&self) -> &str {
+    pub(super) fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Returns whether `source` has the content captured by this fingerprint.
-    pub fn matches(&self, source: &[u8]) -> bool {
+    pub(super) fn matches(&self, source: &[u8]) -> bool {
         *self == Self::from_bytes(source)
     }
 }

@@ -25,7 +25,8 @@ use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
 
 /// Parse `path` and return the set of line numbers that contain a statement.
-pub fn executable_lines(path: &Path) -> io::Result<HashSet<u32>> {
+#[cfg(test)]
+fn executable_lines(path: &Path) -> io::Result<HashSet<u32>> {
     executable_lines_with_exclusions(path, &CoverageExclusions::default())
         .map(|(executable, _)| executable)
 }
@@ -54,7 +55,7 @@ impl CoverageExclusions {
 }
 
 /// Analyze executable and excluded lines using configured expressions.
-pub fn executable_lines_with_exclusions(
+pub(crate) fn executable_lines_with_exclusions(
     path: &Path,
     exclusions: &CoverageExclusions,
 ) -> io::Result<(HashSet<u32>, HashSet<u32>)> {
@@ -66,11 +67,12 @@ pub fn executable_lines_with_exclusions(
 
 /// Compute executable line numbers from a source string. Exposed separately
 /// so unit tests can avoid touching the filesystem.
-pub fn executable_lines_for_source(source: &str) -> HashSet<u32> {
+#[cfg(test)]
+fn executable_lines_for_source(source: &str) -> HashSet<u32> {
     executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).0
 }
 
-pub(crate) fn executable_lines_for_source_with_exclusions(
+pub(super) fn executable_lines_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
 ) -> (HashSet<u32>, HashSet<u32>) {

@@ -30,7 +30,7 @@ pub struct Param {
 }
 
 impl Param {
-    pub(crate) fn new(py: Python, values: Vec<Py<PyAny>>, tags: Vec<Py<PyAny>>) -> PyResult<Self> {
+    fn new(py: Python, values: Vec<Py<PyAny>>, tags: Vec<Py<PyAny>>) -> PyResult<Self> {
         let mut new_tags = Vec::new();
 
         for tag in tags {

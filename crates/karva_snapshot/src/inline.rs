@@ -4,15 +4,15 @@ use camino::Utf8Path;
 use fs_err as fs;
 
 /// Location of an inline snapshot string literal in source code.
-pub struct InlineLocation {
+struct InlineLocation {
     /// Byte offset of string literal start (including quotes).
-    pub start: usize,
+    start: usize,
 
     /// Byte offset of string literal end (including quotes).
-    pub end: usize,
+    end: usize,
 
     /// Column indentation of the `assert_snapshot` call.
-    pub indent: usize,
+    indent: usize,
 }
 
 /// Strip common leading whitespace from all non-empty lines and trim trailing whitespace.
@@ -62,7 +62,7 @@ pub fn dedent(raw: &str) -> String {
 ///
 /// - Single-line, no problematic chars: `"value"`
 /// - Multi-line: `"""\\\n{indented lines}\n{indent}"""`
-pub fn generate_inline_literal(value: &str, indent: usize) -> String {
+fn generate_inline_literal(value: &str, indent: usize) -> String {
     let content_indent = " ".repeat(indent + 4);
 
     if !value.contains('\n') {
@@ -99,7 +99,7 @@ pub fn generate_inline_literal(value: &str, indent: usize) -> String {
 /// correct function. This handles stale line numbers from multiline inline accepts
 /// that shift subsequent code — without this check, the search could find and
 /// corrupt an intervening function's `inline=` argument.
-pub fn find_inline_argument(
+fn find_inline_argument(
     source: &str,
     line_number: u32,
     function_name: Option<&str>,
@@ -359,7 +359,7 @@ fn find_single_quote_end(source: &str, start: usize, quote: char) -> Option<usiz
 }
 
 /// Replace a byte range in source text.
-pub fn apply_edit(source: &str, start: usize, end: usize, replacement: &str) -> String {
+fn apply_edit(source: &str, start: usize, end: usize, replacement: &str) -> String {
     let mut result = String::with_capacity(source.len() + replacement.len());
     result.push_str(&source[..start]);
     result.push_str(replacement);
@@ -385,7 +385,7 @@ pub fn rewrite_inline_snapshot(
 }
 
 /// Applies one inline snapshot update to source text without writing it.
-pub(crate) fn apply_inline_snapshot_update(
+pub(super) fn apply_inline_snapshot_update(
     source: &str,
     source_path: &str,
     line_number: u32,

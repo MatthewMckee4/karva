@@ -45,7 +45,7 @@ pub enum PyTag {
 }
 
 impl PyTag {
-    pub(crate) fn clone_ref(&self, py: Python<'_>) -> Self {
+    fn clone_ref(&self, py: Python<'_>) -> Self {
         match self {
             Self::Parametrize {
                 arg_names,
@@ -92,7 +92,7 @@ pub struct PyTags {
 }
 
 impl PyTags {
-    pub(crate) fn clone_ref(&self, py: Python<'_>) -> Self {
+    fn clone_ref(&self, py: Python<'_>) -> Self {
         Self {
             inner: self.inner.iter().map(|tag| tag.clone_ref(py)).collect(),
         }
@@ -290,7 +290,7 @@ pub mod tags {
 #[pyclass(name = "CustomTagBuilder", from_py_object)]
 pub struct CustomTagBuilder {
     /// Attribute name captured from `karva.tags.<name>`.
-    pub(crate) tag_name: String,
+    tag_name: String,
 }
 
 #[pymethods]

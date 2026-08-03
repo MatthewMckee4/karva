@@ -111,14 +111,6 @@ impl TestPath {
             Err(TestPathError::InvalidUtf8Path(path))
         }
     }
-
-    pub fn path(&self) -> &Utf8PathBuf {
-        match self {
-            Self::File(path)
-            | Self::Directory(path)
-            | Self::Function(TestPathFunction { path, .. }) => path,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
@@ -132,17 +124,6 @@ pub enum TestPathError {
     InvalidUtf8Path(Utf8PathBuf),
     #[error("path `{0}` is missing a function name")]
     MissingFunctionName(Utf8PathBuf),
-}
-
-impl TestPathError {
-    pub fn path(&self) -> &Utf8PathBuf {
-        match self {
-            Self::NotFound(path)
-            | Self::WrongFileExtension(path)
-            | Self::InvalidUtf8Path(path)
-            | Self::MissingFunctionName(path) => path,
-        }
-    }
 }
 
 #[cfg(test)]

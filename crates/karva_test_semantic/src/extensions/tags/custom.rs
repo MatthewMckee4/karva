@@ -16,11 +16,11 @@ pub struct CustomTag {
 }
 
 impl CustomTag {
-    pub(crate) fn name(&self) -> &str {
+    pub(super) fn name(&self) -> &str {
         &self.name
     }
 
-    pub(crate) fn new(
+    pub(super) fn new(
         name: String,
         args: Vec<Arc<Py<PyAny>>>,
         kwargs: Vec<(String, Arc<Py<PyAny>>)>,
@@ -29,7 +29,7 @@ impl CustomTag {
     }
 
     /// Try to create a `CustomTag` from a pytest mark.
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
+    pub(super) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> Option<Self> {
         let name = py_mark.getattr("name").ok()?.extract::<String>().ok()?;
 
         let args = if let Ok(args_tuple) = py_mark.getattr("args")

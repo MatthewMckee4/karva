@@ -13,7 +13,7 @@ pub struct TimeoutTag {
 }
 
 impl TimeoutTag {
-    pub(crate) fn new(seconds: f64) -> Self {
+    pub(super) fn new(seconds: f64) -> Self {
         Self { seconds }
     }
 
@@ -22,7 +22,7 @@ impl TimeoutTag {
     }
 
     /// Parse `@pytest.mark.timeout(seconds)`.
-    pub(crate) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
+    pub(super) fn try_from_pytest_mark(py_mark: &Bound<'_, PyAny>) -> PyResult<Option<Self>> {
         let args = py_mark.getattr("args")?;
         let tuple = args.extract::<Bound<'_, PyTuple>>()?;
         if tuple.is_empty() {

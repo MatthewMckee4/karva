@@ -83,7 +83,7 @@ pub struct Filterset {
 
 impl Filterset {
     /// Parses one filter DSL expression into an evaluable tree.
-    pub fn new(input: &str) -> Result<Self, FilterError> {
+    fn new(input: &str) -> Result<Self, FilterError> {
         let tokens = tokenize(input)?;
         let mut parser = Parser::new(&tokens, input);
         let expr = parser.parse_or()?;
@@ -97,7 +97,7 @@ impl Filterset {
     }
 
     /// Evaluates this expression against one test and its tags.
-    pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
+    fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.expr.matches(ctx)
     }
 }
@@ -116,7 +116,7 @@ pub struct ValidatedFilter {
 
 impl ValidatedFilter {
     /// Validates and compiles a filter while retaining its serialized spelling.
-    pub fn new(raw: String) -> Result<Self, FilterError> {
+    fn new(raw: String) -> Result<Self, FilterError> {
         let compiled = Filterset::new(&raw)?;
         Ok(Self { raw, compiled })
     }
@@ -126,12 +126,8 @@ impl ValidatedFilter {
     }
 
     /// Evaluates the precompiled filter against one test.
-    pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
+    pub(super) fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.compiled.matches(ctx)
-    }
-
-    pub fn filterset(&self) -> &Filterset {
-        &self.compiled
     }
 }
 

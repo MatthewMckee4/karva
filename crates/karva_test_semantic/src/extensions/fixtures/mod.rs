@@ -103,7 +103,7 @@ impl RejectedFixture {
 }
 
 impl DiscoveredFixture {
-    pub(crate) fn new(
+    fn new(
         name: QualifiedFunctionName,
         stmt_function_def: Rc<StmtFunctionDef>,
         source_file: SourceFile,
@@ -141,7 +141,7 @@ impl DiscoveredFixture {
         self.is_generator
     }
 
-    pub(crate) fn auto_use(&self) -> bool {
+    fn auto_use(&self) -> bool {
         self.auto_use
     }
 
@@ -186,7 +186,7 @@ impl DiscoveredFixture {
         )
     }
 
-    pub(crate) fn try_from_pytest_function(
+    fn try_from_pytest_function(
         py: Python<'_>,
         stmt_function_def: Rc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,
@@ -224,7 +224,7 @@ impl DiscoveredFixture {
         ))
     }
 
-    pub(crate) fn try_from_karva_function(
+    fn try_from_karva_function(
         py: Python<'_>,
         stmt_function_def: Rc<StmtFunctionDef>,
         function: &Bound<'_, PyAny>,

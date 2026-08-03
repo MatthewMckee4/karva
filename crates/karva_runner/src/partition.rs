@@ -91,7 +91,7 @@ impl Partition {
         self.weight
     }
 
-    pub(crate) fn tests(&self) -> &[String] {
+    pub(super) fn tests(&self) -> &[String] {
         &self.tests
     }
 }

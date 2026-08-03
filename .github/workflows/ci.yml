@@ -19,6 +19,8 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
+  # renovate: datasource=github-releases depName=astral-sh/hawk
+  HAWK_VERSION: 0.1.9
   # Keep this exact version preinstalled before nextest starts.
   PYTHON_VERSION: "3.14.4"
   RUSTUP_MAX_RETRIES: 10
@@ -141,6 +143,29 @@ jobs:
 
       - name: "Lint Rust"
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+  cargo-hawk:
+    name: "cargo hawk"
+
+    runs-on: ubuntu-latest
+    # Cold local check completed in 28 seconds; 10 minutes leaves CI headroom.
+    timeout-minutes: 10
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: "Install Hawk"
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            "https://github.com/astral-sh/hawk/releases/download/${HAWK_VERSION}/cargo-hawk-installer.sh" | sh
+
+      - name: "Check public Rust APIs"
+        run: cargo hawk check -D warnings -D hawk::unnecessary_crate_visibility
 
   cargo-shear:
     name: "cargo shear"

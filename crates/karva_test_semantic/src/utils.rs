@@ -23,7 +23,7 @@ def _make_sync(async_fn):
 ";
 
 /// Runs a Python coroutine to completion using `asyncio.run()`.
-pub(crate) fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py<PyAny>> {
+pub fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py<PyAny>> {
     let asyncio = py.import("asyncio")?;
     Ok(asyncio.call_method1("run", (coroutine,))?.unbind())
 }
@@ -36,7 +36,7 @@ pub(crate) fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py
 /// abandoned (Python has no safe way to interrupt arbitrary code) and the
 /// executor is shut down without waiting. Async tests are wrapped in
 /// `asyncio.wait_for`, which cancels the coroutine on timeout.
-pub(crate) fn run_test_with_timeout(
+pub fn run_test_with_timeout(
     py: Python<'_>,
     function: &Py<PyAny>,
     kwargs: &FixtureArguments,
@@ -160,7 +160,7 @@ fn rebrand_timeout_error(
 ///
 /// Returns `true` if the function was patched (caller should NOT apply `asyncio.run()`),
 /// or `false` if no patching was needed.
-pub(crate) fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) -> PyResult<bool> {
+pub fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) -> PyResult<bool> {
     let inspect = py.import("inspect")?;
     let is_coroutine_fn = inspect
         .call_method1("iscoroutinefunction", (function,))?
@@ -203,7 +203,7 @@ pub(crate) fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) ->
 
 /// Sets `KARVA_ATTEMPT` and `KARVA_TOTAL_ATTEMPTS` on Python's `os.environ` so
 /// the currently running test can read them.
-pub(crate) fn set_attempt_env(py: Python<'_>, attempt: u32, total_attempts: u32) -> PyResult<()> {
+pub fn set_attempt_env(py: Python<'_>, attempt: u32, total_attempts: u32) -> PyResult<()> {
     let environ = py.import("os")?.getattr("environ")?;
     environ.set_item(WorkerEnvVars::KARVA_ATTEMPT, attempt.to_string())?;
     environ.set_item(
@@ -215,14 +215,14 @@ pub(crate) fn set_attempt_env(py: Python<'_>, attempt: u32, total_attempts: u32)
 
 /// Sets `KARVA_TEST_NAME` on Python's `os.environ` to the qualified name of
 /// the currently running test variant.
-pub(crate) fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResult<()> {
+pub fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResult<()> {
     let environ = py.import("os")?.getattr("environ")?;
     environ.set_item(WorkerEnvVars::KARVA_TEST_NAME, qualified_name)?;
     Ok(())
 }
 
 /// Formats Python values for test identity, quoting strings and escaping NUL bytes.
-pub(crate) fn display_value(value: &Bound<'_, PyAny>) -> String {
+pub fn display_value(value: &Bound<'_, PyAny>) -> String {
     let display = if value.is_instance_of::<PyString>()
         && let Ok(repr) = value.repr()
     {
@@ -258,7 +258,7 @@ fn truncated_display_value(value: &Bound<'_, PyAny>) -> String {
 }
 
 /// Adds a directory path to Python's sys.path at the specified index.
-pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> PyResult<()> {
+pub fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> PyResult<()> {
     let sys_module = py.import("sys")?;
     let sys_path = sys_module.getattr("path")?;
     sys_path.call_method1("insert", (index, path.to_string()))?;
@@ -266,7 +266,7 @@ pub(crate) fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> 
 }
 
 /// Renders parameter-list contents in Python signature order.
-pub(crate) fn test_parameters(
+pub fn test_parameters(
     py: Python,
     kwargs: &FixtureArguments,
     parameters: &Parameters,
@@ -299,7 +299,7 @@ pub(crate) fn test_parameters(
 const TRUNCATE_LENGTH: usize = 30;
 
 /// Truncates user-facing text by Unicode scalar count, preserving a three-character ellipsis.
-pub(crate) fn truncate_string(value: &str) -> String {
+pub fn truncate_string(value: &str) -> String {
     if value.chars().count() > TRUNCATE_LENGTH {
         let truncated: String = value.chars().take(TRUNCATE_LENGTH - 3).collect();
         format!("{truncated}...")

@@ -22,10 +22,6 @@ impl Printer {
         self.status_level
     }
 
-    pub fn final_status_level(self) -> FinalStatusLevel {
-        self.final_status_level
-    }
-
     /// Stream for the "Starting N tests" header and per-test result lines.
     ///
     /// The reporter additionally filters individual results by [`StatusLevel`].

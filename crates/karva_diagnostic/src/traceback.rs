@@ -44,11 +44,6 @@ struct TracebackLocation {
 }
 
 impl Traceback {
-    /// Extracts traceback frames, loading referenced files from disk when available.
-    pub fn from_error(py: Python, error: &PyErr) -> Option<Self> {
-        Self::from_error_with_fallback(py, error, None)
-    }
-
     /// Extracts traceback frames while reusing a known source snapshot when it matches.
     pub fn from_error_with_source(
         py: Python,

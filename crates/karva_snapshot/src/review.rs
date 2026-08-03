@@ -14,13 +14,13 @@ use crate::storage::{
 #[derive(Debug, Default)]
 pub struct ReviewSummary {
     /// Snapshot names accepted during this session.
-    pub accepted: Vec<String>,
+    accepted: Vec<String>,
 
     /// Snapshot names rejected during this session.
-    pub rejected: Vec<String>,
+    rejected: Vec<String>,
 
     /// Snapshot names left pending during this session.
-    pub skipped: Vec<String>,
+    skipped: Vec<String>,
 }
 
 /// Action chosen by the user for a single snapshot.

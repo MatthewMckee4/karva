@@ -376,7 +376,7 @@ fn no_tests_collected(result: &AggregatedResults) -> bool {
 /// Print the message shown when a run is stopped by `--run-timeout`.
 ///
 /// Shared by the one-shot and watch-mode paths.
-pub(super) fn print_run_timed_out(printer: Printer) -> std::io::Result<()> {
+fn print_run_timed_out(printer: Printer) -> std::io::Result<()> {
     let mut stdout = printer.stream_for_message().lock();
     writeln!(stdout, "\nerror: run timed out before all tests completed")
 }

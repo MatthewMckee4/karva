@@ -208,7 +208,7 @@ impl Eq for SlowTimeoutSecs {}
 
 impl SlowTimeoutSecs {
     /// Converts positive, platform-representable seconds; non-positive values disable tracking.
-    pub fn as_duration(self) -> Option<Duration> {
+    pub(super) fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
                 .ok()
@@ -245,7 +245,7 @@ impl Eq for TestTimeoutSecs {}
 
 impl TestTimeoutSecs {
     /// Converts positive, platform-representable seconds; non-positive values disable timeout.
-    pub fn as_duration(self) -> Option<Duration> {
+    pub(super) fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
                 .ok()
@@ -317,7 +317,7 @@ impl Eq for RunTimeoutSecs {}
 
 impl RunTimeoutSecs {
     /// Converts positive, platform-representable seconds; non-positive values disable timeout.
-    pub fn as_duration(self) -> Option<Duration> {
+    pub(super) fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 > 0.0 {
             Duration::try_from_secs_f64(self.0)
                 .ok()
@@ -350,7 +350,7 @@ impl Eq for TerminationGracePeriodSecs {}
 
 impl TerminationGracePeriodSecs {
     /// Converts non-negative, platform-representable seconds; zero requests immediate kill.
-    pub fn as_duration(self) -> Option<Duration> {
+    pub(super) fn as_duration(self) -> Option<Duration> {
         if self.0.is_finite() && self.0 >= 0.0 {
             Duration::try_from_secs_f64(self.0).ok()
         } else {
@@ -459,13 +459,13 @@ impl Combine for CoveragePrecision {
 #[serde(rename_all = "kebab-case")]
 /// Fully resolved settings after configuration profiles and CLI overrides combine.
 pub struct ProjectSettings {
-    pub(crate) src: SrcSettings,
-    pub(crate) terminal: TerminalSettings,
-    pub(crate) test: TestSettings,
-    pub(crate) coverage: CoverageSettings,
-    pub(crate) junit: JunitSettings,
+    pub(super) src: SrcSettings,
+    pub(super) terminal: TerminalSettings,
+    pub(super) test: TestSettings,
+    pub(super) coverage: CoverageSettings,
+    pub(super) junit: JunitSettings,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) overrides: Vec<OverrideSettings>,
+    pub(super) overrides: Vec<OverrideSettings>,
 }
 
 /// A compiled per-test override applied when its [filter](Self::filter)
@@ -502,7 +502,7 @@ pub struct OverrideSettings {
 }
 
 impl OverrideSettings {
-    pub fn matches(&self, ctx: &EvalContext<'_>) -> bool {
+    pub(super) fn matches(&self, ctx: &EvalContext<'_>) -> bool {
         self.filter.matches(ctx)
     }
 }

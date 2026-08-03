@@ -375,7 +375,7 @@ pub struct TestCommand {
     /// remaining workers and exits with a failure status. Accepts fractional
     /// seconds such as `--run-timeout=1800` or `--run-timeout=0.5`.
     #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
-    pub run_timeout: Option<f64>,
+    run_timeout: Option<f64>,
 
     /// Grace period before force-killing workers during shutdown, in seconds.
     ///
@@ -384,7 +384,7 @@ pub struct TestCommand {
     /// are still running after this period, karva force-kills them. Pass `0`
     /// to force-kill immediately after graceful termination.
     #[clap(long, value_name = "SECONDS", help_heading = "Runner options")]
-    pub termination_grace_period: Option<f64>,
+    termination_grace_period: Option<f64>,
 
     /// Disable parallel execution (equivalent to `--num-workers 1`)
     #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Runner options")]

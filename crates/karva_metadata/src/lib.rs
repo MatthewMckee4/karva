@@ -2,7 +2,6 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
-use karva_combine::Combine;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
 
@@ -14,19 +13,20 @@ mod settings;
 
 pub use max_fail::MaxFail;
 pub use options::{
-    Config, CovReport, CoverageOptions, DEFAULT_PROFILE, IncompatibleVersionError, JunitOptions,
-    Options, OutputFormat, OverrideJunitOptions, OverrideOptions, ProjectOptionsOverrides,
-    SrcOptions, TerminalOptions, TestOptions, UnknownProfile,
+    Config, CovReport, CoverageOptions, IncompatibleVersionError, JunitOptions, Options,
+    OutputFormat, OverrideJunitOptions, OverrideOptions, ProjectOptionsOverrides, SrcOptions,
+    TerminalOptions, TestOptions, UnknownProfile,
 };
-pub use pyproject::{PyProject, PyProjectError};
+pub use pyproject::PyProjectError;
 pub use settings::{
-    CovFailUnder, CoverageExcludePattern, CoveragePrecision, CoverageSettings,
-    DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs, FlakyResult, JunitFlakyFailStatus, JunitSettings,
-    NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
-    SlowTimeoutSecs, TerminationGracePeriodSecs, TestTimeoutSecs,
+    CovFailUnder, CoverageExcludePattern, CoveragePrecision, CoverageSettings, FailSlowSecs,
+    FlakyResult, JunitFlakyFailStatus, JunitSettings, NoTestsMode, OverrideSettings,
+    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, TerminationGracePeriodSecs,
+    TestTimeoutSecs,
 };
 
 use crate::options::KarvaTomlError;
+use crate::pyproject::PyProject;
 
 /// File-level configuration paired with the resolved per-profile [`Options`].
 ///
@@ -36,13 +36,13 @@ use crate::options::KarvaTomlError;
 #[derive(Default, Debug, Clone)]
 pub struct ProjectMetadata {
     /// Directory against which relative project paths resolve.
-    pub root: Utf8PathBuf,
+    root: Utf8PathBuf,
 
     /// Target Python grammar version used during syntax collection.
-    pub python_version: PythonVersion,
+    python_version: PythonVersion,
 
     /// Parsed file-level configuration before profile selection.
-    pub config: Config,
+    config: Config,
 
     /// Effective options after profile and CLI precedence is applied.
     pub options: Options,
@@ -85,7 +85,7 @@ impl ProjectMetadata {
     }
 
     /// Loads a project from a `pyproject.toml` file.
-    pub(crate) fn from_pyproject(
+    fn from_pyproject(
         pyproject: PyProject,
         root: Utf8PathBuf,
         python_version: PythonVersion,
@@ -94,7 +94,7 @@ impl ProjectMetadata {
     }
 
     /// Loads a project from a parsed [`Config`].
-    pub fn from_config(config: Config, root: Utf8PathBuf, python_version: PythonVersion) -> Self {
+    fn from_config(config: Config, root: Utf8PathBuf, python_version: PythonVersion) -> Self {
         Self {
             root,
             python_version,
@@ -205,13 +205,6 @@ impl ProjectMetadata {
         &self.root
     }
 
-    /// Replaces root while preserving parsed configuration and resolved options.
-    #[must_use]
-    pub fn with_root(mut self, root: Utf8PathBuf) -> Self {
-        self.root = root;
-        self
-    }
-
     /// Resolve the requested profile from the parsed [`Config`] and combine
     /// CLI overrides on top, populating `self.options`.
     pub fn apply_overrides(
@@ -221,11 +214,6 @@ impl ProjectMetadata {
         let config = std::mem::take(&mut self.config);
         self.options = overrides.apply_to(config)?;
         Ok(())
-    }
-
-    /// Combine the project options with the CLI options where the CLI options take precedence.
-    pub fn apply_options(&mut self, options: Options) {
-        self.options = options.combine(std::mem::take(&mut self.options));
     }
 }
 

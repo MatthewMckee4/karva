@@ -24,13 +24,13 @@ impl MaxFail {
 
     /// Returns a `MaxFail` that stops after the given number of failures,
     /// treating `0` as unlimited.
-    pub fn from_count(count: u32) -> Self {
+    fn from_count(count: u32) -> Self {
         Self(NonZeroU32::new(count))
     }
 
     /// The legacy `fail-fast` boolean: `true` maps to stopping after a single
     /// failure, `false` maps to never stopping.
-    pub fn from_fail_fast(fail_fast: bool) -> Self {
+    pub(super) fn from_fail_fast(fail_fast: bool) -> Self {
         if fail_fast {
             Self::from_count(1)
         } else {
@@ -54,15 +54,12 @@ impl MaxFail {
     /// `MaxFail::unlimited()` wraps `None`, which serializers like TOML
     /// cannot represent — this is exposed primarily so `serde`'s
     /// `skip_serializing_if` can omit the field.
-    pub fn is_unlimited(&self) -> bool {
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde skip_serializing_if requires a shared reference"
+    )]
+    pub(super) fn is_unlimited(&self) -> bool {
         self.0.is_none()
-    }
-
-    /// Returns `true` when the configuration would stop after a single failure.
-    ///
-    /// This is how the legacy `--fail-fast` boolean is surfaced internally.
-    pub fn is_fail_fast(self) -> bool {
-        matches!(self.0, Some(limit) if limit.get() == 1)
     }
 
     /// Returns the configured limit as a raw `u32`, if any.

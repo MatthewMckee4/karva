@@ -9,7 +9,7 @@ mod output_capture;
 mod py_attach;
 mod python;
 mod runner;
-pub mod utils;
+mod utils;
 
 pub(crate) use context::{Context, RunState};
 pub use karva_coverage::CoverageConfig;

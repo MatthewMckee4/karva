@@ -35,7 +35,7 @@ impl<'a> ParallelCollector<'a> {
     }
 
     /// Walks a directory concurrently while serializing package mutation on a receiver thread.
-    pub(crate) fn collect_directory(&self, path: &Utf8PathBuf) -> Result<CollectedPackage> {
+    fn collect_directory(&self, path: &Utf8PathBuf) -> Result<CollectedPackage> {
         let (tx, rx) = unbounded::<CollectionMessage>();
 
         let cloned_path = path.clone();

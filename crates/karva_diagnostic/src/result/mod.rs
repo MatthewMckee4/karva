@@ -19,7 +19,7 @@ pub use case::{
     TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
 };
 pub use diagnostic::RenderedDiagnostic;
-pub use flaky::{DisplayFlakyTest, DisplayFlakyTests, FlakyTest};
+pub use flaky::{DisplayFlakyTests, FlakyTest};
 pub use kind::{IndividualTestResultKind, TestResultKind};
 pub use output::CapturedTestOutput;
 pub use stats::TestResultStats;
@@ -64,11 +64,6 @@ fn diagnostic_display_ordering(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Orde
 }
 
 impl TestRunResult {
-    /// Returns diagnostics belonging to collection or run infrastructure.
-    pub fn run_diagnostics(&self) -> &[Diagnostic] {
-        &self.run_diagnostics
-    }
-
     /// Adds a diagnostic not owned by one test case.
     pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.run_diagnostics.push(diagnostic);
@@ -187,14 +182,6 @@ impl TestRunResult {
                 .then_with(|| a.name().cmp(b.name()))
         });
         self
-    }
-
-    pub fn durations(&self) -> &HashMap<QualifiedFunctionName, std::time::Duration> {
-        &self.durations
-    }
-
-    pub fn test_cases(&self) -> &[TestExecutionResult] {
-        &self.test_cases
     }
 
     /// Decomposes this run for serialization into the worker cache.

@@ -158,7 +158,7 @@ impl Tag {
     ///
     /// We first check if the object is a `PyTag` or `PyTags`.
     /// If not, we try to call it to see if it returns a `PyTag` or `PyTags`.
-    pub(crate) fn try_from_py_any(py: Python, py_any: &Py<PyAny>) -> Option<Self> {
+    pub(super) fn try_from_py_any(py: Python, py_any: &Py<PyAny>) -> Option<Self> {
         if let Ok(tag) = py_any.cast_bound::<PyTag>(py) {
             return Some(Self::from_karva_tag(py, tag.borrow()));
         } else if let Ok(tag) = py_any.cast_bound::<PyTags>(py)
@@ -180,7 +180,7 @@ impl Tag {
     }
 
     /// Converts a Karva Python tag into our internal representation.
-    pub(crate) fn from_karva_tag<T>(py: Python, py_tag: T) -> Self
+    fn from_karva_tag<T>(py: Python, py_tag: T) -> Self
     where
         T: Deref<Target = PyTag>,
     {
@@ -345,7 +345,7 @@ impl CompiledTags {
 }
 
 impl Tags {
-    pub(crate) fn new(tags: Vec<Tag>) -> Self {
+    pub(super) fn new(tags: Vec<Tag>) -> Self {
         Self { inner: tags }
     }
 
