@@ -188,6 +188,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push(format!("--cov-exclude-line={}", pattern.as_str()));
     }
 
+    for pattern in &settings.coverage().partial_branches {
+        cli_args.push(format!("--cov-partial-branch={}", pattern.as_str()));
+    }
+
     if let Some(context) = args.cov_context {
         push_value_arg(&mut cli_args, "--cov-context", context.as_str());
     }

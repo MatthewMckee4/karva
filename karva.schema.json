@@ -152,6 +152,16 @@
             "type": "string"
           }
         },
+        "partial-branches": {
+          "description": "Regular expressions marking intentionally partial branch lines.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/CoveragePartialPattern"
+          }
+        },
         "path-aliases": {
           "description": "Ordered `FROM=TO` path mappings applied when native artifacts are read.\n\nUse aliases to relocate absolute sources collected outside the project\nor artifacts produced under a different CI checkout layout.",
           "type": [
@@ -203,6 +213,10 @@
         }
       },
       "additionalProperties": false
+    },
+    "CoveragePartialPattern": {
+      "description": "Validated regular expression used to suppress intentionally partial branches.",
+      "type": "string"
     },
     "CoveragePrecision": {
       "description": "Decimal places used for coverage percentages.\n\nThe maximum is [`f64::DIGITS`], the number of meaningful decimal digits\navailable from the percentage representation.",

@@ -28,7 +28,7 @@ fn write_branches(report: &mut String, row: &FileRow) -> Result<()> {
     if row.branches == 0 {
         return Ok(());
     }
-    let executed: BTreeSet<BranchArc> = row.branch_executed.iter().copied().collect();
+    let missing: BTreeSet<BranchArc> = row.branch_missing.iter().copied().collect();
     let mut by_line: BTreeMap<u32, Vec<BranchArc>> = BTreeMap::new();
     for arc in &row.branch_possible {
         let Ok(line) = u32::try_from(arc.from) else {
@@ -38,9 +38,9 @@ fn write_branches(report: &mut String, row: &FileRow) -> Result<()> {
     }
     for (line, mut arcs) in by_line {
         arcs.sort_by_key(|arc| (arc.to < 0, arc.to));
-        let any_taken = arcs.iter().any(|arc| executed.contains(arc));
+        let any_taken = arcs.iter().any(|arc| !missing.contains(arc));
         for (branch, arc) in arcs.iter().enumerate() {
-            let taken = if executed.contains(arc) {
+            let taken = if !missing.contains(arc) {
                 "1"
             } else if any_taken {
                 "0"
@@ -130,5 +130,44 @@ mod tests {
         let error = build_lcov_report(&[row]).expect_err("reject invalid branch origin");
 
         assert!(error.to_string().contains("negative origin -1"));
+    }
+
+    #[test]
+    fn intentionally_partial_arcs_are_covered_in_lcov() {
+        let taken = BranchArc { from: 1, to: 2 };
+        let suppressed = BranchArc { from: 1, to: 3 };
+        let row = FileRow {
+            name: "src/app.py".to_owned(),
+            absolute_name: "/project/src/app.py".to_owned(),
+            stmts: 1,
+            hit: 1,
+            miss: 0,
+            missing: String::new(),
+            executable: vec![1],
+            excluded: Vec::new(),
+            executed: vec![1],
+            contexts: BTreeMap::new(),
+            branches_enabled: true,
+            branches: 2,
+            branch_hit: 2,
+            branch_miss: 0,
+            branch_partial: 0,
+            branch_possible: vec![taken, suppressed],
+            branch_executed: vec![taken],
+            branch_missing: Vec::new(),
+            arc_contexts: BTreeMap::new(),
+        };
+
+        insta::assert_snapshot!(build_lcov_report(&[row]).expect("build LCOV report"), @r"
+        SF:src/app.py
+        DA:1,1
+        LF:1
+        LH:1
+        BRDA:1,0,0,1
+        BRDA:1,0,1,1
+        BRF:2
+        BRH:2
+        end_of_record
+        ");
     }
 }

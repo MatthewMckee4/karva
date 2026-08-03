@@ -20,6 +20,7 @@ pub(super) struct CombinedFile {
     branches_enabled: bool,
     branch_possible: BTreeSet<BranchArc>,
     branch_executed: BTreeSet<BranchArc>,
+    branch_partial_lines: BTreeSet<u32>,
     arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
@@ -76,6 +77,7 @@ pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String,
                 bucket.branches_enabled = true;
                 bucket.branch_possible.extend(branches.possible);
                 bucket.branch_executed.extend(branches.executed);
+                bucket.branch_partial_lines.extend(branches.partial);
                 for entry in branches.contexts {
                     bucket
                         .arc_contexts
@@ -177,6 +179,7 @@ fn merge_native(
         if let Some(branches) = &file.branches {
             bucket.branches_enabled = true;
             bucket.branch_possible.extend(&branches.possible);
+            bucket.branch_partial_lines.extend(&branches.partial);
             merge_branch_observations(bucket, branches, filters, run_context_matches);
         }
     }
@@ -304,12 +307,23 @@ pub(super) fn build_rows(
             let branch_missing: BTreeSet<BranchArc> = data
                 .branch_possible
                 .difference(&branch_executed)
+                .filter(|arc| {
+                    u32::try_from(arc.from)
+                        .ok()
+                        .is_none_or(|line| !data.branch_partial_lines.contains(&line))
+                })
                 .copied()
                 .collect();
             let branches = u32::try_from(data.branch_possible.len()).unwrap_or(u32::MAX);
-            let branch_hit = u32::try_from(branch_executed.len()).unwrap_or(u32::MAX);
+            let branch_hit =
+                branches.saturating_sub(u32::try_from(branch_missing.len()).unwrap_or(u32::MAX));
             let branch_miss = branches.saturating_sub(branch_hit);
-            let branch_partial = partial_branch_count(&data.branch_possible, &branch_executed);
+            let effective_executed = data
+                .branch_possible
+                .difference(&branch_missing)
+                .copied()
+                .collect();
+            let branch_partial = partial_branch_count(&data.branch_possible, &effective_executed);
             let missing = if show_missing {
                 let uncovered: BTreeSet<u32> =
                     executable_set.difference(&executed_set).copied().collect();
@@ -570,6 +584,34 @@ mod tests {
     #[test]
     fn percent_zero_stmts() {
         assert!((percent(0, 0) - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn partial_branch_lines_suppress_only_missing_arcs() {
+        let possible = BTreeSet::from([BranchArc { from: 1, to: 2 }, BranchArc { from: 1, to: 3 }]);
+        let executed = BTreeSet::from([BranchArc { from: 1, to: 2 }]);
+        let combined = BTreeMap::from([(
+            "app.py".to_owned(),
+            CombinedFile {
+                executable: BTreeSet::from([1, 2, 3]),
+                executed: BTreeSet::from([1, 2]),
+                branches_enabled: true,
+                branch_possible: possible,
+                branch_executed: executed,
+                branch_partial_lines: BTreeSet::from([1]),
+                ..CombinedFile::default()
+            },
+        )]);
+
+        let rows = build_rows(std::path::Path::new("."), &combined, true);
+        let row = rows.first().expect("coverage row");
+
+        assert_eq!(row.branches, 2);
+        assert_eq!(row.branch_hit, 2);
+        assert_eq!(row.branch_miss, 0);
+        assert_eq!(row.branch_partial, 0);
+        assert_eq!(row.branch_executed, vec![BranchArc { from: 1, to: 2 }]);
+        assert!(row.branch_missing.is_empty());
     }
 
     #[test]

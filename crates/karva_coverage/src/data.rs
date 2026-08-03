@@ -57,6 +57,10 @@ pub struct BranchEntry {
     /// Branch edges observed at runtime.
     pub executed: Vec<BranchArc>,
 
+    /// Branch source lines whose unobserved destinations are intentional.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub partial: Vec<u32>,
+
     /// Test contexts grouped by executed edge.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub contexts: Vec<BranchContextEntry>,

@@ -3,9 +3,10 @@ use std::io;
 use std::path::Path;
 
 use fs_err as fs;
+use regex::Regex;
 use ruff_python_ast::helpers::is_docstring_stmt;
 use ruff_python_ast::{
-    ElifElseClause, ExceptHandler, MatchCase, Stmt, StmtClassDef, StmtFunctionDef, StmtIf,
+    ElifElseClause, ExceptHandler, Expr, MatchCase, Stmt, StmtClassDef, StmtFunctionDef, StmtIf,
     StmtMatch,
 };
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
@@ -13,53 +14,129 @@ use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
 
 use crate::data::BranchArc;
-use crate::executable::{CoverageExclusions, pattern_lines, pragma_no_cover_lines};
+use crate::executable::{
+    CoverageExclusions, comment_lines_matching, pattern_lines, pragma_no_cover_lines,
+};
+
+#[derive(Clone, Debug, Default)]
+/// Compiled expressions identifying intentionally partial branch lines.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "tracer carries this type across private sibling modules"
+)]
+pub(super) struct CoveragePartials(Vec<Regex>);
+
+impl CoveragePartials {
+    /// Compiles configured partial-branch expressions before collection begins.
+    pub(super) fn new(patterns: &[String]) -> anyhow::Result<Self> {
+        patterns
+            .iter()
+            .map(|pattern| {
+                Regex::new(pattern).map_err(|error| {
+                    anyhow::anyhow!("invalid coverage partial-branch pattern `{pattern}`: {error}")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Self)
+    }
+}
 
 #[expect(
     clippy::redundant_pub_crate,
     reason = "tracer uses this helper across private sibling modules"
 )]
-pub(crate) fn branch_arcs_with_exclusions(
+pub(crate) fn branch_analysis_with_exclusions(
     path: &Path,
     exclusions: &CoverageExclusions,
-) -> io::Result<BTreeSet<BranchArc>> {
+    partials: &CoveragePartials,
+) -> io::Result<(BTreeSet<BranchArc>, BTreeSet<u32>)> {
     let source = fs::read_to_string(path)?;
-    Ok(branch_arcs_for_source_with_exclusions(&source, exclusions))
+    Ok(branch_analysis_for_source(&source, exclusions, partials))
 }
 
 #[cfg(test)]
 fn branch_arcs_for_source(source: &str) -> BTreeSet<BranchArc> {
-    branch_arcs_for_source_with_exclusions(source, &CoverageExclusions::default())
+    branch_analysis_for_source(
+        source,
+        &CoverageExclusions::default(),
+        &CoveragePartials::default(),
+    )
+    .0
 }
 
+#[cfg(test)]
 fn branch_arcs_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
 ) -> BTreeSet<BranchArc> {
+    branch_analysis_for_source(source, exclusions, &CoveragePartials::default()).0
+}
+
+fn branch_analysis_for_source(
+    source: &str,
+    exclusions: &CoverageExclusions,
+    partials: &CoveragePartials,
+) -> (BTreeSet<BranchArc>, BTreeSet<u32>) {
     let Some(parsed) = parse_unchecked(source, ParseOptions::from(Mode::Module)).try_into_module()
     else {
-        return BTreeSet::new();
+        return (BTreeSet::new(), BTreeSet::new());
     };
     let line_index = LineIndex::from_source_text(source);
-    let mut pragma_lines = pragma_no_cover_lines(&parsed, source, &line_index);
-    pragma_lines.extend(pattern_lines(source, &line_index, exclusions));
+    let mut excluded_lines = pragma_no_cover_lines(&parsed, source, &line_index);
+    excluded_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
+    let partial_lines = partial_branch_lines(&parsed, source, &line_index, partials);
     let module = parsed.into_syntax();
-    let executable =
-        crate::executable::executable_lines_for_source_with_exclusions(source, exclusions).0;
+    let (executable, built_in_excluded) =
+        crate::executable::executable_lines_for_source_with_exclusions(source, exclusions);
+    excluded_lines.extend(built_in_excluded);
     let mut collector = BranchCollector {
         line_index: &line_index,
-        pragma_lines: &pragma_lines,
+        excluded_lines: &excluded_lines,
         executable: &executable,
         arcs: BTreeSet::new(),
     };
     collector.visit_body(&module.body, None);
-    collector.arcs
+    let branch_lines = branch_lines(&collector.arcs);
+    let partial_lines = partial_lines
+        .into_iter()
+        .filter(|line| branch_lines.contains(line))
+        .collect();
+    (collector.arcs, partial_lines)
+}
+
+fn partial_branch_lines<T>(
+    parsed: &ruff_python_parser::Parsed<T>,
+    source: &str,
+    line_index: &LineIndex,
+    partials: &CoveragePartials,
+) -> HashSet<u32> {
+    let mut lines = comment_lines_matching(parsed, source, line_index, is_pragma_no_branch);
+    lines.extend(pattern_lines(source, line_index, &partials.0));
+    lines
+}
+
+fn is_pragma_no_branch(comment: &str) -> bool {
+    let body = comment.strip_prefix('#').unwrap_or(comment).trim();
+    body.to_ascii_lowercase().contains("pragma: no branch")
+}
+
+fn branch_lines(arcs: &BTreeSet<BranchArc>) -> HashSet<u32> {
+    let mut counts = std::collections::HashMap::new();
+    for arc in arcs {
+        if let Ok(line) = u32::try_from(arc.from) {
+            *counts.entry(line).or_insert(0usize) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .filter_map(|(line, count)| (count > 1).then_some(line))
+        .collect()
 }
 
 /// Walks nested Python bodies while carrying each statement's fallthrough target.
 struct BranchCollector<'a> {
     line_index: &'a LineIndex,
-    pragma_lines: &'a HashSet<u32>,
+    excluded_lines: &'a HashSet<u32>,
     executable: &'a HashSet<u32>,
     arcs: BTreeSet<BranchArc>,
 }
@@ -129,7 +206,9 @@ impl BranchCollector<'_> {
     fn visit_if(&mut self, stmt: &StmtIf, next: Option<i32>) {
         let line = self.line(stmt.range().start());
         let alternate = self.if_alternate_target(stmt, next);
-        self.add_branch(line, [self.first_executable_i32(&stmt.body), alternate]);
+        if !matches!(&*stmt.test, Expr::BooleanLiteral(_)) {
+            self.add_branch(line, [self.first_executable_i32(&stmt.body), alternate]);
+        }
         self.visit_body(&stmt.body, next);
 
         for (idx, clause) in stmt.elif_else_clauses.iter().enumerate() {
@@ -240,7 +319,7 @@ impl BranchCollector<'_> {
 
     fn line_has_pragma(&self, offset: TextSize) -> bool {
         self.line(offset)
-            .is_some_and(|line| self.pragma_lines.contains(&line))
+            .is_some_and(|line| self.excluded_lines.contains(&line))
     }
 }
 
@@ -350,5 +429,54 @@ def f(x):
         let exclusions = CoverageExclusions::new(&["else:".to_owned()]).expect("valid exclusion");
 
         assert!(branch_arcs_for_source_with_exclusions(source, &exclusions).is_empty());
+    }
+
+    #[test]
+    fn pragma_marks_branch_as_intentionally_partial() {
+        let source = "\
+def f(x):
+    if x:  # pragma: no branch
+        return 1
+    return 0
+";
+
+        let (arcs, partial) = branch_analysis_for_source(
+            source,
+            &CoverageExclusions::default(),
+            &CoveragePartials::default(),
+        );
+
+        assert_eq!(arcs.len(), 2);
+        assert_eq!(partial, BTreeSet::from([2]));
+    }
+
+    #[test]
+    fn configured_pattern_marks_branch_as_intentionally_partial() {
+        let source = "\
+def f(x):
+    if x:
+        return 1
+    return 0
+";
+        let partials = CoveragePartials::new(&["if x:".to_owned()]).expect("valid partial");
+
+        let (_, partial) =
+            branch_analysis_for_source(source, &CoverageExclusions::default(), &partials);
+
+        assert_eq!(partial, BTreeSet::from([2]));
+    }
+
+    #[test]
+    fn constant_if_and_type_checking_are_not_branches() {
+        let source = "\
+from typing import TYPE_CHECKING
+if True:
+    value = 1
+if TYPE_CHECKING:
+    if unknown:
+        value = 2
+";
+
+        assert!(arcs(source).is_empty());
     }
 }

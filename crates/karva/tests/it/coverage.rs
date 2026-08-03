@@ -121,6 +121,70 @@ def test_yes():
 }
 
 #[test]
+fn test_cov_honors_builtin_and_configured_partial_branches() {
+    let context = TestContext::with_files([
+        (
+            "pyproject.toml",
+            r#"
+[tool.karva.profile.default.coverage]
+sources = [""]
+branch = true
+partial-branches = ["if custom_flag:"]
+"#,
+        ),
+        (
+            "test_partial_branches.py",
+            r"
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    if unavailable:
+        value = 1
+
+def placeholder():
+    ...
+
+def pragma_choice(flag):
+    if flag:  # pragma: no branch
+        return 1
+    return 0
+
+def configured_choice(custom_flag):
+    if custom_flag:
+        return 1
+    return 0
+
+def test_true_choices():
+    assert pragma_choice(True) == 1
+    assert configured_choice(True) == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov-report=term-missing")
+            .arg("--status-level=none")
+            .arg("test_partial_branches.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name                       Stmts   Miss   Branch   BrPart   Cover   Missing
+    [LONG-LINE]
+    test_partial_branches.py      13      2        4        0     88%   14, 19
+    [LONG-LINE]
+    TOTAL                         13      2        4        0     88%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_branch_json_reports_branch_arcs() {
     let context = TestContext::with_file(
         "test_branch_json.py",

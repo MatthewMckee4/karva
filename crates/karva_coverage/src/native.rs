@@ -19,7 +19,7 @@ use tempfile::NamedTempFile;
 use crate::data::{BranchArc, WorkerFile};
 
 /// Current native coverage schema version.
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 
 /// Karva coverage data retained after one or more test runs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -256,6 +256,7 @@ fn merge_worker_file(
             (CoverageMode::Branch, Some(branches)) => Some(NativeBranchCoverage {
                 possible: branches.possible.into_iter().collect(),
                 executed: branches.executed.into_iter().collect(),
+                partial: branches.partial.into_iter().collect(),
                 contexts: branches
                     .contexts
                     .into_iter()
@@ -332,6 +333,7 @@ fn merge_native_file(
         (Some(current), Some(incoming)) => {
             current.possible.extend(incoming.possible);
             current.executed.extend(incoming.executed);
+            current.partial.extend(incoming.partial);
             for entry in incoming.contexts {
                 merge_arc_contexts(&mut current.contexts, entry);
             }
@@ -389,6 +391,9 @@ pub struct NativeBranchCoverage {
     pub possible: BTreeSet<BranchArc>,
     /// Control-flow edges observed at runtime.
     pub executed: BTreeSet<BranchArc>,
+    /// Branch source lines whose unobserved destinations are intentional.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub partial: BTreeSet<u32>,
     /// Contexts grouped by executed edge, sorted by edge.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub contexts: BTreeSet<NativeArcContexts>,
@@ -459,6 +464,7 @@ mod tests {
                             BranchArc { from: 1, to: 0 },
                         ]),
                         executed: BTreeSet::from([BranchArc { from: 1, to: 2 }]),
+                        partial: BTreeSet::new(),
                         contexts: BTreeSet::from([NativeArcContexts {
                             arc: BranchArc { from: 1, to: 2 },
                             contexts: BTreeSet::from([
@@ -516,14 +522,14 @@ mod tests {
         let directory = tempfile::tempdir().expect("create temp directory");
         let path = Utf8PathBuf::from_path_buf(directory.path().join("data.json"))
             .expect("UTF-8 temp path");
-        fs::write(&path, br#"{"format_version":3}"#).expect("write artifact");
+        fs::write(&path, br#"{"format_version":4}"#).expect("write artifact");
 
         let error = NativeCoverage::read(&path).expect_err("reject future version");
         let message = error.to_string();
 
         assert!(message.contains(path.as_str()));
-        assert!(message.contains("found format version 3"));
-        assert!(message.contains("supported version is 2"));
+        assert!(message.contains("found format version 4"));
+        assert!(message.contains("supported version is 3"));
     }
 
     #[test]

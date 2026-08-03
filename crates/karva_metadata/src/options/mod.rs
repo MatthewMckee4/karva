@@ -17,9 +17,9 @@ pub use overrides::ProjectOptionsOverrides;
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageExcludePattern, CoveragePrecision, CoverageSettings,
-    DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs, FlakyResult, JunitFlakyFailStatus, JunitSettings,
-    NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
+    CovFailUnder, CoverageExcludePattern, CoveragePartialPattern, CoveragePrecision,
+    CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs, FlakyResult, JunitFlakyFailStatus,
+    JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
     SlowTimeoutSecs, SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings,
     TestTimeoutSecs,
 };
@@ -675,6 +675,17 @@ pub struct CoverageOptions {
     )]
     pub exclude_lines: Option<Vec<CoverageExcludePattern>>,
 
+    /// Regular expressions marking intentionally partial branch lines.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"list[str]"#,
+        example = r#"
+            partial-branches = ["if platform.system"]
+        "#
+    )]
+    pub partial_branches: Option<Vec<CoveragePartialPattern>>,
+
     /// Include execution attributed to contexts matching these regular expressions.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
@@ -787,6 +798,7 @@ impl Combine for CoverageOptions {
         self.include = self.include.take().combine(other.include);
         self.omit = self.omit.take().combine(other.omit);
         self.exclude_lines = self.exclude_lines.take().combine(other.exclude_lines);
+        self.partial_branches = self.partial_branches.take().combine(other.partial_branches);
         self.contexts = self.contexts.take().combine(other.contexts);
         self.precision = self.precision.combine(other.precision);
         self.append = self.append.combine(other.append);
@@ -820,6 +832,7 @@ impl CoverageOptions {
             include: self.include.clone().unwrap_or_default(),
             omit: self.omit.clone().unwrap_or_default(),
             exclude_lines: self.exclude_lines.clone().unwrap_or_default(),
+            partial_branches: self.partial_branches.clone().unwrap_or_default(),
             contexts: self.contexts.clone().unwrap_or_default(),
             precision: self.precision.unwrap_or_default(),
             append: self.append.unwrap_or_default(),
@@ -1495,6 +1508,7 @@ report-path = "build/coverage.xml"
                     ],
                 ),
                 exclude_lines: None,
+                partial_branches: None,
                 contexts: Some(
                     [
                         "python=3\\.14",
@@ -1592,6 +1606,7 @@ store-failure-output = false
             include: None,
             omit: None,
             exclude_lines: None,
+            partial_branches: None,
             contexts: None,
             precision: None,
             append: None,
@@ -1637,6 +1652,7 @@ store-failure-output = false
                 ],
             ),
             exclude_lines: None,
+            partial_branches: None,
             contexts: None,
             precision: None,
             append: None,
@@ -1703,6 +1719,7 @@ store-failure-output = false
             include: None,
             omit: None,
             exclude_lines: None,
+            partial_branches: None,
             contexts: None,
             precision: None,
             append: None,
@@ -1747,7 +1764,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }
@@ -1766,7 +1783,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `nonsense`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

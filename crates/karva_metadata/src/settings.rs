@@ -25,6 +25,34 @@ impl CoverageExcludePattern {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+/// Validated regular expression used to suppress intentionally partial branches.
+pub struct CoveragePartialPattern(String);
+
+impl CoveragePartialPattern {
+    /// Returns original configured regular expression.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for CoveragePartialPattern {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let pattern = String::deserialize(deserializer)?;
+        Regex::new(&pattern).map_err(|error| {
+            serde::de::Error::custom(format!(
+                "invalid coverage partial-branch pattern `{pattern}`: {error}"
+            ))
+        })?;
+        Ok(Self(pattern))
+    }
+}
+
 impl<'de> Deserialize<'de> for CoverageExcludePattern {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -656,6 +684,9 @@ pub struct CoverageSettings {
 
     /// Regular expressions excluding matched source lines and clauses.
     pub exclude_lines: Vec<CoverageExcludePattern>,
+
+    /// Regular expressions suppressing missing arcs from matched branch lines.
+    pub partial_branches: Vec<CoveragePartialPattern>,
 
     /// Regular expressions selecting execution contexts for reports.
     pub contexts: Vec<String>,
