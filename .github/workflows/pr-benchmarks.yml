@@ -279,6 +279,7 @@ jobs:
             --output-markdown "${RUNNER_TEMP}/benchmark-report.md" \
             --output-html "${RUNNER_TEMP}/benchmark-report.html" \
             --output-diagnostics-markdown "${RUNNER_TEMP}/diagnostic-report.md" \
+            --output-diagnostics-summary-markdown "${RUNNER_TEMP}/diagnostic-summary.md" \
             --output-diagnostics-html "${RUNNER_TEMP}/diagnostic-report.html"
 
       - name: Merge memory benchmark reports
@@ -290,12 +291,12 @@ jobs:
             --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md" \
             --output-html "${RUNNER_TEMP}/benchmark-memory-report.html"
 
-      - name: Publish full benchmark summary
+      - name: Publish benchmark summary
         run: |
           cat \
             "${RUNNER_TEMP}/benchmark-report.md" \
             "${RUNNER_TEMP}/benchmark-memory-report.md" \
-            "${RUNNER_TEMP}/diagnostic-report.md" \
+            "${RUNNER_TEMP}/diagnostic-summary.md" \
             >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload full benchmark reports
@@ -330,7 +331,7 @@ jobs:
 
 
           > [!NOTE]
-          > Report truncated to fit GitHub's comment limit. [View the complete report online](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) or [download the report artifact](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}#artifacts).
+          > Report truncated to fit GitHub's comment limit. [View the complete summary online](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) or [download the full report artifact](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}#artifacts).
           EOF
             )
 
@@ -366,5 +367,5 @@ jobs:
             "${RUNNER_TEMP}/benchmark-memory-comment.json"
           comment_report \
             "<!-- karva-diagnostic-comparison -->" \
-            "${RUNNER_TEMP}/diagnostic-report.md" \
+            "${RUNNER_TEMP}/diagnostic-summary.md" \
             "${RUNNER_TEMP}/diagnostic-comment.json"

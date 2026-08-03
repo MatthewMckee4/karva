@@ -93,6 +93,9 @@ struct MergeReportsArgs {
     output_diagnostics_markdown: Option<PathBuf>,
 
     #[arg(long, value_name = "PATH")]
+    output_diagnostics_summary_markdown: Option<PathBuf>,
+
+    #[arg(long, value_name = "PATH")]
     output_diagnostics_html: Option<PathBuf>,
 }
 
@@ -140,6 +143,10 @@ struct DiagnosticComparison {
     workload_changed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     diff: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    baseline_output: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    candidate_output: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -295,6 +302,8 @@ fn compare(args: CompareArgs) -> Result<()> {
                 candidate: diagnostics.candidate.clone(),
                 workload_changed: diagnostics.workload_changed,
                 diff: None,
+                baseline_output: None,
+                candidate_output: None,
             });
 
         wall_time_comparisons.push(ProjectComparison {
@@ -361,11 +370,14 @@ fn merge_reports(args: MergeReportsArgs) -> Result<()> {
     if let Some(path) = args.output_diagnostics_markdown {
         write_diagnostics_markdown(&utf8_path(path)?, &report)?;
     }
+    if let Some(path) = args.output_diagnostics_summary_markdown {
+        write_diagnostics_summary_markdown(&utf8_path(path)?, &report)?;
+    }
     if let Some(path) = args.output_diagnostics_html {
         write_html(
             &utf8_path(path)?,
             "Diagnostic comparison",
-            &diagnostics_markdown_report(&report)
+            &diagnostics_markdown_report(&report, true)
                 .context("Failed to render HTML diagnostics report")?,
         )?;
     }
@@ -672,6 +684,8 @@ fn diagnostic_comparison(
         candidate: candidate_stats,
         workload_changed,
         diff,
+        baseline_output: Some(baseline.to_string()),
+        candidate_output: Some(candidate.to_string()),
     })
 }
 
@@ -744,8 +758,15 @@ fn write_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
 
 fn write_diagnostics_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
     create_parent_dir(path)?;
-    let body = diagnostics_markdown_report(report)
+    let body = diagnostics_markdown_report(report, true)
         .context("Failed to render markdown diagnostics report")?;
+    fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
+}
+
+fn write_diagnostics_summary_markdown(path: &Utf8Path, report: &ComparisonReport) -> Result<()> {
+    create_parent_dir(path)?;
+    let body = diagnostics_markdown_report(report, false)
+        .context("Failed to render markdown diagnostics summary")?;
     fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
 }
 
@@ -881,6 +902,7 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
 
 fn diagnostics_markdown_report(
     report: &ComparisonReport,
+    include_full_output: bool,
 ) -> std::result::Result<String, std::fmt::Error> {
     use std::fmt::Write as _;
 
@@ -923,11 +945,19 @@ fn diagnostics_markdown_report(
     body.push_str("\n</details>\n");
 
     for project in &report.projects {
-        let Some(diff) = project
-            .diagnostics
-            .as_ref()
-            .and_then(|diagnostics| diagnostics.diff.as_deref())
-        else {
+        let Some(diagnostics) = &project.diagnostics else {
+            continue;
+        };
+        let Some(diff) = diagnostics.diff.as_deref() else {
+            if include_full_output {
+                write_full_diagnostic_output(
+                    &mut body,
+                    project,
+                    diagnostics,
+                    &report.baseline_label,
+                    &report.candidate_label,
+                )?;
+            }
             continue;
         };
         writeln!(
@@ -936,11 +966,80 @@ fn diagnostics_markdown_report(
             project.name
         )?;
         body.push_str("Durations and memory addresses are normalized.\n\n");
-        writeln!(body, "```diff\n{diff}```\n")?;
+        write_code_block(&mut body, "diff", diff)?;
+        writeln!(body)?;
         body.push_str("</details>\n");
+
+        if include_full_output {
+            write_full_diagnostic_output(
+                &mut body,
+                project,
+                diagnostics,
+                &report.baseline_label,
+                &report.candidate_label,
+            )?;
+        }
     }
 
     Ok(body)
+}
+
+fn write_full_diagnostic_output(
+    body: &mut String,
+    project: &ProjectComparison,
+    diagnostics: &DiagnosticComparison,
+    baseline_label: &str,
+    candidate_label: &str,
+) -> std::result::Result<(), std::fmt::Error> {
+    use std::fmt::Write as _;
+
+    writeln!(
+        body,
+        "\n<details>\n<summary><code>{}</code> full diagnostic output</summary>\n",
+        project.name
+    )?;
+    body.push_str("Durations and memory addresses are normalized.\n\n");
+    writeln!(body, "#### Baseline: `{baseline_label}`\n")?;
+    write_optional_code_block(body, diagnostics.baseline_output.as_deref())?;
+    writeln!(body, "\n#### Candidate: `{candidate_label}`\n")?;
+    write_optional_code_block(body, diagnostics.candidate_output.as_deref())?;
+    body.push_str("\n</details>\n");
+    Ok(())
+}
+
+fn write_optional_code_block(
+    body: &mut String,
+    output: Option<&str>,
+) -> std::result::Result<(), std::fmt::Error> {
+    if let Some(output) = output {
+        write_code_block(body, "text", output)
+    } else {
+        body.push_str("Diagnostic output unavailable.\n");
+        Ok(())
+    }
+}
+
+fn write_code_block(
+    body: &mut String,
+    language: &str,
+    contents: &str,
+) -> std::result::Result<(), std::fmt::Error> {
+    use std::fmt::Write as _;
+
+    let (longest, trailing) = contents.bytes().fold((0_usize, 0_usize), |state, byte| {
+        if byte == b'`' {
+            (state.0, state.1 + 1)
+        } else {
+            (state.0.max(state.1), 0)
+        }
+    });
+    let fence = "`".repeat(longest.max(trailing).saturating_add(1).max(3));
+    writeln!(body, "{fence}{language}")?;
+    body.push_str(contents);
+    if !contents.ends_with('\n') {
+        body.push('\n');
+    }
+    writeln!(body, "{fence}")
 }
 
 fn test_result(stats: Option<&TestStats>) -> String {
@@ -1222,7 +1321,7 @@ mod tests {
         FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement,
         ProjectComparison, TestStats, diagnostic_comparison, diagnostics_markdown_report,
         is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
-        normalize_diagnostic_text, standalone_html, trend,
+        normalize_diagnostic_text, standalone_html, trend, write_code_block,
     };
 
     #[test]
@@ -1324,6 +1423,8 @@ mod tests {
             }),
             workload_changed: true,
             diff: None,
+            baseline_output: None,
+            candidate_output: None,
         });
 
         let markdown =
@@ -1403,8 +1504,12 @@ mod tests {
         comparison.diagnostics =
             diagnostic_comparison(Some(&baseline), Some(&candidate), "main", "PR");
 
-        let markdown = diagnostics_markdown_report(&report_with_projects(vec![comparison]))
-            .expect("report should render");
+        let report = report_with_projects(vec![comparison]);
+        let markdown = diagnostics_markdown_report(&report, true).expect("report should render");
+        let summary = diagnostics_markdown_report(&report, false).expect("summary should render");
+
+        assert!(summary.contains("concise output diff"));
+        assert!(!summary.contains("full diagnostic output"));
 
         insta::assert_snapshot!(markdown, @"
         <!-- karva-diagnostic-comparison -->
@@ -1432,6 +1537,28 @@ mod tests {
         -Summary [TIME] 3 tests run: 2 passed, 1 skipped
         +new diagnostic
         +Summary [TIME] 3 tests run: 1 passed, 1 error, 1 skipped
+        ```
+
+        </details>
+
+        <details>
+        <summary><code>requests</code> full diagnostic output</summary>
+
+        Durations and memory addresses are normalized.
+
+        #### Baseline: `main`
+
+        ```text
+            PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        Summary [TIME] 3 tests run: 2 passed, 1 skipped
+        ```
+
+        #### Candidate: `PR`
+
+        ```text
+            PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
+        new diagnostic
+        Summary [TIME] 3 tests run: 1 passed, 1 error, 1 skipped
         ```
 
         </details>
@@ -1465,6 +1592,16 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_code_blocks_expand_around_embedded_fences() {
+        let mut markdown = String::new();
+
+        write_code_block(&mut markdown, "text", "before\n```\nafter\n")
+            .expect("code block should render");
+
+        assert_eq!(markdown, "````text\nbefore\n```\nafter\n````\n");
+    }
+
+    #[test]
     fn diagnostics_report_omits_unchanged_diffs() {
         let output = normalize_diagnostic_text(
             "    PASS [   0.001s] test_pass\n\
@@ -1473,8 +1610,11 @@ mod tests {
         let mut comparison = project("requests", 21, 1.0, 1.0);
         comparison.diagnostics = diagnostic_comparison(Some(&output), Some(&output), "main", "PR");
 
-        let markdown = diagnostics_markdown_report(&report_with_projects(vec![comparison]))
-            .expect("report should render");
+        let report = report_with_projects(vec![comparison]);
+        let markdown = diagnostics_markdown_report(&report, true).expect("report should render");
+        let summary = diagnostics_markdown_report(&report, false).expect("summary should render");
+
+        assert!(!summary.contains("full diagnostic output"));
 
         insta::assert_snapshot!(markdown, @"
         <!-- karva-diagnostic-comparison -->
@@ -1486,6 +1626,27 @@ mod tests {
         | Project | Previous | New |
         | --- | --- | --- |
         | `requests` | :white_check_mark: 1 pass · 0 fail · 0 error · 0 skip | :white_check_mark: 1 pass · 0 fail · 0 error · 0 skip |
+
+        </details>
+
+        <details>
+        <summary><code>requests</code> full diagnostic output</summary>
+
+        Durations and memory addresses are normalized.
+
+        #### Baseline: `main`
+
+        ```text
+            PASS [TIME] test_pass
+        Summary [TIME] 1 test run: 1 passed, 0 skipped
+        ```
+
+        #### Candidate: `PR`
+
+        ```text
+            PASS [TIME] test_pass
+        Summary [TIME] 1 test run: 1 passed, 0 skipped
+        ```
 
         </details>
         ");
