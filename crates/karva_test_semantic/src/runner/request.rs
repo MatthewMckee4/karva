@@ -1,14 +1,14 @@
 //! Rust-backed implementation of pytest's public fixture request contract.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use pyo3::exceptions::{PyAttributeError, PyModuleNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple, PyType};
 
-use crate::extensions::fixtures::FixtureScope;
+use crate::extensions::fixtures::{FixtureId, FixtureScope};
 use crate::extensions::tags::{RuntimeTags, Tags};
 
 pyo3::create_exception!(karva, FixtureLookupError, pyo3::exceptions::PyLookupError);
@@ -327,6 +327,40 @@ pub(super) struct RequestContext {
     fixture_names: RefCell<Vec<String>>,
     nodes: RequestNodes,
     node_id: String,
+    direct_parameters: HashMap<String, DirectParameter>,
+}
+
+/// Direct test parameter exposed through dynamic fixture lookup.
+pub(super) struct DirectParameter {
+    value: Py<PyAny>,
+    scope: FixtureScope,
+    requesting_fixtures: RefCell<HashSet<FixtureId>>,
+}
+
+impl DirectParameter {
+    pub(super) fn new(value: Py<PyAny>, scope: FixtureScope) -> Self {
+        Self {
+            value,
+            scope,
+            requesting_fixtures: RefCell::new(HashSet::new()),
+        }
+    }
+
+    pub(super) fn value(&self, py: Python<'_>) -> Py<PyAny> {
+        self.value.clone_ref(py)
+    }
+
+    pub(super) fn scope(&self) -> FixtureScope {
+        self.scope
+    }
+
+    pub(super) fn was_requested_by(&self, fixture_id: FixtureId) -> bool {
+        self.requesting_fixtures.borrow().contains(&fixture_id)
+    }
+
+    pub(super) fn record_request_by(&self, fixture_id: FixtureId) {
+        self.requesting_fixtures.borrow_mut().insert(fixture_id);
+    }
 }
 
 pub(super) struct RequestMetadata<'a> {
@@ -343,6 +377,7 @@ impl RequestContext {
         state: Rc<RequestState>,
         function: Py<PyAny>,
         metadata: RequestMetadata<'_>,
+        direct_parameters: HashMap<String, DirectParameter>,
     ) -> PyResult<Self> {
         let RequestMetadata {
             module_name,
@@ -367,7 +402,12 @@ impl RequestContext {
             fixture_names: RefCell::new(fixture_names),
             nodes,
             node_id,
+            direct_parameters,
         })
+    }
+
+    pub(super) fn direct_parameters(&self) -> &HashMap<String, DirectParameter> {
+        &self.direct_parameters
     }
 
     pub(super) fn add_fixture_name(&self, name: &str) {
@@ -857,17 +897,29 @@ pub struct FixtureRequest {
     fixture_stack: Py<PyList>,
 }
 
+/// Fixture-specific request attributes, empty for a request injected into a test.
+pub(super) struct RequestBinding<'a> {
+    pub(super) fixture_name: Option<String>,
+    pub(super) scope: FixtureScope,
+    pub(super) package_owner: Option<&'a std::path::Path>,
+    pub(super) param: Option<Py<PyAny>>,
+    pub(super) param_index: Option<usize>,
+}
+
 impl FixtureRequest {
     pub(super) fn new(
         py: Python<'_>,
         context: Rc<RequestContext>,
         runtime: RequestRuntime,
-        fixture_name: Option<String>,
-        scope: FixtureScope,
-        package_owner: Option<&std::path::Path>,
-        param: Option<Py<PyAny>>,
-        param_index: Option<usize>,
+        binding: RequestBinding<'_>,
     ) -> PyResult<Self> {
+        let RequestBinding {
+            fixture_name,
+            scope,
+            package_owner,
+            param,
+            param_index,
+        } = binding;
         let node = context.node(py, scope, package_owner)?;
         Ok(Self {
             context,
