@@ -31,4 +31,6 @@ pub use report::{
     CoverageReportSort, HtmlReportOptions, JsonReportOptions, combine_and_report,
     write_cobertura_xml, write_html_report, write_json_report,
 };
-pub use tracer::{CoverageConfig, CoveragePhase, CoverageSession};
+pub use tracer::{
+    ChildCoverageSession, CoverageConfig, CoveragePhase, CoverageSession, start_child_coverage,
+};

@@ -15,11 +15,13 @@ pub(crate) use context::{Context, RunState};
 pub use karva_coverage::CoverageConfig;
 pub use python::init_module;
 
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use karva_coverage::CoverageSession;
 use karva_diagnostic::{Reporter, TestRunResult};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
+use pyo3::prelude::{PyResult, Python};
+use pyo3::types::PyAnyMethods;
 use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::failed_to_start_coverage_diagnostic;
@@ -52,6 +54,13 @@ pub fn run_tests(
                 None
             }
         });
+        if let (Some(session), Some(config)) = (&cov_session, coverage)
+            && let Err(err) = configure_child_process_coverage(py, session, config)
+        {
+            state.add_run_diagnostic(failed_to_start_coverage_diagnostic(
+                &err.value(py).to_string(),
+            ));
+        }
 
         let discovery = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
@@ -78,4 +87,28 @@ pub fn run_tests(
 
         state.into_result()
     })
+}
+
+fn configure_child_process_coverage(
+    py: Python<'_>,
+    session: &CoverageSession,
+    config: &CoverageConfig,
+) -> PyResult<()> {
+    let roots = session.source_roots(py)?;
+    let shard_directory = config.data_file.parent().map_or_else(
+        || Utf8PathBuf::from("coverage-children"),
+        |parent| parent.join("coverage-children"),
+    );
+    py.import("karva._coverage")?.call_method1(
+        "_configure",
+        (
+            roots,
+            shard_directory.as_str(),
+            config.branches,
+            &config.exclude_lines,
+            &config.partial_branches,
+            config.static_context.as_deref(),
+        ),
+    )?;
+    Ok(())
 }

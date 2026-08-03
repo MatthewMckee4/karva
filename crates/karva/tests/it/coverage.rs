@@ -1487,6 +1487,214 @@ def test_flaky():
 }
 
 #[test]
+fn test_cov_collects_python_child_processes() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.coverage]
+sources = ["src"]
+branch = true
+context = "child-process"
+"#,
+        ),
+        (
+            "src/child.py",
+            r#"
+def subprocess_path(value):
+    if value == "normal":
+        return 1
+    if value == "exit":
+        return 2
+    return 3
+
+def multiprocessing_path():
+    return 4
+"#,
+        ),
+        (
+            "test_children.py",
+            r#"
+import multiprocessing
+import os
+import subprocess
+import sys
+
+def process_target():
+    from src.child import multiprocessing_path
+    multiprocessing_path()
+
+
+def test_subprocess_normal_exit_and_exec():
+    subprocess.run(
+        [sys.executable, "-c", "from src.child import subprocess_path; subprocess_path('normal')"],
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, "-c", "from src.child import subprocess_path; subprocess_path('exit'); import os; os._exit(0)"],
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, "-c", "from src.child import subprocess_path; subprocess_path('exec'); import os, sys; os.execv(sys.executable, [sys.executable, '-c', 'pass'])"],
+        check=True,
+    )
+
+
+def test_multiprocessing():
+    for method in ("spawn", "fork"):
+        if method in multiprocessing.get_all_start_methods():
+            process = multiprocessing.get_context(method).Process(target=process_target)
+            process.start()
+            process.join()
+            assert process.exitcode == 0
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "--cov-report=json",
+            "--status-level=none",
+            "test_children.py",
+        ]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    insta::assert_snapshot!(context.read_file("coverage.json"), @r#"
+    {
+      "meta": {
+        "format": 2,
+        "version": "karva",
+        "show_contexts": true
+      },
+      "files": {
+        "src/child.py": {
+          "executed_lines": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            9,
+            10
+          ],
+          "summary": {
+            "covered_lines": 8,
+            "num_statements": 8,
+            "percent_covered": 100.0,
+            "missing_lines": [],
+            "excluded_lines": [],
+            "num_branches": 4,
+            "num_partial_branches": 0,
+            "covered_branches": 4,
+            "missing_branches": 0,
+            "percent_branches_covered": 100.0
+          },
+          "missing_lines": [],
+          "excluded_lines": [],
+          "contexts": {
+            "2": [
+              "child-process"
+            ],
+            "3": [
+              "child-process"
+            ],
+            "4": [
+              "child-process"
+            ],
+            "5": [
+              "child-process"
+            ],
+            "6": [
+              "child-process"
+            ],
+            "7": [
+              "child-process"
+            ],
+            "9": [
+              "child-process"
+            ],
+            "10": [
+              "child-process"
+            ]
+          },
+          "executed_branches": [
+            [
+              3,
+              4
+            ],
+            [
+              3,
+              5
+            ],
+            [
+              5,
+              6
+            ],
+            [
+              5,
+              7
+            ]
+          ],
+          "missing_branches": []
+        }
+      },
+      "totals": {
+        "covered_lines": 8,
+        "num_statements": 8,
+        "percent_covered": 100.0,
+        "num_branches": 4,
+        "num_partial_branches": 0,
+        "covered_branches": 4,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0
+      }
+    }
+    "#);
+}
+
+#[test]
+fn test_child_process_coverage_is_not_enabled_without_cov() {
+    let context = TestContext::with_file(
+        "test_child.py",
+        r#"
+import subprocess
+import sys
+
+def test_child_has_no_coverage_activation():
+    subprocess.run(
+        [sys.executable, "-c", "import os; assert '_KARVA_COVERAGE_CONFIG' not in os.environ"],
+        check=True,
+    )
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--status-level=none", "test_child.py"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_report_cli_override_uses_default_path_when_config_path_is_stale() {
     let context = TestContext::with_files([
         (

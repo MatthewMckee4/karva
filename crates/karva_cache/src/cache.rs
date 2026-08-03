@@ -223,7 +223,30 @@ impl RunCache {
             if path.exists() {
                 files.push(path);
             }
+            let child_directory = worker_dir.join("coverage-children");
+            match fs::read_dir(&child_directory) {
+                Ok(entries) => {
+                    for entry in entries {
+                        let path = Utf8PathBuf::from_path_buf(entry?.path()).map_err(|path| {
+                            anyhow::anyhow!(
+                                "child coverage path contains non-Unicode characters: `{}`",
+                                path.display()
+                            )
+                        })?;
+                        if path.extension() == Some("json") {
+                            files.push(path);
+                        }
+                    }
+                }
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to read child coverage directory `{child_directory}`")
+                    });
+                }
+            }
         }
+        files.sort();
         Ok(files)
     }
 
@@ -614,6 +637,36 @@ mod tests {
             "worker-old",
         ]
         "#);
+    }
+
+    #[test]
+    fn coverage_files_include_sorted_child_shards() {
+        let tmp = tempfile::tempdir().expect("temporary directory");
+        let cache_dir =
+            Utf8PathBuf::try_from(tmp.path().to_path_buf()).expect("UTF-8 temporary path");
+        let run_hash = RunHash::from_existing("run-coverage");
+        let cache = RunCache::new(&cache_dir, &run_hash);
+        let worker = cache.coverage_data_file(0);
+        let child_directory = worker
+            .parent()
+            .expect("worker coverage parent")
+            .join("coverage-children");
+        fs::create_dir_all(&child_directory).expect("child coverage directory");
+        fs::write(&worker, "{}").expect("worker coverage");
+        fs::write(child_directory.join("b.json"), "{}").expect("child coverage b");
+        fs::write(child_directory.join("a.json"), "{}").expect("child coverage a");
+        fs::write(child_directory.join("unfinished"), "{}").expect("unfinished temporary file");
+
+        let files = cache.coverage_files().expect("coverage files");
+
+        assert_eq!(
+            files,
+            vec![
+                child_directory.join("a.json"),
+                child_directory.join("b.json"),
+                worker,
+            ]
+        );
     }
 
     #[test]

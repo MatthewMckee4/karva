@@ -15,6 +15,24 @@ def karva_run() -> int:
     """Run Karva using the current process arguments."""
 
 
+class _ChildCoverageSession:
+    """Own native coverage collection in an opted-in child interpreter."""
+
+    def stop_and_save(self) -> None:
+        """Stop collection and atomically write child coverage data."""
+
+
+def _start_child_coverage(
+    roots: list[str],
+    data_file: str,
+    branches: bool,
+    exclude_lines: list[str],
+    partial_branches: list[str],
+    static_context: str | None,
+) -> _ChildCoverageSession:
+    """Start native coverage collection for a Python child interpreter."""
+
+
 class FixtureFunctionMarker(Generic[_P, _T]):
     """Mark a function as a fixture."""
 

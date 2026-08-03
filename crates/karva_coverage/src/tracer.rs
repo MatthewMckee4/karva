@@ -6,6 +6,7 @@
 //! [`CoverageConfig::data_file`].
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -78,11 +79,64 @@ pub struct CoverageSession {
     data_file: Utf8PathBuf,
     exclusions: CoverageExclusions,
     partials: CoveragePartials,
+    include_unexecuted: bool,
+}
+
+/// Native coverage session owned by an opted-in Python child interpreter.
+#[pyclass(name = "_ChildCoverageSession", module = "karva._karva")]
+pub struct ChildCoverageSession {
+    session: Option<CoverageSession>,
+}
+
+#[pymethods]
+impl ChildCoverageSession {
+    /// Stops collection and atomically writes this child's coverage shard.
+    fn stop_and_save(&mut self, py: Python<'_>) -> PyResult<()> {
+        if let Some(session) = self.session.take() {
+            session.stop_and_save(py)?;
+        }
+        Ok(())
+    }
+}
+
+/// Starts native coverage inside an opted-in Python child interpreter.
+#[pyfunction(name = "_start_child_coverage")]
+pub fn start_child_coverage(
+    py: Python<'_>,
+    roots: Vec<String>,
+    data_file: String,
+    branches: bool,
+    exclude_lines: Vec<String>,
+    partial_branches: Vec<String>,
+    static_context: Option<String>,
+) -> PyResult<ChildCoverageSession> {
+    let config = CoverageConfig {
+        sources: roots,
+        data_file: Utf8PathBuf::from(data_file),
+        contexts: false,
+        static_context,
+        branches,
+        exclude_lines,
+        partial_branches,
+    };
+    let session = CoverageSession::start_inner(py, Utf8Path::new(""), &config, false)?;
+    Ok(ChildCoverageSession {
+        session: Some(session),
+    })
 }
 
 impl CoverageSession {
     /// Installs the best tracer supported by the embedded Python version.
     pub fn start(py: Python<'_>, cwd: &Utf8Path, config: &CoverageConfig) -> PyResult<Self> {
+        Self::start_inner(py, cwd, config, true)
+    }
+
+    fn start_inner(
+        py: Python<'_>,
+        cwd: &Utf8Path,
+        config: &CoverageConfig,
+        include_unexecuted: bool,
+    ) -> PyResult<Self> {
         let exclusions = CoverageExclusions::new(&config.exclude_lines)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let partials = CoveragePartials::new(&config.partial_branches)
@@ -123,6 +177,7 @@ impl CoverageSession {
             data_file: config.data_file.clone(),
             exclusions,
             partials,
+            include_unexecuted,
         })
     }
 
@@ -133,6 +188,7 @@ impl CoverageSession {
             data_file,
             exclusions,
             partials,
+            include_unexecuted,
         } = self;
         let bound = tracer.bind(py);
         let tool_id = bound.borrow().monitoring_tool_id.get().copied();
@@ -182,6 +238,7 @@ impl CoverageSession {
             &roots,
             &exclusions,
             &partials,
+            include_unexecuted,
         )
         .map_err(|err| {
             pyo3::exceptions::PyOSError::new_err(format!(
@@ -189,6 +246,24 @@ impl CoverageSession {
             ))
         })?;
         Ok(())
+    }
+
+    /// Returns canonical source roots for descendant-process collection.
+    pub fn source_roots(&self, py: Python<'_>) -> PyResult<Vec<String>> {
+        self.tracer
+            .bind(py)
+            .borrow()
+            .roots
+            .iter()
+            .map(|root| {
+                root.to_str().map(ToOwned::to_owned).ok_or_else(|| {
+                    PyValueError::new_err(format!(
+                        "coverage source contains non-Unicode characters: `{}`",
+                        root.display()
+                    ))
+                })
+            })
+            .collect()
     }
 
     /// Starts first-attempt setup before fixture-derived test identity is available.
@@ -1012,6 +1087,7 @@ fn save_data(
     roots: &[PathBuf],
     exclusions: &CoverageExclusions,
     partials: &CoveragePartials,
+    include_unexecuted: bool,
 ) -> std::io::Result<()> {
     let CollectedCoverage {
         mut executed,
@@ -1019,8 +1095,10 @@ fn save_data(
         mut arcs,
         mut arc_contexts,
     } = collected;
-    for path in walk_source_files(roots) {
-        executed.entry(path).or_default();
+    if include_unexecuted {
+        for path in walk_source_files(roots) {
+            executed.entry(path).or_default();
+        }
     }
 
     let mut files = BTreeMap::new();
@@ -1082,11 +1160,11 @@ fn save_data(
         );
     }
 
-    if let Some(parent) = data_file.parent()
-        && !parent.as_str().is_empty()
-    {
-        fs::create_dir_all(parent.as_std_path())?;
-    }
+    let parent = data_file
+        .parent()
+        .filter(|parent| !parent.as_str().is_empty())
+        .unwrap_or_else(|| Utf8Path::new("."));
+    fs::create_dir_all(parent.as_std_path())?;
     let source_roots = roots
         .iter()
         .map(|root| root.to_string_lossy().into_owned())
@@ -1095,7 +1173,12 @@ fn save_data(
         source_roots,
         files,
     })?;
-    fs::write(data_file.as_std_path(), bytes)
+    let mut temporary = tempfile::NamedTempFile::new_in(parent.as_std_path())?;
+    temporary.write_all(&bytes)?;
+    temporary
+        .persist(data_file.as_std_path())
+        .map(|_| ())
+        .map_err(|error| error.error)
 }
 
 #[cfg(test)]
@@ -1314,6 +1397,7 @@ code = Code()
             &[],
             &CoverageExclusions::default(),
             &CoveragePartials::default(),
+            true,
         )
         .expect_err("missing source should fail");
 

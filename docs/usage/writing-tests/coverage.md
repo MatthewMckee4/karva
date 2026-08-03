@@ -134,6 +134,10 @@ uv run karva coverage html --contexts 'python=3\.14' --show-contexts
 uv run karva coverage json --contexts '\|setup$' --show-contexts
 ```
 
+Coverage-enabled runs also collect Python code executed by descendant interpreters. This includes Python launched through `subprocess`, `multiprocessing` spawn and fork modes, normal interpreter exit, `os._exit`, and `os.exec*` process replacement. Descendants inherit source roots, branch mode, and static context, then write collision-free shards merged through the same native data path.
+
+Hard termination cannot flush in-process data. `SIGKILL`, forced process termination, crashes, and Python launched with `-S` are not covered after their last successful flush.
+
 Persisted native coverage data can be exported independently. Output is compact by default:
 
 ```bash
