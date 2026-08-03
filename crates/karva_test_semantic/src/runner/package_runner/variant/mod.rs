@@ -20,8 +20,7 @@ use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
-use crate::runner::test_iterator::FixtureParameter;
-use crate::runner::test_iterator::TestVariant;
+use crate::runner::test_iterator::{FixtureParameter, ParameterIdentity, TestVariant};
 use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
 
 use super::PackageRunner;
@@ -58,8 +57,8 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     params: HashMap<String, Arc<Py<PyAny>>>,
     /// Parameter values selected for fixture request objects.
     fixture_params: HashMap<String, FixtureParameter>,
-    /// User-defined parameter ID used in the displayed test name.
-    id: Option<String>,
+    /// Display and collection identity for a parametrized test.
+    identity: Option<Box<ParameterIdentity>>,
     /// Compiled fixture arena for this test.
     fixture_plan: Rc<FixturePlan>,
     /// Fixtures passed as Python keyword arguments.
@@ -88,7 +87,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test,
             params,
             fixture_params,
-            id,
+            scoped_params: _,
+            identity,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -102,7 +102,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test,
             params,
             fixture_params,
-            id,
+            identity,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -192,7 +192,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 auto_use_fixtures: &self.auto_use_fixtures,
                 params,
                 fixture_params: self.fixture_params.clone(),
-                parameter_id: self.id.as_deref(),
+                parameter_id: self
+                    .identity
+                    .as_ref()
+                    .map(|identity| identity.node.as_str()),
             },
         );
         PreparedTestAttempt {
@@ -232,7 +235,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
         framework_fixture_names.push("request");
-        let parameters = if let Some(id) = &self.id {
+        let parameters = if let Some(id) = self
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.display.as_ref())
+        {
             Some(id.clone())
         } else {
             test_parameters(

@@ -965,10 +965,10 @@ impl BenchmarkMetric {
     fn report_context(self) -> &'static str {
         match self {
             Self::WallTime => {
-                "Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better."
+                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
             Self::Memory => {
-                "Each benchmark compares median peak RSS for the installed Karva CLI on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and are configured per project. Lower is better."
+                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
         }
     }
@@ -1096,7 +1096,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :x: Merging this PR may alter performance
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **1** improved benchmark
         :x: **1** regressed benchmark

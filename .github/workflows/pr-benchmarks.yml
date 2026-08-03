@@ -110,9 +110,9 @@ jobs:
           git worktree add --detach "${base_worktree}" "${BASE_SHA}"
           (
             cd "${base_worktree}"
-            uv run --no-project --with maturin maturin build --out "${base_wheel_dir}"
+            uv run --no-project --with maturin maturin build --release --out "${base_wheel_dir}"
           )
-          uv run --no-project --with maturin maturin build --out "${head_wheel_dir}"
+          uv run --no-project --with maturin maturin build --release --out "${head_wheel_dir}"
 
           base_wheel=$(find "${base_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
           head_wheel=$(find "${head_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)

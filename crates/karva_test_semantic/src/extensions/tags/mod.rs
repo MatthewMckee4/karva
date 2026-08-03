@@ -352,6 +352,10 @@ impl CompiledTags {
         self.parameter_names.iter().map(String::as_str).collect()
     }
 
+    pub(crate) fn indirect_names(&self) -> impl Iterator<Item = &str> {
+        self.parameters.indirect_names()
+    }
+
     pub(crate) fn required_fixtures(&self) -> &[String] {
         &self.required_fixtures
     }

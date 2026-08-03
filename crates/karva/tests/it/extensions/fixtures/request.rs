@@ -79,6 +79,7 @@ def test_request(resource, request):
     assert request.instance is None
     assert request.module is __import__(__name__)
     assert isinstance(request.path, Path)
+    assert request.path.is_absolute()
     assert request.path.name == "test_request.py"
     assert request.node.name == "test_request"
     assert request.node.originalname == "test_request"
@@ -91,6 +92,13 @@ def test_request(resource, request):
     assert "initial" in request.keywords
     assert request.config is request.session.config
     assert isinstance(request.config.rootpath, Path)
+    assert request.config.getoption("verbose") == 0
+    assert request.config.getoption("-v") == 0
+    assert request.config.getoption("missing", None) is None
+    assert request.config.getoption("missing", default="fallback") == "fallback"
+    assert request.config.getini("python_functions") == ["test"]
+    with pytest.raises(ValueError, match="no option named 'missing'"):
+        request.config.getoption("missing")
     assert request.getfixturevalue("resource") == 42
     with pytest.raises(pytest.FixtureLookupError):
         request.getfixturevalue("missing")
@@ -554,6 +562,505 @@ def test_override(value):
             PASS [TIME] nested.test_request::test_override(value='parent nested module')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn broad_scoped_parameters_are_grouped_across_tests() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="module", params=[1, 2])
+def value(request):
+    events.append(f"setup {request.param}")
+    yield request.param
+    events.append(f"teardown {request.param}")
+
+
+def test_first(value):
+    events.append(f"first {value}")
+
+
+def test_second(value):
+    events.append(f"second {value}")
+    if value == 2:
+        assert events == [
+            "setup 1",
+            "first 1",
+            "second 1",
+            "teardown 1",
+            "setup 2",
+            "first 2",
+            "second 2",
+        ]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_first(1)
+            PASS [TIME] test_request::test_second(1)
+            PASS [TIME] test_request::test_first(2)
+            PASS [TIME] test_request::test_second(2)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn request_nodes_share_truthful_collection_context() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+pytestmark = pytest.mark.level("module")
+fixture_node = None
+session = None
+
+
+@pytest.fixture(scope="module")
+def module_context(request):
+    global fixture_node, session
+    fixture_node = request.node
+    session = request.session
+    assert request.node.name == "test_request.py"
+    assert request.node.nodeid.endswith("test_request.py")
+    assert request.node.path.is_absolute()
+    assert [marker.args[0] for marker in request.node.iter_markers("level")] == ["module"]
+    request.applymarker(pytest.mark.xfail(reason="module request"))
+
+
+@pytest.mark.level("function")
+def test_context(module_context, request):
+    assert request.session is session
+    assert request.session.testscollected == 2
+    assert len(request.session.items) == 2
+    assert request.session.items[0] is request.node
+    assert fixture_node is not request.node
+    assert request.node is request.node
+    assert request.node.parent is fixture_node
+    assert list(request.node.iter_parents())[:2] == [request.node, fixture_node]
+    assert request.node.listchain()[-2:] == [fixture_node, request.node]
+    assert request.node.listnames()[-2:] == ["test_request.py", "test_context"]
+    assert [marker.name for marker in request.node.own_markers] == ["level"]
+    assert [marker.args[0] for marker in request.node.iter_markers("level")] == [
+        "function",
+        "module",
+    ]
+    assert [
+        (node.name, marker.args[0])
+        for node, marker in request.node.iter_markers_with_node("level")
+    ] == [("test_context", "function"), ("test_request.py", "module")]
+    assert "test_context" in request.keywords
+    assert "test_request.py" in request.keywords
+    assert False
+
+
+def test_scoped_marker_persists(module_context, request):
+    assert "xfail" in request.keywords
+    assert False
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_context(module_context=None, request)
+            PASS [TIME] test_request::test_scoped_marker_persists(module_context=None, request)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn indirect_parametrization_supports_scope_and_autouse_fixtures() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+setups = []
+
+
+@pytest.fixture(autouse=True)
+def value(request):
+    assert request.scope == "module"
+    setups.append(request.param)
+    yield request.param
+    setups.append(f"teardown {request.param}")
+
+
+@pytest.mark.parametrize("value", [1], indirect=True, scope="module")
+def test_first():
+    assert setups == [1]
+
+
+@pytest.mark.parametrize("value", [1], indirect=True, scope="module")
+def test_second():
+    assert setups == [1]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_first
+            PASS [TIME] test_request::test_second
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn session_parameters_are_grouped_across_modules() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="session", params=[1, 2])
+def value(request):
+    events.append(f"setup {request.param}")
+    yield request.param
+    events.append(f"teardown {request.param}")
+"#,
+        ),
+        (
+            "test_a.py",
+            r#"
+from conftest import events
+
+
+def test_a(value):
+    events.append(f"a {value}")
+"#,
+        ),
+        (
+            "test_b.py",
+            r#"
+from conftest import events
+
+
+def test_b(value):
+    events.append(f"b {value}")
+    if value == 2:
+        assert events == [
+            "setup 1",
+            "a 1",
+            "b 1",
+            "teardown 1",
+            "setup 2",
+            "a 2",
+            "b 2",
+        ]
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_a(1)
+            PASS [TIME] test_b::test_b(1)
+            PASS [TIME] test_a::test_a(2)
+            PASS [TIME] test_b::test_b(2)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn indirect_parameters_inherit_fixture_scope_for_scheduling() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="module")
+def value(request):
+    events.append(f"setup {request.param}")
+    yield request.param
+    events.append(f"teardown {request.param}")
+
+
+@pytest.mark.parametrize("value", [1, 2], indirect=True)
+def test_first(value):
+    events.append(f"first {value}")
+
+
+@pytest.mark.parametrize("value", [1, 2], indirect=True)
+def test_second(value):
+    events.append(f"second {value}")
+    if value == 2:
+        assert events == [
+            "setup 1",
+            "first 1",
+            "second 1",
+            "teardown 1",
+            "setup 2",
+            "first 2",
+            "second 2",
+        ]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_first(value=1)
+            PASS [TIME] test_request::test_second(value=1)
+            PASS [TIME] test_request::test_first(value=2)
+            PASS [TIME] test_request::test_second(value=2)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn indirect_scope_override_controls_dependency_validation() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+@pytest.fixture
+def dependency():
+    return 1
+
+
+@pytest.fixture(scope="module")
+def value(request, dependency):
+    assert request.scope == "function"
+    return request.param + dependency
+
+
+@pytest.mark.parametrize("value", [1], indirect=True, scope="function")
+def test_value(value):
+    assert value == 2
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_request::test_value(value=2)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn indirect_parameters_control_fixture_lifetime_without_request_argument() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="module")
+def resource():
+    instance = len([event for event in events if event.startswith("setup")]) + 1
+    events.append(f"setup {instance}")
+    yield instance
+    events.append(f"teardown {instance}")
+
+
+@pytest.mark.parametrize("resource", ["a", "b"], indirect=True)
+def test_first(resource):
+    events.append(f"first {resource}")
+
+
+@pytest.mark.parametrize("resource", ["a", "b"], indirect=True)
+def test_second(resource):
+    events.append(f"second {resource}")
+    if resource == 2:
+        assert events == [
+            "setup 1",
+            "first 1",
+            "second 1",
+            "teardown 1",
+            "setup 2",
+            "first 2",
+            "second 2",
+        ]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_first(resource=1)
+            PASS [TIME] test_request::test_second(resource=1)
+            PASS [TIME] test_request::test_first(resource=2)
+            PASS [TIME] test_request::test_second(resource=2)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn direct_scoped_parameters_reorder_collection_items() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+events = []
+expected_items = [
+    "test_first[1]",
+    "test_second[1]",
+    "test_first[2]",
+    "test_second[2]",
+]
+
+
+@pytest.mark.parametrize("value", [1, 2], scope="module")
+def test_first(value, request):
+    assert [item.name for item in request.session.items] == expected_items
+    events.append(f"first {value}")
+
+
+@pytest.mark.parametrize("value", [1, 2], scope="module")
+def test_second(value, request):
+    assert [item.name for item in request.session.items] == expected_items
+    events.append(f"second {value}")
+    if value == 2:
+        assert events == ["first 1", "second 1", "first 2", "second 2"]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_request::test_first(value=1, request)
+            PASS [TIME] test_request::test_second(value=1, request)
+            PASS [TIME] test_request::test_first(value=2, request)
+            PASS [TIME] test_request::test_second(value=2, request)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn package_parameters_are_grouped_across_modules() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="package", params=[1, 2])
+def value(request):
+    events.append(f"setup {request.param}")
+    yield request.param
+    events.append(f"teardown {request.param}")
+"#,
+        ),
+        (
+            "test_a.py",
+            r#"
+from conftest import events
+
+
+def test_a(value):
+    events.append(f"a {value}")
+"#,
+        ),
+        (
+            "test_b.py",
+            r#"
+from conftest import events
+
+
+def test_b(value):
+    events.append(f"b {value}")
+    if value == 2:
+        assert events == [
+            "setup 1",
+            "a 1",
+            "b 1",
+            "teardown 1",
+            "setup 2",
+            "a 2",
+            "b 2",
+        ]
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_a(1)
+            PASS [TIME] test_b::test_b(1)
+            PASS [TIME] test_a::test_a(2)
+            PASS [TIME] test_b::test_b(2)
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
 
     ----- stderr -----
     ");

@@ -39,6 +39,9 @@ pub(super) struct FixturePlanCompiler<'a> {
 
     /// Arena prefix participating in static test variant expansion.
     variant_fixture_count: Option<usize>,
+
+    /// Indirect fixtures whose effective scope is selected per parameter case.
+    deferred_scope_validation: Option<Box<[String]>>,
 }
 
 /// Source-backed fixture metadata retained for resolution diagnostics.
@@ -175,6 +178,7 @@ impl<'a> FixturePlanCompiler<'a> {
             fixtures: Vec::new(),
             dynamic_fixtures: HashMap::new(),
             variant_fixture_count: None,
+            deferred_scope_validation: None,
         }
     }
 
@@ -209,6 +213,18 @@ impl<'a> FixturePlanCompiler<'a> {
         self.fixtures
             .iter()
             .any(NormalizedFixture::requests_request)
+    }
+
+    pub(super) fn defer_scope_validation<'name>(
+        &mut self,
+        fixture_names: impl IntoIterator<Item = &'name str>,
+    ) {
+        let fixture_names = fixture_names
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        self.deferred_scope_validation =
+            (!fixture_names.is_empty()).then(|| fixture_names.into_boxed_slice());
     }
 
     /// Normalizes a fixture and its dependencies recursively.
@@ -373,6 +389,15 @@ impl<'a> FixturePlanCompiler<'a> {
             {
                 if let Some(current_fixture) = current_fixture
                     && !current_fixture.scope().can_use(fixture.scope())
+                    && !self
+                        .deferred_scope_validation
+                        .as_deref()
+                        .is_some_and(|names| {
+                            names.iter().any(|name| {
+                                name == current_fixture.name().function_name()
+                                    || name == fixture.name().function_name()
+                            })
+                        })
                 {
                     let dependency_path = path
                         .fixtures

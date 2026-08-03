@@ -131,18 +131,29 @@ impl PackageRunner<'_, '_> {
             .any(|parameter| parameter.parameter.name.as_str() == "request");
         let request_context = if test_requests_request || fixture_plan.uses_request() {
             let fixture_names = request_fixture_names(test, fixture_plan);
-            match RequestContext::new(
-                py,
-                test.py_function.clone_ref(py),
-                RequestMetadata {
-                    module_name: test.name().module_path().module_name(),
-                    path: test.name().module_path().path().as_str(),
-                    root_path: self.context.cwd().as_str(),
-                    test_name: test.name().function_name(),
-                    parameter_id,
-                    fixture_names,
+            let context = self.request_state.as_ref().map_or_else(
+                || {
+                    Err(pyo3::exceptions::PyRuntimeError::new_err(
+                        "request collection state was not initialized",
+                    ))
                 },
-            ) {
+                |state| match state.as_ref() {
+                    Ok(state) => RequestContext::new(
+                        py,
+                        &state.borrow(),
+                        test.py_function.clone_ref(py),
+                        RequestMetadata {
+                            module_name: test.name().module_path().module_name(),
+                            path: test.name().module_path().path().as_str(),
+                            test_name: test.name().function_name(),
+                            parameter_id,
+                            fixture_names,
+                        },
+                    ),
+                    Err(error) => Err(pyo3::exceptions::PyRuntimeError::new_err(error.clone())),
+                },
+            );
+            match context {
                 Ok(context) => Some(Rc::new(context)),
                 Err(error) => {
                     return PreparedFixtures {
@@ -236,7 +247,7 @@ impl PackageRunner<'_, '_> {
         let request_tags = executor
             .request_context
             .as_ref()
-            .map_or_else(RuntimeTags::default, |context| context.applied_tags());
+            .map_or_else(RuntimeTags::default, |context| context.applied_tags(py));
         PreparedFixtures {
             function_arguments,
             setup_result: FixtureSetupError::from_vec(fixture_call_errors).map_or(Ok(()), Err),
@@ -296,6 +307,17 @@ impl FixtureExecutor {
         self.fixture_params.as_deref()?.get(name)
     }
 
+    fn fixture_scope(&self, fixture_id: FixtureId) -> FixtureScope {
+        let fixture = self.plan.fixture(fixture_id);
+        let Some(parameters) = self.fixture_params.as_deref() else {
+            return fixture.scope();
+        };
+        parameters
+            .get(&fixture.name().to_string())
+            .and_then(|parameter| parameter.scope)
+            .unwrap_or_else(|| fixture.scope())
+    }
+
     fn collect_parameters(
         &self,
         py: Python<'_>,
@@ -323,7 +345,7 @@ impl FixtureExecutor {
         fixture_id: FixtureId,
     ) -> Result<Py<PyAny>, FixtureCallError> {
         let fixture = self.plan.fixture(fixture_id);
-        let scope = scope_key(fixture.scope(), fixture.package_owner());
+        let scope = scope_key(self.fixture_scope(fixture_id), fixture.package_owner());
         let fixture_cache_name = fixture.name().to_string();
         let cache_key = self.cache_key(py, fixture_id);
         let cache_lookup = self
@@ -420,6 +442,27 @@ impl FixtureExecutor {
         let fixture = self.plan.fixture(fixture_id);
         let mut function_arguments = FixtureArguments::default();
 
+        if self.fixture_params.is_some() {
+            let fixture_scope = self.fixture_scope(fixture_id);
+            for dependency_id in fixture.dependencies() {
+                let dependency_scope = self.fixture_scope(*dependency_id);
+                if !fixture_scope.can_use(dependency_scope) {
+                    let dependency = self.plan.fixture(*dependency_id);
+                    return Err(FixtureCallError::new(
+                        fixture,
+                        pyo3::exceptions::PyRuntimeError::new_err(format!(
+                            "ScopeMismatch: {}-scoped fixture `{}` cannot access {}-scoped fixture `{}`",
+                            fixture_scope.name(),
+                            fixture.function_name(),
+                            dependency_scope.name(),
+                            dependency.function_name(),
+                        )),
+                        function_arguments,
+                    ));
+                }
+            }
+        }
+
         for dependency_id in fixture.dependencies() {
             let dependency = self.plan.fixture(*dependency_id);
             match self.run_fixture(py, *dependency_id) {
@@ -442,7 +485,12 @@ impl FixtureExecutor {
             Ok(result) => result,
             Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
         };
-        let (value, finalizer) = match get_value_and_finalizer(py, fixture, fixture_call_result) {
+        let (value, finalizer) = match get_value_and_finalizer(
+            py,
+            fixture,
+            fixture_call_result,
+            self.fixture_scope(fixture_id),
+        ) {
             Ok(result) => result,
             Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
         };
@@ -482,8 +530,9 @@ impl FixtureExecutor {
         };
         let fixture = self.plan.fixture(fixture_id);
         let parameter = self.fixture_parameter(&fixture.name().to_string());
+        let scope = self.fixture_scope(fixture_id);
         let runtime = self.request_runtime(
-            fixture.scope(),
+            scope,
             fixture.package_owner().to_path_buf(),
             Rc::clone(&fixture.definition),
             Some(fixture_id),
@@ -496,10 +545,10 @@ impl FixtureExecutor {
                 Rc::clone(context),
                 runtime,
                 Some(fixture.function_name().to_string()),
-                fixture.scope(),
+                scope,
                 parameter.map(|parameter| parameter.value.clone_ref(py)),
                 Some(parameter.map_or(0, |parameter| parameter.index)),
-            )?,
+            ),
         )
     }
 
@@ -537,7 +586,7 @@ impl FixtureExecutor {
                 FixtureScope::Function,
                 None,
                 None,
-            )?,
+            ),
         )
     }
 
@@ -583,11 +632,12 @@ impl FixtureExecutor {
             )));
         };
         let fixture = self.plan.fixture(fixture_id);
-        if !requesting_scope.can_use(fixture.scope()) {
+        let fixture_scope = self.fixture_scope(fixture_id);
+        if !requesting_scope.can_use(fixture_scope) {
             return Err(RequestFixtureError::Lookup(format!(
                 "ScopeMismatch: {}-scoped request cannot access {}-scoped fixture {name:?}",
                 requesting_scope.name(),
-                fixture.scope().name(),
+                fixture_scope.name(),
             )));
         }
         if fixture.parameters().is_some()
@@ -661,7 +711,7 @@ fn run_fixtures_at_scope(
         executor,
         fixture_ids
             .iter()
-            .filter(|fixture_id| executor.plan.fixture(**fixture_id).scope() == scope),
+            .filter(|fixture_id| executor.fixture_scope(**fixture_id) == scope),
         usage,
     )
 }
@@ -847,6 +897,7 @@ fn get_value_and_finalizer(
     py: Python<'_>,
     fixture: &NormalizedFixture,
     fixture_call_result: Py<PyAny>,
+    scope: FixtureScope,
 ) -> PyResult<(Py<PyAny>, Option<Finalizer>)> {
     if fixture.is_generator && fixture.statement().is_async {
         let bound = fixture_call_result.bind(py);
@@ -857,7 +908,7 @@ fn get_value_and_finalizer(
             fixture_call_result,
             true,
             fixture.name().to_string(),
-            fixture.scope(),
+            scope,
             fixture.package_owner().to_path_buf(),
             Rc::clone(&fixture.definition),
         );
@@ -879,7 +930,7 @@ fn get_value_and_finalizer(
                     bound_iterator.clone().unbind().into_any(),
                     false,
                     fixture.name().to_string(),
-                    fixture.scope(),
+                    scope,
                     fixture.package_owner().to_path_buf(),
                     Rc::clone(&fixture.definition),
                 );
