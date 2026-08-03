@@ -744,6 +744,15 @@
             }
           ]
         },
+        "random-seed": {
+          "description": "Seed used to randomize test order when [`shuffle`](#shuffle) is enabled.\n\nWhen omitted, Karva generates and prints a seed for the run. Setting a\nseed does not enable shuffling by itself.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "retry": {
           "description": "When set, we will retry failed tests up to this number of times.",
           "type": [
@@ -762,6 +771,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "shuffle": {
+          "description": "Randomize test order before assigning tests to workers.\n\nDefaults to `false`. When enabled, Karva prints the seed used for the\nrun so the same order can be reproduced.",
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "slow-timeout": {

@@ -672,6 +672,26 @@ no-tests = "warn"
 
 ---
 
+### `random-seed`
+
+Seed used to randomize test order when [`shuffle`](#shuffle) is enabled.
+
+When omitted, Karva generates and prints a seed for the run. Setting a
+seed does not enable shuffling by itself.
+
+**Default value**: `null`
+
+**Type**: `u64`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+random-seed = 170938
+```
+
+---
+
 ### `retry`
 
 When set, we will retry failed tests up to this number of times.
@@ -709,6 +729,26 @@ Defaults to unset, which lets the run take as long as it needs.
 ```toml
 [tool.karva.profile.default.test]
 run-timeout = 1800.0
+```
+
+---
+
+### `shuffle`
+
+Randomize test order before assigning tests to workers.
+
+Defaults to `false`. When enabled, Karva prints the seed used for the
+run so the same order can be reproduced.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+shuffle = true
 ```
 
 ---

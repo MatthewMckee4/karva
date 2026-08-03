@@ -777,6 +777,13 @@ pub struct TestSettings {
     /// Additional attempts permitted after first failure.
     pub retry: u32,
 
+    /// Whether controller-side test ordering is randomized.
+    pub shuffle: bool,
+
+    /// Configured seed for randomized ordering. `None` requests a generated seed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub random_seed: Option<u64>,
+
     /// Whether eventual success after retry passes the run.
     pub flaky_result: FlakyResult,
 

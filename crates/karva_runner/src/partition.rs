@@ -1,13 +1,18 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::Hasher;
 use std::time::Duration;
 
 use karva_cli::PartitionSelection;
+use siphasher::sip::SipHasher13;
 
 /// Ordering strategy for partition inputs.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum TestOrdering {
     /// Randomize unknown-duration tests to avoid sticky first-run imbalance.
     ShuffleUnknownDurations,
+
+    /// Randomize every selected test reproducibly and ignore duration history.
+    SeededShuffle(u64),
 
     /// Use qualified-name ordering for deterministic benchmark inputs.
     Stable,
@@ -125,6 +130,8 @@ impl Partition {
 /// ## Weighting Strategy
 /// - **With historical data**: Uses actual test duration in microseconds
 /// - **Without historical data**: Tests are shuffled randomly and assigned with equal weight
+/// - **With seeded shuffling**: Ignores duration history and derives ordering
+///   and worker assignment from each test's identity so filters commute with it
 pub fn partition_collected_tests(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
@@ -155,6 +162,10 @@ pub fn partition_collected_tests(
     }
 
     order_tests_for_partitioning(&mut test_infos, test_ordering);
+
+    if let TestOrdering::SeededShuffle(seed) = test_ordering {
+        return partition_shuffled_tests(test_infos, num_workers, seed);
+    }
 
     // Step 1: Group tests by module and calculate module weights, preserving
     // the order chosen above for the first test seen from each module.
@@ -218,6 +229,34 @@ pub fn partition_collected_tests(
     partitions
 }
 
+/// Assigns each shuffled test from its stable random key, independent of sibling tests.
+fn partition_shuffled_tests(
+    test_infos: Vec<TestInfo>,
+    num_workers: usize,
+    seed: u64,
+) -> Vec<Partition> {
+    let mut partitions: Vec<Partition> = (0..num_workers).map(|_| Partition::new()).collect();
+    if partitions.is_empty() {
+        return partitions;
+    }
+
+    for test_info in test_infos {
+        let key = seeded_order_key(seed, &test_info.qualified_name);
+        let partition_index = seeded_partition_index(key, partitions.len());
+        partitions[partition_index].add_test(test_info, 1);
+    }
+
+    partitions
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the remainder is below a worker count that already fits usize"
+)]
+fn seeded_partition_index(key: u64, num_workers: usize) -> usize {
+    (key % num_workers as u64) as usize
+}
+
 /// Finds the index of the partition with the smallest weight
 fn find_lightest_partition(partitions: &[Partition]) -> usize {
     partitions
@@ -263,8 +302,18 @@ fn order_tests_for_partitioning(test_infos: &mut [TestInfo], ordering: TestOrder
 
     match ordering {
         TestOrdering::ShuffleUnknownDurations => shuffle_tests_without_durations(test_infos),
+        TestOrdering::SeededShuffle(seed) => {
+            test_infos.sort_by_cached_key(|test| seeded_order_key(seed, &test.qualified_name));
+        }
         TestOrdering::Stable => {}
     }
+}
+
+/// Produces a stable pseudo-random priority from one run seed and test identity.
+fn seeded_order_key(seed: u64, qualified_name: &str) -> u64 {
+    let mut hasher = SipHasher13::new_with_keys(seed, !seed);
+    hasher.write(qualified_name.as_bytes());
+    hasher.finish()
 }
 
 /// Recursively collects test information from a package and all its subpackages
@@ -359,6 +408,58 @@ mod tests {
                 "test_module::test_b",
                 "test_module::test_c"
             ]
+        );
+    }
+
+    #[test]
+    fn seeded_ordering_is_reproducible() {
+        let tests = vec![
+            test_info("test_module::test_d"),
+            test_info("test_module::test_a"),
+            test_info("test_module::test_c"),
+            test_info("test_module::test_b"),
+        ];
+        let mut first = tests.clone();
+        let mut repeated = tests.clone();
+        let mut different_seed = tests;
+
+        order_tests_for_partitioning(&mut first, TestOrdering::SeededShuffle(170_938));
+        order_tests_for_partitioning(&mut repeated, TestOrdering::SeededShuffle(170_938));
+        order_tests_for_partitioning(&mut different_seed, TestOrdering::SeededShuffle(170_939));
+
+        let names = |tests: &[TestInfo]| {
+            tests
+                .iter()
+                .map(|test| test.qualified_name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(&first), names(&repeated));
+        assert_ne!(names(&first), names(&different_seed));
+    }
+
+    #[test]
+    fn seeded_partitioning_reproduces_worker_assignment_and_order() {
+        let mut tests = vec![
+            test_info("test_module::test_f"),
+            test_info("test_module::test_a"),
+            test_info("test_module::test_e"),
+            test_info("test_module::test_b"),
+            test_info("test_module::test_d"),
+            test_info("test_module::test_c"),
+        ];
+        order_tests_for_partitioning(&mut tests, TestOrdering::SeededShuffle(170_938));
+
+        let first = partition_shuffled_tests(tests.clone(), 2, 170_938);
+        let repeated = partition_shuffled_tests(tests, 2, 170_938);
+
+        assert_eq!(first[0].tests(), repeated[0].tests());
+        assert_eq!(first[1].tests(), repeated[1].tests());
+        assert_eq!(
+            first
+                .iter()
+                .map(|partition| partition.tests().len())
+                .sum::<usize>(),
+            6
         );
     }
 

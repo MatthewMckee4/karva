@@ -365,6 +365,14 @@ pub struct TestCommand {
     #[clap(long, value_name = "STRATEGY:M/N", help_heading = "Filter options")]
     pub partition: Option<PartitionSelection>,
 
+    /// Randomize test order before assigning tests to workers.
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args = 0..=1, help_heading = "Runner options")]
+    pub shuffle: Option<bool>,
+
+    /// Seed used by `--shuffle`. Does not enable shuffling by itself.
+    #[clap(long, value_name = "SEED", help_heading = "Runner options")]
+    pub random_seed: Option<u64>,
+
     /// Number of parallel workers (default: number of CPU cores)
     #[clap(short = 'n', long, help_heading = "Runner options")]
     pub num_workers: Option<NonZeroUsize>,
@@ -510,6 +518,8 @@ impl SubTestCommand {
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,
                 retry: self.retry,
+                shuffle: None,
+                random_seed: None,
                 flaky_result: self.flaky_result.map(Into::into),
                 no_tests: self.no_tests.map(Into::into),
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
@@ -554,12 +564,16 @@ impl TestCommand {
     pub fn into_options(self) -> Options {
         let run_timeout = self.run_timeout;
         let termination_grace_period = self.termination_grace_period;
+        let shuffle = self.shuffle;
+        let random_seed = self.random_seed;
         let mut sub_command = self.sub_command;
         if self.no_capture {
             sub_command.show_output = Some(true);
         }
         let mut options = sub_command.into_options();
         if let Some(test) = options.test.as_mut() {
+            test.shuffle = shuffle;
+            test.random_seed = random_seed;
             test.run_timeout = run_timeout.map(RunTimeoutSecs);
             test.termination_grace_period =
                 termination_grace_period.map(TerminationGracePeriodSecs);
@@ -624,6 +638,7 @@ mod tests {
             "--show-output=false",
             "--no-parallel=false",
             "--no-cache=false",
+            "--shuffle=false",
         ]);
 
         assert_eq!(command.sub_command.no_ignore, Some(false));
@@ -633,6 +648,7 @@ mod tests {
         assert_eq!(command.sub_command.show_output, Some(false));
         assert_eq!(command.no_parallel, Some(false));
         assert_eq!(command.no_cache, Some(false));
+        assert_eq!(command.shuffle, Some(false));
     }
 
     #[test]
@@ -646,6 +662,7 @@ mod tests {
             "--show-output",
             "--no-parallel",
             "--no-cache",
+            "--shuffle",
         ]);
 
         assert_eq!(command.sub_command.no_ignore, Some(true));
@@ -655,6 +672,7 @@ mod tests {
         assert_eq!(command.sub_command.show_output, Some(true));
         assert_eq!(command.no_parallel, Some(true));
         assert_eq!(command.no_cache, Some(true));
+        assert_eq!(command.shuffle, Some(true));
     }
 
     #[test]

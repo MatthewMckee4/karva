@@ -146,7 +146,8 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--profile"><a href="#karva-test--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to use.</p>
 <p>Profiles are defined as <code>&#91;profile.&lt;name&gt;&#93;</code> sections in <code>karva.toml</code> (or <code>&#91;tool.karva.profile.&lt;name&gt;&#93;</code> in <code>pyproject.toml</code>) and may override any of the <code>&#91;src&#93;</code>, <code>&#91;terminal&#93;</code>, and <code>&#91;test&#93;</code> settings. The selected profile is layered on top of any <code>&#91;profile.default&#93;</code> overrides, which themselves layer on top of the top-level options.</p>
 <p>Defaults to <code>default</code>.</p>
-<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--result-format"><a href="#karva-test--result-format"><code>--result-format</code></a> <i>format</i></dt><dd><p>Machine-readable test result format</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--random-seed"><a href="#karva-test--random-seed"><code>--random-seed</code></a> <i>seed</i></dt><dd><p>Seed used by <code>--shuffle</code>. Does not enable shuffling by itself</p>
+</dd><dt id="karva-test--result-format"><a href="#karva-test--result-format"><code>--result-format</code></a> <i>format</i></dt><dd><p>Machine-readable test result format</p>
 <p>Possible values:</p>
 <ul>
 <li><code>json</code>:  Write one JSON document with the full run result</li>
@@ -161,6 +162,11 @@ karva test [OPTIONS] [PATH]...
 </ul></dd><dt id="karva-test--run-timeout"><a href="#karva-test--run-timeout"><code>--run-timeout</code></a> <i>seconds</i></dt><dd><p>Wall-clock limit for the whole run, in seconds.</p>
 <p>When the run takes longer than this duration, karva stops the remaining workers and exits with a failure status. Accepts fractional seconds such as <code>--run-timeout=1800</code> or <code>--run-timeout=0.5</code>.</p>
 </dd><dt id="karva-test--show-output"><a href="#karva-test--show-output"><code>--show-output</code></a>, <code>-s</code> <i>show-output</i></dt><dd><p>Show Python stdout during test execution</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--shuffle"><a href="#karva-test--shuffle"><code>--shuffle</code></a> <i>shuffle</i></dt><dd><p>Randomize test order before assigning tests to workers</p>
 <p>Possible values:</p>
 <ul>
 <li><code>true</code></li>

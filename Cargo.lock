@@ -1377,6 +1377,7 @@ dependencies = [
  "libc",
  "ruff_python_ast",
  "serde_json",
+ "siphasher",
  "tempfile",
  "tracing",
  "which",
