@@ -69,7 +69,7 @@ nav = [
 language = "en"
 logo = "assets/karva-mark.svg"
 favicon = "assets/karva-mark.svg"
-custom_dir = "overrides"
+custom_dir = "docs/overrides"
 features = [
     "navigation.instant",
     "navigation.instant.prefetch",
