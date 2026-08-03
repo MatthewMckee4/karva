@@ -17,10 +17,10 @@ pub use overrides::ProjectOptionsOverrides;
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
-    CovFailUnder, CoverageSettings, FailSlowSecs, FlakyResult, JunitFlakyFailStatus, JunitSettings,
-    NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
-    SlowTimeoutSecs, SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings,
-    TestTimeoutSecs,
+    CovFailUnder, CoveragePrecision, CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs,
+    FlakyResult, JunitFlakyFailStatus, JunitSettings, NoTestsMode, OverrideSettings,
+    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings,
+    TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
@@ -591,6 +591,19 @@ impl TestOptions {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 /// Controls measured Python sources and coverage report generation.
 pub struct CoverageOptions {
+    /// Native coverage artifact read and written by coverage commands.
+    ///
+    /// Relative paths are resolved from the project root.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#".karva/coverage/data.json"#,
+        value_type = r#"path"#,
+        example = r#"
+            data-file = ".karva/coverage/data.json"
+        "#
+    )]
+    pub data_file: Option<String>,
+
     /// Source paths to measure coverage for.
     ///
     /// Equivalent to passing `--cov=<path>` on the command line; may be
@@ -635,6 +648,28 @@ pub struct CoverageOptions {
         "#
     )]
     pub omit: Option<Vec<String>>,
+
+    /// Include execution attributed to contexts matching these regular expressions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = r#"list[str]"#,
+        example = r#"
+            contexts = ["python=3\\.14", "test_checkout"]
+        "#
+    )]
+    pub contexts: Option<Vec<String>>,
+
+    /// Decimal places shown in coverage percentages.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"0"#,
+        value_type = r#"non-negative integer"#,
+        example = r#"
+            precision = 2
+        "#
+    )]
+    pub precision: Option<CoveragePrecision>,
 
     /// Coverage report type.
     ///
@@ -707,9 +742,12 @@ impl Combine for CoverageOptions {
     fn combine_with(&mut self, other: Self) {
         let report_overridden = self.report.is_some();
 
+        self.data_file = self.data_file.take().combine(other.data_file);
         self.sources = self.sources.take().combine(other.sources);
         self.include = self.include.take().combine(other.include);
         self.omit = self.omit.take().combine(other.omit);
+        self.contexts = self.contexts.take().combine(other.contexts);
+        self.precision = self.precision.combine(other.precision);
         self.report = self.report.combine(other.report);
         self.report_path = if report_overridden && self.report_path.is_none() {
             None
@@ -731,9 +769,15 @@ impl CoverageOptions {
             self.sources.clone().unwrap_or_default()
         };
         CoverageSettings {
+            data_file: self
+                .data_file
+                .clone()
+                .unwrap_or_else(|| DEFAULT_COVERAGE_DATA_FILE.to_owned()),
             sources,
             include: self.include.clone().unwrap_or_default(),
             omit: self.omit.clone().unwrap_or_default(),
+            contexts: self.contexts.clone().unwrap_or_default(),
+            precision: self.precision.unwrap_or_default(),
             report: self.report.unwrap_or_default(),
             report_path: self.report_path.clone(),
             branch: self.branch.unwrap_or_default(),
@@ -1356,9 +1400,12 @@ retry = 5
     fn parse_coverage_section() {
         let toml = r#"
 [profile.default.coverage]
+data-file = "build/coverage-data.json"
 sources = ["src", "tests"]
 include = ["src/**"]
 omit = ["**/generated.py"]
+contexts = ["python=3\\.14"]
+precision = 2
 report = "term-missing"
 report-path = "build/coverage.xml"
 "#;
@@ -1369,6 +1416,9 @@ report-path = "build/coverage.xml"
         assert_debug_snapshot!(resolved.coverage, @r#"
         Some(
             CoverageOptions {
+                data_file: Some(
+                    "build/coverage-data.json",
+                ),
                 sources: Some(
                     [
                         "src",
@@ -1385,6 +1435,16 @@ report-path = "build/coverage.xml"
                         "**/generated.py",
                     ],
                 ),
+                contexts: Some(
+                    [
+                        "python=3\\.14",
+                    ],
+                ),
+                precision: Some(
+                    CoveragePrecision(
+                        2,
+                    ),
+                ),
                 report: Some(
                     TermMissing,
                 ),
@@ -1397,6 +1457,18 @@ report-path = "build/coverage.xml"
             },
         )
         "#);
+    }
+
+    #[test]
+    fn coverage_precision_rejects_unrepresentable_digits() {
+        let requested = CoveragePrecision::MAX + 1;
+        let toml = format!("[profile.default.coverage]\nprecision = {requested}\n");
+
+        let error = Config::from_toml_str(&toml).expect_err("reject excessive precision");
+        let message = error.to_string();
+
+        assert!(message.contains(&requested.to_string()));
+        assert!(message.contains(&CoveragePrecision::MAX.to_string()));
     }
 
     #[test]
@@ -1448,6 +1520,7 @@ store-failure-output = false
         };
         assert_debug_snapshot!(cli.combine(file), @r#"
         CoverageOptions {
+            data_file: None,
             sources: Some(
                 [
                     "src",
@@ -1456,6 +1529,8 @@ store-failure-output = false
             ),
             include: None,
             omit: None,
+            contexts: None,
+            precision: None,
             report: Some(
                 TermMissing,
             ),
@@ -1482,6 +1557,7 @@ store-failure-output = false
         };
         assert_debug_snapshot!(cli.combine(file), @r#"
         CoverageOptions {
+            data_file: None,
             sources: None,
             include: Some(
                 [
@@ -1495,6 +1571,8 @@ store-failure-output = false
                     "**/generated.py",
                 ],
             ),
+            contexts: None,
+            precision: None,
             report: None,
             report_path: None,
             branch: None,
@@ -1550,11 +1628,14 @@ store-failure-output = false
             report_path: Some("build/coverage.xml".to_string()),
             ..CoverageOptions::default()
         };
-        assert_debug_snapshot!(cli.combine(file), @r#"
+        assert_debug_snapshot!(cli.combine(file), @"
         CoverageOptions {
+            data_file: None,
             sources: None,
             include: None,
             omit: None,
+            contexts: None,
+            precision: None,
             report: Some(
                 Json,
             ),
@@ -1563,7 +1644,7 @@ store-failure-output = false
             fail_under: None,
             disabled: None,
         }
-        "#);
+        ");
     }
 
     /// `--no-cov` (CLI sets `disabled = Some(true)`) overrides any sources
@@ -1591,12 +1672,12 @@ disabled = true
 ";
         assert_snapshot!(
             Config::from_toml_str(toml).expect_err("unknown field"),
-            @r"
+            @"
         TOML parse error at line 3, column 1
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }
@@ -1610,12 +1691,12 @@ nonsense = 1
 "#;
         assert_snapshot!(
             Config::from_toml_str(toml).expect_err("unknown field"),
-            @r"
+            @"
         TOML parse error at line 4, column 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `sources`, `include`, `omit`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `nonsense`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

@@ -29,6 +29,7 @@ wheels/
 *.profraw
 .coverage
 .coverage.*
+.karva/
 htmlcov/
 
 # Rust formatter backups

@@ -493,9 +493,12 @@ impl SubTestCommand {
                 termination_grace_period: None,
             }),
             coverage: Some(CoverageOptions {
+                data_file: None,
                 sources: (!self.cov.is_empty()).then_some(self.cov),
                 include: (!self.cov_include.is_empty()).then_some(self.cov_include),
                 omit: (!self.cov_omit.is_empty()).then_some(self.cov_omit),
+                contexts: None,
+                precision: None,
                 report: self.cov_report.map(Into::into),
                 report_path: coverage_report_path,
                 branch: self.cov_branch.then_some(true),
@@ -554,7 +557,7 @@ fn parse_fail_slow(raw: &str) -> Result<f64, String> {
 /// Parse and validate a `--cov-fail-under=N` argument.
 ///
 /// Accepts any finite percentage in `0..=100`.
-fn parse_cov_fail_under(raw: &str) -> Result<f64, String> {
+pub fn parse_cov_fail_under(raw: &str) -> Result<f64, String> {
     let value: f64 = raw
         .parse()
         .map_err(|err| format!("`{raw}` is not a valid number: {err}"))?;

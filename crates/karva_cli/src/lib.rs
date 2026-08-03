@@ -5,6 +5,7 @@ use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 
 mod cache;
+mod coverage;
 mod enums;
 mod exit_status;
 mod partition;
@@ -14,6 +15,7 @@ mod test;
 mod verbosity;
 
 pub use cache::{CacheAction, CacheCommand};
+pub use coverage::{CoverageAction, CoverageCommand, CoverageReportCommand};
 pub use enums::{
     CovContext, CovReport, FlakyResult, JunitFlakyFailStatus, NoTests, OutputFormat, ResultFormat,
     RunIgnored,
@@ -52,6 +54,9 @@ pub enum Command {
 
     /// Manage snapshots created by `karva.assert_snapshot()`.
     Snapshot(SnapshotCommand),
+
+    /// Read and report native Karva coverage data.
+    Coverage(CoverageCommand),
 
     /// Manage the karva cache.
     Cache(CacheCommand),

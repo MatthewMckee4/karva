@@ -8,6 +8,9 @@ use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::options::{CovReport, OutputFormat};
 
+/// Project-relative native coverage artifact used when no path is configured.
+pub const DEFAULT_COVERAGE_DATA_FILE: &str = ".karva/coverage/data.json";
+
 macro_rules! impl_duration_secs_deserialize {
     ($type:ident, $option:literal) => {
         impl<'de> Deserialize<'de> for $type {
@@ -334,6 +337,67 @@ impl Combine for CovFailUnder {
     }
 }
 
+/// Decimal places used for coverage percentages.
+///
+/// The maximum is [`f64::DIGITS`], the number of meaningful decimal digits
+/// available from the percentage representation.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct CoveragePrecision(pub usize);
+
+impl CoveragePrecision {
+    /// Maximum meaningful precision for an `f64` percentage.
+    pub const MAX: usize = f64::DIGITS as usize;
+}
+
+impl TryFrom<usize> for CoveragePrecision {
+    type Error = String;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        if value <= Self::MAX {
+            Ok(Self(value))
+        } else {
+            Err(format!(
+                "precision must be at most {} because coverage percentages use f64, got `{value}`",
+                Self::MAX
+            ))
+        }
+    }
+}
+
+impl std::str::FromStr for CoveragePrecision {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value
+            .parse::<usize>()
+            .map_err(|error| format!("`{value}` is not a non-negative integer: {error}"))?
+            .try_into()
+    }
+}
+
+impl<'de> Deserialize<'de> for CoveragePrecision {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        usize::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl Combine for CoveragePrecision {
+    #[inline(always)]
+    fn combine_with(&mut self, _other: Self) {}
+
+    #[inline]
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
+}
+
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Fully resolved settings after configuration profiles and CLI overrides combine.
@@ -546,6 +610,9 @@ pub struct SrcSettings {
 #[serde(rename_all = "kebab-case")]
 /// Resolved coverage collection and reporting settings.
 pub struct CoverageSettings {
+    /// Native coverage artifact path, relative to the project root when not absolute.
+    pub data_file: String,
+
     /// Source roots measured by worker tracers.
     pub sources: Vec<String>,
 
@@ -554,6 +621,12 @@ pub struct CoverageSettings {
 
     /// Report-path globs excluded after inclusion.
     pub omit: Vec<String>,
+
+    /// Regular expressions selecting execution contexts for reports.
+    pub contexts: Vec<String>,
+
+    /// Decimal places shown in coverage percentages.
+    pub precision: CoveragePrecision,
 
     /// Selected report backend.
     pub report: CovReport,

@@ -6,6 +6,7 @@ mod cache;
 mod cancel;
 mod configuration;
 mod coverage;
+mod coverage_command;
 mod discovery;
 mod durations;
 mod extensions;

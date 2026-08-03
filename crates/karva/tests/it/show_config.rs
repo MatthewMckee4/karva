@@ -28,9 +28,12 @@ fn show_config_default_profile() {
     no-tests = "auto"
 
     [coverage]
+    data-file = ".karva/coverage/data.json"
     sources = []
     include = []
     omit = []
+    contexts = []
+    precision = 0
     report = "term"
 
     [junit]
@@ -79,9 +82,12 @@ output-format = "concise"
     no-tests = "auto"
 
     [coverage]
+    data-file = ".karva/coverage/data.json"
     sources = []
     include = []
     omit = []
+    contexts = []
+    precision = 0
     report = "term"
 
     [junit]
@@ -131,9 +137,12 @@ output-format = "concise"
     no-tests = "auto"
 
     [coverage]
+    data-file = ".karva/coverage/data.json"
     sources = []
     include = []
     omit = []
+    contexts = []
+    precision = 0
     report = "term"
 
     [junit]
@@ -189,9 +198,12 @@ fail-under = 90
     termination-grace-period = 2.0
 
     [coverage]
+    data-file = ".karva/coverage/data.json"
     sources = ["src"]
     include = ["src/app/*"]
     omit = ["**/generated.py"]
+    contexts = []
+    precision = 0
     report = "term-missing"
     fail-under = 90.0
 
@@ -242,9 +254,12 @@ slow-timeout = 0.5
     no-tests = "auto"
 
     [coverage]
+    data-file = ".karva/coverage/data.json"
     sources = []
     include = []
     omit = []
+    contexts = []
+    precision = 0
     report = "term"
 
     [junit]

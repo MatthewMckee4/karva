@@ -3356,6 +3356,7 @@ fn test_no_subcommand_prints_help() {
     Commands:
       test         Run tests
       snapshot     Manage snapshots created by `karva.assert_snapshot()`
+      coverage     Read and report native Karva coverage data
       cache        Manage the karva cache
       show-config  Print the resolved configuration karva would run with
       version      Display Karva's version
