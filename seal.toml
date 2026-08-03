@@ -38,7 +38,7 @@ draft = false
 "Documentation" = ["documentation"]
 
 [changelog]
-ignore-contributors = ["dependabot[bot]", "github-actions[bot]"]
+ignore-contributors = ["dependabot[bot]", "github-actions[bot]", "renovate[bot]"]
 ignore-labels = ["internal", "ci", "duplicate", "rust", "wontfix", "needs-decision"]
 include-contributors = true
 changelog-heading = "{version}"
