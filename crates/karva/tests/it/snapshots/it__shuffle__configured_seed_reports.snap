@@ -1,0 +1,24 @@
+---
+source: crates/karva/tests/it/shuffle.rs
+expression: "[(\"json\", RunSnapshot::output(&json_output)),\n(\"jsonl\", RunSnapshot::output(&jsonl_output)),]"
+---
+[
+  [
+    "json",
+    {
+      "success": true,
+      "exit_code": 0,
+      "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 1 test run: 1 passed, 0 skipped",
+      "stderr": ""
+    }
+  ],
+  [
+    "jsonl",
+    {
+      "success": true,
+      "exit_code": 0,
+      "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 1 test run: 1 passed, 0 skipped",
+      "stderr": ""
+    }
+  ]
+]

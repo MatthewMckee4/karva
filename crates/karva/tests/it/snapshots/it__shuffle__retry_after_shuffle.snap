@@ -1,0 +1,18 @@
+---
+source: crates/karva/tests/it/shuffle.rs
+expression: "RunSnapshot::shuffled(&run)"
+---
+{
+  "success": true,
+  "exit_code": 0,
+  "stdout": "Random seed: [SEED]\n────────────\n     Summary [TIME] 3 tests run: 3 passed (1 flaky), 0 skipped\n   FLAKY 2/2 [TIME] test_order::test_flaky",
+  "stderr": "",
+  "worker_orders": [
+    [
+      "a",
+      "flaky:1",
+      "flaky:2",
+      "z"
+    ]
+  ]
+}
