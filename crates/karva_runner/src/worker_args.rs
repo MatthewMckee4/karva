@@ -192,6 +192,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push(format!("--cov-partial-branch={}", pattern.as_str()));
     }
 
+    if let Some(context) = &settings.coverage().context {
+        cli_args.push(format!("--cov-static-context={context}"));
+    }
+
     if let Some(context) = args.cov_context {
         push_value_arg(&mut cli_args, "--cov-context", context.as_str());
     }

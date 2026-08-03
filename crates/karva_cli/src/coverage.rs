@@ -83,6 +83,7 @@ impl CoverageCommand {
                 path_aliases: None,
                 include: (!self.include.is_empty()).then(|| self.include.clone()),
                 omit: (!self.omit.is_empty()).then(|| self.omit.clone()),
+                context: None,
                 contexts: (!self.contexts.is_empty()).then(|| self.contexts.clone()),
                 precision: self.precision,
                 append: None,

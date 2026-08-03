@@ -73,6 +73,23 @@ branch = true
 
 ---
 
+### `context`
+
+Static context component attached to every observation in the run.
+
+**Default value**: `null`
+
+**Type**: `str`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+context = "python=3.14"
+```
+
+---
+
 ### `contexts`
 
 Include execution attributed to contexts matching these regular expressions.

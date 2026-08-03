@@ -19,6 +19,7 @@
 #![warn(unreachable_pub)]
 
 pub(crate) mod branches;
+pub mod context;
 pub mod data;
 pub mod executable;
 pub mod native;
@@ -30,4 +31,4 @@ pub use report::{
     CoverageReportSort, HtmlReportOptions, JsonReportOptions, combine_and_report,
     write_cobertura_xml, write_html_report, write_json_report,
 };
-pub use tracer::{CoverageConfig, CoverageSession};
+pub use tracer::{CoverageConfig, CoveragePhase, CoverageSession};

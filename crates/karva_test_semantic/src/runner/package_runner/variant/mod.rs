@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestCaseRetry, TestExecutionOutcome};
 use karva_metadata::filter::EvalContext;
 use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
@@ -113,8 +114,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
+        self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
         let settings = self.settings(&first_attempt.fixtures.function_arguments);
+        self.resolve_pending_coverage_setup(&settings.qualified_name);
         let function = self.test.py_function.clone_ref(self.py);
         let test_name_env_result =
             set_test_name_env(self.py, &settings.qualified_test_name.to_string());
@@ -123,7 +126,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         self.package_runner
             .context
             .report_test_started(&settings.qualified_test_name);
-        self.set_coverage_context(Some(&settings.qualified_name));
 
         let mut attempt_number = 1;
         let mut prepared_attempt = Some(first_attempt);
@@ -135,6 +137,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             let prepared = prepared_attempt
                 .take()
                 .unwrap_or_else(|| self.prepare_retry(retry_params.clone(), &settings));
+            self.set_coverage_context(&settings.qualified_name, CoveragePhase::Run);
             let attempt = self.execute_attempt(
                 &settings,
                 &function,
@@ -185,16 +188,14 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         }
     }
 
-    /// Prepares a retry while ensuring coverage excludes fixture setup.
+    /// Prepares a retry under its setup coverage context.
     fn prepare_retry(
         &mut self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
-        self.set_coverage_context(None);
-        let prepared = self.prepare_attempt(params, self.start_output_capture());
-        self.set_coverage_context(Some(&settings.qualified_name));
-        prepared
+        self.set_coverage_context(&settings.qualified_name, CoveragePhase::Setup);
+        self.prepare_attempt(params, self.start_output_capture())
     }
 
     /// Derives identity and execution policy after first fixture setup.
@@ -320,7 +321,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         prior_attempts: Vec<TestLifecycleAttempt>,
         final_attempt: TestLifecycleAttempt,
     ) -> bool {
-        self.set_coverage_context(None);
+        self.clear_coverage_context();
         let captured_output = combine_captured_output(
             prior_attempts
                 .iter()
@@ -454,10 +455,31 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         }
     }
 
-    /// Updates coverage context when coverage is active for this worker.
-    fn set_coverage_context(&self, context: Option<&str>) {
+    /// Marks setup whose full fixture-derived test identity is not known yet.
+    fn begin_pending_coverage_setup(&self) {
         if let Some(coverage) = self.package_runner.coverage {
-            coverage.set_current_context(self.py, context);
+            coverage.begin_pending_test_setup(self.py);
+        }
+    }
+
+    /// Resolves pending setup observations to the final qualified test identity.
+    fn resolve_pending_coverage_setup(&self, test: &str) {
+        if let Some(coverage) = self.package_runner.coverage {
+            coverage.resolve_pending_test_setup(self.py, test);
+        }
+    }
+
+    /// Updates coverage attribution for one test lifecycle phase.
+    fn set_coverage_context(&self, test: &str, phase: CoveragePhase) {
+        if let Some(coverage) = self.package_runner.coverage {
+            coverage.set_test_context(self.py, test, phase);
+        }
+    }
+
+    /// Restores session attribution between test variants.
+    fn clear_coverage_context(&self) {
+        if let Some(coverage) = self.package_runner.coverage {
+            coverage.clear_test_context(self.py);
         }
     }
 }

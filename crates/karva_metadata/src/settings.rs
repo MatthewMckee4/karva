@@ -688,6 +688,9 @@ pub struct CoverageSettings {
     /// Regular expressions suppressing missing arcs from matched branch lines.
     pub partial_branches: Vec<CoveragePartialPattern>,
 
+    /// Static context component attached to every observation in the run.
+    pub context: Option<String>,
+
     /// Regular expressions selecting execution contexts for reports.
     pub contexts: Vec<String>,
 

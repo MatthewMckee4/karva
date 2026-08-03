@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 
+use crate::context::{compose_context, prefix_context};
 use crate::data::{BranchArc, WorkerFile};
 use crate::native::{CoverageMode, NativeCoverage, SourceFingerprint};
 use crate::report::CoverageFilters;
@@ -152,10 +153,6 @@ fn merge_native(
     artifact: &NativeCoverage,
     filters: &CoverageFilters,
 ) -> Result<()> {
-    let run_context_matches = artifact
-        .run_context
-        .as_deref()
-        .is_some_and(|context| filters.matches_context(context));
     for (source_path, file) in &artifact.files {
         let mapped_path = filters.map_path(source_path.as_str());
         let bucket = combined.entry(mapped_path.clone()).or_default();
@@ -175,12 +172,12 @@ fn merge_native(
         bucket.executable.extend(&file.executable);
         bucket.excluded.extend(&file.excluded);
         bucket.branches_enabled = artifact.mode == CoverageMode::Branch;
-        merge_line_observations(bucket, file, filters, run_context_matches);
+        merge_line_observations(bucket, file, artifact.run_context.as_deref(), filters);
         if let Some(branches) = &file.branches {
             bucket.branches_enabled = true;
             bucket.branch_possible.extend(&branches.possible);
             bucket.branch_partial_lines.extend(&branches.partial);
-            merge_branch_observations(bucket, branches, filters, run_context_matches);
+            merge_branch_observations(bucket, branches, artifact.run_context.as_deref(), filters);
         }
     }
     Ok(())
@@ -215,27 +212,21 @@ pub(super) fn verify_combined_sources(
 fn merge_line_observations(
     bucket: &mut CombinedFile,
     file: &crate::native::NativeFileCoverage,
+    run_context: Option<&str>,
     filters: &CoverageFilters,
-    run_context_matches: bool,
 ) {
-    if !filters.has_contexts() || run_context_matches {
-        bucket.executed.extend(&file.executed);
-    }
-    for (line, contexts) in &file.line_contexts {
+    for line in &file.executed {
+        let contexts = observation_contexts(run_context, file.line_contexts.get(line));
         let matching: BTreeSet<String> = contexts
             .iter()
             .filter(|context| filters.matches_context(context))
             .cloned()
             .collect();
-        if !matching.is_empty() {
+        if !filters.has_contexts() || !matching.is_empty() {
             bucket.executed.insert(*line);
+        }
+        if !matching.is_empty() {
             bucket.contexts.entry(*line).or_default().extend(matching);
-        } else if !filters.has_contexts() {
-            bucket
-                .contexts
-                .entry(*line)
-                .or_default()
-                .extend(contexts.iter().cloned());
         }
     }
 }
@@ -243,33 +234,49 @@ fn merge_line_observations(
 fn merge_branch_observations(
     bucket: &mut CombinedFile,
     branches: &crate::native::NativeBranchCoverage,
+    run_context: Option<&str>,
     filters: &CoverageFilters,
-    run_context_matches: bool,
 ) {
-    if !filters.has_contexts() || run_context_matches {
-        bucket.branch_executed.extend(&branches.executed);
-    }
-    for entry in &branches.contexts {
-        let matching: BTreeSet<String> = entry
-            .contexts
+    let dynamic_by_arc: BTreeMap<BranchArc, &BTreeSet<String>> = branches
+        .contexts
+        .iter()
+        .map(|entry| (entry.arc, &entry.contexts))
+        .collect();
+    for arc in &branches.executed {
+        let dynamic = dynamic_by_arc.get(arc).copied();
+        let contexts = observation_contexts(run_context, dynamic);
+        let matching: BTreeSet<String> = contexts
             .iter()
             .filter(|context| filters.matches_context(context))
             .cloned()
             .collect();
+        if !filters.has_contexts() || !matching.is_empty() {
+            bucket.branch_executed.insert(*arc);
+        }
         if !matching.is_empty() {
-            bucket.branch_executed.insert(entry.arc);
             bucket
                 .arc_contexts
-                .entry(entry.arc)
+                .entry(*arc)
                 .or_default()
                 .extend(matching);
-        } else if !filters.has_contexts() {
-            bucket
-                .arc_contexts
-                .entry(entry.arc)
-                .or_default()
-                .extend(entry.contexts.iter().cloned());
         }
+    }
+}
+
+fn observation_contexts(
+    run_context: Option<&str>,
+    dynamic: Option<&BTreeSet<String>>,
+) -> BTreeSet<String> {
+    match (run_context, dynamic) {
+        (Some(run_context), Some(dynamic)) if !dynamic.is_empty() => dynamic
+            .iter()
+            .map(|context| prefix_context(run_context, context))
+            .collect(),
+        (Some(run_context), _) => compose_context(Some(run_context), &[])
+            .into_iter()
+            .collect(),
+        (None, Some(dynamic)) => dynamic.clone(),
+        (None, None) => BTreeSet::new(),
     }
 }
 
