@@ -498,6 +498,96 @@ def test_all():
 }
 
 #[test]
+fn test_cov_resolves_importable_sources() {
+    let context = TestContext::with_files([
+        ("external_one/example_module.py", "value = 1\n"),
+        (
+            "external_one/example_package/__init__.py",
+            "from .used import value\n",
+        ),
+        ("external_one/example_package/used.py", "value = 2\n"),
+        ("external_one/example_package/unused.py", "value = 3\n"),
+        ("external_one/namespace_pkg/one.py", "one = 1\n"),
+        ("external_two/namespace_pkg/two.py", "two = 2\n"),
+        (
+            "test_importable.py",
+            r"
+from example_module import value as module_value
+from example_package import value as package_value
+from namespace_pkg.one import one
+from namespace_pkg.two import two
+
+def test_values():
+    assert module_value + package_value + one + two == 6
+",
+        ),
+    ]);
+    let python_path = std::env::join_paths([
+        context.root().join("external_one"),
+        context.root().join("external_two"),
+    ])
+    .expect("valid Python path");
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .env("PYTHONPATH", python_path)
+            .arg("--cov=example_module")
+            .arg("--cov=example_package")
+            .arg("--cov=namespace_pkg")
+            .arg("--cov-report=term-missing")
+            .arg("--status-level=none")
+            .arg("test_importable.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name                                       Stmts   Miss   Cover   Missing
+    [LONG-LINE]
+    external_one/example_module.py                 1      0    100%
+    external_one/example_package/__init__.py       1      0    100%
+    external_one/example_package/unused.py         1      1      0%   1
+    external_one/example_package/used.py           1      0    100%
+    external_one/namespace_pkg/one.py              1      0    100%
+    external_two/namespace_pkg/two.py              1      0    100%
+    [LONG-LINE]
+    TOTAL                                          6      1     83%
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn test_cov_reports_unresolved_importable_source() {
+    let context =
+        TestContext::with_file("test_example.py", "def test_example():\n    assert True\n");
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov=does_not_exist")
+            .arg("--status-level=none")
+            .arg("test_example.py"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[failed-to-start-coverage]: Failed to start coverage measurement: coverage source `does_not_exist` was not found as path `<temp_dir>/does_not_exist` or as an importable module
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_cov_basic() {
     let context = TestContext::with_file(
         "test_covered.py",

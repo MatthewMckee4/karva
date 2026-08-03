@@ -272,9 +272,9 @@ report-path = "build/coverage.xml"
 
 ### `sources`
 
-Source paths to measure coverage for.
+Source paths or importable Python names to measure coverage for.
 
-Equivalent to passing `--cov=<path>` on the command line; may be
+Equivalent to passing `--cov=<source>` on the command line; may be
 listed multiple times. An empty entry (`""`) measures the current
 working directory, matching pytest-cov's bare `--cov`.
 

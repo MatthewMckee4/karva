@@ -32,6 +32,17 @@ struct FailedFunctionCallOptions {
 }
 
 declare_diagnostic_type! {
+    /// ## Failed to start coverage
+    ///
+    /// Raised when configured coverage sources cannot be resolved by the
+    /// worker's Python environment.
+    pub static FAILED_TO_START_COVERAGE = {
+        summary: "Failed to start coverage measurement",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
     /// ## Failed to collect module
     ///
     /// Raised when karva cannot read a Python file during collection. This is
@@ -41,6 +52,10 @@ declare_diagnostic_type! {
         summary: "Failed to collect python module",
         severity: Severity::Error,
     }
+}
+
+pub fn failed_to_start_coverage_diagnostic(reason: &str) -> Diagnostic {
+    FAILED_TO_START_COVERAGE.diagnostic(format!("Failed to start coverage measurement: {reason}"))
 }
 
 declare_diagnostic_type! {

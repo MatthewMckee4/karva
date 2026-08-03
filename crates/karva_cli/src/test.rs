@@ -193,7 +193,7 @@ pub struct SubTestCommand {
     )]
     pub final_status_level: Option<FinalStatusLevel>,
 
-    /// Measure code coverage for the given source path.
+    /// Measure code coverage for a source path or importable Python name.
     ///
     /// May be passed multiple times to measure several sources. Pass without
     /// a value (`--cov`) to measure the current working directory.

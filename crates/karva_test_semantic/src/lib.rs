@@ -22,6 +22,7 @@ use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
 use ruff_python_ast::PythonVersion;
 
+use crate::diagnostic::failed_to_start_coverage_diagnostic;
 use crate::discovery::{DiscoveryIssue, StandardDiscoverer};
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
@@ -45,7 +46,9 @@ pub fn run_tests(
         let cov_session = coverage.and_then(|cfg| match CoverageSession::start(py, cwd, cfg) {
             Ok(session) => Some(session),
             Err(err) => {
-                tracing::error!("Failed to start coverage measurement: {err}");
+                state.add_run_diagnostic(failed_to_start_coverage_diagnostic(
+                    &err.value(py).to_string(),
+                ));
                 None
             }
         });
