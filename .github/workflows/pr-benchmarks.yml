@@ -110,9 +110,9 @@ jobs:
           git worktree add --detach "${base_worktree}" "${BASE_SHA}"
           (
             cd "${base_worktree}"
-            uv run --no-project --with maturin maturin build --release --out "${base_wheel_dir}"
+            uv run --no-project --with maturin maturin build --out "${base_wheel_dir}"
           )
-          uv run --no-project --with maturin maturin build --release --out "${head_wheel_dir}"
+          uv run --no-project --with maturin maturin build --out "${head_wheel_dir}"
 
           base_wheel=$(find "${base_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
           head_wheel=$(find "${head_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
@@ -277,9 +277,7 @@ jobs:
           cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-reports" \
             --output-markdown "${RUNNER_TEMP}/benchmark-report.md" \
-            --output-html "${RUNNER_TEMP}/benchmark-report.html" \
-            --output-diagnostics-markdown "${RUNNER_TEMP}/diagnostic-report.md" \
-            --output-diagnostics-html "${RUNNER_TEMP}/diagnostic-report.html"
+            --output-diagnostics-markdown "${RUNNER_TEMP}/diagnostic-report.md"
 
       - name: Merge memory benchmark reports
         env:
@@ -287,27 +285,15 @@ jobs:
         run: |
           cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-memory-reports" \
-            --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md" \
-            --output-html "${RUNNER_TEMP}/benchmark-memory-report.html"
-
-      - name: Publish full benchmark summary
-        run: |
-          cat \
-            "${RUNNER_TEMP}/benchmark-report.md" \
-            "${RUNNER_TEMP}/benchmark-memory-report.md" \
-            "${RUNNER_TEMP}/diagnostic-report.md" \
-            >> "${GITHUB_STEP_SUMMARY}"
+            --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md"
 
       - name: Upload full benchmark reports
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-reports
+          name: benchmark-markdown-reports
           path: |
-            ${{ runner.temp }}/benchmark-report.html
             ${{ runner.temp }}/benchmark-report.md
-            ${{ runner.temp }}/benchmark-memory-report.html
             ${{ runner.temp }}/benchmark-memory-report.md
-            ${{ runner.temp }}/diagnostic-report.html
             ${{ runner.temp }}/diagnostic-report.md
 
       - name: Comment benchmark reports
@@ -330,7 +316,7 @@ jobs:
 
 
           > [!NOTE]
-          > Report truncated to fit GitHub's comment limit. [View the complete report online](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) or [download the report artifact](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}#artifacts).
+          > Report truncated to fit GitHub's comment limit. [Download the complete report artifact](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}#artifacts).
           EOF
             )
 

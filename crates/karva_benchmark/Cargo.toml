@@ -28,7 +28,6 @@ karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_runner = { workspace = true }
 karva_static = { workspace = true }
-markdown = { workspace = true }
 regex = { workspace = true }
 ruff_python_ast = { workspace = true }
 serde = { workspace = true }

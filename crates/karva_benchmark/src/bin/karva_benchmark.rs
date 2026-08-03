@@ -87,13 +87,7 @@ struct MergeReportsArgs {
     output_markdown: PathBuf,
 
     #[arg(long, value_name = "PATH")]
-    output_html: Option<PathBuf>,
-
-    #[arg(long, value_name = "PATH")]
     output_diagnostics_markdown: Option<PathBuf>,
-
-    #[arg(long, value_name = "PATH")]
-    output_diagnostics_html: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
@@ -131,18 +125,16 @@ struct ProjectComparison {
     diagnostics: Option<DiagnosticComparison>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 /// Normalized test-summary comparison retained beside performance results.
 struct DiagnosticComparison {
     baseline: Option<TestStats>,
     candidate: Option<TestStats>,
-    #[serde(default)]
-    workload_changed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     diff: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct TestStats {
     passed: usize,
     failed: usize,
@@ -165,7 +157,6 @@ struct ReportSummary {
     faster: usize,
     slower: usize,
     unchanged: usize,
-    changed_workloads: usize,
 }
 
 struct Subject<'a> {
@@ -282,20 +273,6 @@ fn compare(args: CompareArgs) -> Result<()> {
         let candidate_wall_time = Measurement::new(candidate_wall_time_values);
         let wall_time_percent_change =
             percent_change(baseline_wall_time.median, candidate_wall_time.median);
-        let diagnostics = diagnostic_comparison(
-            baseline_diagnostic_output.as_deref(),
-            candidate_diagnostic_output.as_deref(),
-            &args.baseline_label,
-            &args.candidate_label,
-        );
-        let memory_diagnostics = diagnostics
-            .as_ref()
-            .map(|diagnostics| DiagnosticComparison {
-                baseline: diagnostics.baseline.clone(),
-                candidate: diagnostics.candidate.clone(),
-                workload_changed: diagnostics.workload_changed,
-                diff: None,
-            });
 
         wall_time_comparisons.push(ProjectComparison {
             name: config.name.to_string(),
@@ -303,7 +280,12 @@ fn compare(args: CompareArgs) -> Result<()> {
             baseline: baseline_wall_time,
             candidate: candidate_wall_time,
             percent_change: wall_time_percent_change,
-            diagnostics,
+            diagnostics: diagnostic_comparison(
+                baseline_diagnostic_output.as_deref(),
+                candidate_diagnostic_output.as_deref(),
+                &args.baseline_label,
+                &args.candidate_label,
+            ),
         });
 
         let baseline_memory = Measurement::new(baseline_memory_values);
@@ -316,7 +298,7 @@ fn compare(args: CompareArgs) -> Result<()> {
             baseline: baseline_memory,
             candidate: candidate_memory,
             percent_change: memory_percent_change,
-            diagnostics: memory_diagnostics,
+            diagnostics: None,
         });
     }
 
@@ -351,23 +333,8 @@ fn merge_reports(args: MergeReportsArgs) -> Result<()> {
     let report = merge_report_files(&input_dir)?;
 
     write_markdown(&output_markdown, &report)?;
-    if let Some(path) = args.output_html {
-        write_html(
-            &utf8_path(path)?,
-            report.metric.report_title(),
-            &markdown_report(&report).context("Failed to render HTML benchmark report")?,
-        )?;
-    }
     if let Some(path) = args.output_diagnostics_markdown {
         write_diagnostics_markdown(&utf8_path(path)?, &report)?;
-    }
-    if let Some(path) = args.output_diagnostics_html {
-        write_html(
-            &utf8_path(path)?,
-            "Diagnostic comparison",
-            &diagnostics_markdown_report(&report)
-                .context("Failed to render HTML diagnostics report")?,
-        )?;
     }
 
     Ok(())
@@ -662,31 +629,12 @@ fn diagnostic_comparison(
             .header(baseline_label, candidate_label)
             .to_string()
     });
-    let baseline_stats = parse_test_stats(baseline);
-    let candidate_stats = parse_test_stats(candidate);
-    let workload_changed =
-        baseline_stats != candidate_stats || test_workload(baseline) != test_workload(candidate);
 
     Some(DiagnosticComparison {
-        baseline: baseline_stats,
-        candidate: candidate_stats,
-        workload_changed,
+        baseline: parse_test_stats(baseline),
+        candidate: parse_test_stats(candidate),
         diff,
     })
-}
-
-fn test_workload(output: &str) -> Vec<&str> {
-    static TEST_RESULT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?m)^\s+(?:PASS|FAIL|ERROR|SKIP|FLAKY \d+/\d+) \[TIME\] (?P<test>.+)$")
-            .expect("test result regex should be valid")
-    });
-
-    let mut tests = TEST_RESULT
-        .captures_iter(output)
-        .filter_map(|captures| captures.name("test").map(|value| value.as_str()))
-        .collect::<Vec<_>>();
-    tests.sort_unstable();
-    tests
 }
 
 fn parse_test_stats(output: &str) -> Option<TestStats> {
@@ -749,43 +697,6 @@ fn write_diagnostics_markdown(path: &Utf8Path, report: &ComparisonReport) -> Res
     fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
 }
 
-fn write_html(path: &Utf8Path, title: &str, report: &str) -> Result<()> {
-    create_parent_dir(path)?;
-    let body = standalone_html(title, report).context("Failed to render HTML report")?;
-    fs::write(path, body).with_context(|| format!("Failed to write `{path}`"))
-}
-
-fn standalone_html(title: &str, report: &str) -> Result<String> {
-    let mut options = markdown::Options::gfm();
-    options.compile.allow_dangerous_html = true;
-    let report = markdown::to_html_with_options(report, &options)
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-    let title = escape_html(title);
-    Ok(format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\
-         <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
-         <title>{title}</title><style>\
-         :root{{color-scheme:light dark;font-family:ui-sans-serif,system-ui,sans-serif}}\
-         body{{margin:0 auto;max-width:120rem;padding:2rem;line-height:1.45}}\
-         table{{border-collapse:collapse;display:block;overflow:auto;width:max-content;max-width:100%}}\
-         th,td{{border:1px solid color-mix(in srgb,currentColor 20%,transparent);padding:.35rem .6rem;text-align:left}}\
-         th{{background:color-mix(in srgb,currentColor 8%,transparent)}}\
-         code,pre{{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}}\
-         pre{{background:color-mix(in srgb,currentColor 6%,transparent);border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:.5rem;overflow:auto;padding:1rem}}\
-         details{{margin-block:1rem}}summary{{cursor:pointer;font-weight:600}}\
-         blockquote{{border-left:.25rem solid currentColor;margin-left:0;padding-left:1rem}}\
-         </style></head><body><h1>{title}</h1><main>{report}</main></body></html>"
-    ))
-}
-
-fn escape_html(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 fn create_parent_dir(path: &Utf8Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -803,7 +714,7 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     let (marker, verdict) = verdict(report.metric, &summary);
     writeln!(body, "### {marker} {verdict}")?;
 
-    if summary.slower > 0 || summary.changed_workloads > 0 {
+    if summary.slower > 0 {
         writeln!(body)?;
         writeln!(
             body,
@@ -821,51 +732,24 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
             summary.unchanged,
             "unchanged benchmark",
         )?;
-        if summary.changed_workloads > 0 {
-            write_summary_line(
-                &mut body,
-                ":warning:",
-                summary.changed_workloads,
-                "changed workload",
-            )?;
-        }
-        if summary.slower > 0 {
-            writeln!(body)?;
-            writeln!(body, "> [!WARNING]")?;
-            writeln!(
-                body,
-                "> Benchmark regressions were detected. Review the {} changes before merging.",
-                report.metric.warning_label()
-            )?;
-            writeln!(body)?;
+        writeln!(body)?;
+        writeln!(body, "> [!WARNING]")?;
+        writeln!(
+            body,
+            "> Benchmark regressions were detected. Review the {} changes before merging.",
+            report.metric.warning_label()
+        )?;
+        writeln!(body)?;
 
-            body.push_str("#### Performance Changes\n\n");
-            write_project_table(
-                &mut body,
-                report.metric,
-                report.projects.iter().filter(|project| {
-                    !project.workload_changed() && is_material_change(project.percent_change)
-                }),
-            )?;
-        }
-        if summary.changed_workloads > 0 {
-            writeln!(body)?;
-            writeln!(body, "> [!NOTE]")?;
-            writeln!(
-                body,
-                "> Changed workloads execute different test sets. Their raw totals are shown but are not classified as performance changes."
-            )?;
-            writeln!(body)?;
-            body.push_str("#### Workload Changes\n\n");
-            write_project_table(
-                &mut body,
-                report.metric,
-                report
-                    .projects
-                    .iter()
-                    .filter(|project| project.workload_changed()),
-            )?;
-        }
+        body.push_str("#### Performance Changes\n\n");
+        write_project_table(
+            &mut body,
+            report.metric,
+            report
+                .projects
+                .iter()
+                .filter(|project| is_material_change(project.percent_change)),
+        )?;
     }
 
     writeln!(body)?;
@@ -974,7 +858,7 @@ fn write_project_table<'a>(
         writeln!(
             body,
             "| {} | {} | `{}` | {} | {} | {} | {} |",
-            project.trend_marker(),
+            trend_marker(project.percent_change),
             metric.mode_label(),
             project.name,
             metric.format_value(project.baseline.median),
@@ -992,10 +876,6 @@ impl ReportSummary {
         let mut summary = Self::default();
 
         for project in projects {
-            if project.workload_changed() {
-                summary.changed_workloads += 1;
-                continue;
-            }
             match trend(project.percent_change) {
                 "faster" => summary.faster += 1,
                 "slower" => summary.slower += 1,
@@ -1010,8 +890,6 @@ impl ReportSummary {
 fn verdict(metric: BenchmarkMetric, summary: &ReportSummary) -> (&'static str, &'static str) {
     if summary.slower > 0 {
         (":x:", metric.regression_verdict())
-    } else if summary.changed_workloads > 0 {
-        (":warning:", "Benchmark includes changed test workloads")
     } else if summary.faster > 0 {
         (":zap:", metric.improvement_verdict())
     } else {
@@ -1054,35 +932,15 @@ fn is_material_change(percent_change: f64) -> bool {
     percent_change.abs() >= MATERIAL_CHANGE_PERCENT
 }
 
-impl ProjectComparison {
-    fn workload_changed(&self) -> bool {
-        let Some(diagnostics) = &self.diagnostics else {
-            return false;
-        };
-        diagnostics.workload_changed || diagnostics.baseline != diagnostics.candidate
-    }
-
-    fn trend_marker(&self) -> &'static str {
-        if self.workload_changed() {
-            ":warning:"
-        } else {
-            match trend(self.percent_change) {
-                "faster" => ":zap:",
-                "slower" => ":x:",
-                _ => ":white_check_mark:",
-            }
-        }
+fn trend_marker(percent_change: f64) -> &'static str {
+    match trend(percent_change) {
+        "faster" => ":zap:",
+        "slower" => ":x:",
+        _ => ":white_check_mark:",
     }
 }
 
 impl BenchmarkMetric {
-    fn report_title(self) -> &'static str {
-        match self {
-            Self::WallTime => "Wall-time benchmark comparison",
-            Self::Memory => "Memory benchmark comparison",
-        }
-    }
-
     fn marker(self) -> &'static str {
         match self {
             Self::WallTime => "<!-- karva-benchmark-comparison -->",
@@ -1107,10 +965,10 @@ impl BenchmarkMetric {
     fn report_context(self) -> &'static str {
         match self {
             Self::WallTime => {
-                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better."
             }
             Self::Memory => {
-                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median peak RSS for the installed Karva CLI on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and are configured per project. Lower is better."
             }
         }
     }
@@ -1218,29 +1076,11 @@ mod tests {
     use camino::Utf8Path;
 
     use super::{
-        BenchmarkMetric, ComparisonReport, DiagnosticComparison, EXTRA_LONG_PROJECT_ITERATIONS,
-        FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement,
-        ProjectComparison, TestStats, diagnostic_comparison, diagnostics_markdown_report,
-        is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
-        normalize_diagnostic_text, standalone_html, trend,
+        BenchmarkMetric, ComparisonReport, EXTRA_LONG_PROJECT_ITERATIONS, FAST_PROJECT_ITERATIONS,
+        LONG_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison,
+        diagnostic_comparison, diagnostics_markdown_report, is_benchmarkable_exit,
+        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text, trend,
     };
-
-    #[test]
-    fn standalone_html_is_complete_and_escapes_report_content() {
-        let html = standalone_html(
-            "Report <title>",
-            "## Results\n\n| Name |\n| --- |\n| value |\n\ndiff & <script>alert(1)</script>",
-        )
-        .expect("report should render");
-
-        assert!(html.starts_with("<!doctype html>"));
-        assert!(html.contains("Report &lt;title&gt;"));
-        assert!(html.contains("<h2>Results</h2>"));
-        assert!(html.contains("<table>"));
-        assert!(html.contains("diff &amp; &lt;script>"));
-        assert!(!html.contains("<script>"));
-        assert!(html.ends_with("</body></html>"));
-    }
 
     #[test]
     fn markdown_report_renders_regressions() {
@@ -1256,7 +1096,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :x: Merging this PR may alter performance
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Lower is better.
 
         :zap: **1** improved benchmark
         :x: **1** regressed benchmark
@@ -1301,60 +1141,6 @@ mod tests {
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
         | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
-
-        </details>
-        ");
-    }
-
-    #[test]
-    fn markdown_report_does_not_classify_changed_workload_as_regression() {
-        let mut comparison = project("expanded-project", 7, 1.0, 1.8);
-        comparison.diagnostics = Some(DiagnosticComparison {
-            baseline: Some(TestStats {
-                passed: 10,
-                failed: 0,
-                errors: 5,
-                skipped: 0,
-            }),
-            candidate: Some(TestStats {
-                passed: 20,
-                failed: 0,
-                errors: 0,
-                skipped: 0,
-            }),
-            workload_changed: true,
-            diff: None,
-        });
-
-        let markdown =
-            markdown_report(&report_with_projects(vec![comparison])).expect("report should render");
-
-        insta::assert_snapshot!(markdown, @"
-        <!-- karva-benchmark-comparison -->
-        ### :warning: Benchmark includes changed test workloads
-
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
-
-        :zap: **0** improved benchmarks
-        :x: **0** regressed benchmarks
-        :white_check_mark: **0** unchanged benchmarks
-        :warning: **1** changed workload
-
-        > [!NOTE]
-        > Changed workloads execute different test sets. Their raw totals are shown but are not classified as performance changes.
-
-        #### Workload Changes
-
-        |  | Mode | Benchmark | Base | Head | Change | Runs |
-        | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :warning: | WallTime | `expanded-project` | 1.000 s | 1.800 s | +80.0% | 7 |
-
-        <details>
-        <summary>All benchmark scores</summary>
-
-        |  | Mode | Benchmark | Base | Head | Change | Runs |
-        | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :warning: | WallTime | `expanded-project` | 1.000 s | 1.800 s | +80.0% | 7 |
 
         </details>
         ");
@@ -1436,32 +1222,6 @@ mod tests {
 
         </details>
         ");
-    }
-
-    #[test]
-    fn diagnostic_comparison_detects_equal_sized_workload_changes() {
-        let baseline =
-            "    PASS [TIME] test_first\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
-        let candidate =
-            "    PASS [TIME] test_second\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
-
-        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
-            .expect("diagnostics should be available");
-
-        assert_eq!(comparison.baseline, comparison.candidate);
-        assert!(comparison.workload_changed);
-    }
-
-    #[test]
-    fn diagnostic_comparison_detects_equal_sized_skipped_workload_changes() {
-        let baseline = "    SKIP [TIME] test_first: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
-        let candidate = "    SKIP [TIME] test_second: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
-
-        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
-            .expect("diagnostics should be available");
-
-        assert_eq!(comparison.baseline, comparison.candidate);
-        assert!(comparison.workload_changed);
     }
 
     #[test]
