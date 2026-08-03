@@ -11,11 +11,11 @@ use crate::settings::CoverageExcludePattern;
 #[serde(rename_all = "kebab-case")]
 pub struct PyProject {
     /// Tool-specific metadata.
-    pub tool: Option<Tool>,
+    tool: Option<Tool>,
 }
 
 impl PyProject {
-    pub(crate) fn karva(&self) -> Option<&Config> {
+    pub(super) fn karva(&self) -> Option<&Config> {
         self.tool.as_ref().and_then(|tool| tool.karva.as_ref())
     }
 }
@@ -40,7 +40,7 @@ pub enum PyProjectError {
 }
 
 impl PyProject {
-    pub(crate) fn from_toml_str(content: &str) -> Result<Self, PyProjectError> {
+    pub(super) fn from_toml_str(content: &str) -> Result<Self, PyProjectError> {
         toml::from_str(content).map_err(PyProjectError::TomlSyntax)
     }
 }
@@ -72,7 +72,7 @@ pub struct CoveragePyReportOptions {
 }
 
 impl PyProject {
-    pub(crate) fn into_karva_config(self) -> Config {
+    pub(super) fn into_karva_config(self) -> Config {
         let mut config = self
             .tool
             .as_ref()
@@ -82,7 +82,7 @@ impl PyProject {
         config
     }
 
-    pub(crate) fn apply_coverage_exclusions(&self, config: &mut Config) {
+    pub(super) fn apply_coverage_exclusions(&self, config: &mut Config) {
         let patterns = self
             .tool
             .as_ref()

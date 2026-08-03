@@ -81,13 +81,13 @@ impl DiscoveredModule {
         self.source_file.clone()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.test_functions.is_empty()
             && self.fixtures.is_empty()
             && self.rejected_fixtures.is_empty()
     }
 
-    pub(crate) fn shrink(&mut self) {
+    pub(super) fn shrink(&mut self) {
         self.test_functions
             .sort_by_key(|function| function.statement().range.start());
     }

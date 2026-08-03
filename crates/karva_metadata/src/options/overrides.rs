@@ -7,13 +7,13 @@ use super::{Config, Options, UnknownProfile};
 /// Explicit config path, profile, and CLI options supplied by one invocation.
 pub struct ProjectOptionsOverrides {
     /// Configuration file replacing automatic project discovery.
-    pub config_file_override: Option<Utf8PathBuf>,
+    config_file_override: Option<Utf8PathBuf>,
 
     /// Named profile selected from loaded configuration.
-    pub profile: Option<String>,
+    profile: Option<String>,
 
     /// Highest-precedence options parsed from CLI arguments.
-    pub options: Options,
+    options: Options,
 }
 
 impl ProjectOptionsOverrides {
@@ -35,7 +35,7 @@ impl ProjectOptionsOverrides {
 
     /// Resolve the requested profile from `config` and combine the CLI
     /// overrides on top.
-    pub fn apply_to(&self, config: Config) -> Result<Options, UnknownProfile> {
+    pub(crate) fn apply_to(&self, config: Config) -> Result<Options, UnknownProfile> {
         let resolved = config.resolve_profile(self.profile.as_deref())?;
         let disable_flaky_result_overrides = self
             .options

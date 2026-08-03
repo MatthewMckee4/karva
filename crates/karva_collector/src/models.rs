@@ -25,7 +25,7 @@ pub struct CollectedModule {
 }
 
 impl CollectedModule {
-    pub(crate) fn new(path: ModulePath, module_type: ModuleType, source_text: String) -> Self {
+    pub(super) fn new(path: ModulePath, module_type: ModuleType, source_text: String) -> Self {
         Self {
             path,
             module_type,
@@ -35,15 +35,15 @@ impl CollectedModule {
         }
     }
 
-    pub(crate) fn add_test_function_def(&mut self, function_def: StmtFunctionDef) {
+    pub(super) fn add_test_function_def(&mut self, function_def: StmtFunctionDef) {
         self.test_function_defs.push(function_def);
     }
 
-    pub(crate) fn add_fixture_function_def(&mut self, function_def: StmtFunctionDef) {
+    pub(super) fn add_fixture_function_def(&mut self, function_def: StmtFunctionDef) {
         self.fixture_function_defs.push(function_def);
     }
 
-    pub(crate) fn file_path(&self) -> &Utf8PathBuf {
+    fn file_path(&self) -> &Utf8PathBuf {
         self.path.path()
     }
 
@@ -52,7 +52,7 @@ impl CollectedModule {
         self.module_type
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.test_function_defs.is_empty() && self.fixture_function_defs.is_empty()
     }
 }
@@ -85,7 +85,7 @@ impl CollectedPackage {
         }
     }
 
-    pub(crate) fn path(&self) -> &Utf8PathBuf {
+    fn path(&self) -> &Utf8PathBuf {
         &self.path
     }
 
@@ -180,7 +180,7 @@ impl CollectedPackage {
         }
     }
 
-    pub(crate) fn update(&mut self, package: Self) {
+    fn update(&mut self, package: Self) {
         for (_, module) in package.modules {
             self.add_module(module);
         }
@@ -212,7 +212,7 @@ impl CollectedPackage {
         module_tests + package_tests
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
 
@@ -230,7 +230,7 @@ impl CollectedPackage {
 impl CollectedModule {
     /// Update this module with another module.
     /// Merges function definitions from the other module into this one.
-    pub(crate) fn update(&mut self, module: Self) {
+    fn update(&mut self, module: Self) {
         if self.path == module.path {
             add_new_definitions(&mut self.test_function_defs, module.test_function_defs);
             add_new_definitions(

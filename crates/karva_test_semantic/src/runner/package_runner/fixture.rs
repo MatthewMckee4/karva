@@ -75,11 +75,7 @@ impl PackageRunner<'_, '_> {
     }
 
     /// Clears cached fixture values and runs finalizers for one completed scope.
-    pub(super) fn clean_up_scope(
-        &mut self,
-        py: Python<'_>,
-        scope: ScopeKey<'_>,
-    ) -> Vec<Diagnostic> {
+    fn clean_up_scope(&mut self, py: Python<'_>, scope: ScopeKey<'_>) -> Vec<Diagnostic> {
         let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
         self.fixture_cache.clear_scope(scope);
         diagnostics

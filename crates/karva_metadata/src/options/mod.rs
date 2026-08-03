@@ -9,10 +9,11 @@ use karva_macros::{Combine, OptionsMetadata};
 use ruff_db::diagnostic::DiagnosticFormat;
 use serde::{Deserialize, Serialize};
 
-pub use config::{
-    Config, DEFAULT_PROFILE, IncompatibleVersionError, KarvaTomlError, UnknownProfile,
-};
+pub use config::{Config, IncompatibleVersionError, KarvaTomlError, UnknownProfile};
 pub use overrides::ProjectOptionsOverrides;
+
+/// The implicit name of the default profile.
+pub const DEFAULT_PROFILE: &str = "default";
 
 use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
@@ -116,7 +117,7 @@ pub struct OverrideOptions {
         "#
     )]
     #[cfg_attr(feature = "schemars", schemars(with = "String"))]
-    pub filter: ValidatedFilter,
+    filter: ValidatedFilter,
 
     /// Number of times to retry a matching test before giving up. Mirrors
     /// the profile-level [`retry`](#retry) field.
@@ -128,7 +129,7 @@ pub struct OverrideOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub retries: Option<u32>,
+    retries: Option<u32>,
 
     /// Whether matching flaky tests pass or fail the run.
     #[option(
@@ -139,12 +140,12 @@ pub struct OverrideOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub flaky_result: Option<FlakyResult>,
+    flaky_result: Option<FlakyResult>,
 
     /// `JUnit` behavior for matching flaky tests configured to fail.
     #[option_group]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub junit: Option<OverrideJunitOptions>,
+    junit: Option<OverrideJunitOptions>,
 
     /// Hard per-test timeout, in seconds, applied to matching tests.
     /// Mirrors the profile-level [`timeout`](#timeout) field. A value of
@@ -158,7 +159,7 @@ pub struct OverrideOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<TestTimeoutSecs>,
+    timeout: Option<TestTimeoutSecs>,
 
     /// Threshold (in seconds) above which a matching test is flagged as
     /// slow. Mirrors the profile-level
@@ -172,7 +173,7 @@ pub struct OverrideOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub slow_timeout: Option<SlowTimeoutSecs>,
+    slow_timeout: Option<SlowTimeoutSecs>,
 
     /// Duration budget (in seconds) for a matching test's full lifecycle.
     /// Mirrors the profile-level [`fail-slow`](#fail-slow) field. A
@@ -185,11 +186,11 @@ pub struct OverrideOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fail_slow: Option<FailSlowSecs>,
+    fail_slow: Option<FailSlowSecs>,
 }
 
 impl OverrideOptions {
-    pub(crate) fn to_settings(&self) -> OverrideSettings {
+    fn to_settings(&self) -> OverrideSettings {
         OverrideSettings {
             filter: self.filter.clone(),
             retries: self.retries,
@@ -220,7 +221,7 @@ pub struct OverrideJunitOptions {
         "#
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub flaky_fail_status: Option<JunitFlakyFailStatus>,
+    flaky_fail_status: Option<JunitFlakyFailStatus>,
 }
 
 #[derive(
@@ -263,7 +264,7 @@ pub struct SrcOptions {
 }
 
 impl SrcOptions {
-    pub(crate) fn to_settings(&self) -> SrcSettings {
+    fn to_settings(&self) -> SrcSettings {
         SrcSettings {
             respect_ignore_files: self.respect_ignore_files.unwrap_or(true),
             include_paths: self.include.clone().unwrap_or_default(),
@@ -341,7 +342,7 @@ pub struct TerminalOptions {
 
 impl TerminalOptions {
     /// Applies defaults and produces terminal settings ready for runtime use.
-    pub fn to_settings(&self) -> TerminalSettings {
+    fn to_settings(&self) -> TerminalSettings {
         TerminalSettings {
             output_format: self.output_format.unwrap_or_default(),
             show_python_output: self.show_python_output.unwrap_or_default(),
@@ -558,7 +559,7 @@ pub struct TestOptions {
 
 impl TestOptions {
     /// Applies defaults and converts second-based limits into platform durations.
-    pub fn to_settings(&self) -> TestSettings {
+    fn to_settings(&self) -> TestSettings {
         let max_fail = self
             .max_fail
             .or_else(|| self.fail_fast.map(MaxFail::from_fail_fast))
@@ -828,7 +829,7 @@ impl Combine for CoverageOptions {
 
 impl CoverageOptions {
     /// Applies defaults and honors runtime-only coverage disablement.
-    pub fn to_settings(&self) -> CoverageSettings {
+    fn to_settings(&self) -> CoverageSettings {
         let sources = if self.disabled.unwrap_or(false) {
             Vec::new()
         } else {
@@ -924,7 +925,7 @@ pub struct JunitOptions {
 
 impl JunitOptions {
     /// Applies `JUnit` defaults and produces report settings.
-    pub fn to_settings(&self) -> JunitSettings {
+    fn to_settings(&self) -> JunitSettings {
         JunitSettings {
             path: self.path.clone(),
             report_name: self
@@ -1005,15 +1006,6 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    /// Returns `true` if this format is intended for users to read directly, in contrast to
-    /// machine-readable or structured formats.
-    ///
-    /// This can be used to check whether information beyond the diagnostics, such as a header or
-    /// `Found N diagnostics` footer, should be included.
-    pub fn is_human_readable(self) -> bool {
-        matches!(self, Self::Full | Self::Concise)
-    }
-
     /// Returns canonical configuration spelling.
     pub fn as_str(&self) -> &'static str {
         match self {

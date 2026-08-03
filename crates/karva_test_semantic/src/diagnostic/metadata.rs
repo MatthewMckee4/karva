@@ -14,7 +14,7 @@ pub struct DiagnosticType {
     pub summary: &'static str,
 
     /// The severity level (error, warning, etc.) of this diagnostic.
-    pub(crate) severity: Severity,
+    pub(super) severity: Severity,
 }
 
 #[macro_export]
@@ -36,7 +36,7 @@ macro_rules! declare_diagnostic_type {
 }
 
 impl DiagnosticType {
-    pub(crate) fn diagnostic(&self, message: impl std::fmt::Display) -> Diagnostic {
+    pub(super) fn diagnostic(&self, message: impl std::fmt::Display) -> Diagnostic {
         Diagnostic::new(DiagnosticId::Lint(self.name), self.severity, message)
     }
 }

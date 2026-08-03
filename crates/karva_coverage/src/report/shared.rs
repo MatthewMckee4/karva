@@ -5,7 +5,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 
 use crate::context::{compose_context, prefix_context};
-use crate::data::{BranchArc, WorkerFile};
+use crate::data::BranchArc;
+#[cfg(test)]
+use crate::data::WorkerFile;
 use crate::native::{CoverageMode, NativeCoverage, SourceFingerprint};
 use crate::report::CoverageFilters;
 
@@ -57,7 +59,8 @@ pub(super) struct FileRow {
 }
 
 /// Unions per-worker payloads so each source path has one coverage record.
-pub(super) fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
+#[cfg(test)]
+fn combine(files: &[impl AsRef<Utf8Path>]) -> Result<BTreeMap<String, CombinedFile>> {
     let mut combined: BTreeMap<String, CombinedFile> = BTreeMap::new();
 
     for path in files {
@@ -468,7 +471,7 @@ pub(super) fn row_percent(row: &FileRow) -> f64 {
     )
 }
 
-pub(super) fn collapse_ranges(lines: &BTreeSet<u32>) -> String {
+fn collapse_ranges(lines: &BTreeSet<u32>) -> String {
     let mut parts: Vec<String> = Vec::new();
     let mut iter = lines.iter().copied();
     let Some(mut start) = iter.next() else {
@@ -528,7 +531,7 @@ fn collapse_missing(lines: &BTreeSet<u32>, branches: &BTreeSet<BranchArc>) -> St
     parts.join(", ")
 }
 
-pub(super) fn format_branch_arc(arc: BranchArc) -> String {
+fn format_branch_arc(arc: BranchArc) -> String {
     let to = if arc.to < 0 {
         "exit".to_string()
     } else {

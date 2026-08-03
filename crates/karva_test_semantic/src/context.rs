@@ -34,7 +34,7 @@ pub struct RunState {
 }
 
 impl<'a> Context<'a> {
-    pub(crate) fn new(
+    pub(super) fn new(
         cwd: &'a Utf8Path,
         settings: &'a ProjectSettings,
         python_version: PythonVersion,
@@ -50,19 +50,19 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub(crate) fn cwd(&self) -> &'a Utf8Path {
+    pub(super) fn cwd(&self) -> &'a Utf8Path {
         self.cwd
     }
 
-    pub(crate) fn settings(&self) -> &'a ProjectSettings {
+    pub(super) fn settings(&self) -> &'a ProjectSettings {
         self.settings
     }
 
-    pub(crate) fn is_verbose(&self) -> bool {
+    pub(super) fn is_verbose(&self) -> bool {
         self.verbose
     }
 
-    pub(crate) fn collection_settings(&'a self) -> CollectionSettings<'a> {
+    pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {
         CollectionSettings {
             python_version: self.python_version,
             test_function_prefix: &self.settings.test().test_function_prefix,
@@ -91,7 +91,7 @@ impl<'a> Context<'a> {
 }
 
 impl RunState {
-    pub(crate) fn into_result(self) -> TestRunResult {
+    pub(super) fn into_result(self) -> TestRunResult {
         self.result.into_sorted()
     }
 
@@ -119,7 +119,7 @@ impl RunState {
         passed
     }
 
-    pub(crate) fn register_module_skip(
+    pub(super) fn register_module_skip(
         &mut self,
         context: &Context<'_>,
         module_path: &ModulePath,
@@ -196,7 +196,7 @@ impl RunState {
         passed
     }
 
-    pub(crate) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
+    pub(super) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.result.add_run_diagnostic(diagnostic);
     }
 }

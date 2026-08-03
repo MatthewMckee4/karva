@@ -21,7 +21,7 @@ pub enum VerbosityLevel {
 
 impl VerbosityLevel {
     /// Returns the maximum tracing level enabled for Karva targets.
-    pub fn level_filter(self) -> LevelFilter {
+    pub(super) fn level_filter(self) -> LevelFilter {
         match self {
             Self::Default => LevelFilter::WARN,
             Self::Verbose => LevelFilter::INFO,
@@ -34,11 +34,11 @@ impl VerbosityLevel {
         matches!(self, Self::Default)
     }
 
-    pub fn is_trace(self) -> bool {
+    pub(super) fn is_trace(self) -> bool {
         matches!(self, Self::Trace)
     }
 
-    pub fn is_extra_verbose(self) -> bool {
+    pub(super) fn is_extra_verbose(self) -> bool {
         matches!(self, Self::ExtraVerbose)
     }
 

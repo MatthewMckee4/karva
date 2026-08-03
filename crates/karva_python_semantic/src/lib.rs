@@ -23,7 +23,7 @@ pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
 }
 
 /// Check whether an expression resolves to a fixture reference.
-pub fn is_fixture(expr: &Expr) -> bool {
+fn is_fixture(expr: &Expr) -> bool {
     match expr {
         Expr::Name(name) => name.id == "fixture",
         Expr::Attribute(attr) => attr.attr.id == "fixture",
@@ -35,7 +35,7 @@ pub fn is_fixture(expr: &Expr) -> bool {
 /// Converts a Python file below `cwd` into its dotted import path.
 ///
 /// Returns `None` when `path` lies outside `cwd`.
-pub fn module_name(cwd: &Utf8Path, path: &Utf8Path) -> Option<String> {
+pub(crate) fn module_name(cwd: &Utf8Path, path: &Utf8Path) -> Option<String> {
     let relative_path = path.strip_prefix(cwd).ok()?;
     let mut components = relative_path.components().peekable();
     let mut name = String::with_capacity(relative_path.as_str().len());

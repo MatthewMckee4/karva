@@ -90,7 +90,7 @@ impl DiscoveredPackage {
         self.packages.retain(|_, package| !package.is_empty());
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.modules.is_empty() && self.packages.is_empty()
     }
 }

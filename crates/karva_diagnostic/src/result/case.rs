@@ -34,7 +34,7 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
 
 impl<D> TestCaseResult<D> {
     /// Builds a result for a test executed once.
-    pub fn new(
+    pub(super) fn new(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -61,7 +61,7 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Builds a result whose final outcome followed earlier failed attempts.
-    pub fn retried(
+    pub(super) fn retried(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -263,7 +263,7 @@ impl TestCaseRetry {
         self.flaky_failure
     }
 
-    pub fn is_junit_flaky_failure(&self) -> bool {
+    fn is_junit_flaky_failure(&self) -> bool {
         self.junit_flaky_failure
     }
 }
@@ -444,14 +444,6 @@ impl FixtureFailure {
             usage,
             dependency_chain,
         }
-    }
-
-    pub fn fixture(&self) -> &str {
-        &self.fixture
-    }
-
-    pub fn usage(&self) -> FixtureUsage {
-        self.usage
     }
 
     pub fn dependency_chain(&self) -> &[String] {

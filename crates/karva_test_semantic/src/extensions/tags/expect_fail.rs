@@ -19,7 +19,7 @@ pub struct ExpectFailTag {
 }
 
 impl ExpectFailTag {
-    pub(crate) fn new(conditions: Vec<bool>, reason: Option<String>) -> Self {
+    pub(super) fn new(conditions: Vec<bool>, reason: Option<String>) -> Self {
         Self { conditions, reason }
     }
 
@@ -38,7 +38,7 @@ impl ExpectFailTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(
+    pub(super) fn try_from_pytest_mark(
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {

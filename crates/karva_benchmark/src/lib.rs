@@ -52,19 +52,19 @@ pub struct BenchmarkProject {
     pub name: &'static str,
 
     /// Git repository cloned for this workload.
-    pub repository: &'static str,
+    repository: &'static str,
 
     /// Exact Git revision preventing workload drift.
-    pub commit: &'static str,
+    commit: &'static str,
 
     /// Test selections executed inside checkout.
     pub paths: &'static [&'static str],
 
     /// Python grammar and environment version for workload.
-    pub python_version: PythonVersion,
+    python_version: PythonVersion,
 
     /// Reproducible dependency installation recipe.
-    pub dependency_setup: DependencySetup,
+    dependency_setup: DependencySetup,
 
     /// Whether Karva must import modules to discover this project's fixtures.
     pub try_import_fixtures: bool,
@@ -94,7 +94,7 @@ pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const FASTAPI_PROJECT: BenchmarkProject = BenchmarkProject {
+const FASTAPI_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "fastapi",
     repository: "https://github.com/fastapi/fastapi",
     commit: "53d2453d1a77f3384a1648d717f8ddafb5e9e460",
@@ -108,7 +108,7 @@ pub const FASTAPI_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const HTTPX_PROJECT: BenchmarkProject = BenchmarkProject {
+const HTTPX_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "httpx",
     repository: "https://github.com/encode/httpx",
     commit: "ae1b9f66238f75ced3ced5e4485408435de10768",

@@ -175,7 +175,7 @@ impl RunCache {
     }
 
     /// Path to the directory for a specific worker. Does not create it.
-    pub fn worker_dir(&self, worker_id: usize) -> Utf8PathBuf {
+    fn worker_dir(&self, worker_id: usize) -> Utf8PathBuf {
         self.run_dir.join(worker_folder(worker_id))
     }
 

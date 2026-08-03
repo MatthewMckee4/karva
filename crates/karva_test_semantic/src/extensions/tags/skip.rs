@@ -19,18 +19,18 @@ pub struct SkipTag {
 }
 
 impl SkipTag {
-    pub(crate) fn new(conditions: Vec<bool>, reason: Option<String>) -> Self {
+    pub(super) fn new(conditions: Vec<bool>, reason: Option<String>) -> Self {
         Self { conditions, reason }
     }
 
-    pub(crate) fn reason(&self) -> Option<String> {
+    pub(super) fn reason(&self) -> Option<String> {
         self.reason.clone()
     }
 
     /// Check if the test should be skipped.
     /// If there are no conditions, always skip.
     /// If there are conditions, skip only if any condition is true.
-    pub(crate) fn should_skip(&self) -> bool {
+    pub(super) fn should_skip(&self) -> bool {
         if self.conditions.is_empty() {
             true
         } else {
@@ -38,7 +38,7 @@ impl SkipTag {
         }
     }
 
-    pub(crate) fn try_from_pytest_mark(
+    pub(super) fn try_from_pytest_mark(
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {

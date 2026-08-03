@@ -11,7 +11,7 @@ use crate::format::SnapshotFile;
 /// Return the snapshots directory for a given test file.
 ///
 /// For a test file at `tests/test_example.py`, this returns `tests/snapshots/`.
-pub fn snapshot_dir(test_file: &Utf8Path) -> Utf8PathBuf {
+fn snapshot_dir(test_file: &Utf8Path) -> Utf8PathBuf {
     if let Some(parent) = test_file.parent() {
         parent.join("snapshots")
     } else {
@@ -35,7 +35,7 @@ pub fn snapshot_path(test_file: &Utf8Path, module_name: &str, snapshot_name: &st
 }
 
 /// Return the path to a pending snapshot file (`.snap.new`).
-pub fn pending_path(snap_path: &Utf8Path) -> Utf8PathBuf {
+fn pending_path(snap_path: &Utf8Path) -> Utf8PathBuf {
     Utf8PathBuf::from(format!("{snap_path}.new"))
 }
 
@@ -73,7 +73,7 @@ fn write_snapshot_file(path: &Utf8Path, snapshot: &SnapshotFile) -> io::Result<(
 }
 
 /// Replaces a file only after its complete contents have been written beside it.
-pub(crate) fn write_file_atomically(path: &Utf8Path, content: &[u8]) -> io::Result<()> {
+pub(super) fn write_file_atomically(path: &Utf8Path, content: &[u8]) -> io::Result<()> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_str().is_empty())
@@ -94,7 +94,7 @@ pub struct PendingSnapshotInfo {
     pub pending_path: Utf8PathBuf,
 
     /// Path to the corresponding `.snap` file (may not exist yet).
-    pub snap_path: Utf8PathBuf,
+    pub(super) snap_path: Utf8PathBuf,
 }
 
 /// Recursively walk a directory tree and collect files that match a filter.
@@ -213,7 +213,7 @@ fn extract_function_name(source: Option<&str>) -> Option<&str> {
 /// For inline snapshots (with `inline_source`/`inline_line` metadata),
 /// rewrites the source file in-place and deletes the `.snap.new` file.
 /// For file-based snapshots, atomically promotes `.snap.new` to `.snap`.
-pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
+pub(crate) fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
     if let Some(snapshot) = read_snapshot(pending_path)?
         && let Some(source_file) = &snapshot.metadata.inline_source
         && let Some(line) = snapshot.metadata.inline_line
@@ -340,7 +340,7 @@ pub fn reject_pending(pending_path: &Utf8Path) -> io::Result<()> {
 #[derive(Debug, Clone)]
 pub struct SnapshotInfo {
     /// Path to committed `.snap` file.
-    pub snap_path: Utf8PathBuf,
+    snap_path: Utf8PathBuf,
 }
 
 /// Why a snapshot is considered unreferenced.
@@ -391,7 +391,7 @@ pub struct UnreferencedSnapshot {
 /// Parse a snapshot's `source` metadata field into `(filename, snapshot_name)`.
 ///
 /// Handles formats like `test.py:5::test_name` and `test.py::test_name`.
-pub fn parse_source(source: &str) -> Option<(&str, &str)> {
+fn parse_source(source: &str) -> Option<(&str, &str)> {
     let (file, name) = source.split_once("::")?;
     let file = file
         .rsplit_once(':')
@@ -409,7 +409,7 @@ pub fn parse_source(source: &str) -> Option<(&str, &str)> {
 /// numbering `test_foo-2` → `test_foo`,
 /// inline suffix `test_foo_inline_5` → `test_foo`,
 /// and class prefix `TestClass::test_method` → `test_method`.
-pub fn base_function_name(name: &str) -> &str {
+fn base_function_name(name: &str) -> &str {
     let name = name.rsplit_once("::").map_or(name, |(_, method)| method);
     let name = name.split_once("--").map_or(name, |(base, _)| base);
     let name = name.split_once('(').map_or(name, |(base, _)| base);
@@ -430,7 +430,7 @@ pub fn base_function_name(name: &str) -> &str {
 }
 
 /// Check whether a function definition `def {name}(` exists in a file.
-pub fn function_exists_in_file(path: &Utf8Path, name: &str) -> io::Result<bool> {
+fn function_exists_in_file(path: &Utf8Path, name: &str) -> io::Result<bool> {
     let content = fs::read_to_string(path).map_err(|err| {
         io::Error::new(
             err.kind(),
@@ -456,7 +456,7 @@ fn line_declares_function(line: &str, name: &str) -> bool {
 }
 
 /// Recursively find all committed snapshot files (`.snap`, not `.snap.new`).
-pub fn find_snapshots(root: &Utf8Path) -> io::Result<Vec<SnapshotInfo>> {
+fn find_snapshots(root: &Utf8Path) -> io::Result<Vec<SnapshotInfo>> {
     let mut results = Vec::new();
     find_recursive(
         root,

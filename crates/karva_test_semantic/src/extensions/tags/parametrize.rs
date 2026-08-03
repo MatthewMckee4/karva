@@ -378,7 +378,7 @@ pub struct Parametrization {
 }
 
 impl Parametrization {
-    pub(crate) fn tags(&self) -> &Tags {
+    fn tags(&self) -> &Tags {
         &self.tags
     }
 }
@@ -411,7 +411,7 @@ pub struct ParametrizationArgs {
 }
 
 impl ParametrizationArgs {
-    pub(crate) fn extend(&mut self, other: Self) {
+    fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
         self.tags.extend(&other.tags);
         if !self.id.is_empty() && !other.id.is_empty() {
@@ -433,7 +433,7 @@ pub struct ParameterPlan {
 }
 
 impl ParameterPlan {
-    pub(crate) fn new(dimensions: Vec<Vec<ParametrizationArgs>>) -> Self {
+    pub(super) fn new(dimensions: Vec<Vec<ParametrizationArgs>>) -> Self {
         Self { dimensions }
     }
 }
@@ -708,18 +708,18 @@ fn extract_parametrize_args<'py>(
 }
 
 impl ParametrizeTag {
-    pub(crate) fn names(&self) -> &[String] {
+    pub(super) fn names(&self) -> &[String] {
         &self.names
     }
 
-    pub(crate) fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
+    fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
         Self {
             names,
             parametrizations,
         }
     }
 
-    pub(crate) fn from_karva(arg_names: Vec<String>, arg_values: Vec<Param>) -> Self {
+    pub(super) fn from_karva(arg_names: Vec<String>, arg_values: Vec<Param>) -> Self {
         Self::new(
             arg_names,
             arg_values
@@ -741,7 +741,7 @@ impl ParametrizeTag {
         )
     }
 
-    pub(crate) fn try_from_pytest_mark(
+    pub(super) fn try_from_pytest_mark(
         py_mark: &Bound<'_, PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {
@@ -753,7 +753,7 @@ impl ParametrizeTag {
         Ok(Some(Self::new(arg_names, parametrizations)))
     }
 
-    pub(crate) fn validate<'a>(
+    pub(super) fn validate<'a>(
         &'a self,
         function_parameter_names: &HashSet<&str>,
         seen_names: &mut HashSet<&'a str>,
@@ -802,7 +802,7 @@ impl ParametrizeTag {
     /// Returns each parameterize case.
     ///
     /// Each [`HashMap`] is used as keyword arguments for the test function.
-    pub(crate) fn each_arg_value(&self) -> Vec<ParametrizationArgs> {
+    pub(super) fn each_arg_value(&self) -> Vec<ParametrizationArgs> {
         let total_combinations = self.parametrizations.len();
         let mut param_args = Vec::with_capacity(total_combinations);
 
@@ -829,7 +829,7 @@ impl ParametrizeTag {
 
 /// Check for instances of `pytest.ParameterSet` and extract the parameters
 /// from it. Also handles regular tuples by extracting their values.
-pub(super) fn handle_custom_parametrize_param(
+fn handle_custom_parametrize_param(
     py: Python,
     param: Py<PyAny>,
     expect_multiple: bool,

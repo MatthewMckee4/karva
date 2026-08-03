@@ -19,7 +19,7 @@ pub enum FixtureScope {
 
 impl FixtureScope {
     /// Returns a list of scopes above the current scope.
-    pub(crate) fn scopes_above(self) -> &'static [Self] {
+    pub(super) fn scopes_above(self) -> &'static [Self] {
         use FixtureScope::{Function, Module, Package, Session};
 
         match self {

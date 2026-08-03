@@ -5,13 +5,12 @@ use camino::Utf8Path;
 use colored::Colorize;
 use fs_err as fs;
 
-use super::combined_rows;
+use super::CoverageAnalysis;
 use super::html::{HtmlReportOptions, build_html_report};
 use super::json::{JsonReportOptions, build_json_report};
 use super::lcov::build_lcov_report;
 use super::shared::{FileRow, row_percent, total_percent, totals_row};
 use super::xml::build_cobertura_xml;
-use super::{CoverageAnalysis, CoverageFilters};
 
 /// Terminal coverage report representation.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -56,66 +55,7 @@ pub struct CoverageReportOptions {
     pub format: CoverageReportFormat,
 }
 
-/// Prints the terminal coverage table and returns its total percentage.
-///
-/// Returns `None` when no worker coverage artifacts contain source data.
-pub fn combine_and_report(
-    cwd: &Utf8Path,
-    files: &[impl AsRef<Utf8Path>],
-    show_missing: bool,
-    filters: &CoverageFilters,
-) -> Result<Option<f64>> {
-    let Some(analysis) = combined_rows(cwd, files, filters)? else {
-        return Ok(None);
-    };
-    analysis.report(show_missing).map(Some)
-}
-
-/// Writes a Cobertura-compatible XML report and returns its total percentage.
-pub fn write_cobertura_xml(
-    cwd: &Utf8Path,
-    files: &[impl AsRef<Utf8Path>],
-    output: &Utf8Path,
-    filters: &CoverageFilters,
-) -> Result<Option<f64>> {
-    let Some(analysis) = combined_rows(cwd, files, filters)? else {
-        return Ok(None);
-    };
-    analysis.write_cobertura_xml(output).map(Some)
-}
-
-/// Writes a coverage.py-compatible JSON report and returns its total percentage.
-pub fn write_json_report(
-    cwd: &Utf8Path,
-    files: &[impl AsRef<Utf8Path>],
-    output: &Utf8Path,
-    filters: &CoverageFilters,
-) -> Result<Option<f64>> {
-    let Some(analysis) = combined_rows(cwd, files, filters)? else {
-        return Ok(None);
-    };
-    analysis.write_json(output).map(Some)
-}
-
-/// Writes a standalone HTML coverage report and returns its total percentage.
-pub fn write_html_report(
-    cwd: &Utf8Path,
-    files: &[impl AsRef<Utf8Path>],
-    output_dir: &Utf8Path,
-    filters: &CoverageFilters,
-) -> Result<Option<f64>> {
-    let Some(analysis) = combined_rows(cwd, files, filters)? else {
-        return Ok(None);
-    };
-    analysis.write_html(output_dir).map(Some)
-}
-
 impl CoverageAnalysis {
-    /// Prints the compact terminal report and returns total coverage.
-    pub fn report(&self, show_missing: bool) -> Result<f64> {
-        self.report_with_precision(show_missing, 0)
-    }
-
     /// Prints the compact terminal report using `precision` decimal places.
     pub fn report_with_precision(&self, show_missing: bool, precision: usize) -> Result<f64> {
         self.write_report(

@@ -9,7 +9,7 @@ pub struct FailSlowTag {
 }
 
 impl FailSlowTag {
-    pub(crate) fn new(seconds: f64) -> Self {
+    pub(super) fn new(seconds: f64) -> Self {
         Self { seconds }
     }
 

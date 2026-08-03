@@ -54,10 +54,6 @@ impl RenderedDiagnostic {
         &self.code
     }
 
-    pub fn severity(&self) -> Severity {
-        self.severity
-    }
-
     pub fn severity_name(&self) -> &'static str {
         match self.severity {
             Severity::Info => "info",

@@ -15,13 +15,9 @@ use regex::RegexSet;
 
 pub use html::HtmlReportOptions;
 pub use json::JsonReportOptions;
-pub use terminal::combine_and_report;
-pub use terminal::write_cobertura_xml;
-pub use terminal::write_html_report;
-pub use terminal::write_json_report;
 pub use terminal::{CoverageReportFormat, CoverageReportOptions, CoverageReportSort};
 
-use self::shared::{FileRow, combine, combine_native, total_percent, verify_combined_sources};
+use self::shared::{FileRow, combine_native, total_percent, verify_combined_sources};
 
 #[derive(Debug, Default)]
 /// File globs and context regexes applied before coverage metrics are calculated.
@@ -250,7 +246,8 @@ impl CoverageAnalysis {
     }
 
     /// Returns the number of source files retained by the filters.
-    pub fn file_count(&self) -> usize {
+    #[cfg(test)]
+    fn file_count(&self) -> usize {
         self.rows.len()
     }
 }
@@ -269,28 +266,6 @@ fn compile_globs(kind: &str, patterns: &[String]) -> Result<Option<GlobSet>> {
         );
     }
     Ok(Some(builder.build()?))
-}
-
-fn combined_rows(
-    cwd: &Utf8Path,
-    files: &[impl AsRef<Utf8Path>],
-    filters: &CoverageFilters,
-) -> Result<Option<CoverageAnalysis>> {
-    let combined = combine(files)?;
-    if combined.is_empty() {
-        return Ok(None);
-    }
-
-    let cwd_real = canonical_root(cwd);
-    let rows = shared::build_rows(&cwd_real, &combined, true)
-        .into_iter()
-        .filter(|row| filters.matches(&row.name))
-        .collect();
-    Ok(Some(CoverageAnalysis {
-        coverage_root: cwd.to_path_buf(),
-        cwd_real,
-        rows,
-    }))
 }
 
 fn canonical_root(cwd: &Utf8Path) -> std::path::PathBuf {

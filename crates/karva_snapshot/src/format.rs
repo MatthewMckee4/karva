@@ -68,7 +68,7 @@ impl SnapshotFile {
     /// ---
     /// snapshot content here
     /// ```
-    pub fn parse(input: &str) -> Result<Self, ParseSnapshotError> {
+    pub(super) fn parse(input: &str) -> Result<Self, ParseSnapshotError> {
         let input = input
             .strip_prefix("---\n")
             .ok_or(ParseSnapshotError::MissingOpeningSeparator)?;
@@ -102,7 +102,7 @@ impl SnapshotFile {
     }
 
     /// Serialize the snapshot file to its string representation.
-    pub fn serialize(&self) -> String {
+    pub(super) fn serialize(&self) -> String {
         let mut output = String::new();
         output.push_str("---\n");
 

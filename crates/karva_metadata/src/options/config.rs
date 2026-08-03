@@ -8,10 +8,7 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::Options;
-
-/// The implicit name of the default profile.
-pub const DEFAULT_PROFILE: &str = "default";
+use super::{DEFAULT_PROFILE, Options};
 
 /// File-level configuration: a collection of named profiles.
 ///
@@ -37,12 +34,12 @@ pub struct Config {
     )]
     #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub required_version: Option<VersionReq>,
+    required_version: Option<VersionReq>,
 
     #[cfg_attr(feature = "schemars", schemars(schema_with = "profile_schema"))]
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     /// Named option profiles; `default` forms the base for every named profile.
-    pub profile: BTreeMap<String, Options>,
+    pub(crate) profile: BTreeMap<String, Options>,
 }
 
 #[cfg(feature = "schemars")]
@@ -60,7 +57,7 @@ fn profile_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema
 
 impl Config {
     /// Parses configuration text and validates all profile names.
-    pub fn from_toml_str(content: &str) -> Result<Self, KarvaTomlError> {
+    pub(crate) fn from_toml_str(content: &str) -> Result<Self, KarvaTomlError> {
         let config: Self = toml::from_str(content)?;
         validate_profile_names(&config.profile)?;
         Ok(config)
@@ -71,7 +68,10 @@ impl Config {
     /// `current` is parsed once with [`semver::Version::parse`]; karva's
     /// own version is well-formed semver, so a parse failure here is an
     /// internal error rather than a configuration problem.
-    pub fn check_required_version(&self, current: &str) -> Result<(), IncompatibleVersionError> {
+    pub(crate) fn check_required_version(
+        &self,
+        current: &str,
+    ) -> Result<(), IncompatibleVersionError> {
         let Some(required) = &self.required_version else {
             return Ok(());
         };
@@ -105,7 +105,8 @@ impl Config {
 
     /// Returns true if `name` is defined as a profile in this configuration.
     /// The implicit `default` profile always exists.
-    pub fn has_profile(&self, name: &str) -> bool {
+    #[cfg(test)]
+    pub(super) fn has_profile(&self, name: &str) -> bool {
         if name == DEFAULT_PROFILE {
             return true;
         }
@@ -121,7 +122,7 @@ impl Config {
     ///
     /// Returns [`UnknownProfile`] when `name` refers to a profile that is
     /// not defined.
-    pub fn resolve_profile(mut self, name: Option<&str>) -> Result<Options, UnknownProfile> {
+    pub(super) fn resolve_profile(mut self, name: Option<&str>) -> Result<Options, UnknownProfile> {
         let requested = name.unwrap_or(DEFAULT_PROFILE);
 
         let default_overrides = self.profile.remove(DEFAULT_PROFILE);
@@ -185,10 +186,10 @@ fn validate_profile_names(profiles: &BTreeMap<String, Options>) -> Result<(), Ka
 )]
 pub struct UnknownProfile {
     /// Requested undefined profile name.
-    pub name: String,
+    name: String,
 
     /// Sorted profile names available to the user, including implicit `default`.
-    pub available: Vec<String>,
+    available: Vec<String>,
 }
 
 #[derive(Debug, Error)]

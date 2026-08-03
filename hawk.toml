@@ -1,0 +1,43 @@
+[[production]]
+package = "karva"
+bin = "karva"
+reason = "shipped controller binary"
+
+[[production]]
+package = "karva_worker"
+bin = "karva-worker"
+reason = "shipped worker binary"
+
+[[production]]
+package = "karva_benchmark"
+bin = "karva-benchmark"
+reason = "benchmark runner"
+
+[[production]]
+package = "karva_dev"
+bin = "karva_dev"
+reason = "developer tooling"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "karva_benchmark"
+item = "prepare_benchmark_project"
+kind = "function"
+level = "expect"
+reason = "called from Divan benchmark registration"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "karva_benchmark"
+item = "prepare_benchmark_project_with_wheel"
+kind = "function"
+level = "expect"
+reason = "called from Divan benchmark registration"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "karva_benchmark"
+item = "try_run_project"
+kind = "function"
+level = "expect"
+reason = "called from Divan benchmark registration"

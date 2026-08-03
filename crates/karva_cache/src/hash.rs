@@ -84,7 +84,7 @@ impl RunHash {
     /// Falls back to a zero timestamp and nil UUID if the input cannot be
     /// parsed; this keeps callers from having to handle malformed legacy
     /// directories that may exist on disk.
-    pub fn from_existing(hash: &str) -> Self {
+    pub(super) fn from_existing(hash: &str) -> Self {
         let inner = hash.strip_prefix(RUN_PREFIX).unwrap_or(hash);
         let (ts_str, uuid_str) = inner.split_once('-').unwrap_or((inner, ""));
         let timestamp = ts_str.parse().unwrap_or(0);
@@ -137,12 +137,12 @@ impl RunHash {
     }
 
     /// Returns the directory name used in the cache (`run-<ms>-<uuid>`).
-    pub fn dir_name(&self) -> String {
+    pub(super) fn dir_name(&self) -> String {
         format!("{RUN_PREFIX}{}", self.inner())
     }
 
     /// Returns the underlying timestamp, used for ordering runs chronologically.
-    pub fn sort_key(&self) -> u128 {
+    pub(super) fn sort_key(&self) -> u128 {
         self.timestamp
     }
 }

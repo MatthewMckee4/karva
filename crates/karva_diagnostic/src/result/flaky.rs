@@ -9,23 +9,23 @@ use serde::{Deserialize, Serialize};
 /// Test that failed at least once before eventually passing.
 pub struct FlakyTest {
     /// Import-qualified Python module containing the test.
-    pub module_name: String,
+    module_name: String,
 
     /// Function name without parameter display suffix.
-    pub function_name: String,
+    function_name: String,
 
     /// Parameter display suffix, including delimiters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub params: Option<String>,
+    params: Option<String>,
 
     /// One-based attempt on which the test passed.
-    pub passed_on: u32,
+    passed_on: u32,
 
     /// Maximum attempts permitted by retry configuration.
-    pub total_attempts: u32,
+    total_attempts: u32,
 
     /// Combined duration across all attempts.
-    pub duration: Duration,
+    duration: Duration,
 }
 
 impl FlakyTest {
@@ -52,13 +52,13 @@ impl FlakyTest {
     }
 
     /// Returns terminal-display formatting for this flaky result.
-    pub fn display(&self) -> DisplayFlakyTest<'_> {
+    fn display(&self) -> DisplayFlakyTest<'_> {
         DisplayFlakyTest(self)
     }
 }
 
 /// Terminal-display wrapper for one flaky result.
-pub struct DisplayFlakyTest<'a>(&'a FlakyTest);
+struct DisplayFlakyTest<'a>(&'a FlakyTest);
 
 impl fmt::Display for DisplayFlakyTest<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

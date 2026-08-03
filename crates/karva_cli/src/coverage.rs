@@ -19,19 +19,19 @@ pub struct CoverageCommand {
         value_name = "PATH",
         help_heading = "Coverage options"
     )]
-    pub data_file: Option<Utf8PathBuf>,
+    data_file: Option<Utf8PathBuf>,
 
     /// Include only report paths matching this glob.
     #[arg(long, global = true, value_name = "GLOB", action = clap::ArgAction::Append, help_heading = "Coverage options")]
-    pub include: Vec<String>,
+    include: Vec<String>,
 
     /// Exclude report paths matching this glob after inclusion.
     #[arg(long, global = true, value_name = "GLOB", action = clap::ArgAction::Append, help_heading = "Coverage options")]
-    pub omit: Vec<String>,
+    omit: Vec<String>,
 
     /// Include execution attributed to a matching context regular expression.
     #[arg(long = "contexts", global = true, value_name = "REGEX", action = clap::ArgAction::Append, help_heading = "Coverage options")]
-    pub contexts: Vec<String>,
+    contexts: Vec<String>,
 
     /// Decimal places shown in coverage percentages.
     #[arg(
@@ -40,7 +40,7 @@ pub struct CoverageCommand {
         value_name = "N",
         help_heading = "Coverage options"
     )]
-    pub precision: Option<CoveragePrecision>,
+    precision: Option<CoveragePrecision>,
 
     /// Fail when total coverage is below this percentage.
     #[arg(
@@ -50,7 +50,7 @@ pub struct CoverageCommand {
         value_parser = parse_cov_fail_under,
         help_heading = "Coverage options"
     )]
-    pub fail_under: Option<f64>,
+    fail_under: Option<f64>,
 
     /// The path to a `karva.toml` file to use for configuration.
     #[arg(
