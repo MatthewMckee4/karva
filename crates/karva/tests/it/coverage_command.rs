@@ -192,6 +192,65 @@ path-aliases = ['C:\repo=.']
 }
 
 #[test]
+fn erase_is_idempotent_and_preserves_reports_and_neighbors() {
+    let context = TestContext::new();
+    context.write_file("karva.toml", "");
+    let combined = Utf8Path::new(".karva/coverage/data.json");
+    let shard = Utf8Path::new(".karva/coverage/pending/nested/shard.json");
+    write_coverage(&context, combined);
+    write_coverage(&context, shard);
+    context.write_file(".karva/coverage/notes.json", "unrelated");
+    context.write_file(".karva/coverage/pending/notes.txt", "unrelated");
+    context.write_file("coverage.xml", "xml report");
+    context.write_file("coverage.json", "json report");
+    context.write_file("coverage.lcov", "lcov report");
+    context.write_file("htmlcov/index.html", "html report");
+    context.write_file("nested/.gitkeep", "");
+    let mut command = context.karva_command_in(context.root().join("nested"));
+    command.args(["coverage", "erase"]);
+
+    assert_cmd_snapshot!(command, @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join(combined).exists());
+    assert!(!context.root().join(shard).exists());
+    for path in [
+        ".karva/coverage/notes.json",
+        ".karva/coverage/pending/notes.txt",
+        "coverage.xml",
+        "coverage.json",
+        "coverage.lcov",
+        "htmlcov/index.html",
+    ] {
+        assert!(
+            context.root().join(path).exists(),
+            "expected `{path}` to survive"
+        );
+    }
+
+    assert_cmd_snapshot!(context.coverage("erase"), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(context.coverage("report"), @r"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: no coverage data found at `<temp_dir>/.karva/coverage/data.json`; run `uv run karva test --cov` first
+    ");
+}
+
+#[test]
 fn report_reads_default_native_data() {
     let context = TestContext::new();
     write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));

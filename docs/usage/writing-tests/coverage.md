@@ -144,6 +144,12 @@ uv run karva coverage combine shard-a.json shard-b.json
 
 With no paths, `combine` discovers artifacts under `.karva/coverage/pending/`. Successfully consumed inputs are removed after the combined artifact is atomically replaced. Pass `--keep` to retain them or `--append` to include the existing combined artifact.
 
+Delete combined native data and recognized pending shards without touching generated reports:
+
+```bash
+uv run karva coverage erase
+```
+
 `--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
 
 ```bash
