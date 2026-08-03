@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use siphasher::sip128::{Hasher128, SipHasher13};
 use tempfile::NamedTempFile;
 
-use crate::data::BranchArc;
+use crate::data::{BranchArc, WorkerFile};
 
 /// Current native coverage schema version.
 pub const FORMAT_VERSION: u32 = 1;
@@ -117,6 +117,191 @@ impl NativeCoverage {
         }
         Ok(())
     }
+
+    /// Builds one durable artifact by unioning transient worker payloads.
+    pub fn from_worker_files(
+        project_root: &Utf8Path,
+        source_roots: &[String],
+        mode: CoverageMode,
+        files: &[impl AsRef<Utf8Path>],
+    ) -> Result<Self> {
+        let canonical_root = dunce::canonicalize(project_root)
+            .with_context(|| format!("failed to resolve coverage project root `{project_root}`"))?;
+        let canonical_root = Utf8PathBuf::from_path_buf(canonical_root).map_err(|path| {
+            anyhow::anyhow!(
+                "coverage project root contains non-Unicode characters: `{}`",
+                path.display()
+            )
+        })?;
+        let mut native_files = BTreeMap::new();
+
+        for worker_path in files {
+            let worker_path = worker_path.as_ref();
+            let bytes = fs::read(worker_path)
+                .with_context(|| format!("failed to read coverage file `{worker_path}`"))?;
+            let worker: WorkerFile = serde_json::from_slice(&bytes)
+                .with_context(|| format!("failed to parse coverage file `{worker_path}`"))?;
+            for (source, file) in worker.files {
+                merge_worker_file(
+                    &canonical_root,
+                    worker_path,
+                    &source,
+                    file,
+                    mode,
+                    &mut native_files,
+                )?;
+            }
+        }
+
+        Ok(Self::new(
+            mode,
+            canonical_root,
+            source_roots.iter().map(Utf8PathBuf::from).collect(),
+            None,
+            native_files,
+        ))
+    }
+
+    /// Unions compatible observations into this artifact.
+    pub fn merge(&mut self, other: Self) -> Result<()> {
+        if self.mode != other.mode {
+            bail!(
+                "cannot append coverage collected in {:?} mode to coverage collected in {:?} mode",
+                other.mode,
+                self.mode
+            );
+        }
+        if self.project_root != other.project_root {
+            bail!(
+                "cannot append coverage from project root `{}` to coverage from `{}`",
+                other.project_root,
+                self.project_root
+            );
+        }
+        if self.source_roots != other.source_roots {
+            bail!("cannot append coverage collected from different source roots");
+        }
+        if self.run_context != other.run_context {
+            bail!("cannot append coverage collected with different run contexts");
+        }
+
+        for (path, incoming) in other.files {
+            if let Some(current) = self.files.get_mut(&path) {
+                merge_native_file(&path, current, incoming)?;
+            } else {
+                self.files.insert(path, incoming);
+            }
+        }
+        Ok(())
+    }
+}
+
+fn merge_worker_file(
+    project_root: &Utf8Path,
+    worker_path: &Utf8Path,
+    source: &str,
+    file: crate::data::FileEntry,
+    mode: CoverageMode,
+    files: &mut BTreeMap<Utf8PathBuf, NativeFileCoverage>,
+) -> Result<()> {
+    let source_path = dunce::canonicalize(source).with_context(|| {
+        format!("coverage worker artifact `{worker_path}` references unreadable source `{source}`")
+    })?;
+    let source_path = Utf8PathBuf::from_path_buf(source_path).map_err(|path| {
+        anyhow::anyhow!(
+            "coverage source contains non-Unicode characters: `{}`",
+            path.display()
+        )
+    })?;
+    let stored_path = source_path
+        .strip_prefix(project_root)
+        .unwrap_or(&source_path)
+        .to_path_buf();
+    let source_bytes = fs::read(&source_path).with_context(|| {
+        format!("coverage worker artifact `{worker_path}` references unreadable source `{source}`")
+    })?;
+    let fingerprint = SourceFingerprint::from_bytes(&source_bytes);
+    let incoming = NativeFileCoverage {
+        source_fingerprint: fingerprint,
+        executable: file.executable.into_iter().collect(),
+        excluded: BTreeSet::new(),
+        executed: file.executed.into_iter().collect(),
+        line_contexts: file.contexts,
+        branches: match (mode, file.branches) {
+            (CoverageMode::Line, None) => None,
+            (CoverageMode::Line, Some(_)) => {
+                bail!(
+                    "coverage worker artifact `{worker_path}` contains branch data for line-only collection"
+                )
+            }
+            (CoverageMode::Branch, None) => {
+                bail!("coverage worker artifact `{worker_path}` lacks branch data for `{source}`")
+            }
+            (CoverageMode::Branch, Some(branches)) => Some(NativeBranchCoverage {
+                possible: branches.possible.into_iter().collect(),
+                executed: branches.executed.into_iter().collect(),
+                contexts: branches
+                    .contexts
+                    .into_iter()
+                    .map(|entry| NativeArcContexts {
+                        arc: entry.arc,
+                        contexts: entry.contexts,
+                    })
+                    .collect(),
+            }),
+        },
+    };
+
+    if let Some(current) = files.get_mut(&stored_path) {
+        merge_native_file(&stored_path, current, incoming)
+    } else {
+        files.insert(stored_path, incoming);
+        Ok(())
+    }
+}
+
+fn merge_native_file(
+    path: &Utf8Path,
+    current: &mut NativeFileCoverage,
+    incoming: NativeFileCoverage,
+) -> Result<()> {
+    if current.source_fingerprint != incoming.source_fingerprint {
+        bail!("cannot merge coverage for changed source `{path}`");
+    }
+    current.executable.extend(incoming.executable);
+    current.excluded.extend(incoming.excluded);
+    current.executed.extend(incoming.executed);
+    for (line, contexts) in incoming.line_contexts {
+        current
+            .line_contexts
+            .entry(line)
+            .or_default()
+            .extend(contexts);
+    }
+    match (&mut current.branches, incoming.branches) {
+        (None, None) => {}
+        (Some(current), Some(incoming)) => {
+            current.possible.extend(incoming.possible);
+            current.executed.extend(incoming.executed);
+            for entry in incoming.contexts {
+                merge_arc_contexts(&mut current.contexts, entry);
+            }
+        }
+        _ => bail!("cannot merge line and branch coverage for `{path}`"),
+    }
+    Ok(())
+}
+
+fn merge_arc_contexts(current: &mut BTreeSet<NativeArcContexts>, mut incoming: NativeArcContexts) {
+    if let Some(existing) = current
+        .iter()
+        .find(|entry| entry.arc == incoming.arc)
+        .cloned()
+    {
+        current.remove(&existing);
+        incoming.contexts.extend(existing.contexts);
+    }
+    current.insert(incoming);
 }
 
 /// Coverage opportunities captured by an artifact.
@@ -320,6 +505,65 @@ mod tests {
             error
                 .to_string()
                 .contains("source changed since collection")
+        );
+    }
+
+    #[test]
+    fn worker_artifacts_and_appended_runs_union_observations() {
+        let directory = tempfile::tempdir().expect("create temp directory");
+        let project_root =
+            Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).expect("UTF-8 temp path");
+        let source = project_root.join("app.py");
+        fs::write(&source, "first = 1\nsecond = 2\n").expect("write source");
+        let first_worker = project_root.join("first-worker.json");
+        let second_worker = project_root.join("second-worker.json");
+        let worker = |executed, context: &str| WorkerFile {
+            files: BTreeMap::from([(
+                source.to_string(),
+                crate::data::FileEntry {
+                    executable: vec![1, 2],
+                    executed: vec![executed],
+                    contexts: BTreeMap::from([(executed, BTreeSet::from([context.to_owned()]))]),
+                    branches: None,
+                },
+            )]),
+        };
+        fs::write(
+            &first_worker,
+            serde_json::to_vec(&worker(1, "first")).expect("serialize worker"),
+        )
+        .expect("write first worker");
+        fs::write(
+            &second_worker,
+            serde_json::to_vec(&worker(2, "second")).expect("serialize worker"),
+        )
+        .expect("write second worker");
+
+        let mut first = NativeCoverage::from_worker_files(
+            &project_root,
+            &["app.py".to_owned()],
+            CoverageMode::Line,
+            &[first_worker],
+        )
+        .expect("build first artifact");
+        let second = NativeCoverage::from_worker_files(
+            &project_root,
+            &["app.py".to_owned()],
+            CoverageMode::Line,
+            &[second_worker],
+        )
+        .expect("build second artifact");
+
+        first.merge(second).expect("append compatible artifact");
+
+        let file = first.files.get(Utf8Path::new("app.py")).expect("app data");
+        assert_eq!(file.executed, BTreeSet::from([1, 2]));
+        assert_eq!(
+            file.line_contexts,
+            BTreeMap::from([
+                (1, BTreeSet::from(["first".to_owned()])),
+                (2, BTreeSet::from(["second".to_owned()])),
+            ])
         );
     }
 }

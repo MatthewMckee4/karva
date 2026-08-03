@@ -11,6 +11,9 @@ use karva_metadata::{
 /// Coverage report selection parsed from `--cov-report`.
 #[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum CovReport {
+    /// Persist native data without rendering a report.
+    None,
+
     /// Compact terminal table (default).
     #[default]
     Term,
@@ -34,6 +37,7 @@ impl FromStr for CovReport {
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
         match raw.split_once(':') {
             None => match raw {
+                "" => Ok(Self::None),
                 "term" => Ok(Self::Term),
                 "term-missing" => Ok(Self::TermMissing),
                 "xml" => Ok(Self::Xml { path: None }),
@@ -109,6 +113,7 @@ impl From<OutputFormat> for karva_metadata::OutputFormat {
 impl From<CovReport> for karva_metadata::CovReport {
     fn from(value: CovReport) -> Self {
         match value {
+            CovReport::None => Self::None,
             CovReport::Term => Self::Term,
             CovReport::TermMissing => Self::TermMissing,
             CovReport::Xml { .. } => Self::Xml,

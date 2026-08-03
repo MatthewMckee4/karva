@@ -671,15 +671,26 @@ pub struct CoverageOptions {
     )]
     pub precision: Option<CoveragePrecision>,
 
+    /// Add a test run to compatible native data instead of replacing it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = r#"true | false"#,
+        example = r#"
+            append = true
+        "#
+    )]
+    pub append: Option<bool>,
+
     /// Coverage report type.
     ///
     /// `term` (default) prints a compact terminal table.
     /// `term-missing` extends it with a `Missing` column listing the
-    /// uncovered line numbers per file.
+    /// uncovered line numbers per file. `none` persists native data only.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"term"#,
-        value_type = r#"term | term-missing | xml | json | html"#,
+        value_type = r#"none | term | term-missing | xml | json | html"#,
         example = r#"
             report = "term-missing"
         "#
@@ -748,6 +759,7 @@ impl Combine for CoverageOptions {
         self.omit = self.omit.take().combine(other.omit);
         self.contexts = self.contexts.take().combine(other.contexts);
         self.precision = self.precision.combine(other.precision);
+        self.append = self.append.combine(other.append);
         self.report = self.report.combine(other.report);
         self.report_path = if report_overridden && self.report_path.is_none() {
             None
@@ -778,6 +790,7 @@ impl CoverageOptions {
             omit: self.omit.clone().unwrap_or_default(),
             contexts: self.contexts.clone().unwrap_or_default(),
             precision: self.precision.unwrap_or_default(),
+            append: self.append.unwrap_or_default(),
             report: self.report.unwrap_or_default(),
             report_path: self.report_path.clone(),
             branch: self.branch.unwrap_or_default(),
@@ -872,6 +885,9 @@ impl JunitOptions {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum CovReport {
+    /// Persist native data without rendering a report.
+    None,
+
     /// Compact terminal table (default).
     #[default]
     Term,
@@ -903,6 +919,7 @@ impl CovReport {
     /// Returns canonical configuration spelling.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::None => "none",
             Self::Term => "term",
             Self::TermMissing => "term-missing",
             Self::Xml => "xml",
@@ -1445,6 +1462,7 @@ report-path = "build/coverage.xml"
                         2,
                     ),
                 ),
+                append: None,
                 report: Some(
                     TermMissing,
                 ),
@@ -1531,6 +1549,7 @@ store-failure-output = false
             omit: None,
             contexts: None,
             precision: None,
+            append: None,
             report: Some(
                 TermMissing,
             ),
@@ -1573,6 +1592,7 @@ store-failure-output = false
             ),
             contexts: None,
             precision: None,
+            append: None,
             report: None,
             report_path: None,
             branch: None,
@@ -1636,6 +1656,7 @@ store-failure-output = false
             omit: None,
             contexts: None,
             precision: None,
+            append: None,
             report: Some(
                 Json,
             ),
@@ -1677,7 +1698,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }
@@ -1696,7 +1717,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `nonsense`, expected one of `data-file`, `sources`, `include`, `omit`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
         "
         );
     }

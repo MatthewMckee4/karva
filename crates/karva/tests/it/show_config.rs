@@ -34,6 +34,7 @@ fn show_config_default_profile() {
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
@@ -88,6 +89,7 @@ output-format = "concise"
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
@@ -143,6 +145,7 @@ output-format = "concise"
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]
@@ -204,6 +207,7 @@ fail-under = 90
     omit = ["**/generated.py"]
     contexts = []
     precision = 0
+    append = false
     report = "term-missing"
     fail-under = 90.0
 
@@ -260,6 +264,7 @@ slow-timeout = 0.5
     omit = []
     contexts = []
     precision = 0
+    append = false
     report = "term"
 
     [junit]

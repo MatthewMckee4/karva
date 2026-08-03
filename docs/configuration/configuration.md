@@ -39,6 +39,23 @@ Configuration groups combined across defaults, profiles, environment, and CLI.
 
 Controls measured Python sources and coverage report generation.
 
+### `append`
+
+Add a test run to compatible native data instead of replacing it.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+append = true
+```
+
+---
+
 ### `branch`
 
 Whether to measure branch coverage in addition to line coverage.
@@ -179,11 +196,11 @@ Coverage report type.
 
 `term` (default) prints a compact terminal table.
 `term-missing` extends it with a `Missing` column listing the
-uncovered line numbers per file.
+uncovered line numbers per file. `none` persists native data only.
 
 **Default value**: `term`
 
-**Type**: `term | term-missing | xml | json | html`
+**Type**: `none | term | term-missing | xml | json | html`
 
 **Example usage** (`pyproject.toml`):
 

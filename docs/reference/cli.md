@@ -50,7 +50,12 @@ karva test [OPTIONS] [PATH]...
 <p>While karva configuration can be included in a <code>pyproject.toml</code> file, it is not allowed in this context.</p>
 <p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-test--cov"><a href="#karva-test--cov"><code>--cov</code></a> <i>source</i></dt><dd><p>Measure code coverage for the given source path.</p>
 <p>May be passed multiple times to measure several sources. Pass without a value (<code>--cov</code>) to measure the current working directory.</p>
-</dd><dt id="karva-test--cov-branch"><a href="#karva-test--cov-branch"><code>--cov-branch</code></a></dt><dd><p>Measure branch coverage in addition to line coverage</p>
+</dd><dt id="karva-test--cov-append"><a href="#karva-test--cov-append"><code>--cov-append</code></a> <i>cov-append</i></dt><dd><p>Add this run to compatible native coverage data instead of replacing it</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--cov-branch"><a href="#karva-test--cov-branch"><code>--cov-branch</code></a></dt><dd><p>Measure branch coverage in addition to line coverage</p>
 </dd><dt id="karva-test--cov-context"><a href="#karva-test--cov-context"><code>--cov-context</code></a> <i>context</i></dt><dd><p>Record per-test coverage contexts.</p>
 <p>Currently supports <code>test</code>, which records the qualified test name for each line executed while that test is running. Contexts are emitted in JSON coverage reports.</p>
 <p>Possible values:</p>
@@ -63,7 +68,7 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--cov-omit"><a href="#karva-test--cov-omit"><code>--cov-omit</code></a> <i>glob</i></dt><dd><p>Exclude coverage report files whose project-relative path matches this glob.</p>
 <p>May be passed multiple times.</p>
 </dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
-<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk.</p>
+<p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, and <code>html&#91;:DIR&#93;</code> write reports to disk. Pass an empty value (<code>--cov-report=</code>) to persist native data only.</p>
 </dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
 </dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a> <i>fail-fast</i></dt><dd><p>Stop scheduling new tests after the first failure.</p>
 <p>Equivalent to <code>--max-fail=1</code>. Use <code>--no-fail-fast</code> to keep running after failures.</p>

@@ -246,6 +246,10 @@ pub struct SubTestCommand {
     #[clap(long = "cov-branch", action = clap::ArgAction::SetTrue, help_heading = "Coverage options")]
     pub cov_branch: bool,
 
+    /// Add this run to compatible native coverage data instead of replacing it.
+    #[clap(long = "cov-append", default_missing_value = "true", require_equals = true, num_args = 0..=1, help_heading = "Coverage options")]
+    pub cov_append: Option<bool>,
+
     /// Disable coverage measurement for this run.
     ///
     /// Overrides any `--cov` flag and any `[coverage] sources` configured in
@@ -265,6 +269,7 @@ pub struct SubTestCommand {
     /// `term-missing` extends it with a `Missing` column listing the
     /// uncovered line numbers per file.
     /// `xml[:PATH]`, `json[:PATH]`, and `html[:DIR]` write reports to disk.
+    /// Pass an empty value (`--cov-report=`) to persist native data only.
     #[clap(
         long = "cov-report",
         value_name = "TYPE",
@@ -460,7 +465,7 @@ impl SubTestCommand {
             CovReport::Xml { path } | CovReport::Json { path } | CovReport::Html { path } => {
                 path.as_ref().map(ToString::to_string)
             }
-            CovReport::Term | CovReport::TermMissing => None,
+            CovReport::None | CovReport::Term | CovReport::TermMissing => None,
         });
 
         Options {
@@ -499,6 +504,7 @@ impl SubTestCommand {
                 omit: (!self.cov_omit.is_empty()).then_some(self.cov_omit),
                 contexts: None,
                 precision: None,
+                append: self.cov_append,
                 report: self.cov_report.map(Into::into),
                 report_path: coverage_report_path,
                 branch: self.cov_branch.then_some(true),
@@ -635,6 +641,11 @@ mod tests {
     #[test]
     fn parse_html_cov_report_without_path() {
         assert_eq!(parse_cov_report("html"), Ok(CovReport::Html { path: None }));
+    }
+
+    #[test]
+    fn empty_cov_report_disables_rendering() {
+        assert_eq!(parse_cov_report(""), Ok(CovReport::None));
     }
 
     #[test]
