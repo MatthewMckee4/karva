@@ -63,7 +63,7 @@ jobs:
             ':!.github/ISSUE_TEMPLATE/**' \
             ':!.github/PULL_REQUEST_TEMPLATE.md' \
             ':!.github/actionlint.yaml' \
-            ':!.github/dependabot.yml' \
+            ':!.github/renovate.json5' \
             ':!.github/zizmor.yml' \
             ':!docs/' \
             ':!.markdownlint.yaml' \
