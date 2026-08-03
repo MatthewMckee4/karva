@@ -13,29 +13,39 @@ use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
 
 use crate::data::BranchArc;
-use crate::executable::pragma_no_cover_lines;
+use crate::executable::{CoverageExclusions, pattern_lines, pragma_no_cover_lines};
 
 #[expect(
     clippy::redundant_pub_crate,
-    reason = "sibling modules use this helper, while unreachable_pub rejects `pub` here"
+    reason = "tracer uses this helper across private sibling modules"
 )]
-/// Finds possible control-flow arcs, excluding branches suppressed by no-cover pragmas.
-///
-/// Negative endpoints encode function entry and exit using coverage.py's arc convention.
-pub(crate) fn branch_arcs(path: &Path) -> io::Result<BTreeSet<BranchArc>> {
+pub(crate) fn branch_arcs_with_exclusions(
+    path: &Path,
+    exclusions: &CoverageExclusions,
+) -> io::Result<BTreeSet<BranchArc>> {
     let source = fs::read_to_string(path)?;
-    Ok(branch_arcs_for_source(&source))
+    Ok(branch_arcs_for_source_with_exclusions(&source, exclusions))
 }
 
+#[cfg(test)]
 fn branch_arcs_for_source(source: &str) -> BTreeSet<BranchArc> {
+    branch_arcs_for_source_with_exclusions(source, &CoverageExclusions::default())
+}
+
+fn branch_arcs_for_source_with_exclusions(
+    source: &str,
+    exclusions: &CoverageExclusions,
+) -> BTreeSet<BranchArc> {
     let Some(parsed) = parse_unchecked(source, ParseOptions::from(Mode::Module)).try_into_module()
     else {
         return BTreeSet::new();
     };
     let line_index = LineIndex::from_source_text(source);
-    let pragma_lines = pragma_no_cover_lines(&parsed, source, &line_index);
+    let mut pragma_lines = pragma_no_cover_lines(&parsed, source, &line_index);
+    pragma_lines.extend(pattern_lines(source, &line_index, exclusions));
     let module = parsed.into_syntax();
-    let executable = crate::executable::executable_lines_for_source(source);
+    let executable =
+        crate::executable::executable_lines_for_source_with_exclusions(source, exclusions).0;
     let mut collector = BranchCollector {
         line_index: &line_index,
         pragma_lines: &pragma_lines,
@@ -326,5 +336,19 @@ def f(x):
 ";
 
         assert!(arcs(source).is_empty());
+    }
+
+    #[test]
+    fn configured_excluded_choice_removes_branch() {
+        let source = "\
+def f(x):
+    if x:
+        return 1
+    else:
+        return 0
+";
+        let exclusions = CoverageExclusions::new(&["else:".to_owned()]).expect("valid exclusion");
+
+        assert!(branch_arcs_for_source_with_exclusions(source, &exclusions).is_empty());
     }
 }

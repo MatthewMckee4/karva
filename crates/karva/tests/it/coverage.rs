@@ -264,6 +264,121 @@ def test_yes():
 }
 
 #[test]
+fn test_cov_honors_coverage_py_exclusion_patterns() {
+    let context = TestContext::with_files([
+        (
+            "pyproject.toml",
+            r#"
+[tool.karva.profile.default.coverage]
+sources = [""]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = ["if TYPE_CHECKING:", "@overload"]
+"#,
+        ),
+        (
+            "test_excluded.py",
+            r"
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import unavailable_at_runtime
+
+def covered():
+    return 1
+
+def test_covered():
+    assert covered() == 1
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel()
+            .arg("--cov-report=term-missing")
+            .arg("--cov-fail-under=100")
+            .arg("--status-level=none")
+            .arg("test_excluded.py"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    Name               Stmts   Miss   Branch   BrPart   Cover   Missing
+    [LONG-LINE]
+    test_excluded.py       5      0        0        0    100%
+    [LONG-LINE]
+    TOTAL                  5      0        0        0    100%
+
+    ----- stderr -----
+    "
+    );
+
+    assert_cmd_snapshot!(context.coverage("report").arg("--show-missing"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Name               Stmts   Miss   Branch   BrPart   Cover   Missing
+    [LONG-LINE]
+    test_excluded.py       5      0        0        0    100%
+    [LONG-LINE]
+    TOTAL                  5      0        0        0    100%
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_cov_rejects_invalid_exclusion_pattern() {
+    let context = TestContext::with_files([
+        (
+            "pyproject.toml",
+            r#"
+[tool.karva.profile.default.coverage]
+sources = [""]
+
+[tool.coverage.report]
+exclude_lines = ["("]
+"#,
+        ),
+        ("test_example.py", "def test_example():\n    assert True\n"),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("test_example.py"),
+        @r#"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    Karva failed
+      Cause: <temp_dir>/pyproject.toml is not a valid `pyproject.toml`: TOML parse error at line 6, column 17
+      |
+    6 | exclude_lines = ["("]
+      |                 ^^^^^
+    invalid coverage exclusion pattern `(`: regex parse error:
+        (
+        ^
+    error: unclosed group
+
+      Cause: TOML parse error at line 6, column 17
+      |
+    6 | exclude_lines = ["("]
+      |                 ^^^^^
+    invalid coverage exclusion pattern `(`: regex parse error:
+        (
+        ^
+    error: unclosed group
+    "#
+    );
+}
+
+#[test]
 fn test_cov_saves_on_test_failure() {
     let context = TestContext::with_file(
         "test_failing.py",

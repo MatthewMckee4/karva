@@ -12,6 +12,7 @@ use std::io;
 use std::path::Path;
 
 use fs_err as fs;
+use regex::Regex;
 use ruff_python_ast::helpers::is_docstring_stmt;
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{
@@ -25,27 +26,101 @@ use ruff_text_size::{Ranged, TextSize};
 
 /// Parse `path` and return the set of line numbers that contain a statement.
 pub fn executable_lines(path: &Path) -> io::Result<HashSet<u32>> {
+    executable_lines_with_exclusions(path, &CoverageExclusions::default())
+        .map(|(executable, _)| executable)
+}
+
+/// Compiled source exclusion expressions shared by line and branch analysis.
+#[derive(Clone, Debug, Default)]
+pub struct CoverageExclusions(Vec<Regex>);
+
+impl CoverageExclusions {
+    /// Compiles configured expressions before coverage collection begins.
+    pub fn new(patterns: &[String]) -> anyhow::Result<Self> {
+        patterns
+            .iter()
+            .map(|pattern| {
+                Regex::new(pattern).map_err(|error| {
+                    anyhow::anyhow!("invalid coverage `exclude-lines` pattern `{pattern}`: {error}")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Self)
+    }
+}
+
+/// Analyze executable and excluded lines using configured expressions.
+pub fn executable_lines_with_exclusions(
+    path: &Path,
+    exclusions: &CoverageExclusions,
+) -> io::Result<(HashSet<u32>, HashSet<u32>)> {
     let source = fs::read_to_string(path)?;
-    Ok(executable_lines_for_source(&source))
+    Ok(executable_lines_for_source_with_exclusions(
+        &source, exclusions,
+    ))
 }
 
 /// Compute executable line numbers from a source string. Exposed separately
 /// so unit tests can avoid touching the filesystem.
 pub fn executable_lines_for_source(source: &str) -> HashSet<u32> {
+    executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).0
+}
+
+pub(crate) fn executable_lines_for_source_with_exclusions(
+    source: &str,
+    exclusions: &CoverageExclusions,
+) -> (HashSet<u32>, HashSet<u32>) {
     let Some(parsed) = parse_unchecked(source, ParseOptions::from(Mode::Module)).try_into_module()
     else {
-        return HashSet::new();
+        return (HashSet::new(), HashSet::new());
     };
     let line_index = LineIndex::from_source_text(source);
-    let pragma_lines = pragma_no_cover_lines(&parsed, source, &line_index);
+    let mut excluded_head_lines = pragma_no_cover_lines(&parsed, source, &line_index);
+    excluded_head_lines.extend(pattern_lines(source, &line_index, exclusions));
     let module = parsed.into_syntax();
     let mut visitor = ExecutableLineVisitor {
         line_index: &line_index,
-        pragma_lines: &pragma_lines,
+        excluded_head_lines: &excluded_head_lines,
         lines: HashSet::new(),
     };
     visitor.visit_body(&module.body);
-    visitor.lines
+    let executable = visitor.lines;
+    let no_exclusions = HashSet::new();
+    let mut baseline = ExecutableLineVisitor {
+        line_index: &line_index,
+        excluded_head_lines: &no_exclusions,
+        lines: HashSet::new(),
+    };
+    baseline.visit_body(&module.body);
+    let excluded = baseline.lines.difference(&executable).copied().collect();
+    (executable, excluded)
+}
+
+pub(crate) fn pattern_lines(
+    source: &str,
+    line_index: &LineIndex,
+    exclusions: &CoverageExclusions,
+) -> HashSet<u32> {
+    exclusions
+        .0
+        .iter()
+        .flat_map(|pattern| pattern.find_iter(source))
+        .flat_map(|matched| {
+            let start = u32::try_from(matched.start()).ok().map(TextSize::new);
+            let end_offset = matched.end().saturating_sub(1).max(matched.start());
+            let end = u32::try_from(end_offset).ok().map(TextSize::new);
+            match (start, end) {
+                (Some(start), Some(end)) => {
+                    let first = line_index.line_index(start).get();
+                    let last = line_index.line_index(end).get();
+                    (first..=last)
+                        .filter_map(|line| u32::try_from(line).ok())
+                        .collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            }
+        })
+        .collect()
 }
 
 /// Collect the set of line numbers carrying a `# pragma: no cover` comment.
@@ -83,7 +158,7 @@ fn is_pragma_no_cover(comment: &str) -> bool {
 
 struct ExecutableLineVisitor<'a> {
     line_index: &'a LineIndex,
-    pragma_lines: &'a HashSet<u32>,
+    excluded_head_lines: &'a HashSet<u32>,
     lines: HashSet<u32>,
 }
 
@@ -98,7 +173,7 @@ impl ExecutableLineVisitor<'_> {
     /// Used to decide whether to skip a statement (or clause) outright.
     fn line_has_pragma(&self, offset: TextSize) -> bool {
         if let Ok(line) = u32::try_from(self.line_index.line_index(offset).get()) {
-            self.pragma_lines.contains(&line)
+            self.excluded_head_lines.contains(&line)
         } else {
             false
         }
@@ -193,6 +268,18 @@ mod tests {
         v
     }
 
+    fn lines_with_exclusions(source: &str, patterns: &[&str]) -> (Vec<u32>, Vec<u32>) {
+        let patterns = patterns.iter().map(ToString::to_string).collect::<Vec<_>>();
+        let exclusions = CoverageExclusions::new(&patterns).expect("valid exclusions");
+        let (executable, excluded) =
+            executable_lines_for_source_with_exclusions(source, &exclusions);
+        let mut executable = executable.into_iter().collect::<Vec<_>>();
+        executable.sort_unstable();
+        let mut excluded = excluded.into_iter().collect::<Vec<_>>();
+        excluded.sort_unstable();
+        (executable, excluded)
+    }
+
     /// Render `source` with each line prefixed by `[recorded]` if the
     /// visitor counted it as executable, or whitespace if not. Makes
     /// snapshots line up next to the original Python so a reviewer can
@@ -224,6 +311,26 @@ mod tests {
 
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
         assert!(err.to_string().contains("missing.py"), "{err}");
+    }
+
+    #[test]
+    fn configured_pattern_excludes_whole_clause() {
+        let source = "if TYPE_CHECKING:\n    import unavailable\nvalue = 1\n";
+
+        assert_eq!(
+            lines_with_exclusions(source, &["if TYPE_CHECKING:"]),
+            (vec![3], vec![1, 2])
+        );
+    }
+
+    #[test]
+    fn multiline_pattern_excludes_every_matched_statement() {
+        let source = "debug = True\nif debug:\n    first = 1\n    second = 2\nvalue = 3\n";
+
+        assert_eq!(
+            lines_with_exclusions(source, &["(?s)if debug:.*second = 2"]),
+            (vec![1, 5], vec![2, 3, 4])
+        );
     }
 
     #[test]

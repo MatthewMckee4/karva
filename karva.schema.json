@@ -72,6 +72,10 @@
         }
       ]
     },
+    "CoverageExcludePattern": {
+      "description": "Validated regular expression used to exclude coverage opportunities.",
+      "type": "string"
+    },
     "CoverageOptions": {
       "description": "Controls measured Python sources and coverage report generation.",
       "type": "object",
@@ -106,6 +110,16 @@
             "string",
             "null"
           ]
+        },
+        "exclude-lines": {
+          "description": "Regular expressions excluding matching source lines or whole clauses.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/CoverageExcludePattern"
+          }
         },
         "fail-under": {
           "description": "Minimum total coverage percentage required for the run to succeed.\n\nWhen set, the test command exits with a non-zero status if the\nreported `TOTAL` coverage is below this value, even when every test\npassed. Has no effect when tests already failed (the exit code is\nalready non-zero).",
