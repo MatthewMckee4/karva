@@ -44,6 +44,5 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         "SnapshotMismatchError",
         py.get_type::<SnapshotMismatchError>(),
     )?;
-
     Ok(())
 }

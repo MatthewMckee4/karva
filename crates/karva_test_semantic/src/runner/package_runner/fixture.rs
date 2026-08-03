@@ -320,6 +320,12 @@ impl FixtureExecutor {
     }
 
     fn cache_key(&self, py: Python<'_>, fixture_id: FixtureId) -> Option<FixtureCacheKey> {
+        if !self.plan.requires_parameter_cache_key(fixture_id)
+            && self.fixture_params.is_none()
+            && self.direct_parameters().is_none_or(HashMap::is_empty)
+        {
+            return None;
+        }
         let mut parameters = Vec::new();
         let mut visited = HashSet::new();
         self.collect_parameters(py, fixture_id, &mut visited, &mut parameters);
@@ -404,19 +410,23 @@ impl FixtureExecutor {
             }
         }
 
-        if self.running.borrow().contains(&fixture_id) {
-            return Err(FixtureCallError::new(
-                fixture,
-                pyo3::exceptions::PyRuntimeError::new_err(format!(
-                    "recursive dependency involving fixture `{}`",
-                    fixture.function_name()
-                )),
-                FixtureArguments::default(),
-            ));
+        if self.request_context.is_some() {
+            if self.running.borrow().contains(&fixture_id) {
+                return Err(FixtureCallError::new(
+                    fixture,
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "recursive dependency involving fixture `{}`",
+                        fixture.function_name()
+                    )),
+                    FixtureArguments::default(),
+                ));
+            }
+            self.running.borrow_mut().push(fixture_id);
         }
-        self.running.borrow_mut().push(fixture_id);
         let result = self.call_fixture(py, fixture_id, &mut cache_key, scope);
-        let _ = self.running.borrow_mut().pop();
+        if self.request_context.is_some() {
+            let _ = self.running.borrow_mut().pop();
+        }
         result
     }
 

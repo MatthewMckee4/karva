@@ -284,6 +284,43 @@ def test_product(number, letter):
 }
 
 #[test]
+fn karva_fixture_parameter_marks_use_function_globals() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import karva
+import pytest
+
+ENABLED = False
+
+
+@karva.fixture(params=[
+    pytest.param("run", marks=pytest.mark.skipif("ENABLED", reason="disabled")),
+    pytest.param("skip", marks=pytest.mark.skipif("not ENABLED", reason="enabled")),
+])
+def value(request):
+    return request.param
+
+
+def test_value(value):
+    assert value == "run"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_request::test_value('run')
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn partial_indirect_parametrization_only_routes_named_fixtures() {
     let context = TestContext::with_file(
         "test_request.py",

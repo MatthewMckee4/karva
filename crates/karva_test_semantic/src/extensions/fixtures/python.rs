@@ -22,8 +22,11 @@ pub struct FixtureFunctionMarker {
     #[pyo3(get)]
     pub auto_use: bool,
 
-    /// Parameter values that create distinct fixture invocations.
-    pub parameters: Option<Vec<Parametrization>>,
+    /// Raw parameter values parsed after the decorated function supplies globals.
+    params: Option<Py<PyAny>>,
+
+    /// Raw parameter IDs paired with `params` during decorator application.
+    ids: Option<Py<PyAny>>,
 }
 
 impl FixtureFunctionMarker {
@@ -32,7 +35,8 @@ impl FixtureFunctionMarker {
         scope: Option<Py<PyAny>>,
         name: Option<String>,
         auto_use: bool,
-        parameters: Option<Vec<Parametrization>>,
+        params: Option<Py<PyAny>>,
+        ids: Option<Py<PyAny>>,
     ) -> Self {
         let scope = scope.unwrap_or_else(|| PyString::new(py, "function").into_any().unbind());
 
@@ -40,7 +44,8 @@ impl FixtureFunctionMarker {
             scope,
             name,
             auto_use,
-            parameters,
+            params,
+            ids,
         }
     }
 }
@@ -62,13 +67,29 @@ impl FixtureFunctionMarker {
                 "`request` is a reserved fixture name; use another name",
             ));
         }
+        let globals = function
+            .bind(py)
+            .getattr("__globals__")
+            .ok()
+            .and_then(|globals| globals.cast_into::<PyDict>().ok());
+        let parameters = self
+            .params
+            .as_ref()
+            .map(|params| {
+                parse_fixture_params(
+                    params.bind(py),
+                    self.ids.as_ref().map(|ids| ids.bind(py)),
+                    globals.as_ref(),
+                )
+            })
+            .transpose()?;
 
         let fixture_def = FixtureFunctionDefinition {
             function,
             name: func_name,
             scope: self.scope.clone_ref(py),
             auto_use: self.auto_use,
-            parameters: self.parameters.clone(),
+            parameters,
         };
 
         Ok(fixture_def)
@@ -127,11 +148,14 @@ pub fn fixture_decorator(
     ids: Option<&Bound<'_, PyAny>>,
     name: Option<&str>,
 ) -> PyResult<Py<PyAny>> {
-    let parameters = params
-        .map(|params| parse_fixture_params(params, ids, None))
-        .transpose()?;
-    let marker =
-        FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use, parameters);
+    let marker = FixtureFunctionMarker::new(
+        py,
+        scope,
+        name.map(String::from),
+        auto_use,
+        params.map(|params| params.clone().unbind()),
+        ids.map(|ids| ids.clone().unbind()),
+    );
     if let Some(f) = func {
         let fixture_def = marker.__call__(py, f)?;
         Ok(Py::new(py, fixture_def)?.into_any())

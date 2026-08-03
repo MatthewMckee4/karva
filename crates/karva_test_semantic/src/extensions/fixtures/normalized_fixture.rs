@@ -128,6 +128,12 @@ impl FixturePlan {
             .as_deref()
     }
 
+    pub(crate) fn requires_parameter_cache_key(&self, id: FixtureId) -> bool {
+        self.metadata
+            .as_ref()
+            .is_some_and(|metadata| metadata.parameterizations.contains_key(&id))
+    }
+
     pub(crate) fn requires_variant_execution(&self, id: FixtureId) -> bool {
         let fixture = self.fixture(id);
         self.parameters(id).is_some()
