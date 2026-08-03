@@ -16,7 +16,7 @@ mod test_iterator;
 
 use finalizer_cache::FinalizerCache;
 pub use fixture_arguments::FixtureArguments;
-use fixture_cache::{FixtureCache, FixtureCacheKey};
+use fixture_cache::{FixtureCache, FixtureCacheKey, FixtureCacheLookup};
 pub use fixture_resolver::{FixtureResolutionEntry, FixtureResolutionError};
 pub use package_runner::{FixtureCallError, FixtureChainEntry, PackageRunner};
 pub use request::{FixtureLookupError, FixtureRequest, RequestConfig, RequestNode, RequestSession};

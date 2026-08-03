@@ -8,6 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyType};
 
 use crate::extensions::fixtures::FixtureScope;
+use crate::extensions::tags::{RuntimeTags, Tags};
 
 pyo3::create_exception!(karva, FixtureLookupError, pyo3::exceptions::PyLookupError);
 
@@ -51,6 +52,8 @@ pub(super) struct RequestContext {
     keywords: Py<PyDict>,
     fixture_names: RefCell<Vec<String>>,
     markers: RequestMarkers,
+    applied_tags: Rc<RefCell<RuntimeTags>>,
+    globals: Option<Py<PyDict>>,
     test_name: String,
     test_node_name: String,
     module_name: String,
@@ -84,6 +87,15 @@ impl RequestContext {
         let path_object = python_path(py, path)?;
         let root_path_object = python_path(py, root_path)?;
         let (markers, keywords) = request_markers(py, &function)?;
+        let globals = function
+            .getattr(py, "__globals__")
+            .ok()
+            .and_then(|globals| {
+                globals
+                    .cast_bound::<PyDict>(py)
+                    .ok()
+                    .map(|globals| globals.clone().unbind())
+            });
         let config = Py::new(
             py,
             RequestConfig {
@@ -117,6 +129,8 @@ impl RequestContext {
             keywords,
             fixture_names: RefCell::new(fixture_names),
             markers,
+            applied_tags: Rc::new(RefCell::new(RuntimeTags::default())),
+            globals,
             test_name: test_name.to_string(),
             test_node_name,
             module_name: module_name.to_string(),
@@ -129,6 +143,10 @@ impl RequestContext {
         if !fixture_names.iter().any(|existing| existing == name) {
             fixture_names.push(name.to_string());
         }
+    }
+
+    pub(super) fn applied_tags(&self) -> RuntimeTags {
+        self.applied_tags.borrow().clone()
     }
 
     fn node(&self, py: Python<'_>, scope: FixtureScope) -> PyResult<Py<RequestNode>> {
@@ -181,6 +199,8 @@ impl RequestContext {
                 session: self.session.clone_ref(py),
                 keywords: self.keywords.clone_ref(py),
                 markers: Rc::clone(&self.markers),
+                applied_tags: Rc::clone(&self.applied_tags),
+                globals: self.globals.as_ref().map(|globals| globals.clone_ref(py)),
             },
         )
     }
@@ -300,6 +320,8 @@ pub struct RequestNode {
     session: Py<RequestSession>,
     keywords: Py<PyDict>,
     markers: RequestMarkers,
+    applied_tags: Rc<RefCell<RuntimeTags>>,
+    globals: Option<Py<PyDict>>,
 }
 
 impl RequestNode {
@@ -310,6 +332,13 @@ impl RequestNode {
         append: bool,
     ) -> PyResult<()> {
         let marker = normalize_marker(py, marker)?;
+        if let Some(tags) = Tags::from_pytest_marks(
+            py,
+            &marker,
+            self.globals.as_ref().map(|globals| globals.bind(py)),
+        )? {
+            self.applied_tags.borrow_mut().extend(&tags);
+        }
         let name = marker_name(py, &marker)?;
         self.keywords.bind(py).set_item(&name, &marker)?;
         if append {
@@ -387,7 +416,6 @@ impl RequestNode {
         self.markers
             .borrow()
             .iter()
-            .rev()
             .find(|marker| marker_name(py, marker).is_ok_and(|found| found == name))
             .map_or_else(
                 || default.map_or_else(|| py.None(), |value| value.clone_ref(py)),
@@ -458,11 +486,7 @@ impl FixtureRequest {
 }
 
 fn register_with_pytest(py: Python<'_>) -> PyResult<()> {
-    let modules = py
-        .import("sys")?
-        .getattr("modules")?
-        .cast_into::<PyDict>()?;
-    let Some(pytest) = modules.get_item("pytest")? else {
+    let Ok(pytest) = py.import("pytest") else {
         return Ok(());
     };
     pytest

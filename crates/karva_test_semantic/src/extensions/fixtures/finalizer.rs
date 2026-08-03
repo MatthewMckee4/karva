@@ -44,6 +44,9 @@ pub struct Finalizer {
     /// The scope determines when this finalizer runs.
     pub(crate) scope: FixtureScope,
 
+    /// Fixture instance that owns this teardown, or `None` for test finalizers.
+    pub(crate) fixture_name: Option<String>,
+
     /// Defining package for package-scoped teardown.
     pub(crate) package_owner: Utf8PathBuf,
 
@@ -64,6 +67,7 @@ impl Finalizer {
     pub(crate) fn generator(
         fixture_return: Py<PyAny>,
         is_async: bool,
+        fixture_name: String,
         scope: FixtureScope,
         package_owner: Utf8PathBuf,
         definition: Rc<FunctionDefinition>,
@@ -74,6 +78,7 @@ impl Finalizer {
                 is_async,
             },
             scope,
+            fixture_name: Some(fixture_name),
             package_owner,
             definition,
         }
@@ -81,6 +86,7 @@ impl Finalizer {
 
     pub(crate) fn callback(
         callback: Py<PyAny>,
+        fixture_name: Option<String>,
         scope: FixtureScope,
         package_owner: Utf8PathBuf,
         definition: Rc<FunctionDefinition>,
@@ -88,6 +94,7 @@ impl Finalizer {
         Self {
             operation: FinalizerOperation::Callback(callback),
             scope,
+            fixture_name,
             package_owner,
             definition,
         }
@@ -95,7 +102,22 @@ impl Finalizer {
 
     /// Resumes teardown once and reports invalid generator behavior.
     pub(crate) fn run(self, py: Python<'_>) -> Result<(), Diagnostic> {
-        let result = match &self.operation {
+        self.execute(py).map_err(|error| {
+            invalid_fixture_finalizer_diagnostic(
+                self.definition.source_file().clone(),
+                self.definition.statement(),
+                &error.to_string(),
+            )
+        })
+    }
+
+    /// Runs teardown while replacing a parametrized fixture instance.
+    pub(crate) fn run_for_replacement(self, py: Python<'_>) -> Result<(), String> {
+        self.execute(py).map_err(|error| error.to_string())
+    }
+
+    fn execute(&self, py: Python<'_>) -> Result<(), FinalizerError> {
+        match &self.operation {
             FinalizerOperation::Generator {
                 fixture_return,
                 is_async: true,
@@ -108,15 +130,7 @@ impl Finalizer {
                 .call0(py)
                 .map(|_| ())
                 .map_err(|error| FinalizerError::ResetFailed(error.value(py).to_string())),
-        };
-
-        result.map_err(|error| {
-            invalid_fixture_finalizer_diagnostic(
-                self.definition.source_file().clone(),
-                self.definition.statement(),
-                &error.to_string(),
-            )
-        })
+        }
     }
 
     /// Runs teardown for a sync generator fixture.

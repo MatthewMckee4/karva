@@ -33,6 +33,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 PreparedFixtures {
                     function_arguments,
                     setup_result,
+                    request_tags: _,
                 },
             setup_duration,
             output_capture,

@@ -335,6 +335,7 @@ pub fn get_auto_use_fixtures<'a>(
     let current_fixtures = current.auto_use_fixtures(scope.scopes_above());
     let parent_fixtures = parents
         .iter()
+        .rev()
         .flat_map(|parent| parent.auto_use_fixtures(&[scope]));
 
     let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();

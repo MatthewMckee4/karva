@@ -29,14 +29,14 @@ impl FixtureId {
 #[derive(Debug)]
 pub struct FixturePlan {
     fixtures: Vec<NormalizedFixture>,
-    dynamic_fixtures: std::collections::HashMap<String, FixtureId>,
+    dynamic_fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
     variant_fixture_count: usize,
 }
 
 impl FixturePlan {
     pub(crate) fn new(
         fixtures: Vec<NormalizedFixture>,
-        dynamic_fixtures: std::collections::HashMap<String, FixtureId>,
+        dynamic_fixtures: std::collections::HashMap<String, Vec<FixtureId>>,
         variant_fixture_count: usize,
     ) -> Self {
         Self {
@@ -51,7 +51,27 @@ impl FixturePlan {
     }
 
     pub(crate) fn dynamic_fixture(&self, name: &str) -> Option<FixtureId> {
-        self.dynamic_fixtures.get(name).copied()
+        self.dynamic_fixtures.get(name)?.first().copied()
+    }
+
+    /// Resolves a dynamic name, advancing through an overridden fixture chain.
+    pub(crate) fn dynamic_fixture_for(
+        &self,
+        name: &str,
+        requesting_fixture: Option<FixtureId>,
+    ) -> Option<FixtureId> {
+        let fixtures = self.dynamic_fixtures.get(name)?;
+        let Some(requesting_fixture) = requesting_fixture else {
+            return fixtures.first().copied();
+        };
+        if let Some(index) = fixtures
+            .iter()
+            .position(|fixture| *fixture == requesting_fixture)
+        {
+            fixtures.get(index + 1).copied()
+        } else {
+            fixtures.first().copied()
+        }
     }
 
     pub(crate) fn variant_fixtures(&self) -> impl Iterator<Item = (FixtureId, &NormalizedFixture)> {

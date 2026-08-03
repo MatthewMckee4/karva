@@ -122,7 +122,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let first_params = std::mem::take(&mut self.params);
         self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
-        let settings = self.settings(&first_attempt.fixtures.function_arguments);
+        let settings = self.settings(
+            &first_attempt.fixtures.function_arguments,
+            &first_attempt.fixtures.request_tags,
+        );
         self.resolve_pending_coverage_setup(&settings.qualified_name);
         let function = self.test.py_function.clone_ref(self.py);
         let test_name_env_result =
@@ -210,7 +213,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Derives identity and execution policy after first fixture setup.
-    fn settings(&self, function_arguments: &FixtureArguments) -> VariantSettings {
+    fn settings(
+        &self,
+        function_arguments: &FixtureArguments,
+        request_tags: &RuntimeTags,
+    ) -> VariantSettings {
         let name = self.test.name();
         let fixture_names = self
             .fixture_dependencies
@@ -241,13 +248,14 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             QualifiedTestName::new(name.clone())
         };
         let qualified_name = qualified_test_name.to_string();
-        let custom_tag_names = self.tags.custom_tag_names();
+        let mut tags = self.tags.clone();
+        tags.extend_runtime(request_tags);
+        let custom_tag_names = tags.custom_tag_names();
         let evaluation_context = EvalContext {
             test_name: &qualified_name,
             tags: &custom_tag_names,
         };
-        let fail_slow_budget = self
-            .tags
+        let fail_slow_budget = tags
             .fail_slow_tag()
             .map(FailSlowTag::seconds)
             .and_then(|seconds| Duration::try_from_secs_f64(seconds).ok())
@@ -262,17 +270,13 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .context
             .settings()
             .slow_timeout_for(&evaluation_context);
-        let timeout_seconds = self
-            .tags
-            .timeout_tag()
-            .map(TimeoutTag::seconds)
-            .or_else(|| {
-                self.package_runner
-                    .context
-                    .settings()
-                    .timeout_for(&evaluation_context)
-                    .map(|duration| duration.as_secs_f64())
-            });
+        let timeout_seconds = tags.timeout_tag().map(TimeoutTag::seconds).or_else(|| {
+            self.package_runner
+                .context
+                .settings()
+                .timeout_for(&evaluation_context)
+                .map(|duration| duration.as_secs_f64())
+        });
         let max_attempts = self
             .package_runner
             .context
@@ -289,7 +293,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .context
             .settings()
             .junit_flaky_fail_status_for(&evaluation_context);
-        let expect_fail_tag = self.tags.expect_fail_tag();
+        let expect_fail_tag = tags.expect_fail_tag();
         let async_patch_result = if self.test.statement().is_async {
             crate::utils::patch_async_test_function(self.py, &self.test.py_function)
         } else {

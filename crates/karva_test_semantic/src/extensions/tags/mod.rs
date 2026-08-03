@@ -272,6 +272,23 @@ impl RuntimeTags {
         }
     }
 
+    /// Merges policy discovered during fixture setup after static test policy.
+    pub(crate) fn extend_runtime(&mut self, other: &Self) {
+        if matches!(self.skip, SkipPolicy::Run) {
+            self.skip = other.skip.clone();
+        }
+        if self.expect_fail.is_none() {
+            self.expect_fail.clone_from(&other.expect_fail);
+        }
+        if self.timeout.is_none() {
+            self.timeout = other.timeout;
+        }
+        if self.fail_slow.is_none() {
+            self.fail_slow = other.fail_slow;
+        }
+        self.custom_names.extend(other.custom_names.iter().cloned());
+    }
+
     pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
         match &self.skip {
             SkipPolicy::Run => (false, None),

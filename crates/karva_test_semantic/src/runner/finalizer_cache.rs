@@ -32,4 +32,17 @@ impl FinalizerCache {
     pub(super) fn take_scope(&mut self, scope: ScopeKey<'_>) -> Vec<Finalizer> {
         self.storage.take(scope)
     }
+
+    /// Drains finalizers owned by one fixture while retaining unrelated scope state.
+    pub(super) fn take_fixture(&mut self, fixture_name: &str) -> Vec<Finalizer> {
+        let mut collected = Vec::new();
+        self.storage.for_each_mut(|finalizers| {
+            let (matching, remaining) = std::mem::take(finalizers)
+                .into_iter()
+                .partition(|finalizer| finalizer.fixture_name.as_deref() == Some(fixture_name));
+            *finalizers = remaining;
+            collected.extend(matching);
+        });
+        collected
+    }
 }

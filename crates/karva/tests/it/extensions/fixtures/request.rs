@@ -338,3 +338,223 @@ def test_source(source):
     ----- stderr -----
     ");
 }
+
+#[test]
+fn scoped_parameters_replace_the_active_fixture_instance() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="module", params=["one", "two"])
+def scoped(request):
+    value = request.param
+    events.append(f"setup {value}")
+    request.addfinalizer(lambda: events.append(f"teardown {value}"))
+    return value
+
+
+def test_parameter_lifetime(scoped):
+    if scoped == "one":
+        assert events == ["setup one"]
+    else:
+        assert events == ["setup one", "teardown one", "setup two"]
+
+
+dependency_events = []
+
+
+@pytest.fixture(scope="module", params=[1, 2])
+def dependency(request):
+    value = request.param
+    dependency_events.append(f"dependency setup {value}")
+    yield value
+    dependency_events.append(f"dependency teardown {value}")
+
+
+@pytest.fixture(scope="module")
+def dependent(dependency):
+    dependency_events.append(f"dependent setup {dependency}")
+    yield dependency
+    dependency_events.append(f"dependent teardown {dependency}")
+
+
+def test_dependency_lifetime(dependency, dependent):
+    assert dependency == dependent
+    if dependency == 2:
+        assert dependency_events == [
+            "dependency setup 1",
+            "dependent setup 1",
+            "dependent teardown 1",
+            "dependency teardown 1",
+            "dependency setup 2",
+            "dependent setup 2",
+        ]
+
+
+@pytest.fixture(scope="module")
+def indirect_value(request):
+    return request.param
+
+
+@pytest.mark.parametrize("indirect_value", ["first"], indirect=True)
+def test_first_indirect(indirect_value):
+    assert indirect_value == "first"
+
+
+@pytest.mark.parametrize("indirect_value", ["second"], indirect=True)
+def test_second_indirect(indirect_value):
+    assert indirect_value == "second"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+            PASS [TIME] test_request::test_parameter_lifetime('one')
+            PASS [TIME] test_request::test_parameter_lifetime('two')
+            PASS [TIME] test_request::test_dependency_lifetime(1)
+            PASS [TIME] test_request::test_dependency_lifetime(2)
+            PASS [TIME] test_request::test_first_indirect(indirect_value='first')
+            PASS [TIME] test_request::test_second_indirect(indirect_value='second')
+    ────────────
+         Summary [TIME] 6 tests run: 6 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn request_applied_xfail_and_marker_order_match_pytest() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r#"
+import pytest
+
+
+@pytest.fixture
+def expected_failure(request):
+    request.applymarker(pytest.mark.xfail(reason="dynamic"))
+
+
+@pytest.mark.label("outer")
+@pytest.mark.label("inner")
+def test_dynamic_marker(expected_failure, request):
+    assert [marker.args[0] for marker in request.node.iter_markers("label")] == [
+        "inner",
+        "outer",
+    ]
+    assert request.node.get_closest_marker("label").args == ("inner",)
+    assert False
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_request::test_dynamic_marker(expected_failure=None, request)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn request_registers_with_pytest_before_a_late_import() {
+    let context = TestContext::with_file(
+        "test_request.py",
+        r"
+def test_request_type(request):
+    import pytest
+
+    assert isinstance(request, pytest.FixtureRequest)
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_request::test_request_type(request)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn dynamic_lookup_uses_overridden_parent_and_deferred_autouse_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import pytest
+
+
+events = []
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize(request):
+    events.append(request.scope)
+
+
+@pytest.fixture
+def value():
+    return "parent"
+"#,
+        ),
+        (
+            "nested/conftest.py",
+            r#"
+import pytest
+
+
+@pytest.fixture
+def value(request):
+    return request.getfixturevalue("value") + " nested"
+"#,
+        ),
+        (
+            "nested/test_request.py",
+            r#"
+import pytest
+
+from conftest import events
+
+
+@pytest.fixture
+def value(request):
+    return request.getfixturevalue("value") + " module"
+
+
+def test_override(value):
+    assert value == "parent nested module"
+    assert events == ["session"]
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] nested.test_request::test_override(value='parent nested module')
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

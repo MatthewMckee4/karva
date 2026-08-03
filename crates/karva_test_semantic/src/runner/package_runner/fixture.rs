@@ -16,6 +16,7 @@ use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{
     Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
 };
+use crate::extensions::tags::RuntimeTags;
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::runner::request::{
@@ -23,7 +24,7 @@ use crate::runner::request::{
 };
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::FixtureParameter;
-use crate::runner::{FinalizerCache, FixtureCache, FixtureCacheKey};
+use crate::runner::{FinalizerCache, FixtureCache, FixtureCacheKey, FixtureCacheLookup};
 use crate::utils::run_coroutine;
 
 use super::PackageRunner;
@@ -147,6 +148,7 @@ impl PackageRunner<'_, '_> {
                     return PreparedFixtures {
                         function_arguments: FixtureArguments::default(),
                         setup_result: Err(FixtureSetupError::from_request_error(test, error)),
+                        request_tags: RuntimeTags::default(),
                     };
                 }
             }
@@ -230,9 +232,14 @@ impl PackageRunner<'_, '_> {
             }
         }
 
+        let request_tags = executor
+            .request_context
+            .as_ref()
+            .map_or_else(RuntimeTags::default, |context| context.applied_tags());
         PreparedFixtures {
             function_arguments,
             setup_result: FixtureSetupError::from_vec(fixture_call_errors).map_or(Ok(()), Err),
+            request_tags,
         }
     }
 }
@@ -276,26 +283,20 @@ impl FixtureExecutor {
         }
     }
 
-    fn cache_key(&self, fixture_id: FixtureId) -> Option<FixtureCacheKey> {
-        let fixture = self.plan.fixture(fixture_id);
-        if !fixture.is_parameterized() {
-            return None;
-        }
+    fn cache_key(&self, py: Python<'_>, fixture_id: FixtureId) -> Option<FixtureCacheKey> {
         let mut parameters = Vec::new();
         let mut visited = HashSet::new();
-        self.collect_parameter_indices(fixture_id, &mut visited, &mut parameters);
-        parameters.sort_unstable();
-        Some(FixtureCacheKey {
-            fixture: fixture.name().to_string(),
-            parameters,
-        })
+        self.collect_parameters(py, fixture_id, &mut visited, &mut parameters);
+        parameters.sort_unstable_by(|(name, _), (other_name, _)| name.cmp(other_name));
+        (!parameters.is_empty()).then_some(FixtureCacheKey { parameters })
     }
 
-    fn collect_parameter_indices(
+    fn collect_parameters(
         &self,
+        py: Python<'_>,
         fixture_id: FixtureId,
         visited: &mut HashSet<FixtureId>,
-        parameters: &mut Vec<(String, usize)>,
+        parameters: &mut Vec<(String, Py<PyAny>)>,
     ) {
         if !visited.insert(fixture_id) {
             return;
@@ -303,10 +304,10 @@ impl FixtureExecutor {
         let fixture = self.plan.fixture(fixture_id);
         let name = fixture.name().to_string();
         if let Some(parameter) = self.fixture_params.get(&name) {
-            parameters.push((name, parameter.index));
+            parameters.push((name, parameter.value.clone_ref(py)));
         }
         for dependency in fixture.dependencies() {
-            self.collect_parameter_indices(*dependency, visited, parameters);
+            self.collect_parameters(py, *dependency, visited, parameters);
         }
     }
 
@@ -318,13 +319,19 @@ impl FixtureExecutor {
     ) -> Result<Py<PyAny>, FixtureCallError> {
         let fixture = self.plan.fixture(fixture_id);
         let scope = scope_key(fixture.scope(), fixture.package_owner());
-        let cache_key = self.cache_key(fixture_id);
-        if let Some(cached) =
-            self.fixture_cache
-                .borrow()
-                .get(py, fixture.function_name(), cache_key.as_ref(), scope)
-        {
-            return Ok(cached);
+        let fixture_cache_name = fixture.name().to_string();
+        let cache_key = self.cache_key(py, fixture_id);
+        let cache_lookup = self
+            .fixture_cache
+            .borrow()
+            .lookup(py, &fixture_cache_name, cache_key.as_ref(), scope)
+            .map_err(|error| FixtureCallError::new(fixture, error, FixtureArguments::default()))?;
+        match cache_lookup {
+            FixtureCacheLookup::Hit(cached) => return Ok(cached),
+            FixtureCacheLookup::Vacant => {}
+            FixtureCacheLookup::ParameterChanged => {
+                self.finish_fixture_instance(py, fixture_id)?;
+            }
         }
 
         if self.running.borrow().contains(&fixture_id) {
@@ -341,6 +348,60 @@ impl FixtureExecutor {
         let result = self.call_fixture(py, fixture_id, cache_key, scope);
         let _ = self.running.borrow_mut().pop();
         result
+    }
+
+    #[expect(clippy::result_large_err)]
+    fn finish_fixture_instance(
+        &self,
+        py: Python<'_>,
+        fixture_id: FixtureId,
+    ) -> Result<(), FixtureCallError> {
+        let fixture = self.plan.fixture(fixture_id);
+        let mut failures = Vec::new();
+        self.finish_fixture_identity(
+            py,
+            &fixture.name().to_string(),
+            &mut HashSet::new(),
+            &mut failures,
+        );
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(FixtureCallError::new(
+                fixture,
+                pyo3::exceptions::PyRuntimeError::new_err(failures.join("\n")),
+                FixtureArguments::default(),
+            ))
+        }
+    }
+
+    fn finish_fixture_identity(
+        &self,
+        py: Python<'_>,
+        fixture_name: &str,
+        finishing: &mut HashSet<String>,
+        failures: &mut Vec<String>,
+    ) {
+        if !finishing.insert(fixture_name.to_string()) {
+            return;
+        }
+        let dependents = self.fixture_cache.borrow().dependents(fixture_name);
+        for dependent in dependents {
+            self.finish_fixture_identity(py, &dependent, finishing, failures);
+        }
+        loop {
+            let finalizers = self.finalizer_cache.borrow_mut().take_fixture(fixture_name);
+            if finalizers.is_empty() {
+                break;
+            }
+            failures.extend(
+                finalizers
+                    .into_iter()
+                    .rev()
+                    .filter_map(|finalizer| finalizer.run_for_replacement(py).err()),
+            );
+        }
+        self.fixture_cache.borrow_mut().remove(fixture_name);
     }
 
     #[expect(clippy::result_large_err)]
@@ -381,11 +442,19 @@ impl FixtureExecutor {
             Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
         };
 
+        let parameter_dependencies = cache_key.as_ref().map_or_else(Vec::new, |_| {
+            fixture
+                .dependencies()
+                .iter()
+                .map(|dependency| self.plan.fixture(*dependency).name().to_string())
+                .collect()
+        });
         self.fixture_cache.borrow_mut().insert(
-            fixture.function_name().to_string(),
+            fixture.name().to_string(),
             cache_key,
             value.clone_ref(py),
             scope,
+            parameter_dependencies,
         );
         if let Some(finalizer) = finalizer {
             self.finalizer_cache.borrow_mut().add_finalizer(finalizer);
@@ -412,6 +481,8 @@ impl FixtureExecutor {
             fixture.scope(),
             fixture.package_owner().to_path_buf(),
             Rc::clone(&fixture.definition),
+            Some(fixture_id),
+            Some(fixture.name().to_string()),
         );
         Py::new(
             py,
@@ -444,7 +515,13 @@ impl FixtureExecutor {
             .parent()
             .unwrap_or_else(|| definition.name().module_path().path())
             .to_path_buf();
-        let runtime = self.request_runtime(FixtureScope::Function, package_owner, definition);
+        let runtime = self.request_runtime(
+            FixtureScope::Function,
+            package_owner,
+            definition,
+            None,
+            None,
+        );
         Py::new(
             py,
             FixtureRequest::new(
@@ -464,10 +541,12 @@ impl FixtureExecutor {
         requesting_scope: FixtureScope,
         package_owner: camino::Utf8PathBuf,
         definition: Rc<FunctionDefinition>,
+        requesting_fixture: Option<FixtureId>,
+        fixture_name: Option<String>,
     ) -> RequestRuntime {
         let executor = Rc::clone(self);
         let get_fixture = move |py: Python<'_>, name: &str| {
-            executor.get_fixture_value(py, name, requesting_scope)
+            executor.get_fixture_value(py, name, requesting_scope, requesting_fixture)
         };
 
         let finalizer_cache = Rc::clone(&self.finalizer_cache);
@@ -476,6 +555,7 @@ impl FixtureExecutor {
                 .borrow_mut()
                 .add_finalizer(Finalizer::callback(
                     callback,
+                    fixture_name.clone(),
                     requesting_scope,
                     package_owner.clone(),
                     Rc::clone(&definition),
@@ -490,8 +570,9 @@ impl FixtureExecutor {
         py: Python<'_>,
         name: &str,
         requesting_scope: FixtureScope,
+        requesting_fixture: Option<FixtureId>,
     ) -> Result<Py<PyAny>, RequestFixtureError> {
-        let Some(fixture_id) = self.plan.dynamic_fixture(name) else {
+        let Some(fixture_id) = self.plan.dynamic_fixture_for(name, requesting_fixture) else {
             return Err(RequestFixtureError::Lookup(format!(
                 "fixture {name:?} not found"
             )));
@@ -516,8 +597,16 @@ impl FixtureExecutor {
         if let Some(context) = &self.request_context {
             context.add_fixture_name(name);
         }
-        self.run_fixture(py, fixture_id)
-            .map_err(|error| RequestFixtureError::Python(error.error))
+        let value = self
+            .run_fixture(py, fixture_id)
+            .map_err(|error| RequestFixtureError::Python(error.error))?;
+        if let Some(requesting_fixture) = requesting_fixture {
+            self.fixture_cache.borrow_mut().add_dependency(
+                fixture.name().to_string(),
+                self.plan.fixture(requesting_fixture).name().to_string(),
+            );
+        }
+        Ok(value)
     }
 }
 
@@ -587,6 +676,9 @@ pub(super) struct PreparedFixtures {
     pub(super) function_arguments: FixtureArguments,
     /// Whether fixture setup completed or blocked the test call.
     pub(super) setup_result: Result<(), FixtureSetupError>,
+
+    /// Runtime marker policy applied through request objects during setup.
+    pub(super) request_tags: RuntimeTags,
 }
 
 /// Raw fixture call error paired with its relationship to the blocked test.
@@ -759,6 +851,7 @@ fn get_value_and_finalizer(
         let finalizer = Finalizer::generator(
             fixture_call_result,
             true,
+            fixture.name().to_string(),
             fixture.scope(),
             fixture.package_owner().to_path_buf(),
             Rc::clone(&fixture.definition),
@@ -780,6 +873,7 @@ fn get_value_and_finalizer(
                 let finalizer = Finalizer::generator(
                     bound_iterator.clone().unbind().into_any(),
                     false,
+                    fixture.name().to_string(),
                     fixture.scope(),
                     fixture.package_owner().to_path_buf(),
                     Rc::clone(&fixture.definition),
