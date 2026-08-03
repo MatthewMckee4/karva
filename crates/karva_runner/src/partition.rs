@@ -8,8 +8,8 @@ use siphasher::sip::SipHasher13;
 /// Ordering strategy for partition inputs.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum TestOrdering {
-    /// Randomize unknown-duration tests to avoid sticky first-run imbalance.
-    ShuffleUnknownDurations,
+    /// Randomize unmeasured tests to avoid sticky first-run imbalance.
+    RandomizeUnmeasured,
 
     /// Randomize every selected test reproducibly and ignore duration history.
     SeededShuffle(u64),
@@ -280,7 +280,7 @@ fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
 ///
 /// This ensures tests without timing info are randomly distributed across partitions
 /// rather than always landing in the same order.
-fn shuffle_tests_without_durations(test_infos: &mut [TestInfo]) {
+fn randomize_unmeasured_tests(test_infos: &mut [TestInfo]) {
     let no_duration_indices: Vec<usize> = test_infos
         .iter()
         .enumerate()
@@ -301,7 +301,7 @@ fn order_tests_for_partitioning(test_infos: &mut [TestInfo], ordering: TestOrder
     test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
 
     match ordering {
-        TestOrdering::ShuffleUnknownDurations => shuffle_tests_without_durations(test_infos),
+        TestOrdering::RandomizeUnmeasured => randomize_unmeasured_tests(test_infos),
         TestOrdering::SeededShuffle(seed) => {
             test_infos.sort_by_cached_key(|test| seeded_order_key(seed, &test.qualified_name));
         }
@@ -395,7 +395,7 @@ mod tests {
             test_info_with_duration("test_module::test_b", duration),
         ];
 
-        order_tests_for_partitioning(&mut tests, TestOrdering::ShuffleUnknownDurations);
+        order_tests_for_partitioning(&mut tests, TestOrdering::RandomizeUnmeasured);
 
         let ordered_names: Vec<_> = tests
             .iter()

@@ -735,7 +735,7 @@ run-timeout = 1800.0
 
 ### `shuffle`
 
-Randomize test order before assigning tests to workers.
+Use seeded randomized ordering instead of duration-aware scheduling.
 
 Defaults to `false`. When enabled, Karva prints the seed used for the
 run so the same order can be reproduced.

@@ -365,7 +365,7 @@ pub struct TestCommand {
     #[clap(long, value_name = "STRATEGY:M/N", help_heading = "Filter options")]
     pub partition: Option<PartitionSelection>,
 
-    /// Randomize test order before assigning tests to workers.
+    /// Use seeded randomized ordering instead of duration-aware scheduling.
     #[clap(long, default_missing_value = "true", require_equals = true, num_args = 0..=1, help_heading = "Runner options")]
     pub shuffle: Option<bool>,
 

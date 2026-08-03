@@ -166,7 +166,7 @@ karva test [OPTIONS] [PATH]...
 <ul>
 <li><code>true</code></li>
 <li><code>false</code></li>
-</ul></dd><dt id="karva-test--shuffle"><a href="#karva-test--shuffle"><code>--shuffle</code></a> <i>shuffle</i></dt><dd><p>Randomize test order before assigning tests to workers</p>
+</ul></dd><dt id="karva-test--shuffle"><a href="#karva-test--shuffle"><code>--shuffle</code></a> <i>shuffle</i></dt><dd><p>Use seeded randomized ordering instead of duration-aware scheduling</p>
 <p>Possible values:</p>
 <ul>
 <li><code>true</code></li>

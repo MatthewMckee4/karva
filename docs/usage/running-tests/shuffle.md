@@ -1,6 +1,15 @@
 # Randomizing test order
 
-Use `--shuffle` to expose tests that depend on state left by another test:
+## Default scheduling
+
+By default, Karva uses cached test durations as weights. It keeps small modules
+together, splits large modules, and assigns each group or test to the lightest
+worker. Tests without duration history have equal weight and are randomized
+before assignment, so their worker buckets can vary between runs. This default
+optimizes for load balance, not reproducibility.
+
+Use `--shuffle` to replace that scheduler with fully seeded randomized
+ordering:
 
 ```bash
 uv run karva test --shuffle

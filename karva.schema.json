@@ -774,7 +774,7 @@
           ]
         },
         "shuffle": {
-          "description": "Randomize test order before assigning tests to workers.\n\nDefaults to `false`. When enabled, Karva prints the seed used for the\nrun so the same order can be reproduced.",
+          "description": "Use seeded randomized ordering instead of duration-aware scheduling.\n\nDefaults to `false`. When enabled, Karva prints the seed used for the\nrun so the same order can be reproduced.",
           "type": [
             "boolean",
             "null"

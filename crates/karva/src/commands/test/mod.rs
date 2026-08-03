@@ -113,7 +113,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         profile,
         partition,
         test_ordering: random_seed.map_or(
-            karva_runner::TestOrdering::ShuffleUnknownDurations,
+            karva_runner::TestOrdering::RandomizeUnmeasured,
             karva_runner::TestOrdering::SeededShuffle,
         ),
     };
