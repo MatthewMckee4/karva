@@ -274,7 +274,7 @@ sources = [""]
 branch = true
 
 [tool.coverage.report]
-exclude_lines = ["if TYPE_CHECKING:"]
+exclude_lines = ["if TYPE_CHECKING:", "@overload"]
 "#,
         ),
         (

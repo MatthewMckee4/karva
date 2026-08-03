@@ -185,7 +185,7 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     }
 
     for pattern in &settings.coverage().exclude_lines {
-        push_value_arg(&mut cli_args, "--cov-exclude-line", pattern.as_str());
+        cli_args.push(format!("--cov-exclude-line={}", pattern.as_str()));
     }
 
     if let Some(context) = args.cov_context {
