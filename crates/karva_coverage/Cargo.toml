@@ -32,6 +32,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
+lcov = { workspace = true }
 
 [lints]
 workspace = true

@@ -316,7 +316,7 @@ fn xml_writes_cobertura_report() {
     <?xml version="1.0" ?>
     <coverage version="1.0" timestamp="[TIMESTAMP]" lines-valid="2" lines-covered="1" line-rate="0.5000" branches-covered="0" branches-valid="0" branch-rate="0.0000" complexity="0.0">
       <sources>
-        <source><temp_dir>/</source>
+        <source>.</source>
       </sources>
       <packages>
         <package name="." line-rate="0.5000" branch-rate="0.0000" complexity="0.0">
