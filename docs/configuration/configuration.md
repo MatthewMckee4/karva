@@ -190,6 +190,23 @@ omit = ["**/migrations/*"]
 
 ---
 
+### `partial-branches`
+
+Regular expressions marking intentionally partial branch lines.
+
+**Default value**: `null`
+
+**Type**: `list[str]`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.coverage]
+partial-branches = ["if platform.system"]
+```
+
+---
+
 ### `path-aliases`
 
 Ordered `FROM=TO` path mappings applied when native artifacts are read.

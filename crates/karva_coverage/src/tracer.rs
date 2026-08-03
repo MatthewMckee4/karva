@@ -14,7 +14,7 @@ use fs_err as fs;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use crate::branches::branch_arcs_with_exclusions;
+use crate::branches::{CoveragePartials, branch_analysis_with_exclusions};
 use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
 use crate::executable::{CoverageExclusions, executable_lines_with_exclusions};
 
@@ -36,6 +36,9 @@ pub struct CoverageConfig {
 
     /// Regular expressions excluding matched source lines and clauses.
     pub exclude_lines: Vec<String>,
+
+    /// Regular expressions suppressing missing arcs from matched branch lines.
+    pub partial_branches: Vec<String>,
 }
 
 /// Path components inside a source root that suppress tracking. These match
@@ -49,12 +52,15 @@ pub struct CoverageSession {
     tracer: Py<CoverageTracer>,
     data_file: Utf8PathBuf,
     exclusions: CoverageExclusions,
+    partials: CoveragePartials,
 }
 
 impl CoverageSession {
     /// Installs the best tracer supported by the embedded Python version.
     pub fn start(py: Python<'_>, cwd: &Utf8Path, config: &CoverageConfig) -> PyResult<Self> {
         let exclusions = CoverageExclusions::new(&config.exclude_lines)
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        let partials = CoveragePartials::new(&config.partial_branches)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let roots = resolve_source_roots(py, cwd, &config.sources)?;
 
@@ -80,6 +86,7 @@ impl CoverageSession {
             tracer,
             data_file: config.data_file.clone(),
             exclusions,
+            partials,
         })
     }
 
@@ -89,6 +96,7 @@ impl CoverageSession {
             tracer,
             data_file,
             exclusions,
+            partials,
         } = self;
         let bound = tracer.bind(py);
         let tool_id = bound.borrow().monitoring_tool_id.get().copied();
@@ -137,6 +145,7 @@ impl CoverageSession {
             branches,
             &roots,
             &exclusions,
+            &partials,
         )
         .map_err(|err| {
             pyo3::exceptions::PyOSError::new_err(format!(
@@ -854,6 +863,7 @@ fn save_data(
     branches: bool,
     roots: &[PathBuf],
     exclusions: &CoverageExclusions,
+    partials: &CoveragePartials,
 ) -> std::io::Result<()> {
     let CollectedCoverage {
         mut executed,
@@ -883,7 +893,7 @@ fn save_data(
             .map(|(line, contexts)| (line, contexts.into_iter().collect::<BTreeSet<_>>()))
             .collect();
         let branches = if branches {
-            let possible = branch_arcs_with_exclusions(&path, exclusions)?;
+            let (possible, partial) = branch_analysis_with_exclusions(&path, exclusions, partials)?;
             let executed_arcs = arcs.remove(&path).unwrap_or_default();
             let mut possible_vec: Vec<BranchArc> = possible.iter().copied().collect();
             possible_vec.sort_unstable();
@@ -903,6 +913,7 @@ fn save_data(
                 possible: possible_vec,
                 executed: executed_vec,
                 contexts,
+                partial: partial.into_iter().collect(),
             })
         } else {
             None
@@ -1150,6 +1161,7 @@ code = Code()
             false,
             &[],
             &CoverageExclusions::default(),
+            &CoveragePartials::default(),
         )
         .expect_err("missing source should fail");
 

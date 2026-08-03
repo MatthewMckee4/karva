@@ -103,14 +103,14 @@ pub(super) fn build_cobertura_xml(
 }
 
 fn branch_lines(row: &FileRow) -> BTreeMap<u32, (u32, u32)> {
-    let executed: BTreeSet<_> = row.branch_executed.iter().copied().collect();
+    let missing: BTreeSet<_> = row.branch_missing.iter().copied().collect();
     let mut lines: BTreeMap<u32, (u32, u32)> = BTreeMap::new();
     for arc in &row.branch_possible {
         let Ok(line) = u32::try_from(arc.from) else {
             continue;
         };
         let entry = lines.entry(line).or_default();
-        if executed.contains(arc) {
+        if !missing.contains(arc) {
             entry.0 = entry.0.saturating_add(1);
         }
         entry.1 = entry.1.saturating_add(1);
@@ -120,9 +120,13 @@ fn branch_lines(row: &FileRow) -> BTreeMap<u32, (u32, u32)> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use camino::Utf8Path;
 
-    use super::build_cobertura_xml;
+    use super::{branch_lines, build_cobertura_xml};
+    use crate::data::BranchArc;
+    use crate::report::shared::FileRow;
 
     #[test]
     fn build_cobertura_xml_reports_missing_coverage_root_metadata() {
@@ -138,5 +142,34 @@ mod tests {
                 .contains("failed to read coverage root metadata"),
             "{err:?}"
         );
+    }
+
+    #[test]
+    fn intentionally_partial_arcs_are_covered_in_xml() {
+        let taken = BranchArc { from: 1, to: 2 };
+        let suppressed = BranchArc { from: 1, to: 3 };
+        let row = FileRow {
+            name: "src/app.py".to_owned(),
+            absolute_name: "/project/src/app.py".to_owned(),
+            stmts: 1,
+            hit: 1,
+            miss: 0,
+            missing: String::new(),
+            executable: vec![1],
+            excluded: Vec::new(),
+            executed: vec![1],
+            contexts: BTreeMap::new(),
+            branches_enabled: true,
+            branches: 2,
+            branch_hit: 2,
+            branch_miss: 0,
+            branch_partial: 0,
+            branch_possible: vec![taken, suppressed],
+            branch_executed: vec![taken],
+            branch_missing: Vec::new(),
+            arc_contexts: BTreeMap::new(),
+        };
+
+        assert_eq!(branch_lines(&row), BTreeMap::from([(1, (2, 2))]));
     }
 }

@@ -3,7 +3,7 @@ source: crates/karva_coverage/src/native.rs
 expression: "serde_json::to_string_pretty(&artifact()).expect(\"serialize artifact\")"
 ---
 {
-  "format_version": 2,
+  "format_version": 3,
   "karva_version": "0.0.0",
   "mode": "branch",
   "source_roots": [

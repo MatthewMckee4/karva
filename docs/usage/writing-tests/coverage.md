@@ -225,6 +225,24 @@ def excluded():  # pragma: no cover
 
 The match is case-insensitive (`# PRAGMA: NO COVER` works) and is only recognised inside an actual comment — the literal text inside a string is not a directive.
 
+Karva also excludes ellipsis-only placeholder bodies and `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:` clauses by default. These lines do not count as executable or missing.
+
+Use `# pragma: no branch` when a conditional is executable but one destination is intentionally unreachable:
+
+```python
+if debug:  # pragma: no branch
+    enable_diagnostics()
+```
+
+`while True` and literal boolean `if` conditions are recognised as structurally partial without a pragma. Configured regular expressions can mark project-specific branch lines the same way:
+
+```toml
+[tool.karva.profile.default.coverage]
+partial-branches = ["if platform.system"]
+```
+
+Partial-branch rules suppress missing branch destinations only. The source line remains executable and measured.
+
 ## Source roots
 
 Karva first treats each `--cov` value as a path relative to the project root. If that path does not exist, Karva resolves it as a module, regular package, or namespace package using the selected Python environment. Existing paths therefore take precedence over importable names. Modules without Python source and unresolved names produce an error naming both attempted interpretations.

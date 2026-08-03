@@ -19,7 +19,7 @@ use ruff_python_ast::visitor::source_order::{
     SourceOrderVisitor, walk_decorator, walk_elif_else_clause, walk_except_handler,
     walk_match_case, walk_stmt,
 };
-use ruff_python_ast::{Decorator, ElifElseClause, ExceptHandler, MatchCase, Stmt};
+use ruff_python_ast::{Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
@@ -46,6 +46,10 @@ impl CoverageExclusions {
             })
             .collect::<Result<Vec<_>, _>>()
             .map(Self)
+    }
+
+    pub(super) fn patterns(&self) -> &[Regex] {
+        &self.0
     }
 }
 
@@ -76,11 +80,12 @@ pub(crate) fn executable_lines_for_source_with_exclusions(
     };
     let line_index = LineIndex::from_source_text(source);
     let mut excluded_head_lines = pragma_no_cover_lines(&parsed, source, &line_index);
-    excluded_head_lines.extend(pattern_lines(source, &line_index, exclusions));
+    excluded_head_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
     let module = parsed.into_syntax();
     let mut visitor = ExecutableLineVisitor {
         line_index: &line_index,
         excluded_head_lines: &excluded_head_lines,
+        builtins: true,
         lines: HashSet::new(),
     };
     visitor.visit_body(&module.body);
@@ -89,6 +94,7 @@ pub(crate) fn executable_lines_for_source_with_exclusions(
     let mut baseline = ExecutableLineVisitor {
         line_index: &line_index,
         excluded_head_lines: &no_exclusions,
+        builtins: false,
         lines: HashSet::new(),
     };
     baseline.visit_body(&module.body);
@@ -99,10 +105,9 @@ pub(crate) fn executable_lines_for_source_with_exclusions(
 pub(crate) fn pattern_lines(
     source: &str,
     line_index: &LineIndex,
-    exclusions: &CoverageExclusions,
+    patterns: &[Regex],
 ) -> HashSet<u32> {
-    exclusions
-        .0
+    patterns
         .iter()
         .flat_map(|pattern| pattern.find_iter(source))
         .flat_map(|matched| {
@@ -131,6 +136,15 @@ pub(crate) fn pragma_no_cover_lines<T>(
     source: &str,
     line_index: &LineIndex,
 ) -> HashSet<u32> {
+    comment_lines_matching(parsed, source, line_index, is_pragma_no_cover)
+}
+
+pub(crate) fn comment_lines_matching<T>(
+    parsed: &ruff_python_parser::Parsed<T>,
+    source: &str,
+    line_index: &LineIndex,
+    matches: impl Fn(&str) -> bool,
+) -> HashSet<u32> {
     let mut lines = HashSet::new();
     for token in parsed.tokens() {
         if token.kind() != TokenKind::Comment {
@@ -140,7 +154,7 @@ pub(crate) fn pragma_no_cover_lines<T>(
         let Some(text) = source.get(range.start().to_usize()..range.end().to_usize()) else {
             continue;
         };
-        if is_pragma_no_cover(text)
+        if matches(text)
             && let Ok(line) = u32::try_from(line_index.line_index(range.start()).get())
         {
             lines.insert(line);
@@ -159,6 +173,7 @@ fn is_pragma_no_cover(comment: &str) -> bool {
 struct ExecutableLineVisitor<'a> {
     line_index: &'a LineIndex,
     excluded_head_lines: &'a HashSet<u32>,
+    builtins: bool,
     lines: HashSet<u32>,
 }
 
@@ -211,6 +226,9 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
     /// the head and the entire body — we skip recording and stop walking
     /// the subtree.
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
+        if self.builtins && is_builtin_exclusion(stmt) {
+            return;
+        }
         let offset = match stmt {
             Stmt::FunctionDef(s) => s.name.range().start(),
             Stmt::ClassDef(s) => s.name.range().start(),
@@ -236,7 +254,9 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
     /// even when the head itself has no recorded line (bare `else:`).
     fn visit_elif_else_clause(&mut self, clause: &'a ElifElseClause) {
         let offset = clause.range().start();
-        if self.line_has_pragma(offset) {
+        if self.line_has_pragma(offset)
+            || self.builtins && clause.test.as_ref().is_some_and(is_type_checking)
+        {
             return;
         }
         if clause.test.is_some() {
@@ -255,6 +275,25 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
         if self.record_unless_pragma(case.range().start()) {
             walk_match_case(self, case);
         }
+    }
+}
+
+fn is_builtin_exclusion(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::Expr(stmt) => matches!(&*stmt.value, Expr::EllipsisLiteral(_)),
+        Stmt::If(stmt) => is_type_checking(&stmt.test),
+        _ => false,
+    }
+}
+
+fn is_type_checking(expression: &Expr) -> bool {
+    match expression {
+        Expr::Name(name) => name.id == "TYPE_CHECKING",
+        Expr::Attribute(attribute) => {
+            attribute.attr.id == "TYPE_CHECKING"
+                && matches!(&*attribute.value, Expr::Name(name) if name.id == "typing")
+        }
+        _ => false,
     }
 }
 
@@ -321,6 +360,33 @@ mod tests {
             lines_with_exclusions(source, &["if TYPE_CHECKING:"]),
             (vec![3], vec![1, 2])
         );
+    }
+
+    #[test]
+    fn builtins_exclude_type_checking_clauses_and_ellipsis_bodies() {
+        let source = "\
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    if unavailable:
+        value = 1
+
+def placeholder():
+    ...
+
+runtime = 2
+";
+
+        assert_eq!(
+            lines_with_exclusions(source, &[]),
+            (vec![1, 6, 9], vec![2, 3, 4, 7])
+        );
+    }
+
+    #[test]
+    fn typing_qualified_type_checking_clause_is_excluded() {
+        let source = "import typing\nif typing.TYPE_CHECKING:\n    value = 1\nruntime = 2\n";
+
+        assert_eq!(lines_with_exclusions(source, &[]), (vec![1, 4], vec![2, 3]));
     }
 
     #[test]

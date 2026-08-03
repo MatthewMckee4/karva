@@ -315,6 +315,10 @@ pub struct SubTestCommand {
     #[clap(long, hide = true, action = clap::ArgAction::Append)]
     pub cov_exclude_line: Vec<String>,
 
+    /// Internal: validated partial-branch expression forwarded to workers.
+    #[clap(long, hide = true, action = clap::ArgAction::Append)]
+    pub cov_partial_branch: Vec<String>,
+
     /// Internal: a single per-test override entry, encoded as JSON.
     ///
     /// Workers receive overrides from the main process via this flag, one
@@ -521,6 +525,7 @@ impl SubTestCommand {
                 include: (!self.cov_include.is_empty()).then_some(self.cov_include),
                 omit: (!self.cov_omit.is_empty()).then_some(self.cov_omit),
                 exclude_lines: None,
+                partial_branches: None,
                 contexts: None,
                 precision: None,
                 append: self.cov_append,

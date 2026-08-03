@@ -328,6 +328,7 @@ mod tests {
         let branches = (mode == CoverageMode::Branch).then(|| NativeBranchCoverage {
             possible: BTreeSet::from([BranchArc { from: 1, to: 2 }, BranchArc { from: 1, to: 0 }]),
             executed: BTreeSet::new(),
+            partial: BTreeSet::new(),
             contexts: BTreeSet::new(),
         });
         let artifact = NativeCoverage::new(
