@@ -6,24 +6,7 @@ use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::TextRange;
 
-use super::Tags;
-
-const KARVA_BUILTINS: &[&str] = &[
-    "expect_fail",
-    "fail_slow",
-    "parametrize",
-    "skip",
-    "timeout",
-    "use_fixtures",
-];
-const PYTEST_BUILTINS: &[&str] = &[
-    "parametrize",
-    "skip",
-    "skipif",
-    "timeout",
-    "usefixtures",
-    "xfail",
-];
+use super::{Tag, Tags};
 
 /// One custom tag reference absent from the project registry.
 pub struct UnknownTag {
@@ -129,15 +112,12 @@ impl SourceOrderVisitor<'_> for TagVisitor<'_> {
             && let Expr::Name(root) = &*namespace.value
         {
             let name = attribute.attr.id.as_str();
-            let builtins = match (root.id.as_str(), namespace.attr.id.as_str()) {
-                ("karva", "tags") => Some(KARVA_BUILTINS),
-                ("pytest", "mark") => Some(PYTEST_BUILTINS),
+            let is_builtin = match (root.id.as_str(), namespace.attr.id.as_str()) {
+                ("karva", "tags") => Some(Tag::is_builtin_name(name)),
+                ("pytest", "mark") => Some(Tag::is_pytest_builtin_name(name)),
                 _ => None,
             };
-            if let Some(builtins) = builtins
-                && !builtins.contains(&name)
-                && !self.registered.contains_key(name)
-            {
+            if is_builtin == Some(false) && !self.registered.contains_key(name) {
                 self.unknown.push(UnknownTag {
                     name: name.to_string(),
                     range: attribute.attr.range,

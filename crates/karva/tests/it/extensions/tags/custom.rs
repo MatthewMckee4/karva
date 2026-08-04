@@ -400,8 +400,13 @@ strict-tags = true
             r#"
 import karva as k
 import pytest as pt
+from karva import tags
 
 pytestmark = pt.mark.daatbase
+
+@tags.integraiton
+def test_imported_tags():
+    pass
 
 @k.tags.parametrize("value", [
     k.param(1, tags=(k.tags.integraiton,)),
@@ -416,23 +421,31 @@ def test_aliases(value):
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 1 test across 1 worker
+        Starting 2 tests across 1 worker
     diagnostics:
 
     error[unknown-tag]: Tag `daatbase` is not registered
-     --> test.py:5:22
+     --> test.py:6:22
       |
-    5 | pytestmark = pt.mark.daatbase
+    6 | pytestmark = pt.mark.daatbase
       |                      ^^^^^^^^ unregistered tag
       |
     info: Did you mean `database`?
 
     error[unknown-tag]: Tag `integraiton` is not registered
-     --> test.py:8:29
+     --> test.py:8:7
       |
-    8 |     k.param(1, tags=(k.tags.integraiton,)),
-      |                             ^^^^^^^^^^^ unregistered tag
+    8 | @tags.integraiton
+      |       ^^^^^^^^^^^ unregistered tag
       |
+    info: Did you mean `integration`?
+
+    error[unknown-tag]: Tag `integraiton` is not registered
+      --> test.py:13:29
+       |
+    13 |     k.param(1, tags=(k.tags.integraiton,)),
+       |                             ^^^^^^^^^^^ unregistered tag
+       |
     info: Did you mean `integration`?
 
     ────────────

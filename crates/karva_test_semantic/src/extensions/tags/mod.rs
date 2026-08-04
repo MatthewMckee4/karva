@@ -126,16 +126,56 @@ pub enum Tag {
 }
 
 impl Tag {
+    const PARAMETRIZE_NAME: &'static str = "parametrize";
+    const USE_FIXTURES_NAME: &'static str = "use_fixtures";
+    const SKIP_NAME: &'static str = "skip";
+    const EXPECT_FAIL_NAME: &'static str = "expect_fail";
+    const TIMEOUT_NAME: &'static str = "timeout";
+    const FAIL_SLOW_NAME: &'static str = "fail_slow";
+
+    const PYTEST_PARAMETRIZE_NAME: &'static str = "parametrize";
+    const PYTEST_SKIP_NAME: &'static str = "skip";
+    const PYTEST_SKIP_IF_NAME: &'static str = "skipif";
+    const PYTEST_TIMEOUT_NAME: &'static str = "timeout";
+    const PYTEST_USE_FIXTURES_NAME: &'static str = "usefixtures";
+    const PYTEST_EXPECT_FAIL_NAME: &'static str = "xfail";
+
+    const BUILTIN_NAMES: &'static [&'static str] = &[
+        Self::PARAMETRIZE_NAME,
+        Self::USE_FIXTURES_NAME,
+        Self::SKIP_NAME,
+        Self::EXPECT_FAIL_NAME,
+        Self::TIMEOUT_NAME,
+        Self::FAIL_SLOW_NAME,
+    ];
+
+    const PYTEST_BUILTIN_NAMES: &'static [&'static str] = &[
+        Self::PYTEST_PARAMETRIZE_NAME,
+        Self::PYTEST_SKIP_NAME,
+        Self::PYTEST_SKIP_IF_NAME,
+        Self::PYTEST_TIMEOUT_NAME,
+        Self::PYTEST_USE_FIXTURES_NAME,
+        Self::PYTEST_EXPECT_FAIL_NAME,
+    ];
+
     fn name(&self) -> &str {
         match self {
-            Self::Parametrize(_) => "parametrize",
-            Self::UseFixtures(_) => "use_fixtures",
-            Self::Skip(_) => "skip",
-            Self::ExpectFail(_) => "expect_fail",
-            Self::Timeout(_) => "timeout",
-            Self::FailSlow(_) => "fail_slow",
+            Self::Parametrize(_) => Self::PARAMETRIZE_NAME,
+            Self::UseFixtures(_) => Self::USE_FIXTURES_NAME,
+            Self::Skip(_) => Self::SKIP_NAME,
+            Self::ExpectFail(_) => Self::EXPECT_FAIL_NAME,
+            Self::Timeout(_) => Self::TIMEOUT_NAME,
+            Self::FailSlow(_) => Self::FAIL_SLOW_NAME,
             Self::Custom(custom) => custom.name(),
         }
+    }
+
+    fn is_builtin_name(name: &str) -> bool {
+        Self::BUILTIN_NAMES.contains(&name)
+    }
+
+    fn is_pytest_builtin_name(name: &str) -> bool {
+        Self::PYTEST_BUILTIN_NAMES.contains(&name)
     }
 
     /// Converts a Pytest mark into an Karva Tag.
@@ -154,17 +194,17 @@ impl Tag {
         };
 
         match name.as_str() {
-            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark, globals)
+            Self::PYTEST_PARAMETRIZE_NAME => ParametrizeTag::try_from_pytest_mark(py_mark, globals)
                 .map(|tag| tag.map(Self::Parametrize)),
-            "usefixtures" => {
+            Self::PYTEST_USE_FIXTURES_NAME => {
                 UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
             }
-            "skip" | "skipif" => {
+            Self::PYTEST_SKIP_NAME | Self::PYTEST_SKIP_IF_NAME => {
                 SkipTag::try_from_pytest_mark(py_mark, globals).map(|tag| tag.map(Self::Skip))
             }
-            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark, globals)
+            Self::PYTEST_EXPECT_FAIL_NAME => ExpectFailTag::try_from_pytest_mark(py_mark, globals)
                 .map(|tag| tag.map(Self::ExpectFail)),
-            "timeout" => {
+            Self::PYTEST_TIMEOUT_NAME => {
                 TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
             }
             // Any other marker is treated as a custom marker
