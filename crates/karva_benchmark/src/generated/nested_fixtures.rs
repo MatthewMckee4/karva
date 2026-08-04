@@ -11,6 +11,17 @@ use fs_err as fs;
 pub(super) const DEPTH: usize = 64;
 pub(super) const TESTS: usize = 1_024;
 
+/// Generates a deep fixture chain, shaped on a small scale like:
+///
+/// ```python
+/// @pytest.fixture
+/// def fixture_0(): return 0
+/// @pytest.fixture
+/// def fixture_1(fixture_0): return fixture_0 + 1
+/// @pytest.fixture
+/// def fixture_2(fixture_1): return fixture_1 + 1
+/// def test_nested_fixtures_0(fixture_2): assert fixture_2 == 2
+/// ```
 pub(super) fn generate(tests: &Utf8Path) -> Result<()> {
     let mut fixtures = String::from("import pytest\n\n");
     writeln!(

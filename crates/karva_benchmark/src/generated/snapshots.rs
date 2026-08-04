@@ -11,6 +11,13 @@ use fs_err as fs;
 pub(super) const CASES: usize = 128;
 pub(super) const LINES: usize = 128;
 
+/// Generates repeated large inline comparisons, shaped on a small scale like:
+///
+/// ```python
+/// SNAPSHOT = "record 000\nrecord 001"
+/// def test_snapshot_0():
+///     karva.assert_snapshot(SNAPSHOT, inline=SNAPSHOT)
+/// ```
 pub(super) fn generate(tests: &Utf8Path) -> Result<()> {
     let snapshot = (0..LINES)
         .map(|line| format!("record {line:03}: αβγ/\\/\"quoted\""))

@@ -98,6 +98,12 @@ const fn generated_project(name: &'static str, workload: GeneratedBenchmark) -> 
     }
 }
 
+const DENSE_FIXTURES_PROJECT: BenchmarkProject =
+    generated_project("karva-dense-fixtures", GeneratedBenchmark::DenseFixtures);
+
+const MANY_MODULES_PROJECT: BenchmarkProject =
+    generated_project("karva-many-modules", GeneratedBenchmark::ManyModules);
+
 const NESTED_FIXTURES_PROJECT: BenchmarkProject =
     generated_project("karva-nested-fixtures", GeneratedBenchmark::NestedFixtures);
 
@@ -112,6 +118,9 @@ const SNAPSHOTS_PROJECT: BenchmarkProject =
 
 const RETRIES_PROJECT: BenchmarkProject =
     generated_project("karva-retries", GeneratedBenchmark::Retries);
+
+const WIDE_FIXTURES_PROJECT: BenchmarkProject =
+    generated_project("karva-wide-fixtures", GeneratedBenchmark::WideFixtures);
 
 const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "requests",
@@ -339,10 +348,13 @@ const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
 
 /// All workloads included in benchmark comparisons.
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
+    DENSE_FIXTURES_PROJECT,
+    MANY_MODULES_PROJECT,
     NESTED_FIXTURES_PROJECT,
     PARAMETRIZED_MATRIX_PROJECT,
     SNAPSHOTS_PROJECT,
     RETRIES_PROJECT,
+    WIDE_FIXTURES_PROJECT,
     REQUESTS_PROJECT,
     FASTAPI_PROJECT,
     HTTPX_PROJECT,

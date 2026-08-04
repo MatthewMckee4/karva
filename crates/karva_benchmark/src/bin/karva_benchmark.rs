@@ -1237,10 +1237,13 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "karva-nested-fixtures"
+        "karva-dense-fixtures"
+        | "karva-many-modules"
+        | "karva-nested-fixtures"
         | "karva-parametrized-matrix"
         | "karva-retries"
         | "karva-snapshots"
+        | "karva-wide-fixtures"
         | "fastapi"
         | "httpx"
         | "werkzeug" => LONG_PROJECT_ITERATIONS,
@@ -1813,6 +1816,14 @@ mod tests {
         assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
         assert_eq!(
+            matrix_iterations("karva-dense-fixtures"),
+            LONG_PROJECT_ITERATIONS
+        );
+        assert_eq!(
+            matrix_iterations("karva-many-modules"),
+            LONG_PROJECT_ITERATIONS
+        );
+        assert_eq!(
             matrix_iterations("karva-nested-fixtures"),
             LONG_PROJECT_ITERATIONS
         );
@@ -1823,6 +1834,10 @@ mod tests {
         assert_eq!(matrix_iterations("karva-retries"), LONG_PROJECT_ITERATIONS);
         assert_eq!(
             matrix_iterations("karva-snapshots"),
+            LONG_PROJECT_ITERATIONS
+        );
+        assert_eq!(
+            matrix_iterations("karva-wide-fixtures"),
             LONG_PROJECT_ITERATIONS
         );
         assert_eq!(matrix_iterations("requests"), EXTRA_LONG_PROJECT_ITERATIONS);
