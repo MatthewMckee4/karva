@@ -1237,7 +1237,7 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
-        "requests" => EXTRA_LONG_PROJECT_ITERATIONS,
+        "karva-custom" | "requests" => EXTRA_LONG_PROJECT_ITERATIONS,
         "fastapi" | "httpx" | "werkzeug" => LONG_PROJECT_ITERATIONS,
         "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
@@ -1806,6 +1806,10 @@ mod tests {
         assert_eq!(matrix_iterations("h11"), FAST_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("fastapi"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("httpx"), LONG_PROJECT_ITERATIONS);
+        assert_eq!(
+            matrix_iterations("karva-custom"),
+            EXTRA_LONG_PROJECT_ITERATIONS
+        );
         assert_eq!(matrix_iterations("requests"), EXTRA_LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("werkzeug"), LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
@@ -1829,7 +1833,7 @@ mod tests {
     fn cli_benchmark_invocation_uses_normal_cached_status_output() {
         let num_workers = NonZeroUsize::MIN;
         let invocation = karva_invocation(
-            &karva_benchmark::SYNTHETIC_PROJECT,
+            &karva_benchmark::CUSTOM_PROJECT,
             Utf8Path::new("/tmp/project"),
             num_workers,
         )
