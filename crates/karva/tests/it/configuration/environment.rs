@@ -218,8 +218,9 @@ KARVA_RUN_ID = "mine"
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 3, column 1
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
+      Cause: TOML parse error at line 3, column 1
       |
     3 | KARVA_RUN_ID = "mine"
       | ^^^^^^^^^^^^
@@ -243,8 +244,9 @@ APP_ENV = { value = "test", unset = true }
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 3, column 11
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
+      Cause: TOML parse error at line 3, column 11
       |
     3 | APP_ENV = { value = "test", unset = true }
       |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

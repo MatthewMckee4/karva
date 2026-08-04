@@ -78,13 +78,13 @@ fn combine_failure_preserves_output_and_inputs() {
         context
             .coverage("combine")
             .args([valid.as_str(), rejected.as_str()]),
-        @r"
+        @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: failed to combine native coverage artifacts:
     `<temp_dir>/inputs/rejected.json`: failed to parse native coverage artifact `<temp_dir>/inputs/rejected.json`: expected ident at line 1 column 2
     "
@@ -239,13 +239,13 @@ fn erase_is_idempotent_and_preserves_reports_and_neighbors() {
 
     ----- stderr -----
     ");
-    assert_cmd_snapshot!(context.coverage("report"), @r"
+    assert_cmd_snapshot!(context.coverage("report"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: no coverage data found at `<temp_dir>/.karva/coverage/data.json`; run `uv run karva test --cov` first
     ");
 }
@@ -518,7 +518,7 @@ fn report_missing_data_names_default_and_remedy() {
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: no coverage data found at `<temp_dir>/.karva/coverage/data.json`; run `uv run karva test --cov` first
     ");
 }
@@ -584,13 +584,13 @@ fn report_rejects_unmatched_selector() {
     let context = TestContext::new();
     write_coverage(&context, Utf8Path::new(".karva/coverage/data.json"));
 
-    assert_cmd_snapshot!(context.coverage("report").arg("missing.module"), @r"
+    assert_cmd_snapshot!(context.coverage("report").arg("missing.module"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: coverage selector `missing.module` matched no source files
     ");
 }

@@ -260,8 +260,9 @@ retries = 1
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 3, column 10
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
+      Cause: TOML parse error at line 3, column 10
       |
     3 | filter = "tag("
       |          ^^^^^^

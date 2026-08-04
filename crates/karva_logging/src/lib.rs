@@ -2,7 +2,7 @@
 
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufWriter};
+use std::io::BufWriter;
 use std::path::Path;
 
 use colored::Colorize;

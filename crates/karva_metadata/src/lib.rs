@@ -335,7 +335,7 @@ pub enum ProjectMetadataError {
     NotADirectory(Utf8PathBuf),
 
     /// A discovered `pyproject.toml` could not be loaded.
-    #[error("{path} is not a valid `pyproject.toml`: {source}")]
+    #[error("{path} is not a valid `pyproject.toml`")]
     InvalidPyProject {
         /// Parsing or filesystem failure.
         source: Box<PyProjectError>,
@@ -345,7 +345,7 @@ pub enum ProjectMetadataError {
     },
 
     /// An explicit or discovered `karva.toml` could not be loaded.
-    #[error("{path} is not a valid `karva.toml`: {source}")]
+    #[error("{path} is not a valid `karva.toml`")]
     InvalidKarvaToml {
         /// Parsing, validation, or filesystem failure.
         source: Box<KarvaTomlError>,
@@ -355,7 +355,7 @@ pub enum ProjectMetadataError {
     },
 
     /// Running Karva version violates configured `required-version`.
-    #[error("{path}: {source}")]
+    #[error("configuration at {path} is incompatible with this Karva version")]
     IncompatibleVersion {
         /// Configuration path declaring requirement.
         path: Utf8PathBuf,

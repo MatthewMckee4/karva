@@ -153,13 +153,13 @@ test-function-prefix = "check"
         ("test.py", "def test_a(): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.command().args(["--profile", "missing"]), @r"
+    assert_cmd_snapshot!(context.command().args(["--profile", "missing"]), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: profile `missing` is not defined in configuration (available: ci, default, fast)
     ");
 }
@@ -438,8 +438,9 @@ test-function-prefix = "check"
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 2, column 2
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
+      Cause: TOML parse error at line 2, column 2
       |
     2 | [test]
       |  ^^^^
@@ -466,7 +467,8 @@ retry = 1
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: invalid profile name `default-ci`: the `default-` prefix is reserved for built-in profiles
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
+      Cause: invalid profile name `default-ci`: the `default-` prefix is reserved for built-in profiles
     ");
 }

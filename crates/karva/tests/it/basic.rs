@@ -771,13 +771,13 @@ fn test_text_file() {
 
     assert_cmd_snapshot!(
         context.command().args(["random.txt"]),
-        @r"
+        @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: path `<temp_dir>/random.txt` has a wrong file extension
     ");
 }
@@ -846,13 +846,13 @@ fn test_quiet_output_failing() {
 fn test_invalid_path() {
     let context = TestContext::new();
 
-    assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @r"
+    assert_cmd_snapshot!(context.command().arg("non_existing_path.py"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: path `<temp_dir>/non_existing_path.py` could not be found
     ");
 }
@@ -3098,13 +3098,13 @@ fn test_num_workers_zero_is_rejected() {
 fn test_max_parallelism_env_invalid_value() {
     let context = TestContext::with_file("test.py", "def test_1(): pass");
 
-    assert_cmd_snapshot!(context.command().env(EnvVars::KARVA_MAX_PARALLELISM, "0"), @r"
+    assert_cmd_snapshot!(context.command().env(EnvVars::KARVA_MAX_PARALLELISM, "0"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: Failed to determine default worker count
       Cause: invalid KARVA_MAX_PARALLELISM value `0`; expected a positive integer
       Cause: number would be zero for non-zero type
@@ -3327,13 +3327,13 @@ def test_3(): assert False
 fn test_nonexistent_path_exits_nonzero() {
     let context = TestContext::new();
 
-    assert_cmd_snapshot!(context.command().arg("missing.py"), @r"
+    assert_cmd_snapshot!(context.command().arg("missing.py"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: path `<temp_dir>/missing.py` could not be found
     ");
 }

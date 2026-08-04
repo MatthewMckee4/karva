@@ -420,8 +420,9 @@ exclude_lines = ["("]
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/pyproject.toml is not a valid `pyproject.toml`: TOML parse error at line 6, column 17
+    karva failed
+      Cause: <temp_dir>/pyproject.toml is not a valid `pyproject.toml`
+      Cause: TOML parse error at line 6, column 17
       |
     6 | exclude_lines = ["("]
       |                 ^^^^^

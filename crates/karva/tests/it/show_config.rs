@@ -384,13 +384,13 @@ retry = 3
 ",
     );
 
-    assert_cmd_snapshot!(context.show_config().args(["--profile", "bogus"]), @r"
+    assert_cmd_snapshot!(context.show_config().args(["--profile", "bogus"]), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: profile `bogus` is not defined in configuration (available: ci, default)
     ");
 }

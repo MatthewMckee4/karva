@@ -28,7 +28,7 @@ pub enum PyProjectError {
     TomlSyntax(#[from] toml::de::Error),
 
     /// File could not be read from disk.
-    #[error("Failed to read `{path}`: {source}")]
+    #[error("Failed to read `{path}`")]
     FileReadError {
         /// Underlying filesystem failure.
         #[source]
