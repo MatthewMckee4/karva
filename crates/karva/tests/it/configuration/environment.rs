@@ -58,6 +58,151 @@ def test_environment(): pass
 }
 
 #[test]
+fn pyproject_environment_is_applied_before_conftest_import() {
+    let context = TestContext::with_files([
+        (
+            "pyproject.toml",
+            r#"
+[tool.karva.profile.default.env]
+CONFTEST_ENV = "ready"
+"#,
+        ),
+        (
+            "conftest.py",
+            r#"
+import os
+
+assert os.environ["CONFTEST_ENV"] == "ready"
+"#,
+        ),
+        ("test_environment.py", "def test_environment(): pass"),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_environment::test_environment
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn environment_is_applied_to_every_worker() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.env]
+WORKER_ENV = "ready"
+"#,
+        ),
+        (
+            "test_first.py",
+            r#"
+import os
+
+def test_first(): assert os.environ["WORKER_ENV"] == "ready"
+"#,
+        ),
+        (
+            "test_second.py",
+            r#"
+import os
+
+def test_second(): assert os.environ["WORKER_ENV"] == "ready"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--num-workers", "2", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn named_profile_can_unset_inherited_value() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.env]
+INHERITED_ENV = "default"
+
+[profile.ci.env]
+INHERITED_ENV = { unset = true }
+"#,
+        ),
+        (
+            "test_environment.py",
+            r#"
+import os
+
+def test_environment(): assert "INHERITED_ENV" not in os.environ
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command().args(["--profile", "ci"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_environment::test_environment
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn configured_values_are_absent_from_result_report() {
+    const SECRET: &str = "super-secret-profile-value";
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.env]
+SECRET_VALUE = "super-secret-profile-value"
+"#,
+        ),
+        ("test_environment.py", "def test_environment(): pass"),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--status-level=none", "--result-output=results.json"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+    assert!(!context.read_file("results.json").contains(SECRET));
+}
+
+#[test]
 fn karva_environment_variables_are_reserved() {
     let context = TestContext::with_file(
         "karva.toml",
@@ -75,12 +220,6 @@ KARVA_RUN_ID = "mine"
     ----- stderr -----
     Karva failed
       Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 3, column 1
-      |
-    3 | KARVA_RUN_ID = "mine"
-      | ^^^^^^^^^^^^
-    environment variable `KARVA_RUN_ID` is reserved by Karva
-
-      Cause: TOML parse error at line 3, column 1
       |
     3 | KARVA_RUN_ID = "mine"
       | ^^^^^^^^^^^^
@@ -106,12 +245,6 @@ APP_ENV = { value = "test", unset = true }
     ----- stderr -----
     Karva failed
       Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 3, column 11
-      |
-    3 | APP_ENV = { value = "test", unset = true }
-      |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    expected exactly `{ value = "...", preserve = true }` or `{ unset = true }`
-
-      Cause: TOML parse error at line 3, column 11
       |
     3 | APP_ENV = { value = "test", unset = true }
       |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -266,12 +266,6 @@ retries = 1
     3 | filter = "tag("
       |          ^^^^^^
     expected a matcher body in filter expression `tag(`
-
-      Cause: TOML parse error at line 3, column 10
-      |
-    3 | filter = "tag("
-      |          ^^^^^^
-    expected a matcher body in filter expression `tag(`
     "#);
 }
 

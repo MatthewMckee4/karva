@@ -188,3 +188,78 @@ impl schemars::JsonSchema for EnvironmentVariable {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde::de::value::{Error, StrDeserializer};
+
+    use super::*;
+
+    #[rstest::rstest]
+    #[case(r#""test""#, EnvironmentVariable::Set("test".to_string()))]
+    #[case(
+        r#"{ value = "test", preserve = true }"#,
+        EnvironmentVariable::Preserve("test".to_string())
+    )]
+    #[case(r"{ unset = true }", EnvironmentVariable::Unset)]
+    fn parses_operation(#[case] input: &str, #[case] expected: EnvironmentVariable) {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            variable: EnvironmentVariable,
+        }
+
+        let parsed: Wrapper =
+            toml::from_str(&format!("variable = {input}")).expect("valid operation");
+
+        assert_eq!(parsed.variable, expected);
+    }
+
+    #[rstest::rstest]
+    #[case("{}")]
+    #[case(r#"{ value = "test" }"#)]
+    #[case(r#"{ value = "test", preserve = false }"#)]
+    #[case("{ preserve = true }")]
+    #[case("{ unset = false }")]
+    #[case(r#"{ value = "test", preserve = true, unset = true }"#)]
+    #[case("{ unknown = true }")]
+    fn rejects_invalid_operation(#[case] input: &str) {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            #[serde(rename = "variable")]
+            _variable: EnvironmentVariable,
+        }
+
+        assert!(toml::from_str::<Wrapper>(&format!("variable = {input}")).is_err());
+    }
+
+    #[rstest::rstest]
+    #[case("APP_ENV")]
+    #[case("lowercase")]
+    #[case("name-with-dashes")]
+    fn accepts_valid_name(#[case] input: &str) {
+        let name = EnvironmentVariableName::deserialize(StrDeserializer::<Error>::new(input))
+            .expect("valid environment variable name");
+
+        assert_eq!(name.as_str(), input);
+    }
+
+    #[rstest::rstest]
+    #[case("")]
+    #[case("HAS=EQUALS")]
+    #[case("HAS\0NUL")]
+    #[case("KARVA")]
+    #[case("KARVA_RUN_ID")]
+    #[case("karva_worker_id")]
+    fn rejects_invalid_name(#[case] input: &str) {
+        assert!(
+            EnvironmentVariableName::deserialize(StrDeserializer::<Error>::new(input)).is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_nul_value() {
+        assert!(
+            EnvironmentVariable::deserialize(StrDeserializer::<Error>::new("has\0nul")).is_err()
+        );
+    }
+}

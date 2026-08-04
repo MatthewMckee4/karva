@@ -429,15 +429,6 @@ exclude_lines = ["("]
         (
         ^
     error: unclosed group
-
-      Cause: TOML parse error at line 6, column 17
-      |
-    6 | exclude_lines = ["("]
-      |                 ^^^^^
-    invalid coverage exclusion pattern `(`: regex parse error:
-        (
-        ^
-    error: unclosed group
     "#
     );
 }

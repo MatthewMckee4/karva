@@ -432,7 +432,7 @@ test-function-prefix = "check"
         ("test.py", "def test_a(): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -440,12 +440,6 @@ test-function-prefix = "check"
     ----- stderr -----
     Karva failed
       Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 2, column 2
-      |
-    2 | [test]
-      |  ^^^^
-    unknown field `test`, expected `required-version` or `profile`
-
-      Cause: TOML parse error at line 2, column 2
       |
     2 | [test]
       |  ^^^^
@@ -466,7 +460,7 @@ retry = 1
         ("test.py", "def test_a(): pass"),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -474,6 +468,5 @@ retry = 1
     ----- stderr -----
     Karva failed
       Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: invalid profile name `default-ci`: the `default-` prefix is reserved for built-in profiles
-      Cause: invalid profile name `default-ci`: the `default-` prefix is reserved for built-in profiles
     ");
 }

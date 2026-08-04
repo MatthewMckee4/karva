@@ -34,14 +34,23 @@ pub fn error_chain_contains_broken_pipe<'a>(
     })
 }
 
-/// Writes Karva's top-level failure heading followed by each causal error.
+/// Writes Karva's top-level failure heading followed by each distinct causal error.
 pub fn write_error_chain<'a>(
     writer: &mut impl io::Write,
     causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
 ) -> io::Result<()> {
     writeln!(writer, "{}", "Karva failed".red().bold())?;
+    let mut previous = None;
     for cause in causes {
+        let cause = cause.to_string();
+        if previous
+            .as_ref()
+            .is_some_and(|previous: &String| previous.ends_with(&cause))
+        {
+            continue;
+        }
         writeln!(writer, "  {} {cause}", "Cause:".bold())?;
+        previous = Some(cause);
     }
     Ok(())
 }
