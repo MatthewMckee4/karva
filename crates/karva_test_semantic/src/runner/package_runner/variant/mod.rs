@@ -393,9 +393,13 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     fn should_skip(&mut self) -> Option<bool> {
         let filter = &self.package_runner.context.settings().test().filter;
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
+        let qualified = if let Some(id) = &self.id {
+            QualifiedTestName::with_parameters(self.test.name().clone(), id.clone())
+        } else {
+            QualifiedTestName::new(self.test.name().clone())
+        };
 
         if !filter.is_empty() {
-            let qualified = QualifiedTestName::new(self.test.name().clone());
             let display_name = qualified.to_string();
             let custom_names = self.tags.custom_tag_names();
             let context = EvalContext {
@@ -424,7 +428,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let (true, reason) = skipped else {
             return None;
         };
-        let qualified = QualifiedTestName::new(self.test.name().clone());
         Some(self.package_runner.state.register_test_case_result(
             self.package_runner.context,
             &qualified,

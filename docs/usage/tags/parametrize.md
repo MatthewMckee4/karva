@@ -105,6 +105,25 @@ def test_status(status, expected):
 
 IDs combine with `-` when multiple parametrize tags are stacked.
 
+Use `id` on `karva.param` when each row should carry its own name:
+
+```python title="test.py"
+import karva
+
+@karva.tags.parametrize("card,expected", [
+    karva.param(valid_card, "paid", id="valid-card"),
+    karva.param(expired_card, "declined", id="expired-card"),
+])
+def test_checkout(card, expected):
+    assert checkout(card) == expected
+```
+
+The ID appears in output and failure reports and provides a stable exact filter:
+
+```console
+uv run karva -E 'test(="test::test_checkout(expired-card)")'
+```
+
 ## Params
 
 You can use `karva.param` (similar to `pytest.param`) to attach tags to individual parameter sets:

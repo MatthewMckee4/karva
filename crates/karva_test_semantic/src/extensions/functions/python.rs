@@ -30,7 +30,12 @@ pub struct Param {
 }
 
 impl Param {
-    fn new(py: Python, values: Vec<Py<PyAny>>, tags: Vec<Py<PyAny>>) -> PyResult<Self> {
+    fn new(
+        py: Python,
+        values: Vec<Py<PyAny>>,
+        tags: Vec<Py<PyAny>>,
+        id: Option<String>,
+    ) -> PyResult<Self> {
         let mut new_tags = Vec::new();
 
         for tag in tags {
@@ -44,7 +49,7 @@ impl Param {
             default_id: default_param_id(py, &values),
             values,
             tags: Tags::new(new_tags),
-            id: None,
+            id,
         })
     }
 
@@ -109,12 +114,13 @@ pub fn fail(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (*values, tags = None))]
-/// Creates one parameter row with optional row-specific tags.
+#[pyo3(signature = (*values, tags = None, id = None))]
+/// Creates one parameter row with optional row-specific tags and display ID.
 pub fn param(
     py: Python<'_>,
     values: Vec<Py<PyAny>>,
     tags: Option<Vec<Py<PyAny>>>,
+    id: Option<String>,
 ) -> PyResult<Param> {
-    Param::new(py, values, tags.unwrap_or_default())
+    Param::new(py, values, tags.unwrap_or_default(), id)
 }

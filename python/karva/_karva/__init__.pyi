@@ -75,13 +75,16 @@ class Param:
 
 
 def param(
-    *values: object, tags: Sequence[Tags | Callable[[], Tags]] | None = None
-) -> None:
+    *values: object,
+    tags: Sequence[Tags | Callable[[], Tags]] | None = None,
+    id: str | None = None,
+) -> Param:
     """Define a parameterized test case.
 
     Args:
         *values: The values to parameterize the test case with.
         tags: The tag or tag functions.
+        id: A stable name for the parameterized test case.
 
     Examples:
         Parameterize a test and tag individual cases:
