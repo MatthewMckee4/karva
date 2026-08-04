@@ -1857,10 +1857,13 @@ import karva
 
 @karva.tags.parametrize("a", [
     karva.param(1),
-    karva.param(2),
+    karva.param(2, id="two"),
     karva.param(3),
-])
+], ids=["one", "ignored", "three"])
 def test_single_arg(a):
+    if a == 2:
+        import os
+        assert os.environ["KARVA_TEST_NAME"] == "test::test_single_arg(two)"
     assert a > 0
 "#,
     );
@@ -1870,11 +1873,66 @@ def test_single_arg(a):
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_single_arg(a=1)
-            PASS [TIME] test::test_single_arg(a=2)
-            PASS [TIME] test::test_single_arg(a=3)
+            PASS [TIME] test::test_single_arg(one)
+            PASS [TIME] test::test_single_arg(two)
+            PASS [TIME] test::test_single_arg(three)
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(
+        test_context
+            .command_no_parallel()
+            .args(["-E", "test(=\"test::test_single_arg(two)\")"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_single_arg(two)
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn test_karva_param_rejects_empty_id() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("value", [karva.param(1, id="")])
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_value
+
+    failures:
+
+    test::test_value:
+
+    error[invalid-parametrize]: Parameter ID cannot be empty
+     --> test.py:5:5
+      |
+    5 | def test_value(value):
+      |     ^^^^^^^^^^
+      |
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
