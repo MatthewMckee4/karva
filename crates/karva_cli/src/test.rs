@@ -371,8 +371,10 @@ pub struct TestCommand {
     shuffle: Option<bool>,
 
     /// Seed used by `--shuffle`. Does not enable shuffling by itself.
+    ///
+    /// Pass `last` to reuse the most recently generated seed.
     #[clap(long, value_name = "SEED", help_heading = "Runner options")]
-    random_seed: Option<u64>,
+    random_seed: Option<RandomSeed>,
 
     /// Number of parallel workers (default: number of CPU cores)
     #[clap(short = 'n', long, help_heading = "Runner options")]
@@ -473,6 +475,11 @@ impl TestCommand {
     pub fn verbosity(&self) -> &Verbosity {
         &self.sub_command.verbosity
     }
+
+    /// Returns the controller-side random seed selection.
+    pub fn random_seed(&self) -> Option<RandomSeed> {
+        self.random_seed
+    }
 }
 
 impl SubTestCommand {
@@ -567,7 +574,7 @@ impl TestCommand {
         let run_timeout = self.run_timeout;
         let termination_grace_period = self.termination_grace_period;
         let shuffle = self.shuffle;
-        let random_seed = self.random_seed;
+        let random_seed = self.random_seed.and_then(RandomSeed::value);
         let mut sub_command = self.sub_command;
         if self.no_capture {
             sub_command.show_output = Some(true);
@@ -581,6 +588,39 @@ impl TestCommand {
                 termination_grace_period.map(TerminationGracePeriodSecs);
         }
         options
+    }
+}
+
+/// User selection for the run's base random seed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RandomSeed {
+    /// A concrete reproducible seed.
+    Value(u64),
+
+    /// The most recently generated seed stored in Karva's cache.
+    Last,
+}
+
+impl RandomSeed {
+    /// Returns the concrete value, or `None` for [`Self::Last`].
+    const fn value(self) -> Option<u64> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::Last => None,
+        }
+    }
+}
+
+impl std::str::FromStr for RandomSeed {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value == "last" {
+            return Ok(Self::Last);
+        }
+        value.parse().map(Self::Value).map_err(|error| {
+            format!("`{value}` is not a valid random seed; expected an integer or `last`: {error}")
+        })
     }
 }
 
@@ -627,7 +667,14 @@ mod tests {
     use camino::Utf8PathBuf;
     use clap::Parser as _;
 
-    use super::{CovReport, TestCommand, parse_cov_report};
+    use super::{CovReport, RandomSeed, TestCommand, parse_cov_report};
+
+    #[test]
+    fn random_seed_accepts_last_generated_seed() {
+        let command = TestCommand::parse_from(["karva-test", "--random-seed=last"]);
+
+        assert_eq!(command.random_seed(), Some(RandomSeed::Last));
+    }
 
     #[test]
     fn optional_bool_flags_accept_equals_false() {

@@ -11,8 +11,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
-use karva_cache::{AggregatedResults, DisplayFlakyTests};
-use karva_cli::{CovReport as CliCovReport, TestCommand};
+use karva_cache::{
+    AggregatedResults, CACHE_DIR, DisplayFlakyTests, read_random_seed, write_random_seed,
+};
+use karva_cli::{CovReport as CliCovReport, RandomSeed, TestCommand};
 use karva_logging::{Printer, Stdout, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{CovReport, NoTestsMode, ProjectMetadata, ProjectOptionsOverrides};
@@ -58,6 +60,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let last_failed = args.last_failed;
     let partition = args.partition;
     let no_cache = args.no_cache.unwrap_or(false);
+    let random_seed_selection = args.random_seed();
     let num_workers = if args.no_parallel.unwrap_or(false) || args.no_capture {
         1
     } else if let Some(num_workers) = args.num_workers {
@@ -93,13 +96,32 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     FiltersetSet::new(&sub_command.filter_expressions).context("invalid `--filter` expression")?;
 
-    let random_seed = project.settings().test().shuffle.then(|| {
-        project
-            .settings()
-            .test()
-            .random_seed
-            .unwrap_or_else(karva_runner::generate_random_seed)
-    });
+    let cache_dir = project.cwd().join(CACHE_DIR);
+    let (random_seed, generated_random_seed) = if project.settings().test().shuffle {
+        match random_seed_selection {
+            Some(RandomSeed::Last) => {
+                if no_cache {
+                    anyhow::bail!("`--random-seed=last` cannot be used with `--no-cache`");
+                }
+                let seed = read_random_seed(&cache_dir)?
+                    .context("No generated random seed found; run with `--shuffle` first")?;
+                (Some(seed), false)
+            }
+            Some(RandomSeed::Value(seed)) => (Some(seed), false),
+            None => match project.settings().test().random_seed {
+                Some(seed) => (Some(seed), false),
+                None => (Some(karva_runner::generate_random_seed()), true),
+            },
+        }
+    } else {
+        (None, false)
+    };
+    if generated_random_seed
+        && !no_cache
+        && let Some(seed) = random_seed
+    {
+        write_random_seed(&cache_dir, seed)?;
+    }
     if let Some(seed) = random_seed {
         let mut stdout = printer.stream_for_message().lock();
         writeln!(stdout, "Random seed: {seed}")?;
