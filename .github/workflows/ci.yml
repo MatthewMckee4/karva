@@ -182,7 +182,7 @@ jobs:
           persist-credentials: false
 
       - name: "Install cargo shear"
-        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2.85.2
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
         with:
           tool: cargo-shear@1.12.4
 
@@ -214,7 +214,7 @@ jobs:
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2.85.2
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
         with:
           tool: cargo-nextest
 
@@ -296,7 +296,7 @@ jobs:
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2.85.2
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
         with:
           tool: cargo-nextest
 
@@ -339,7 +339,7 @@ jobs:
           persist-credentials: false
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf # v2.85.2
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
         with:
           tool: cargo-nextest
 
