@@ -1154,7 +1154,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `shuffle`, `random-seed`, `flaky-result`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
+        unknown field `nonsense`
         "
         );
     }
@@ -1172,7 +1172,7 @@ foo = 1
           |
         2 | [bogus]
           |  ^^^^^
-        unknown field `bogus`, expected `required-version` or `profile`
+        unknown field `bogus`
         "
         );
     }
@@ -1190,19 +1190,14 @@ test-function-prefix = "test"
           |
         2 | [test]
           |  ^^^^
-        unknown field `test`, expected `required-version` or `profile`
+        unknown field `test`
         "
         );
     }
 
     #[test]
     fn from_toml_str_empty_is_default() {
-        assert_debug_snapshot!(Config::from_toml_str("").expect("parse"), @"
-        Config {
-            required_version: None,
-            profile: {},
-        }
-        ");
+        assert_eq!(Config::from_toml_str("").expect("parse"), Config::default());
     }
 
     /// `MaxFail` wraps `NonZeroU32`, so raw `0` must be rejected by the
@@ -1238,30 +1233,15 @@ max-fail = 0
             try_import_fixtures: Some(true),
             ..TestOptions::default()
         };
-        assert_debug_snapshot!(cli.combine(file), @r#"
-        TestOptions {
-            test_function_prefix: Some(
-                "cli_prefix",
-            ),
-            fail_fast: None,
-            max_fail: None,
-            try_import_fixtures: Some(
-                true,
-            ),
-            retry: Some(
-                5,
-            ),
-            shuffle: None,
-            random_seed: None,
-            flaky_result: None,
-            no_tests: None,
-            slow_timeout: None,
-            timeout: None,
-            fail_slow: None,
-            run_timeout: None,
-            termination_grace_period: None,
-        }
-        "#);
+        assert_eq!(
+            cli.combine(file),
+            TestOptions {
+                test_function_prefix: Some("cli_prefix".to_string()),
+                try_import_fixtures: Some(true),
+                retry: Some(5),
+                ..TestOptions::default()
+            }
+        );
     }
 
     #[test]
@@ -1273,30 +1253,15 @@ max-fail = 0
             retry: Some(3),
             ..TestOptions::default()
         };
-        assert_debug_snapshot!(cli.combine(file), @r#"
-        TestOptions {
-            test_function_prefix: Some(
-                "from_file",
-            ),
-            fail_fast: Some(
-                true,
-            ),
-            max_fail: None,
-            try_import_fixtures: None,
-            retry: Some(
-                3,
-            ),
-            shuffle: None,
-            random_seed: None,
-            flaky_result: None,
-            no_tests: None,
-            slow_timeout: None,
-            timeout: None,
-            fail_slow: None,
-            run_timeout: None,
-            termination_grace_period: None,
-        }
-        "#);
+        assert_eq!(
+            cli.combine(file),
+            TestOptions {
+                test_function_prefix: Some("from_file".to_string()),
+                fail_fast: Some(true),
+                retry: Some(3),
+                ..TestOptions::default()
+            }
+        );
     }
 
     /// `Vec::combine` appends `self` after `other`, so CLI entries take
@@ -1311,19 +1276,13 @@ max-fail = 0
             include: Some(vec!["file_only".to_string()]),
             respect_ignore_files: Some(false),
         };
-        assert_debug_snapshot!(cli.combine(file), @r#"
-        SrcOptions {
-            respect_ignore_files: Some(
-                false,
-            ),
-            include: Some(
-                [
-                    "file_only",
-                    "cli_only",
-                ],
-            ),
-        }
-        "#);
+        assert_eq!(
+            cli.combine(file),
+            SrcOptions {
+                respect_ignore_files: Some(false),
+                include: Some(vec!["file_only".to_string(), "cli_only".to_string()]),
+            }
+        );
     }
 
     #[test]
@@ -1342,30 +1301,14 @@ retry = 2
 "#;
         let config = Config::from_toml_str(toml).expect("parse");
         let overrides = ProjectOptionsOverrides::new(None, cli_options);
-        assert_debug_snapshot!(overrides.apply_to(config).expect("resolves").test, @r#"
-        Some(
-            TestOptions {
-                test_function_prefix: Some(
-                    "cli",
-                ),
-                fail_fast: None,
-                max_fail: None,
-                try_import_fixtures: None,
-                retry: Some(
-                    2,
-                ),
-                shuffle: None,
-                random_seed: None,
-                flaky_result: None,
-                no_tests: None,
-                slow_timeout: None,
-                timeout: None,
-                fail_slow: None,
-                run_timeout: None,
-                termination_grace_period: None,
-            },
-        )
-        "#);
+        assert_eq!(
+            overrides.apply_to(config).expect("resolves").test,
+            Some(TestOptions {
+                test_function_prefix: Some("cli".to_string()),
+                retry: Some(2),
+                ..TestOptions::default()
+            })
+        );
     }
 
     #[test]
@@ -1402,32 +1345,15 @@ retry = 5
             .expect("parse")
             .resolve_profile(Some("ci"))
             .expect("resolves");
-        assert_debug_snapshot!(resolved.test, @r#"
-        Some(
-            TestOptions {
-                test_function_prefix: Some(
-                    "base",
-                ),
-                fail_fast: Some(
-                    true,
-                ),
-                max_fail: None,
-                try_import_fixtures: None,
-                retry: Some(
-                    5,
-                ),
-                shuffle: None,
-                random_seed: None,
-                flaky_result: None,
-                no_tests: None,
-                slow_timeout: None,
-                timeout: None,
-                fail_slow: None,
-                run_timeout: None,
-                termination_grace_period: None,
-            },
-        )
-        "#);
+        assert_eq!(
+            resolved.test,
+            Some(TestOptions {
+                test_function_prefix: Some("base".to_string()),
+                fail_fast: Some(true),
+                retry: Some(5),
+                ..TestOptions::default()
+            })
+        );
     }
 
     #[test]
@@ -1546,61 +1472,22 @@ report-path = "build/coverage.xml"
             .expect("parse")
             .resolve_profile(None)
             .expect("resolves");
-        assert_debug_snapshot!(resolved.coverage, @r#"
-        Some(
-            CoverageOptions {
-                data_file: Some(
-                    "build/coverage-data.json",
-                ),
-                path_aliases: Some(
-                    [
-                        "/workspace=.",
-                    ],
-                ),
-                sources: Some(
-                    [
-                        "src",
-                        "tests",
-                    ],
-                ),
-                include: Some(
-                    [
-                        "src/**",
-                    ],
-                ),
-                omit: Some(
-                    [
-                        "**/generated.py",
-                    ],
-                ),
-                exclude_lines: None,
-                partial_branches: None,
-                context: Some(
-                    "python=3.14",
-                ),
-                contexts: Some(
-                    [
-                        "python=3\\.14",
-                    ],
-                ),
-                precision: Some(
-                    CoveragePrecision(
-                        2,
-                    ),
-                ),
-                append: None,
-                report: Some(
-                    TermMissing,
-                ),
-                report_path: Some(
-                    "build/coverage.xml",
-                ),
-                branch: None,
-                fail_under: None,
-                disabled: None,
-            },
-        )
-        "#);
+        assert_eq!(
+            resolved.coverage,
+            Some(CoverageOptions {
+                data_file: Some("build/coverage-data.json".to_string()),
+                path_aliases: Some(vec!["/workspace=.".to_string()]),
+                sources: Some(vec!["src".to_string(), "tests".to_string()]),
+                include: Some(vec!["src/**".to_string()]),
+                omit: Some(vec!["**/generated.py".to_string()]),
+                context: Some("python=3.14".to_string()),
+                contexts: Some(vec![r"python=3\.14".to_string()]),
+                precision: Some(CoveragePrecision(2)),
+                report: Some(CovReport::TermMissing),
+                report_path: Some("build/coverage.xml".to_string()),
+                ..CoverageOptions::default()
+            })
+        );
     }
 
     #[test]
@@ -1628,25 +1515,16 @@ store-failure-output = false
             .expect("parse")
             .resolve_profile(Some("ci"))
             .expect("resolves");
-        assert_debug_snapshot!(resolved.junit, @r#"
-        Some(
-            JunitOptions {
-                path: Some(
-                    "reports/test-results.xml",
-                ),
-                report_name: Some(
-                    "karva-ci",
-                ),
-                store_success_output: Some(
-                    true,
-                ),
-                store_failure_output: Some(
-                    false,
-                ),
-                flaky_fail_status: None,
-            },
-        )
-        "#);
+        assert_eq!(
+            resolved.junit,
+            Some(JunitOptions {
+                path: Some("reports/test-results.xml".to_string()),
+                report_name: Some("karva-ci".to_string()),
+                store_success_output: Some(true),
+                store_failure_output: Some(false),
+                ..JunitOptions::default()
+            })
+        );
     }
 
     /// CLI `--cov` sources accumulate with file sources at the tail (matching
@@ -1662,33 +1540,14 @@ store-failure-output = false
             report: Some(CovReport::TermMissing),
             ..CoverageOptions::default()
         };
-        assert_debug_snapshot!(cli.combine(file), @r#"
-        CoverageOptions {
-            data_file: None,
-            path_aliases: None,
-            sources: Some(
-                [
-                    "src",
-                    "tests",
-                ],
-            ),
-            include: None,
-            omit: None,
-            exclude_lines: None,
-            partial_branches: None,
-            context: None,
-            contexts: None,
-            precision: None,
-            append: None,
-            report: Some(
-                TermMissing,
-            ),
-            report_path: None,
-            branch: None,
-            fail_under: None,
-            disabled: None,
-        }
-        "#);
+        assert_eq!(
+            cli.combine(file),
+            CoverageOptions {
+                sources: Some(vec!["src".to_string(), "tests".to_string()]),
+                report: Some(CovReport::TermMissing),
+                ..CoverageOptions::default()
+            }
+        );
     }
 
     /// CLI filters accumulate with file filters, matching coverage sources.
@@ -1704,36 +1563,17 @@ store-failure-output = false
             omit: Some(vec!["**/migrations/*".to_string()]),
             ..CoverageOptions::default()
         };
-        assert_debug_snapshot!(cli.combine(file), @r#"
-        CoverageOptions {
-            data_file: None,
-            path_aliases: None,
-            sources: None,
-            include: Some(
-                [
-                    "src/**",
-                    "tests/**",
-                ],
-            ),
-            omit: Some(
-                [
-                    "**/migrations/*",
-                    "**/generated.py",
-                ],
-            ),
-            exclude_lines: None,
-            partial_branches: None,
-            context: None,
-            contexts: None,
-            precision: None,
-            append: None,
-            report: None,
-            report_path: None,
-            branch: None,
-            fail_under: None,
-            disabled: None,
-        }
-        "#);
+        assert_eq!(
+            cli.combine(file),
+            CoverageOptions {
+                include: Some(vec!["src/**".to_string(), "tests/**".to_string()]),
+                omit: Some(vec![
+                    "**/migrations/*".to_string(),
+                    "**/generated.py".to_string(),
+                ]),
+                ..CoverageOptions::default()
+            }
+        );
     }
 
     /// CLI `--cov-report` overrides the configured value (scalar `Combine`).
@@ -1782,28 +1622,13 @@ store-failure-output = false
             report_path: Some("build/coverage.xml".to_string()),
             ..CoverageOptions::default()
         };
-        assert_debug_snapshot!(cli.combine(file), @"
-        CoverageOptions {
-            data_file: None,
-            path_aliases: None,
-            sources: None,
-            include: None,
-            omit: None,
-            exclude_lines: None,
-            partial_branches: None,
-            context: None,
-            contexts: None,
-            precision: None,
-            append: None,
-            report: Some(
-                Json,
-            ),
-            report_path: None,
-            branch: None,
-            fail_under: None,
-            disabled: None,
-        }
-        ");
+        assert_eq!(
+            cli.combine(file),
+            CoverageOptions {
+                report: Some(CovReport::Json),
+                ..CoverageOptions::default()
+            }
+        );
     }
 
     /// `--no-cov` (CLI sets `disabled = Some(true)`) overrides any sources
@@ -1836,7 +1661,7 @@ disabled = true
           |
         3 | disabled = true
           | ^^^^^^^^
-        unknown field `disabled`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `context`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `disabled`
         "
         );
     }
@@ -1855,7 +1680,7 @@ nonsense = 1
           |
         4 | nonsense = 1
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `data-file`, `path-aliases`, `sources`, `include`, `omit`, `exclude-lines`, `partial-branches`, `context`, `contexts`, `precision`, `append`, `report`, `report-path`, `branch`, `fail-under`
+        unknown field `nonsense`
         "
         );
     }
