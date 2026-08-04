@@ -22,8 +22,8 @@ env:
   BENCHMARK_PYTHON_VERSION: "3.13"
 
 jobs:
-  benchmark-projects:
-    name: "benchmark projects"
+  benchmark-tools:
+    name: "build benchmark tools"
 
     runs-on: ubuntu-latest
 
@@ -48,13 +48,22 @@ jobs:
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
-      - name: Generate project matrix
-        id: projects
+      - name: Build benchmark runner
         env:
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+        run: cargo build -p karva_benchmark --bin karva-benchmark --release
+
+      - name: Generate project matrix
+        id: projects
         run: |
-          matrix=$(cargo run -p karva_benchmark --bin karva-benchmark -- list-projects)
+          matrix=$(target/release/karva-benchmark list-projects)
           echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload benchmark runner
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-tools
+          path: target/release/karva-benchmark
 
   build-wheels:
     name: "build benchmark wheels"
@@ -144,25 +153,14 @@ jobs:
     timeout-minutes: 60
 
     needs:
-      - benchmark-projects
+      - benchmark-tools
       - build-wheels
 
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.benchmark-projects.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.benchmark-tools.outputs.matrix) }}
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: setup-python
@@ -173,10 +171,11 @@ jobs:
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
-      - name: Build benchmark runner
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-        run: cargo build -p karva_benchmark --bin karva-benchmark --release
+      - name: Download benchmark runner
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: benchmark-tools
+          path: ${{ runner.temp }}/benchmark-tools
 
       - name: Download benchmark wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -198,8 +197,9 @@ jobs:
           report_dir="${RUNNER_TEMP}/benchmark-reports"
           memory_report_dir="${RUNNER_TEMP}/benchmark-memory-reports"
           mkdir -p "${report_dir}" "${memory_report_dir}"
+          chmod +x "${RUNNER_TEMP}/benchmark-tools/karva-benchmark"
 
-          target/release/karva-benchmark compare \
+          "${RUNNER_TEMP}/benchmark-tools/karva-benchmark" compare \
             --baseline-label "${BASE_LABEL}" \
             --baseline-wheel "${base_wheel}" \
             --candidate-label "${HEAD_LABEL}" \
@@ -239,22 +239,16 @@ jobs:
     if: ${{ needs.compare-benchmarks.result == 'success' }}
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        id: setup-python
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - name: Download benchmark runner
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: benchmark-tools
+          path: ${{ runner.temp }}/benchmark-tools
 
       - name: Download benchmark reports
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -271,10 +265,9 @@ jobs:
           path: ${{ runner.temp }}/benchmark-memory-reports
 
       - name: Merge benchmark reports
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
+          chmod +x "${RUNNER_TEMP}/benchmark-tools/karva-benchmark"
+          "${RUNNER_TEMP}/benchmark-tools/karva-benchmark" merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-reports" \
             --output-markdown "${RUNNER_TEMP}/benchmark-report.md" \
             --output-html "${RUNNER_TEMP}/benchmark-report.html" \
@@ -283,10 +276,8 @@ jobs:
             --output-diagnostics-html "${RUNNER_TEMP}/diagnostic-report.html"
 
       - name: Merge memory benchmark reports
-        env:
-          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
-          cargo run -p karva_benchmark --bin karva-benchmark -- merge-reports \
+          "${RUNNER_TEMP}/benchmark-tools/karva-benchmark" merge-reports \
             --input-dir "${RUNNER_TEMP}/benchmark-memory-reports" \
             --output-markdown "${RUNNER_TEMP}/benchmark-memory-report.md" \
             --output-html "${RUNNER_TEMP}/benchmark-memory-report.html"
