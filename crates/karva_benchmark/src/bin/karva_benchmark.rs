@@ -665,10 +665,12 @@ fn diagnostic_comparison(
         return None;
     };
 
-    let diff = (baseline != candidate).then(|| {
+    let sorted_baseline = sort_diagnostic_lines(baseline);
+    let sorted_candidate = sort_diagnostic_lines(candidate);
+    let diff = (sorted_baseline != sorted_candidate).then(|| {
         TextDiff::configure()
             .algorithm(Algorithm::Patience)
-            .diff_lines(baseline, candidate)
+            .diff_lines(&sorted_baseline, &sorted_candidate)
             .unified_diff()
             .context_radius(3)
             .header(baseline_label, candidate_label)
@@ -687,6 +689,18 @@ fn diagnostic_comparison(
         baseline_output: Some(baseline.to_string()),
         candidate_output: Some(candidate.to_string()),
     })
+}
+
+/// Sorts nonblank concise output lines because parallel workers emit them in completion order.
+fn sort_diagnostic_lines(output: &str) -> String {
+    let mut lines = output
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    lines.sort_unstable();
+    let mut sorted = lines.join("\n");
+    sorted.push('\n');
+    sorted
 }
 
 fn test_workload(output: &str) -> Vec<&str> {
@@ -965,7 +979,7 @@ fn diagnostics_markdown_report(
             "\n<details>\n<summary><code>{}</code> concise output diff</summary>\n",
             project.name
         )?;
-        body.push_str("Durations and memory addresses are normalized.\n\n");
+        body.push_str("Durations, memory addresses, and line order are normalized.\n\n");
         write_code_block(&mut body, "diff", diff)?;
         writeln!(body)?;
         body.push_str("</details>\n");
@@ -1527,7 +1541,7 @@ mod tests {
         <details>
         <summary><code>requests</code> concise output diff</summary>
 
-        Durations and memory addresses are normalized.
+        Durations, memory addresses, and line order are normalized.
 
         ```diff
         --- main
@@ -1535,8 +1549,8 @@ mod tests {
         @@ -1,2 +1,3 @@
              PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
         -Summary [TIME] 3 tests run: 2 passed, 1 skipped
-        +new diagnostic
         +Summary [TIME] 3 tests run: 1 passed, 1 error, 1 skipped
+        +new diagnostic
         ```
 
         </details>
@@ -1589,6 +1603,18 @@ mod tests {
 
         assert_eq!(comparison.baseline, comparison.candidate);
         assert!(comparison.workload_changed);
+    }
+
+    #[test]
+    fn diagnostic_comparison_ignores_parallel_line_order() {
+        let baseline = "    PASS [TIME] test_second\n    PASS [TIME] test_first\nSummary [TIME] 2 tests run: 2 passed, 0 skipped\n";
+        let candidate = "    PASS [TIME] test_first\n    PASS [TIME] test_second\nSummary [TIME] 2 tests run: 2 passed, 0 skipped\n";
+
+        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
+            .expect("diagnostics should be available");
+
+        assert!(!comparison.workload_changed);
+        assert!(comparison.diff.is_none());
     }
 
     #[test]
