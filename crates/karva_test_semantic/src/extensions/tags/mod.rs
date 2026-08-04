@@ -22,7 +22,7 @@ pub mod python;
 pub mod skip;
 pub mod timeout;
 mod use_fixtures;
-pub(crate) mod validation;
+pub mod validation;
 
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;

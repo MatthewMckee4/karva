@@ -230,13 +230,13 @@ strict-tags = true
         ),
         (
             "test.py",
-            r#"
+            r"
 import karva
 
 @karva.tags.integraiton
 def test_typo():
     pass
-"#,
+",
         ),
     ]);
 
@@ -267,10 +267,10 @@ fn strict_tags_validate_pytest_marks_fixture_tags_and_parameter_tags() {
     let context = TestContext::with_files([
         (
             "karva.toml",
-            r#"
+            r"
 [profile.default.test]
 strict-tags = true
-"#,
+",
         ),
         (
             "test.py",
@@ -349,13 +349,13 @@ retry = 1
         ),
         (
             "test.py",
-            r#"
+            r"
 import karva
 
 @karva.tags.integraiton
 def test_typo():
     pass
-"#,
+",
         ),
     ]);
 
