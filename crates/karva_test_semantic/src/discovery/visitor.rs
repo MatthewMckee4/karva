@@ -31,6 +31,9 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     /// The module being populated with discovered test functions and fixtures.
     module: &'b mut DiscoveredModule,
 
+    /// Complete module statements used to locate runtime-discovered module marks.
+    module_body: &'b [Stmt],
+
     /// Lazily-loaded Python module, imported only when needed to avoid side effects.
     py_module: Option<Bound<'py, PyModule>>,
 
@@ -45,10 +48,16 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
 }
 
 impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
-    fn new(py: Python<'py>, context: &'ctx Context<'a>, module: &'b mut DiscoveredModule) -> Self {
+    fn new(
+        py: Python<'py>,
+        context: &'ctx Context<'a>,
+        module: &'b mut DiscoveredModule,
+        module_body: &'b [Stmt],
+    ) -> Self {
         Self {
             context,
             module,
+            module_body,
             py_module: None,
             py,
             tried_to_import_module: false,
@@ -150,6 +159,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     if self.context.settings().test().strict_tags {
                         let unknown = unknown_runtime_tags(
                             test_function.statement(),
+                            self.module_body,
                             &test_function.tags,
                             self.context.settings().tags(),
                         );
@@ -315,11 +325,13 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
 /// Binds collected AST definitions to imported Python callables.
 ///
 /// Duplicate or invalid definitions emit diagnostics and are excluded. Imported fixtures
-/// are scanned only for `conftest.py` or when `try_import_fixtures` is enabled.
+/// are scanned only for `conftest.py` or when `try_import_fixtures` is enabled. The complete
+/// module body provides source ranges for marks inherited by each test at runtime.
 pub fn discover(
     context: &Context,
     py: Python,
     module: &mut DiscoveredModule,
+    module_body: &[Stmt],
     test_function_defs: Vec<StmtFunctionDef>,
     fixture_function_defs: Vec<StmtFunctionDef>,
 ) -> Vec<DiscoveryIssue> {
@@ -328,7 +340,7 @@ pub fn discover(
         .file_name()
         .is_some_and(|name| name == "conftest.py");
 
-    let mut visitor = FunctionDefinitionVisitor::new(py, context, module);
+    let mut visitor = FunctionDefinitionVisitor::new(py, context, module, module_body);
 
     let duplicate_test_indices = duplicate_definition_indices(
         &test_function_defs,

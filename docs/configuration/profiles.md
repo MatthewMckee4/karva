@@ -33,9 +33,10 @@ A profile is selected at runtime with `--profile <name>` (or `-P <name>`), or
 by setting the `KARVA_PROFILE` environment variable. If neither is set, the
 implicit `default` profile is used.
 
-Every option group documented in [Configuration](configuration.md) — `src`,
-`terminal`, `test` — may appear inside a profile. Top-level `[src]`,
-`[terminal]`, or `[test]` tables (without `profile.<name>`) are not accepted.
+All profile-scoped configuration documented in
+[Configuration](configuration.md) — `env`, `src`, `terminal`, `test`,
+`coverage`, `junit`, and `overrides` — may appear inside a profile. These
+settings are not accepted without `profile.<name>`.
 
 <div class="admonition warning">
 <p class="admonition-title">Reserved profile names</p>

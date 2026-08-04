@@ -8,7 +8,7 @@ use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
 use ruff_python_ast::{PythonVersion, Stmt};
-use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
+use ruff_python_parser::{Mode, ParseOptions, Parsed, parse_unchecked};
 
 use crate::Context;
 use crate::collection::TestFunctionCollector;
@@ -141,6 +141,15 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             fixture_function_defs,
         } = collected_module;
 
+        let syntax = if self.context.settings().test().strict_tags {
+            let parse_options =
+                ParseOptions::from(Mode::Module).with_target_version(self.context.python_version());
+            parse_unchecked(&source_text, parse_options)
+                .try_into_module()
+                .map(Parsed::into_syntax)
+        } else {
+            None
+        };
         let mut module = DiscoveredModule::new_with_source(path, source_text);
 
         if self.context.settings().test().strict_tags {
@@ -166,6 +175,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             self.context,
             py,
             &mut module,
+            syntax.as_ref().map_or(&[], |module| module.body.as_slice()),
             test_function_defs,
             fixture_function_defs,
         ));

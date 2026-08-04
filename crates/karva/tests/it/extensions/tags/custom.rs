@@ -419,6 +419,14 @@ def test_aliases(value):
         Starting 1 test across 1 worker
     diagnostics:
 
+    error[unknown-tag]: Tag `daatbase` is not registered
+     --> test.py:5:22
+      |
+    5 | pytestmark = pt.mark.daatbase
+      |                      ^^^^^^^^ unregistered tag
+      |
+    info: Did you mean `database`?
+
     error[unknown-tag]: Tag `integraiton` is not registered
      --> test.py:8:29
       |
@@ -426,14 +434,6 @@ def test_aliases(value):
       |                             ^^^^^^^^^^^ unregistered tag
       |
     info: Did you mean `integration`?
-
-    error[unknown-tag]: Tag `daatbase` is not registered
-      --> test.py:10:5
-       |
-    10 | def test_aliases(value):
-       |     ^^^^^^^^^^^^ unregistered tag
-       |
-    info: Did you mean `database`?
 
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped

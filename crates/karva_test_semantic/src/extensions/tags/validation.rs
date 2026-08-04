@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
-use ruff_python_ast::{Expr, StmtFunctionDef};
+use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::TextRange;
 
 use super::Tags;
@@ -50,6 +50,7 @@ pub fn unknown_tags(
 /// Validates tags discovered from Python objects, covering aliases and module marks.
 pub fn unknown_runtime_tags(
     function: &StmtFunctionDef,
+    module_body: &[Stmt],
     tags: &Tags,
     registered: &BTreeMap<String, String>,
 ) -> Vec<UnknownTag> {
@@ -57,18 +58,46 @@ pub fn unknown_runtime_tags(
         .into_iter()
         .map(|name| UnknownTag {
             name: name.to_string(),
-            range: tag_range(function, name).unwrap_or(function.name.range),
+            range: tag_range(function, module_body, name).unwrap_or(function.name.range),
             suggestion: unique_suggestion(name, registered.keys()),
         })
         .collect()
 }
 
-fn tag_range(function: &StmtFunctionDef, name: &str) -> Option<TextRange> {
+fn tag_range(function: &StmtFunctionDef, module_body: &[Stmt], name: &str) -> Option<TextRange> {
     let mut visitor = TagRangeVisitor { name, range: None };
     for decorator in &function.decorator_list {
         visitor.visit_expr(&decorator.expression);
     }
-    visitor.range
+    visitor
+        .range
+        .or_else(|| module_tag_range(module_body, name))
+}
+
+fn module_tag_range(module_body: &[Stmt], name: &str) -> Option<TextRange> {
+    for statement in module_body {
+        let value = match statement {
+            Stmt::Assign(assign) if assign.targets.iter().any(is_pytestmark_target) => {
+                Some(assign.value.as_ref())
+            }
+            Stmt::AnnAssign(assign) if is_pytestmark_target(&assign.target) => {
+                assign.value.as_deref()
+            }
+            _ => None,
+        };
+        if let Some(value) = value {
+            let mut visitor = TagRangeVisitor { name, range: None };
+            visitor.visit_expr(value);
+            if visitor.range.is_some() {
+                return visitor.range;
+            }
+        }
+    }
+    None
+}
+
+fn is_pytestmark_target(expression: &Expr) -> bool {
+    matches!(expression, Expr::Name(name) if name.id == "pytestmark")
 }
 
 struct TagRangeVisitor<'a> {
