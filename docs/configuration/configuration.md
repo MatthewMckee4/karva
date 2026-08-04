@@ -35,6 +35,28 @@ required-version = ">=0.5.0"
 
 Configuration groups combined across defaults, profiles, environment, and CLI.
 
+## `env`
+
+Environment variables applied to test workers before Python imports any
+test modules or fixtures. Strings always set values. Use
+`{ value = "...", preserve = true }` to keep an existing value, or
+`{ unset = true }` to remove one. Karva's own variables are reserved.
+
+**Default value**: `{}`
+
+**Type**: `table`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.env]
+APP_ENV = "test"
+CACHE_DIR = { value = ".cache/tests", preserve = true }
+LIVE_API_TOKEN = { unset = true }
+```
+
+---
+
 ## `coverage`
 
 Controls measured Python sources and coverage report generation.

@@ -1,3 +1,4 @@
+mod environment;
 mod overrides;
 mod profile;
 mod required_version;

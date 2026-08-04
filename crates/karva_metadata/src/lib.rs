@@ -5,12 +5,14 @@ use fs_err as fs;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
 
+mod environment;
 pub mod filter;
 mod max_fail;
 mod options;
 mod pyproject;
 mod settings;
 
+pub use environment::{EnvironmentVariable, EnvironmentVariableName};
 pub use max_fail::MaxFail;
 pub use options::{
     Config, CovReport, CoverageOptions, IncompatibleVersionError, JunitOptions, Options,
