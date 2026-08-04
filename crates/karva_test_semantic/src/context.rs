@@ -1,7 +1,7 @@
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
-    CapturedTestOutput, IndividualTestResultKind, Reporter, TestCaseRetry, TestExecutionAttempt,
+    IndividualTestResultKind, Reporter, TestCaseArtifacts, TestCaseRetry, TestExecutionAttempt,
     TestExecutionOutcome, TestRunResult,
 };
 use karva_metadata::ProjectSettings;
@@ -25,6 +25,9 @@ pub struct Context<'a> {
 
     /// Whether diagnostics should include the full Python call chain.
     verbose: bool,
+
+    /// Base seed for Python standard-library randomness.
+    random_seed: Option<u64>,
 }
 
 /// Mutable result state owned by the active execution path.
@@ -40,6 +43,7 @@ impl<'a> Context<'a> {
         python_version: PythonVersion,
         reporter: &'a dyn Reporter,
         verbose: bool,
+        random_seed: Option<u64>,
     ) -> Self {
         Self {
             cwd,
@@ -47,6 +51,7 @@ impl<'a> Context<'a> {
             python_version,
             reporter,
             verbose,
+            random_seed,
         }
     }
 
@@ -60,6 +65,10 @@ impl<'a> Context<'a> {
 
     pub(super) fn is_verbose(&self) -> bool {
         self.verbose
+    }
+
+    pub(super) fn random_seed(&self) -> Option<u64> {
+        self.random_seed
     }
 
     pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {
@@ -104,7 +113,7 @@ impl RunState {
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
-        captured_output: Option<CapturedTestOutput>,
+        artifacts: TestCaseArtifacts,
     ) -> bool {
         let passed = !outcome.is_non_success();
 
@@ -112,7 +121,7 @@ impl RunState {
             test_case_name,
             outcome,
             duration,
-            captured_output,
+            artifacts,
             Some(context.reporter),
         );
 
@@ -134,7 +143,7 @@ impl RunState {
             &name,
             TestExecutionOutcome::Skipped { reason },
             std::time::Duration::ZERO,
-            None,
+            TestCaseArtifacts::default(),
         );
     }
 
@@ -181,7 +190,7 @@ impl RunState {
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
         retry: TestCaseRetry,
-        captured_output: Option<CapturedTestOutput>,
+        artifacts: TestCaseArtifacts,
         attempts: Vec<TestExecutionAttempt>,
     ) -> bool {
         let passed = !outcome.is_non_success() && !retry.is_flaky_failure();
@@ -190,7 +199,7 @@ impl RunState {
             outcome,
             duration,
             retry,
-            captured_output,
+            artifacts,
             attempts,
         );
         passed

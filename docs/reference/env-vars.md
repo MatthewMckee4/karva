@@ -106,6 +106,11 @@ set; `"1"` when no retries are configured.
 The total number of attempts allowed for the currently running test
 (`retries + 1`). Always set.
 
+### `KARVA_RANDOM_SEED`
+
+Seed applied to Python's standard-library `random` module for the
+current setup, call, or teardown phase. Updated before each phase.
+
 ### `KARVA_PROFILE`
 
 Name of the active configuration profile, e.g. `"default"` or

@@ -146,7 +146,7 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--profile"><a href="#karva-test--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to use.</p>
 <p>Profiles are defined as <code>&#91;profile.&lt;name&gt;&#93;</code> sections in <code>karva.toml</code> (or <code>&#91;tool.karva.profile.&lt;name&gt;&#93;</code> in <code>pyproject.toml</code>) and may override <code>env</code>, <code>src</code>, <code>terminal</code>, <code>test</code>, <code>coverage</code>, <code>junit</code>, and <code>overrides</code>. The selected profile is layered on top of any <code>&#91;profile.default&#93;</code> overrides, which themselves layer on top of Karva's built-in defaults.</p>
 <p>Defaults to <code>default</code>.</p>
-<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--random-seed"><a href="#karva-test--random-seed"><code>--random-seed</code></a> <i>seed</i></dt><dd><p>Seed used by <code>--shuffle</code>. Does not enable shuffling by itself.</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd><dt id="karva-test--random-seed"><a href="#karva-test--random-seed"><code>--random-seed</code></a> <i>seed</i></dt><dd><p>Seed for Python randomness and, with <code>--shuffle</code>, test ordering.</p>
 <p>Pass <code>last</code> to reuse the most recently generated seed.</p>
 </dd><dt id="karva-test--result-format"><a href="#karva-test--result-format"><code>--result-format</code></a> <i>format</i></dt><dd><p>Machine-readable test result format</p>
 <p>Possible values:</p>

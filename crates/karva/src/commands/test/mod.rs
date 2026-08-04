@@ -97,24 +97,23 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     FiltersetSet::new(&sub_command.filter_expressions).context("invalid `--filter` expression")?;
 
     let cache_dir = project.cwd().join(CACHE_DIR);
-    let (random_seed, generated_random_seed) = if project.settings().test().shuffle {
-        match random_seed_selection {
-            Some(RandomSeed::Last) => {
-                if no_cache {
-                    anyhow::bail!("`--random-seed=last` cannot be used with `--no-cache`");
-                }
-                let seed = read_random_seed(&cache_dir)?
-                    .context("No generated random seed found; run with `--shuffle` first")?;
-                (Some(seed), false)
+    let (random_seed, generated_random_seed) = match random_seed_selection {
+        Some(RandomSeed::Last) => {
+            if no_cache {
+                anyhow::bail!("`--random-seed=last` cannot be used with `--no-cache`");
             }
-            Some(RandomSeed::Value(seed)) => (Some(seed), false),
-            None => match project.settings().test().random_seed {
-                Some(seed) => (Some(seed), false),
-                None => (Some(karva_runner::generate_random_seed()), true),
-            },
+            let seed = read_random_seed(&cache_dir)?
+                .context("No generated random seed found; run with `--shuffle` first")?;
+            (Some(seed), false)
         }
-    } else {
-        (None, false)
+        Some(RandomSeed::Value(seed)) => (Some(seed), false),
+        None => match project.settings().test().random_seed {
+            Some(seed) => (Some(seed), false),
+            None if project.settings().test().shuffle => {
+                (Some(karva_runner::generate_random_seed()), true)
+            }
+            None => (None, false),
+        },
     };
     if generated_random_seed
         && !no_cache
@@ -134,10 +133,13 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         last_failed,
         profile,
         partition,
-        test_ordering: random_seed.map_or(
-            karva_runner::TestOrdering::RandomizeUnmeasured,
-            karva_runner::TestOrdering::SeededShuffle,
-        ),
+        random_seed,
+        test_ordering: random_seed
+            .filter(|_| project.settings().test().shuffle)
+            .map_or(
+                karva_runner::TestOrdering::RandomizeUnmeasured,
+                karva_runner::TestOrdering::SeededShuffle,
+            ),
     };
 
     if watch {
@@ -500,6 +502,7 @@ fn write_test_failures_block(
                 if other.captured_output().is_none()
                     && other.outcome().diagnostic() == Some(diagnostic)
                     && other.outcome().related_diagnostics() == case.outcome().related_diagnostics()
+                    && other.random_seeds() == case.random_seeds()
                 {
                     emitted[other_index] = true;
                     write_test_failure_header(stdout, other)?;
@@ -510,6 +513,17 @@ fn write_test_failures_block(
         write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
         for diagnostic in case.outcome().related_diagnostics() {
             write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        }
+        if let Some(seeds) = case.random_seeds() {
+            writeln!(stdout, "Random seed: {}", seeds.base())?;
+            writeln!(
+                stdout,
+                "Phase seeds: setup={}, call={}, teardown={}",
+                seeds.setup(),
+                seeds.call(),
+                seeds.teardown()
+            )?;
+            writeln!(stdout)?;
         }
         if let Some(output) = case.captured_output() {
             write_captured_stream(stdout, "stdout", output.stdout())?;

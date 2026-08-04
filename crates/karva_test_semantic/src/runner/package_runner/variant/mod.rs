@@ -1,12 +1,15 @@
 //! Orchestration and reporting for one concrete test variant.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_coverage::CoveragePhase;
-use karva_diagnostic::{CapturedTestOutput, TestCaseRetry, TestExecutionOutcome};
+use karva_diagnostic::{
+    CapturedTestOutput, TestCaseArtifacts, TestCaseRetry, TestExecutionOutcome, TestRandomSeeds,
+};
 use karva_metadata::filter::EvalContext;
 use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
@@ -21,9 +24,13 @@ use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::fixture_arguments::FixtureArguments;
 use crate::runner::test_iterator::TestVariant;
-use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
+use crate::utils::{
+    display_value, set_attempt_env, set_random_seed, set_test_name_env, test_parameters,
+    test_random_seeds,
+};
 
 use super::PackageRunner;
+use super::fixture::PreparedFixtures;
 
 mod attempt;
 
@@ -117,10 +124,12 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         }
 
         let retry_params = self.params.clone();
+        let random_seeds = self.random_seeds();
         let first_params = std::mem::take(&mut self.params);
         self.begin_pending_coverage_setup();
-        let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
-        let settings = self.settings(&first_attempt.fixtures.function_arguments);
+        let first_attempt =
+            self.prepare_attempt(first_params, self.start_output_capture(), random_seeds);
+        let settings = self.settings(&first_attempt.fixtures.function_arguments, random_seeds);
         self.resolve_pending_coverage_setup(&settings.qualified_name);
         let function = self.test.py_function.clone_ref(self.py);
         let test_name_env_result =
@@ -175,20 +184,28 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         &mut self,
         params: HashMap<String, Arc<Py<PyAny>>>,
         output_capture: Option<PythonOutputCapture>,
+        random_seeds: Option<TestRandomSeeds>,
     ) -> PreparedTestAttempt {
         let setup_start = Instant::now();
-        let fixtures = self.package_runner.prepare_test_fixtures(
-            self.py,
-            &self.fixture_plan,
-            &self.fixture_dependencies,
-            &self.use_fixture_dependencies,
-            &self.auto_use_fixtures,
-            params,
-        );
+        let random_seed_error =
+            random_seeds.and_then(|seeds| set_random_seed(self.py, seeds.setup()).err());
+        let fixtures = if random_seed_error.is_some() {
+            PreparedFixtures::from_params(self.py, params)
+        } else {
+            self.package_runner.prepare_test_fixtures(
+                self.py,
+                &self.fixture_plan,
+                &self.fixture_dependencies,
+                &self.use_fixture_dependencies,
+                &self.auto_use_fixtures,
+                params,
+            )
+        };
         PreparedTestAttempt {
             fixtures,
             setup_duration: setup_start.elapsed(),
             output_capture,
+            random_seed_error,
         }
     }
 
@@ -199,11 +216,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
         self.set_coverage_context(&settings.qualified_name, CoveragePhase::Setup);
-        self.prepare_attempt(params, self.start_output_capture())
+        self.prepare_attempt(params, self.start_output_capture(), settings.random_seeds)
     }
 
     /// Derives identity and execution policy after first fixture setup.
-    fn settings(&self, function_arguments: &FixtureArguments) -> VariantSettings {
+    fn settings(
+        &self,
+        function_arguments: &FixtureArguments,
+        random_seeds: Option<TestRandomSeeds>,
+    ) -> VariantSettings {
         let name = self.test.name();
         let fixture_names = self
             .fixture_dependencies
@@ -316,7 +337,29 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             max_attempts,
             flaky_result,
             junit_flaky_fail_status,
+            random_seeds,
         }
+    }
+
+    /// Derives seed identity from collection-time parameters, before fixtures run.
+    fn random_seeds(&self) -> Option<TestRandomSeeds> {
+        let base = self.package_runner.context.random_seed()?;
+        let mut arguments = FixtureArguments::default();
+        for (name, value) in &self.params {
+            arguments.insert(name.clone(), value.as_ref().clone_ref(self.py));
+        }
+        let mut identity = self.test.name().to_string();
+        if let Some(id) = &self.id {
+            let _ = write!(identity, "\0id:{}:{id}", id.len());
+        } else {
+            for (name, value) in
+                arguments.iter_in_signature_order(&self.test.statement().parameters)
+            {
+                let value = display_value(value.bind(self.py));
+                let _ = write!(identity, "\0{}:{name}{}:{value}", name.len(), value.len());
+            }
+        }
+        Some(test_random_seeds(base, &identity))
     }
 
     /// Registers final outcome after all retries and returns pass/fail status.
@@ -368,7 +411,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 &settings.qualified_test_name,
                 final_attempt.outcome,
                 total_duration,
-                captured_output,
+                TestCaseArtifacts::new(captured_output, settings.random_seeds),
             )
         } else {
             let final_attempt_number = final_attempt.attempt;
@@ -388,7 +431,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 total_duration,
                 TestCaseRetry::new(final_attempt_number, settings.max_attempts)
                     .with_failure_policy(flaky_failure, junit_flaky_failure),
-                captured_output,
+                TestCaseArtifacts::new(captured_output, settings.random_seeds),
                 execution_attempts,
             )
         }
@@ -418,7 +461,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                     &qualified,
                     TestExecutionOutcome::Skipped { reason: None },
                     Duration::ZERO,
-                    None,
+                    TestCaseArtifacts::default(),
                 ));
             }
         }
@@ -439,7 +482,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             &qualified,
             TestExecutionOutcome::Skipped { reason },
             Duration::ZERO,
-            None,
+            TestCaseArtifacts::default(),
         ))
     }
 
@@ -519,6 +562,8 @@ struct VariantSettings {
     flaky_result: FlakyResult,
     /// How a flaky failure appears in `JUnit`.
     junit_flaky_fail_status: JunitFlakyFailStatus,
+    /// Seeds reapplied at each lifecycle boundary and reused by retries.
+    random_seeds: Option<TestRandomSeeds>,
 }
 
 /// Finishes best-effort Python output capture.

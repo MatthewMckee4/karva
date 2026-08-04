@@ -36,6 +36,10 @@ struct Args {
     #[arg(long)]
     worker_id: usize,
 
+    /// Base seed for Python standard-library randomness.
+    #[arg(long)]
+    random_seed: Option<u64>,
+
     /// Shared test execution options inherited from the main CLI.
     #[clap(flatten)]
     sub_command: SubTestCommand,
@@ -162,6 +166,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         )
     };
 
+    let run_options =
+        karva_test_semantic::TestRunOptions::new(!verbosity.is_default(), args.random_seed);
     let result = karva_test_semantic::run_tests(
         &cwd,
         &settings,
@@ -169,7 +175,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         reporter.as_ref(),
         test_paths,
         coverage.as_ref(),
-        !verbosity.is_default(),
+        run_options,
     );
 
     let diagnostic_format = settings.terminal().output_format.into();

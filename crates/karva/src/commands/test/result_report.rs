@@ -6,7 +6,7 @@ use karva_cache::AggregatedResults;
 use karva_cli::ResultFormat;
 use karva_diagnostic::{
     CapturedTestOutput, FixtureFailure, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome,
-    TestCaseResult, TestCaseRetry,
+    TestCaseResult, TestCaseRetry, TestRandomSeeds,
 };
 use karva_project::path::absolute;
 use serde::Serialize;
@@ -117,7 +117,7 @@ struct RunReport<'a> {
 
     status: RunStatus,
 
-    /// Seed controlling randomized ordering, omitted when shuffling is disabled.
+    /// Base seed controlling Python randomness and optional shuffled ordering.
     #[serde(skip_serializing_if = "Option::is_none")]
     random_seed: Option<u64>,
 
@@ -224,6 +224,8 @@ struct TestReport<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     retry: Option<RetryReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    random_seeds: Option<TestRandomSeeds>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     captured_output: Option<CapturedOutputReport<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     diagnostic: Option<DiagnosticReport<'a>>,
@@ -259,6 +261,7 @@ impl<'a> TestReport<'a> {
             skip_reason,
             flaky,
             retry,
+            random_seeds: case.random_seeds(),
             captured_output: case.captured_output().map(CapturedOutputReport::new),
             diagnostic: diagnostic.map(DiagnosticReport::new),
             fixture_failures: (!case.outcome().fixture_failures().is_empty())
@@ -402,7 +405,7 @@ impl<'a> DiagnosticReport<'a> {
 struct RunFinishedRecord {
     status: RunStatus,
 
-    /// Seed controlling randomized ordering, omitted when shuffling is disabled.
+    /// Base seed controlling Python randomness and optional shuffled ordering.
     #[serde(skip_serializing_if = "Option::is_none")]
     random_seed: Option<u64>,
 

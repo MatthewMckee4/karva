@@ -54,7 +54,8 @@ names, status, duration, skip reason, captured output, diagnostics, and retry
 attempts when applicable. Collection and import diagnostics that do not belong
 to one test are stored separately as run diagnostics.
 
-Seeded shuffled runs include `random_seed` in the top-level run metadata.
+Seeded runs include `random_seed` in the top-level run metadata and the base,
+setup, call, and teardown values under `random_seeds` on each executed test.
 
 Result output is plain text without ANSI styling, regardless of terminal color
 settings.
@@ -72,5 +73,5 @@ uv run karva test \
 Karva writes a `test` record for each test, a `run_diagnostic` record for each
 unattached collection or import diagnostic, then one `run_finished` record
 with final status and aggregate statistics. Every line includes the schema
-version and record type. Seeded shuffled runs include `random_seed` on the
-`run_finished` record.
+version and record type. Seeded runs include `random_seed` on the
+`run_finished` record and `random_seeds` on each `test` record.

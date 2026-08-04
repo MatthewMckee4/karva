@@ -6,8 +6,9 @@ use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
+use crate::diagnostic::test_failure_diagnostic;
 use crate::extensions::functions::snapshot::set_snapshot_context;
-use crate::utils::{run_coroutine, run_test_with_timeout};
+use crate::utils::{run_coroutine, run_test_with_timeout, set_random_seed};
 
 use super::{VariantRunner, VariantSettings, finish_output_capture};
 use crate::output_capture::PythonOutputCapture;
@@ -37,31 +38,51 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 },
             setup_duration,
             output_capture,
+            random_seed_error,
         } = prepared;
 
-        let body = match setup_result {
-            Ok(()) => self.execute_test_body(
-                settings,
-                function,
-                test_name_env_result,
-                attempt_env_result,
-                &function_arguments,
-            ),
-            Err(error) => AttemptBody {
-                outcome: error
-                    .into_test_error(self.py, self.package_runner.context.is_verbose())
-                    .into_outcome(),
-                call_duration: Duration::ZERO,
-                retryable: true,
+        let body = match random_seed_error {
+            Some(error) => self.classify_seed_error(error, &function_arguments),
+            None => match setup_result {
+                Ok(()) => self.execute_test_body(
+                    settings,
+                    function,
+                    test_name_env_result,
+                    attempt_env_result,
+                    &function_arguments,
+                ),
+                Err(error) => AttemptBody {
+                    outcome: error
+                        .into_test_error(self.py, self.package_runner.context.is_verbose())
+                        .into_outcome(),
+                    call_duration: Duration::ZERO,
+                    retryable: true,
+                },
             },
         };
 
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
-        let finalizer_diagnostics = self
-            .package_runner
-            .clean_up_test_attempt(self.py, test_finalizers);
+        let mut finalizer_diagnostics = settings
+            .random_seeds
+            .and_then(|seeds| set_random_seed(self.py, seeds.teardown()).err())
+            .map(|error| {
+                test_failure_diagnostic(
+                    self.py,
+                    self.test.source_file(),
+                    self.test.statement(),
+                    &function_arguments,
+                    &error,
+                    self.package_runner.context.is_verbose(),
+                )
+            })
+            .into_iter()
+            .collect::<Vec<_>>();
+        finalizer_diagnostics.extend(
+            self.package_runner
+                .clean_up_test_attempt(self.py, test_finalizers),
+        );
         let teardown_failed = !finalizer_diagnostics.is_empty();
         let phases = PhaseDurations {
             setup: setup_duration,
@@ -106,19 +127,23 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         function_arguments: &crate::runner::FixtureArguments,
     ) -> AttemptBody {
         set_snapshot_context(settings.snapshot_context.clone());
-        let prepared_call = attempt_env_result.and_then(|()| {
-            if let Err(error) = test_name_env_result {
-                return Err(error.clone_ref(self.py));
-            }
-            if let Err(error) = &settings.async_patch_result {
-                return Err(error.clone_ref(self.py));
-            }
-            if function_arguments.is_empty() || settings.timeout_seconds.is_some() {
-                Ok(None)
-            } else {
-                function_arguments.to_kwargs(self.py).map(Some)
-            }
-        });
+        let prepared_call = settings
+            .random_seeds
+            .map_or(Ok(()), |seeds| set_random_seed(self.py, seeds.call()))
+            .and(attempt_env_result)
+            .and_then(|()| {
+                if let Err(error) = test_name_env_result {
+                    return Err(error.clone_ref(self.py));
+                }
+                if let Err(error) = &settings.async_patch_result {
+                    return Err(error.clone_ref(self.py));
+                }
+                if function_arguments.is_empty() || settings.timeout_seconds.is_some() {
+                    Ok(None)
+                } else {
+                    function_arguments.to_kwargs(self.py).map(Some)
+                }
+            });
         let (test_result, call_duration) = match prepared_call {
             Ok(keyword_arguments) => {
                 let call_start = Instant::now();
@@ -169,6 +194,30 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             retryable: result.retryable,
         }
     }
+
+    fn classify_seed_error(
+        &self,
+        error: PyErr,
+        function_arguments: &crate::runner::FixtureArguments,
+    ) -> AttemptBody {
+        let result = classify_test_result(
+            self.py,
+            Err(error),
+            &OutcomeContext {
+                name: self.test.name(),
+                source_file: self.test.source_file(),
+                stmt_function_def: self.test.statement(),
+                function_arguments,
+                expect_fail_tag: None,
+                verbose: self.package_runner.context.is_verbose(),
+            },
+        );
+        AttemptBody {
+            outcome: result.outcome,
+            call_duration: Duration::ZERO,
+            retryable: false,
+        }
+    }
 }
 
 /// Test-body result before common teardown and duration policy are applied.
@@ -191,6 +240,8 @@ pub(super) struct PreparedTestAttempt {
     pub(super) setup_duration: Duration,
     /// Python stdout and stderr capture spanning setup, call, and teardown.
     pub(super) output_capture: Option<PythonOutputCapture>,
+    /// Failure while applying the setup phase seed.
+    pub(super) random_seed_error: Option<PyErr>,
 }
 
 /// Completed call lifecycle plus retry decision.

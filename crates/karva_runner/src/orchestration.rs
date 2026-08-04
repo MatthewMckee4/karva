@@ -470,6 +470,9 @@ pub struct ParallelTestConfig {
     /// When set, restrict the run to the selected slice of collected tests.
     pub partition: Option<PartitionSelection>,
 
+    /// Base seed forwarded to workers for Python standard-library randomness.
+    pub random_seed: Option<u64>,
+
     /// Ordering strategy for partition inputs.
     pub test_ordering: TestOrdering,
 }
@@ -685,6 +688,7 @@ pub fn run_parallel_tests(
         args,
         num_workers,
         profile: config.profile.as_deref().unwrap_or("default"),
+        random_seed: config.random_seed,
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };

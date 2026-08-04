@@ -31,6 +31,7 @@ ruff_python_parser = { workspace = true }
 ruff_python_stdlib = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
+siphasher = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

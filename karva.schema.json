@@ -794,7 +794,7 @@
           ]
         },
         "random-seed": {
-          "description": "Seed used to randomize test order when [`shuffle`](#shuffle) is enabled.\n\nWhen omitted, Karva generates and prints a seed for the run. Setting a\nseed does not enable shuffling by itself.",
+          "description": "Base seed for Python randomness and optional shuffled ordering.\n\nKarva derives distinct setup, call, and teardown seeds for each test.\nWhen [`shuffle`](#shuffle) is enabled, the same base seed also controls\nordering. Without either setting, runs use Python's default randomness.",
           "type": [
             "integer",
             "null"

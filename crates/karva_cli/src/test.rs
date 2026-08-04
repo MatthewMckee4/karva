@@ -378,7 +378,7 @@ pub struct TestCommand {
     #[clap(long, default_missing_value = "true", require_equals = true, num_args = 0..=1, help_heading = "Runner options")]
     shuffle: Option<bool>,
 
-    /// Seed used by `--shuffle`. Does not enable shuffling by itself.
+    /// Seed for Python randomness and, with `--shuffle`, test ordering.
     ///
     /// Pass `last` to reuse the most recently generated seed.
     #[clap(long, value_name = "SEED", help_heading = "Runner options")]

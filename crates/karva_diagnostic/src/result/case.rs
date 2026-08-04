@@ -28,6 +28,8 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
     retry: Option<TestCaseRetry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     captured_output: Option<CapturedTestOutput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    random_seeds: Option<TestRandomSeeds>,
     #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
     attempts: Vec<TestCaseAttempt<D>>,
 }
@@ -38,8 +40,12 @@ impl<D> TestCaseResult<D> {
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
-        captured_output: Option<CapturedTestOutput>,
+        artifacts: TestCaseArtifacts,
     ) -> Self {
+        let TestCaseArtifacts {
+            captured_output,
+            random_seeds,
+        } = artifacts;
         let function_name = test_case_name.function_name();
         let module_name = function_name.module_path().module_name().to_string();
         let full_name = test_case_name.to_string();
@@ -56,6 +62,7 @@ impl<D> TestCaseResult<D> {
             duration,
             retry: None,
             captured_output,
+            random_seeds,
             attempts: Vec::new(),
         }
     }
@@ -66,10 +73,10 @@ impl<D> TestCaseResult<D> {
         outcome: TestCaseOutcome<D>,
         duration: Duration,
         retry: TestCaseRetry,
-        captured_output: Option<CapturedTestOutput>,
+        artifacts: TestCaseArtifacts,
         attempts: Vec<TestCaseAttempt<D>>,
     ) -> Self {
-        let mut result = Self::new(test_case_name, outcome, duration, captured_output);
+        let mut result = Self::new(test_case_name, outcome, duration, artifacts);
         result.retry = Some(retry);
         result.attempts = attempts;
         result
@@ -96,6 +103,7 @@ impl<D> TestCaseResult<D> {
             duration,
             retry: None,
             captured_output,
+            random_seeds: None,
             attempts: Vec::new(),
         }
     }
@@ -140,6 +148,10 @@ impl<D> TestCaseResult<D> {
         self.captured_output.as_ref()
     }
 
+    pub fn random_seeds(&self) -> Option<TestRandomSeeds> {
+        self.random_seeds
+    }
+
     pub fn attempts(&self) -> &[TestCaseAttempt<D>] {
         &self.attempts
     }
@@ -157,12 +169,74 @@ impl<D> TestCaseResult<D> {
             duration: self.duration,
             retry: self.retry,
             captured_output: self.captured_output,
+            random_seeds: self.random_seeds,
             attempts: self
                 .attempts
                 .into_iter()
                 .map(|attempt| attempt.try_map_diagnostic(&mut map))
                 .collect::<Result<Vec<_>, _>>()?,
         })
+    }
+}
+
+#[derive(Default)]
+/// Output and reproducibility metadata produced while executing one test.
+pub struct TestCaseArtifacts {
+    captured_output: Option<CapturedTestOutput>,
+    random_seeds: Option<TestRandomSeeds>,
+}
+
+impl TestCaseArtifacts {
+    /// Groups captured output with the seeds that produced the test result.
+    pub const fn new(
+        captured_output: Option<CapturedTestOutput>,
+        random_seeds: Option<TestRandomSeeds>,
+    ) -> Self {
+        Self {
+            captured_output,
+            random_seeds,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Stable seeds assigned to one test variant's lifecycle phases.
+pub struct TestRandomSeeds {
+    base: u64,
+    setup: u64,
+    call: u64,
+    teardown: u64,
+}
+
+impl TestRandomSeeds {
+    /// Records the base seed and its derived phase seeds.
+    pub const fn new(base: u64, setup: u64, call: u64, teardown: u64) -> Self {
+        Self {
+            base,
+            setup,
+            call,
+            teardown,
+        }
+    }
+
+    /// Base seed selected for the run.
+    pub const fn base(self) -> u64 {
+        self.base
+    }
+
+    /// Seed applied before fixture setup.
+    pub const fn setup(self) -> u64 {
+        self.setup
+    }
+
+    /// Seed applied before the test call.
+    pub const fn call(self) -> u64 {
+        self.call
+    }
+
+    /// Seed applied before fixture teardown.
+    pub const fn teardown(self) -> u64 {
+        self.teardown
     }
 }
 
@@ -499,8 +573,12 @@ mod tests {
             "value=1".to_string(),
         );
 
-        let result =
-            TestCaseResult::<()>::new(&name, TestCaseOutcome::Passed, Duration::ZERO, None);
+        let result = TestCaseResult::<()>::new(
+            &name,
+            TestCaseOutcome::Passed,
+            Duration::ZERO,
+            TestCaseArtifacts::default(),
+        );
 
         assert_eq!(result.module_name(), "tests.test");
         assert_eq!(result.name(), "test_example(value=1)");

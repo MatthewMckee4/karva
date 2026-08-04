@@ -34,6 +34,9 @@ pub struct WorkerSpawn<'a> {
     /// Resolved configuration profile propagated through `KARVA_PROFILE`.
     pub profile: &'a str,
 
+    /// Base seed for Python standard-library randomness.
+    pub random_seed: Option<u64>,
+
     /// Executable selected for the worker subprocess.
     pub worker_binary: &'a Utf8PathBuf,
 
@@ -95,6 +98,10 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partiti
 
     for path in partition.tests() {
         cmd.arg(path);
+    }
+
+    if let Some(seed) = spawn.random_seed {
+        cmd.arg("--random-seed").arg(seed.to_string());
     }
 
     cmd.args(inner_cli_args(spawn.project.settings(), spawn.args));

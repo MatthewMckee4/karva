@@ -434,6 +434,7 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
         last_failed: false,
         profile: None,
         partition: None,
+        random_seed: None,
         test_ordering: karva_runner::TestOrdering::Stable,
     };
 

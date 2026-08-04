@@ -1001,6 +1001,7 @@ mod tests {
                         stderr: "",
                     },
                 ),
+                random_seeds: None,
                 attempts: [],
             },
             TestCaseResult {
@@ -1016,6 +1017,7 @@ mod tests {
                         stderr: "worker 1 stderr\n",
                     },
                 ),
+                random_seeds: None,
                 attempts: [],
             },
         ]
@@ -1087,6 +1089,7 @@ mod tests {
                 duration: 42ms,
                 retry: None,
                 captured_output: None,
+                random_seeds: None,
                 attempts: [],
             },
             TestCaseResult {
@@ -1106,6 +1109,7 @@ mod tests {
                 duration: 24ms,
                 retry: None,
                 captured_output: None,
+                random_seeds: None,
                 attempts: [],
             },
         ]

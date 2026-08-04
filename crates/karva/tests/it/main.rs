@@ -14,6 +14,7 @@ mod filterset;
 mod junit;
 mod last_failed;
 mod partition;
+mod random_seed;
 mod result_report;
 mod run_ignored;
 mod run_timeout;

@@ -161,6 +161,10 @@ env_vars! {
         /// (`retries + 1`). Always set.
         pub const KARVA_TOTAL_ATTEMPTS: &'static str = "KARVA_TOTAL_ATTEMPTS";
 
+        /// Seed applied to Python's standard-library `random` module for the
+        /// current setup, call, or teardown phase. Updated before each phase.
+        pub const KARVA_RANDOM_SEED: &'static str = "KARVA_RANDOM_SEED";
+
         /// Name of the active configuration profile, e.g. `"default"` or
         /// whatever was passed to `--profile` / `KARVA_PROFILE`.
         pub const KARVA_PROFILE: &'static str = "KARVA_PROFILE";

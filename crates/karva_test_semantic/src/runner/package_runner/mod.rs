@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use karva_coverage::CoverageSession;
+use karva_diagnostic::TestCaseArtifacts;
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
@@ -86,7 +87,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             &QualifiedTestName::new(test.name().clone()),
             error.into_outcome(),
             std::time::Duration::ZERO,
-            None,
+            TestCaseArtifacts::default(),
         );
         self.record_outcome(false);
     }

@@ -27,6 +27,23 @@ use crate::discovery::{DiscoveryIssue, StandardDiscoverer};
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
 
+/// Worker-local options that do not belong to project configuration.
+#[derive(Clone, Copy)]
+pub struct TestRunOptions {
+    verbose: bool,
+    random_seed: Option<u64>,
+}
+
+impl TestRunOptions {
+    /// Creates execution options for one worker run.
+    pub const fn new(verbose: bool, random_seed: Option<u64>) -> Self {
+        Self {
+            verbose,
+            random_seed,
+        }
+    }
+}
+
 /// Runs discovery and execution inside one interpreter attachment.
 ///
 /// Coverage startup or persistence failures are logged but do not discard test results.
@@ -37,9 +54,20 @@ pub fn run_tests(
     reporter: &dyn Reporter,
     test_paths: Vec<Result<TestPath, TestPathError>>,
     coverage: Option<&CoverageConfig>,
-    verbose: bool,
+    options: TestRunOptions,
 ) -> TestRunResult {
-    let context = Context::new(cwd, settings, python_version, reporter, verbose);
+    let TestRunOptions {
+        verbose,
+        random_seed,
+    } = options;
+    let context = Context::new(
+        cwd,
+        settings,
+        python_version,
+        reporter,
+        verbose,
+        random_seed,
+    );
     let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {

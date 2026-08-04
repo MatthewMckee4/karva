@@ -480,10 +480,11 @@ pub struct TestOptions {
     )]
     pub shuffle: Option<bool>,
 
-    /// Seed used to randomize test order when [`shuffle`](#shuffle) is enabled.
+    /// Base seed for Python randomness and optional shuffled ordering.
     ///
-    /// When omitted, Karva generates and prints a seed for the run. Setting a
-    /// seed does not enable shuffling by itself.
+    /// Karva derives distinct setup, call, and teardown seeds for each test.
+    /// When [`shuffle`](#shuffle) is enabled, the same base seed also controls
+    /// ordering. Without either setting, runs use Python's default randomness.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"null"#,

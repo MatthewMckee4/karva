@@ -1,12 +1,15 @@
 use std::fmt::Write;
+use std::hash::{Hash, Hasher};
 
 use camino::Utf8Path;
+use karva_diagnostic::TestRandomSeeds;
 use karva_static::WorkerEnvVars;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyString, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
+use siphasher::sip::SipHasher13;
 
 use crate::extensions::functions::snapshot::{
     SnapshotContext, capture_snapshot_thread_state, set_snapshot_thread_state,
@@ -219,6 +222,31 @@ pub fn set_test_name_env(py: Python<'_>, qualified_name: &str) -> PyResult<()> {
     let environ = py.import("os")?.getattr("environ")?;
     environ.set_item(WorkerEnvVars::KARVA_TEST_NAME, qualified_name)?;
     Ok(())
+}
+
+/// Seeds Python's standard-library PRNG and exposes the active phase seed.
+pub fn set_random_seed(py: Python<'_>, seed: u64) -> PyResult<()> {
+    py.import("random")?.call_method1("seed", (seed,))?;
+    let environ = py.import("os")?.getattr("environ")?;
+    environ.set_item(WorkerEnvVars::KARVA_RANDOM_SEED, seed.to_string())?;
+    Ok(())
+}
+
+/// Derives stable, distinct lifecycle seeds from one run seed and test identity.
+pub fn test_random_seeds(base: u64, test_identity: &str) -> TestRandomSeeds {
+    TestRandomSeeds::new(
+        base,
+        phase_random_seed(base, test_identity, 0),
+        phase_random_seed(base, test_identity, 1),
+        phase_random_seed(base, test_identity, 2),
+    )
+}
+
+fn phase_random_seed(base: u64, test_identity: &str, phase: u8) -> u64 {
+    let mut hasher = SipHasher13::new_with_keys(base, base ^ 0x9e37_79b9_7f4a_7c15);
+    test_identity.hash(&mut hasher);
+    phase.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Formats Python values for test identity, quoting strings and escaping NUL bytes.

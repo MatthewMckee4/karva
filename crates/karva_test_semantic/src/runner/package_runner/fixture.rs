@@ -251,6 +251,24 @@ pub(super) struct PreparedFixtures {
     pub(super) test_finalizers: Vec<Finalizer>,
 }
 
+impl PreparedFixtures {
+    /// Retains parameters for identity and reporting when setup cannot start.
+    pub(super) fn from_params(py: Python<'_>, params: HashMap<String, Arc<Py<PyAny>>>) -> Self {
+        let mut function_arguments = FixtureArguments::default();
+        for (key, value) in params {
+            function_arguments.insert(
+                key,
+                Arc::try_unwrap(value).unwrap_or_else(|arc| (*arc).clone_ref(py)),
+            );
+        }
+        Self {
+            function_arguments,
+            setup_result: Ok(()),
+            test_finalizers: Vec::new(),
+        }
+    }
+}
+
 /// Raw fixture call error paired with its relationship to the blocked test.
 struct PreparedFixtureFailure {
     /// Python call failure and source context for diagnostic rendering.

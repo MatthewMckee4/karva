@@ -15,8 +15,9 @@ use ruff_db::diagnostic::Diagnostic;
 use crate::reporter::Reporter;
 
 pub use case::{
-    FixtureFailure, FixtureUsage, TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry,
-    TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
+    FixtureFailure, FixtureUsage, TestCaseArtifacts, TestCaseAttempt, TestCaseOutcome,
+    TestCaseResult, TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
+    TestRandomSeeds,
 };
 pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTests, FlakyTest};
@@ -100,7 +101,7 @@ impl TestRunResult {
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
-        captured_output: Option<CapturedTestOutput>,
+        artifacts: TestCaseArtifacts,
         reporter: Option<&dyn Reporter>,
     ) {
         let result = outcome.result_kind();
@@ -111,7 +112,7 @@ impl TestRunResult {
             test_case_name,
             outcome,
             duration,
-            captured_output,
+            artifacts,
         ));
 
         if matches!(
@@ -143,7 +144,7 @@ impl TestRunResult {
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
         retry: TestCaseRetry,
-        captured_output: Option<CapturedTestOutput>,
+        artifacts: TestCaseArtifacts,
         attempts: Vec<TestExecutionAttempt>,
     ) {
         let result = outcome.result_kind();
@@ -155,7 +156,7 @@ impl TestRunResult {
             outcome,
             duration,
             retry,
-            captured_output,
+            artifacts,
             attempts,
         ));
 
