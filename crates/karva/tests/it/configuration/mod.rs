@@ -1657,9 +1657,9 @@ fn test_config_file_flag_nonexistent_windows() {
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
-      Cause: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
+    karva failed
+      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`
+      Cause: Failed to read `<temp_dir>/nonexistent.toml`
       Cause: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
     ");
 }
