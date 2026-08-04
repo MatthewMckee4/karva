@@ -380,3 +380,64 @@ def test_typo():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn strict_tags_validate_aliases_module_marks_and_parameter_tags() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[tags]
+database = ""
+integration = ""
+
+[profile.default.test]
+strict-tags = true
+"#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva as k
+import pytest as pt
+
+pytestmark = pt.mark.daatbase
+
+@k.tags.parametrize("value", [
+    k.param(1, tags=(k.tags.integraiton,)),
+])
+def test_aliases(value):
+    pass
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[unknown-tag]: Tag `integraiton` is not registered
+     --> test.py:8:29
+      |
+    8 |     k.param(1, tags=(k.tags.integraiton,)),
+      |                             ^^^^^^^^^^^ unregistered tag
+      |
+    info: Did you mean `integration`?
+
+    error[unknown-tag]: Tag `daatbase` is not registered
+      --> test.py:10:5
+       |
+    10 | def test_aliases(value):
+       |     ^^^^^^^^^^^^ unregistered tag
+       |
+    info: Did you mean `database`?
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

@@ -712,6 +712,11 @@ impl ParametrizeTag {
         &self.names
     }
 
+    /// Returns tag sets attached to individual parameter cases.
+    pub(super) fn parameter_tags(&self) -> impl Iterator<Item = &Tags> {
+        self.parametrizations.iter().map(Parametrization::tags)
+    }
+
     fn new(names: Vec<String>, parametrizations: Vec<Parametrization>) -> Self {
         Self {
             names,

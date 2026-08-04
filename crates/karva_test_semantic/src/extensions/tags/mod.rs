@@ -1,6 +1,11 @@
 //! Registration, inheritance, and execution hooks for Karva test tags.
 
-use std::{collections::HashSet, ffi::CString, ops::Deref, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    ffi::CString,
+    ops::Deref,
+    sync::Arc,
+};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -374,6 +379,28 @@ impl Tags {
 
     pub(crate) fn extend(&mut self, other: &Self) {
         self.inner.extend(other.inner.iter().cloned());
+    }
+
+    /// Returns unregistered custom names, including parameter-specific tags.
+    pub(crate) fn unknown_custom_names<'a>(
+        &'a self,
+        registered: &BTreeMap<String, String>,
+    ) -> Vec<&'a str> {
+        let mut unknown = Vec::new();
+        for tag in &self.inner {
+            match tag {
+                Tag::Custom(custom) if !registered.contains_key(custom.name()) => {
+                    unknown.push(custom.name());
+                }
+                Tag::Parametrize(parametrize) => {
+                    for tags in parametrize.parameter_tags() {
+                        unknown.extend(tags.unknown_custom_names(registered));
+                    }
+                }
+                _ => {}
+            }
+        }
+        unknown
     }
 
     pub(crate) fn from_py_any(

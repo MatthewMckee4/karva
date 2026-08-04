@@ -6,6 +6,8 @@ use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 use ruff_text_size::TextRange;
 
+use super::Tags;
+
 const KARVA_BUILTINS: &[&str] = &[
     "expect_fail",
     "fail_slow",
@@ -43,6 +45,47 @@ pub fn unknown_tags(
         visitor.visit_expr(&decorator.expression);
     }
     visitor.unknown
+}
+
+/// Validates tags discovered from Python objects, covering aliases and module marks.
+pub fn unknown_runtime_tags(
+    function: &StmtFunctionDef,
+    tags: &Tags,
+    registered: &BTreeMap<String, String>,
+) -> Vec<UnknownTag> {
+    tags.unknown_custom_names(registered)
+        .into_iter()
+        .map(|name| UnknownTag {
+            name: name.to_string(),
+            range: tag_range(function, name).unwrap_or(function.name.range),
+            suggestion: unique_suggestion(name, registered.keys()),
+        })
+        .collect()
+}
+
+fn tag_range(function: &StmtFunctionDef, name: &str) -> Option<TextRange> {
+    let mut visitor = TagRangeVisitor { name, range: None };
+    for decorator in &function.decorator_list {
+        visitor.visit_expr(&decorator.expression);
+    }
+    visitor.range
+}
+
+struct TagRangeVisitor<'a> {
+    name: &'a str,
+    range: Option<TextRange>,
+}
+
+impl SourceOrderVisitor<'_> for TagRangeVisitor<'_> {
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if self.range.is_none()
+            && let Expr::Attribute(attribute) = expression
+            && attribute.attr.id == self.name
+        {
+            self.range = Some(attribute.attr.range);
+        }
+        source_order::walk_expr(self, expression);
+    }
 }
 
 struct TagVisitor<'a> {
@@ -126,8 +169,8 @@ mod tests {
 
     #[test]
     fn recognizes_common_single_edit_typos() {
-        assert!(is_single_typo("intergation", "integration"));
-        assert!(is_single_typo("integraton", "integration"));
+        assert!(is_single_typo("integraiton", "integration"));
+        assert!(is_single_typo(concat!("inter", "gation"), "integration"));
         assert!(is_single_typo("integrations", "integration"));
         assert!(is_single_typo("integretion", "integration"));
         assert!(!is_single_typo("unit", "integration"));

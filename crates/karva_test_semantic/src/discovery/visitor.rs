@@ -18,6 +18,7 @@ use crate::discovery::{DiscoveredModule, DiscoveredTestFunction, DiscoveryError,
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
+use crate::extensions::tags::validation::unknown_runtime_tags;
 
 /// Visitor for discovering test functions and fixture definitions in a given module.
 ///
@@ -145,7 +146,29 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 Rc::new(stmt_function_def),
                 py_function.unbind(),
             ) {
-                Ok(test_function) => self.module.add_test_function(test_function),
+                Ok(test_function) => {
+                    if self.context.settings().test().strict_tags {
+                        let unknown = unknown_runtime_tags(
+                            test_function.statement(),
+                            &test_function.tags,
+                            self.context.settings().tags(),
+                        );
+                        if !unknown.is_empty() {
+                            for unknown in unknown {
+                                self.issues.push(DiscoveryIssue::Error(
+                                    DiscoveryError::UnknownTag {
+                                        source_file: self.module.source_file(),
+                                        name: unknown.name,
+                                        range: unknown.range,
+                                        suggestion: unknown.suggestion,
+                                    },
+                                ));
+                            }
+                            return;
+                        }
+                    }
+                    self.module.add_test_function(test_function);
+                }
                 Err(error) => {
                     self.issues
                         .push(DiscoveryIssue::Error(DiscoveryError::Import {
