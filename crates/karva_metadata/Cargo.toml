@@ -29,6 +29,7 @@ regex = { workspace = true }
 ruff_db = { workspace = true }
 ruff_options_metadata = { workspace = true }
 ruff_python_ast = { workspace = true }
+ruff_python_stdlib = { workspace = true }
 schemars = { workspace = true, optional = true }
 semver = { workspace = true }
 serde = { workspace = true }

@@ -156,6 +156,13 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push("--try-import-fixtures".to_string());
     }
 
+    if settings.test().strict_tags {
+        cli_args.push("--strict-tags=true".to_string());
+        for name in settings.tags().keys() {
+            push_value_arg(&mut cli_args, "--registered-tag", name);
+        }
+    }
+
     if args.snapshot_update.unwrap_or(false) {
         cli_args.push("--snapshot-update".to_string());
     }

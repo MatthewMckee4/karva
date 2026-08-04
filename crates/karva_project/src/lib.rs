@@ -80,7 +80,10 @@ pub struct Project {
 impl Project {
     /// Resolves settings from previously discovered project metadata.
     pub fn from_metadata(metadata: ProjectMetadata) -> Self {
-        let settings = metadata.options.to_settings();
+        let settings = metadata
+            .options
+            .to_settings()
+            .with_tags(metadata.tags().clone());
         Self { settings, metadata }
     }
 

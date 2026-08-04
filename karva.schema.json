@@ -23,6 +23,13 @@
         "string",
         "null"
       ]
+    },
+    "tags": {
+      "description": "Project-wide custom tag registry. Empty descriptions are allowed.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   },
   "additionalProperties": false,
@@ -831,6 +838,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "strict-tags": {
+          "description": "Reject custom tags that are absent from the project-wide `[tags]` registry.\nBuilt-in Karva tags and pytest marks remain available without registration.",
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "termination-grace-period": {

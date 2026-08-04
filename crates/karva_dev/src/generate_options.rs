@@ -45,6 +45,7 @@ fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
                  target the implicit `default` profile.\n\n",
             );
             emit_required_version_section(output);
+            emit_tags_section(output);
         }
         Set::Named { name, .. } => {
             let title = parents
@@ -134,6 +135,28 @@ fn emit_required_version_section(output: &mut String) {
     output.push_str("```toml\nrequired-version = \">=0.5.0\"\n```\n\n");
     output.push_str("The same field in `pyproject.toml` lives under `[tool.karva]`:\n\n");
     output.push_str("```toml\n[tool.karva]\nrequired-version = \">=0.5.0\"\n```\n\n");
+    output.push_str("---\n\n");
+}
+
+/// `[tags]` is project-wide rather than profile-specific, so emit it beside
+/// `required-version` instead of routing it through profile metadata.
+fn emit_tags_section(output: &mut String) {
+    output.push_str("## `tags`\n\n");
+    output.push_str(
+        "Project-wide custom tag registry. Each key is a tag name and each value is an optional \
+         description for project documentation. Use an empty string when no description is needed.\n\n\
+         Enable [`strict-tags`](#strict-tags) in a profile to reject custom tags absent from this table.\n\n",
+    );
+    output.push_str("**Default value**: `{}`\n\n");
+    output.push_str("**Type**: `table`\n\n");
+    output.push_str("**Example usage** (`karva.toml`):\n\n");
+    output.push_str(
+        "```toml\n[tags]\nintegration = \"Uses an external service\"\nslow = \"\"\n```\n\n",
+    );
+    output.push_str("The same table in `pyproject.toml` lives under `[tool.karva.tags]`:\n\n");
+    output.push_str(
+        "```toml\n[tool.karva.tags]\nintegration = \"Uses an external service\"\nslow = \"\"\n```\n\n",
+    );
     output.push_str("---\n\n");
 }
 

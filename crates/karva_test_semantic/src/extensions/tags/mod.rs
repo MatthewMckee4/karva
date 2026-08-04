@@ -17,6 +17,7 @@ pub mod python;
 pub mod skip;
 pub mod timeout;
 mod use_fixtures;
+pub(crate) mod validation;
 
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;
@@ -120,6 +121,18 @@ pub enum Tag {
 }
 
 impl Tag {
+    fn name(&self) -> &str {
+        match self {
+            Self::Parametrize(_) => "parametrize",
+            Self::UseFixtures(_) => "use_fixtures",
+            Self::Skip(_) => "skip",
+            Self::ExpectFail(_) => "expect_fail",
+            Self::Timeout(_) => "timeout",
+            Self::FailSlow(_) => "fail_slow",
+            Self::Custom(custom) => custom.name(),
+        }
+    }
+
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
@@ -236,7 +249,7 @@ pub struct RuntimeTags {
     expect_fail: Option<ExpectFailTag>,
     timeout: Option<TimeoutTag>,
     fail_slow: Option<FailSlowTag>,
-    custom_names: Vec<String>,
+    names: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -255,6 +268,7 @@ impl RuntimeTags {
 
     pub(crate) fn extend(&mut self, tags: &Tags) {
         for tag in &tags.inner {
+            self.names.push(tag.name().to_string());
             match tag {
                 Tag::Skip(skip) if matches!(self.skip, SkipPolicy::Run) && skip.should_skip() => {
                     self.skip = SkipPolicy::Skip(skip.reason());
@@ -266,7 +280,6 @@ impl RuntimeTags {
                 Tag::FailSlow(fail_slow) if self.fail_slow.is_none() => {
                     self.fail_slow = Some(*fail_slow);
                 }
-                Tag::Custom(custom) => self.custom_names.push(custom.name().to_string()),
                 _ => {}
             }
         }
@@ -279,8 +292,8 @@ impl RuntimeTags {
         }
     }
 
-    pub(crate) fn custom_tag_names(&self) -> Vec<&str> {
-        self.custom_names.iter().map(String::as_str).collect()
+    pub(crate) fn tag_names(&self) -> Vec<&str> {
+        self.names.iter().map(String::as_str).collect()
     }
 
     pub(crate) fn expect_fail_tag(&self) -> Option<ExpectFailTag> {

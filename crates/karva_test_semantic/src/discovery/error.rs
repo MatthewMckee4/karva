@@ -6,6 +6,7 @@ use karva_python_semantic::ModulePath;
 use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
+use ruff_text_size::TextRange;
 
 use crate::diagnostic::{
     collection_error_diagnostic, duplicate_fixture_diagnostic, duplicate_test_diagnostic,
@@ -45,6 +46,12 @@ pub enum DiscoveryError {
     GeneratorTest {
         source_file: SourceFile,
         definition: Rc<StmtFunctionDef>,
+    },
+    UnknownTag {
+        source_file: SourceFile,
+        name: String,
+        range: TextRange,
+        suggestion: Option<String>,
     },
 }
 
@@ -94,6 +101,17 @@ impl DiscoveryError {
                 source_file,
                 definition,
             } => generator_test_diagnostic(source_file, &definition),
+            Self::UnknownTag {
+                source_file,
+                name,
+                range,
+                suggestion,
+            } => crate::diagnostic::unknown_tag_diagnostic(
+                source_file,
+                &name,
+                range,
+                suggestion.as_deref(),
+            ),
         }
     }
 }

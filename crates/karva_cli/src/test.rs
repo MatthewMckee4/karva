@@ -39,6 +39,14 @@ pub struct SubTestCommand {
     #[clap(long, help_heading = "Filter options")]
     pub test_prefix: Option<String>,
 
+    /// Internal transport for resolved strict-tag validation.
+    #[arg(long, hide = true)]
+    pub strict_tags: Option<bool>,
+
+    /// Internal transport for one registered custom tag name.
+    #[arg(long, hide = true, action = clap::ArgAction::Append)]
+    pub registered_tag: Vec<String>,
+
     /// When set, .gitignore files will not be respected.
     #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
     pub no_ignore: Option<bool>,
@@ -523,6 +531,7 @@ impl SubTestCommand {
             }),
             test: Some(TestOptions {
                 test_function_prefix: self.test_prefix,
+                strict_tags: self.strict_tags,
                 fail_fast,
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,

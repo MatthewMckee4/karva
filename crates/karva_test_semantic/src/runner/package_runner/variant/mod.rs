@@ -229,10 +229,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             QualifiedTestName::new(name.clone())
         };
         let qualified_name = qualified_test_name.to_string();
-        let custom_tag_names = self.tags.custom_tag_names();
+        let tag_names = self.tags.tag_names();
         let evaluation_context = EvalContext {
             test_name: &qualified_name,
-            tags: &custom_tag_names,
+            tags: &tag_names,
         };
         let fail_slow_budget = self
             .tags
@@ -401,10 +401,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
         if !filter.is_empty() {
             let display_name = qualified.to_string();
-            let custom_names = self.tags.custom_tag_names();
+            let tag_names = self.tags.tag_names();
             let context = EvalContext {
                 test_name: &display_name,
-                tags: &custom_names,
+                tags: &tag_names,
             };
             if !filter.matches(&context) {
                 return Some(self.package_runner.state.register_test_case_result(

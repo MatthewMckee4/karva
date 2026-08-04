@@ -22,6 +22,70 @@ fn show_config_default_profile() {
 
     [test]
     test-function-prefix = "test"
+    strict-tags = false
+    try-import-fixtures = false
+    retry = 0
+    shuffle = false
+    flaky-result = "pass"
+    no-tests = "auto"
+
+    [coverage]
+    data-file = ".karva/coverage/data.json"
+    path-aliases = []
+    sources = []
+    include = []
+    omit = []
+    exclude-lines = []
+    partial-branches = []
+    contexts = []
+    precision = 0
+    append = false
+    report = "term"
+
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
+    flaky-fail-status = "failure"
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn show_config_emits_project_tags_and_strict_mode() {
+    let context = TestContext::with_file(
+        "karva.toml",
+        r#"
+[tags]
+integration = "Uses an external service"
+slow = ""
+
+[profile.default.test]
+strict-tags = true
+"#,
+    );
+
+    assert_cmd_snapshot!(context.show_config(), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    [tags]
+    integration = "Uses an external service"
+    slow = ""
+
+    [src]
+    respect-ignore-files = true
+    include = []
+
+    [terminal]
+    output-format = "full"
+    show-python-output = false
+    status-level = "pass"
+    final-status-level = "pass"
+
+    [test]
+    test-function-prefix = "test"
+    strict-tags = true
     try-import-fixtures = false
     retry = 0
     shuffle = false

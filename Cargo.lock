@@ -1216,6 +1216,7 @@ dependencies = [
  "ruff_db",
  "ruff_options_metadata",
  "ruff_python_ast",
+ "ruff_python_stdlib",
  "schemars",
  "semver",
  "serde",

@@ -3,6 +3,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use ruff_python_ast::PythonVersion;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 mod environment;
@@ -46,6 +47,9 @@ pub struct ProjectMetadata {
     /// Parsed file-level configuration before profile selection.
     config: Config,
 
+    /// Project-wide registered custom tags retained after profile resolution.
+    tags: BTreeMap<String, String>,
+
     /// Effective options after profile and CLI precedence is applied.
     pub options: Options,
 }
@@ -57,6 +61,7 @@ impl ProjectMetadata {
             root,
             python_version,
             config: Config::default(),
+            tags: BTreeMap::new(),
             options: Options::default(),
         }
     }
@@ -82,6 +87,7 @@ impl ProjectMetadata {
             root: cwd.to_path_buf(),
             python_version,
             config,
+            tags: BTreeMap::new(),
             options: Options::default(),
         })
     }
@@ -101,6 +107,7 @@ impl ProjectMetadata {
             root,
             python_version,
             config,
+            tags: BTreeMap::new(),
             options: Options::default(),
         }
     }
@@ -207,6 +214,11 @@ impl ProjectMetadata {
         &self.root
     }
 
+    /// Returns project-wide custom tag names and their documentation.
+    pub fn tags(&self) -> &BTreeMap<String, String> {
+        &self.tags
+    }
+
     /// Resolve the requested profile from the parsed [`Config`] and combine
     /// CLI overrides on top, populating `self.options`.
     pub fn apply_overrides(
@@ -214,6 +226,7 @@ impl ProjectMetadata {
         overrides: &ProjectOptionsOverrides,
     ) -> Result<(), UnknownProfile> {
         let config = std::mem::take(&mut self.config);
+        self.tags = config.tags.clone();
         self.options = overrides.apply_to(config)?;
         Ok(())
     }

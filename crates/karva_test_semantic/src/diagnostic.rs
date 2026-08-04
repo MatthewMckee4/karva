@@ -13,6 +13,7 @@ use ruff_db::diagnostic::{
 };
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
+use ruff_text_size::TextRange;
 
 mod metadata;
 
@@ -29,6 +30,36 @@ use crate::utils::truncate_string;
 struct FailedFunctionCallOptions {
     function_kind: FunctionKind,
     verbose: bool,
+}
+
+declare_diagnostic_type! {
+    /// ## Unknown tag
+    ///
+    /// Raised during strict tag validation before the module is imported.
+    pub static UNKNOWN_TAG = {
+        summary: "Unknown custom tag",
+        severity: Severity::Error,
+    }
+}
+
+pub fn unknown_tag_diagnostic(
+    source_file: SourceFile,
+    name: &str,
+    range: TextRange,
+    suggestion: Option<&str>,
+) -> Diagnostic {
+    let mut diagnostic = UNKNOWN_TAG.diagnostic(format!("Tag `{name}` is not registered"));
+    diagnostic.annotate(
+        Annotation::primary(Span::from(source_file).with_range(range)).message("unregistered tag"),
+    );
+    if let Some(suggestion) = suggestion {
+        diagnostic.info(format!("Did you mean `{suggestion}`?"));
+    } else {
+        diagnostic.info(format!(
+            "Register `{name}` in the project-wide `[tags]` table."
+        ));
+    }
+    diagnostic
 }
 
 declare_diagnostic_type! {

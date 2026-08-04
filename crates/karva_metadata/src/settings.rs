@@ -462,6 +462,8 @@ impl Combine for CoveragePrecision {
 /// Fully resolved settings after configuration profiles and CLI overrides combine.
 pub struct ProjectSettings {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) tags: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) env: BTreeMap<EnvironmentVariableName, EnvironmentVariable>,
     pub(super) src: SrcSettings,
     pub(super) terminal: TerminalSettings,
@@ -512,6 +514,17 @@ impl OverrideSettings {
 }
 
 impl ProjectSettings {
+    /// Adds project-wide custom tag registrations after profile resolution.
+    #[must_use]
+    pub fn with_tags(mut self, tags: BTreeMap<String, String>) -> Self {
+        self.tags = tags;
+        self
+    }
+
+    /// Returns registered custom tags and their descriptions.
+    pub fn tags(&self) -> &BTreeMap<String, String> {
+        &self.tags
+    }
     /// Returns environment changes to apply to every worker process.
     pub fn env(&self) -> &BTreeMap<EnvironmentVariableName, EnvironmentVariable> {
         &self.env
@@ -774,6 +787,9 @@ fn is_false(value: &bool) -> bool {
 pub struct TestSettings {
     /// Prefix identifying Python test functions during syntax collection.
     pub test_function_prefix: String,
+
+    /// Whether unregistered custom tags fail collection.
+    pub strict_tags: bool,
 
     /// `MaxFail::unlimited()` wraps `None`, which TOML cannot represent —
     /// omit the field when no limit is configured.
