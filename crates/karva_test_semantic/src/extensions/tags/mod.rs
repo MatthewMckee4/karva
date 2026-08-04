@@ -382,10 +382,7 @@ impl Tags {
     }
 
     /// Returns unregistered custom names, including parameter-specific tags.
-    pub(crate) fn unknown_custom_names<'a>(
-        &'a self,
-        registered: &BTreeMap<String, String>,
-    ) -> Vec<&'a str> {
+    fn unknown_custom_names<'a>(&'a self, registered: &BTreeMap<String, String>) -> Vec<&'a str> {
         let mut unknown = Vec::new();
         for tag in &self.inner {
             match tag {
