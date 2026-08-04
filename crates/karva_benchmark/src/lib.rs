@@ -4,7 +4,6 @@
 //! `target/benchmark_cache/`. Dependencies are either synced from a lockfile
 //! or resolved with uv's `--exclude-newer` cap so CI runs are reproducible.
 
-use std::fmt::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -20,22 +19,9 @@ use karva_runner::RunOutput;
 use karva_static::{ToolEnvVars, max_parallelism};
 use ruff_python_ast::PythonVersion;
 
-// Receipt: 64 fixtures across 1,024 tests ran in 0.83 s at 47.5 MiB peak RSS.
-const CUSTOM_FIXTURE_DEPTH: usize = 64;
-const CUSTOM_FIXTURE_TESTS: usize = 1_024;
+mod generated;
 
-// Receipt: a 16³ matrix ran 4,096 tests in 0.88 s at 48.4 MiB peak RSS.
-const CUSTOM_PARAMETER_VALUES: usize = 16;
-
-// Receipt: 512 tests passing on their second attempt ran in 0.74 s at 39.8 MiB
-// peak RSS.
-const CUSTOM_RETRY_CASES: usize = 512;
-
-// Receipt: 128 snapshots of 128 lines ran in 0.72 s at 38.2 MiB peak RSS.
-const CUSTOM_SNAPSHOT_CASES: usize = 128;
-const CUSTOM_SNAPSHOT_LINES: usize = 128;
-
-// Receipts measured on arm64 macOS with a local debug wheel on 2026-08-04.
+use generated::GeneratedBenchmark;
 
 #[derive(Debug, Clone, Copy)]
 /// Reproducible dependency-install strategy for a benchmark checkout.
@@ -73,22 +59,6 @@ enum BenchmarkSource {
         /// Exact revision preventing workload drift.
         commit: &'static str,
     },
-}
-
-#[derive(Debug, Clone, Copy)]
-/// Karva subsystem isolated by a generated benchmark project.
-enum GeneratedBenchmark {
-    /// Deep fixture dependency resolution.
-    NestedFixtures,
-
-    /// Large Cartesian parametrization expansion.
-    ParametrizedMatrix,
-
-    /// Repeated comparison of large inline snapshots.
-    Snapshots,
-
-    /// Re-execution and result tracking for flaky tests.
-    Retries,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -495,7 +465,7 @@ fn ensure_checkout(config: &BenchmarkProject) -> Result<Utf8PathBuf> {
     let project_root = project_cache_dir(config.name)?;
     match config.source {
         BenchmarkSource::Generated(workload) => {
-            generate_custom_project(workload, &project_root)?;
+            generated::generate_project(workload, &project_root)?;
         }
         BenchmarkSource::Git { .. } => {
             if !project_root.exists() {
@@ -505,118 +475,6 @@ fn ensure_checkout(config: &BenchmarkProject) -> Result<Utf8PathBuf> {
         }
     }
     Ok(project_root)
-}
-
-fn generate_custom_project(workload: GeneratedBenchmark, project_root: &Utf8Path) -> Result<()> {
-    let tests = project_root.join("tests");
-    if tests.exists() {
-        fs::remove_dir_all(&tests).context("Failed to clear generated benchmark tests")?;
-    }
-    fs::create_dir_all(&tests).context("Failed to create generated benchmark tests")?;
-    let retry = if matches!(workload, GeneratedBenchmark::Retries) {
-        "\n[tool.karva.profile.default.test]\nretry = 1\n"
-    } else {
-        ""
-    };
-    fs::write(
-        project_root.join("pyproject.toml"),
-        format!(
-            "[project]\nname = \"karva-custom-benchmark\"\nversion = \"0.0.0\"\nrequires-python = \">=3.13\"\n{retry}"
-        ),
-    )
-    .context("Failed to write generated benchmark project metadata")?;
-
-    match workload {
-        GeneratedBenchmark::NestedFixtures => generate_nested_fixtures(&tests),
-        GeneratedBenchmark::ParametrizedMatrix => generate_parametrized_matrix(&tests),
-        GeneratedBenchmark::Snapshots => generate_snapshots(&tests),
-        GeneratedBenchmark::Retries => generate_retries(&tests),
-    }
-}
-
-fn generate_nested_fixtures(tests: &Utf8Path) -> Result<()> {
-    let mut fixtures = String::from("import pytest\n\n");
-    writeln!(
-        fixtures,
-        "@pytest.fixture\ndef fixture_0():\n    return 0\n"
-    )?;
-    for depth in 1..CUSTOM_FIXTURE_DEPTH {
-        writeln!(
-            fixtures,
-            "@pytest.fixture\ndef fixture_{depth}(fixture_{}):\n    return fixture_{} + 1\n",
-            depth - 1,
-            depth - 1,
-        )?;
-    }
-    fs::write(tests.join("conftest.py"), fixtures)
-        .context("Failed to write generated nested fixtures")?;
-
-    let mut source = String::new();
-    for case in 0..CUSTOM_FIXTURE_TESTS {
-        writeln!(
-            source,
-            "def test_nested_fixtures_{case}(fixture_{}):\n    assert fixture_{} == {}\n",
-            CUSTOM_FIXTURE_DEPTH - 1,
-            CUSTOM_FIXTURE_DEPTH - 1,
-            CUSTOM_FIXTURE_DEPTH - 1,
-        )?;
-    }
-    fs::write(tests.join("test_nested_fixtures.py"), source)
-        .context("Failed to write generated nested fixture tests")?;
-
-    Ok(())
-}
-
-fn generate_parametrized_matrix(tests: &Utf8Path) -> Result<()> {
-    let values = (0..CUSTOM_PARAMETER_VALUES).collect::<Vec<_>>();
-    fs::write(
-        tests.join("test_parametrized_matrix.py"),
-        format!(
-            r#"import pytest
-
-@pytest.mark.parametrize("first", {values:?})
-@pytest.mark.parametrize("second", {values:?})
-@pytest.mark.parametrize("third", {values:?})
-def test_parametrized_matrix(first, second, third):
-    assert first + second + third >= 0
-"#,
-        ),
-    )
-    .context("Failed to write generated parametrized tests")?;
-
-    Ok(())
-}
-
-fn generate_snapshots(tests: &Utf8Path) -> Result<()> {
-    let snapshot = (0..CUSTOM_SNAPSHOT_LINES)
-        .map(|line| format!("record {line:03}: αβγ/\\/\"quoted\""))
-        .collect::<Vec<_>>()
-        .join("\\n");
-    let mut source = format!("import karva\n\nSNAPSHOT = {snapshot:?}\n\n");
-    for case in 0..CUSTOM_SNAPSHOT_CASES {
-        writeln!(
-            source,
-            "def test_snapshot_{case}():\n    karva.assert_snapshot(SNAPSHOT, inline=SNAPSHOT)\n"
-        )?;
-    }
-    fs::write(tests.join("test_snapshots.py"), source)
-        .context("Failed to write generated snapshot tests")?;
-
-    Ok(())
-}
-
-fn generate_retries(tests: &Utf8Path) -> Result<()> {
-    let mut source = String::from("import os\n\n");
-    for case in 0..CUSTOM_RETRY_CASES {
-        writeln!(
-            source,
-            "def test_retry_{case}():\n    assert int(os.environ[\"KARVA_ATTEMPT\"]) > 1\n"
-        )?;
-    }
-    fs::write(tests.join("test_retries.py"), source)
-        .context("Failed to write generated retry tests")?;
-
-    Ok(())
 }
 
 fn project_cache_dir(project_name: &str) -> Result<Utf8PathBuf> {
@@ -859,78 +717,7 @@ fn cargo_target_directory() -> Option<&'static PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use camino::Utf8Path;
-    use fs_err as fs;
-    use tempfile::tempdir;
-
-    use super::{
-        CUSTOM_FIXTURE_DEPTH, CUSTOM_FIXTURE_TESTS, CUSTOM_PARAMETER_VALUES, CUSTOM_RETRY_CASES,
-        CUSTOM_SNAPSHOT_CASES, CUSTOM_SNAPSHOT_LINES, GeneratedBenchmark, format_command_failure,
-        generate_custom_project,
-    };
-
-    #[test]
-    fn generated_projects_isolate_targeted_workloads() {
-        let temp_dir = tempdir().expect("temporary directory should be created");
-        let root = Utf8Path::from_path(temp_dir.path())
-            .expect("temporary directory path should be valid UTF-8");
-
-        generate_custom_project(GeneratedBenchmark::NestedFixtures, root)
-            .expect("nested fixture project should be generated");
-        let fixtures = fs::read_to_string(root.join("tests/conftest.py"))
-            .expect("fixtures should be readable");
-        let fixture_tests = fs::read_to_string(root.join("tests/test_nested_fixtures.py"))
-            .expect("nested fixture tests should be readable");
-        assert_eq!(
-            fixtures.matches("@pytest.fixture").count(),
-            CUSTOM_FIXTURE_DEPTH
-        );
-        assert_eq!(
-            fixture_tests.matches("def test_nested_fixtures_").count(),
-            CUSTOM_FIXTURE_TESTS
-        );
-
-        generate_custom_project(GeneratedBenchmark::ParametrizedMatrix, root)
-            .expect("parametrized matrix project should be generated");
-        let parametrized = fs::read_to_string(root.join("tests/test_parametrized_matrix.py"))
-            .expect("parametrized tests should be readable");
-        let metadata = fs::read_to_string(root.join("pyproject.toml"))
-            .expect("project metadata should be readable");
-        let parameter_values = (0..CUSTOM_PARAMETER_VALUES).collect::<Vec<_>>();
-        assert!(!root.join("tests/conftest.py").exists());
-        assert!(!metadata.contains("retry = 1"));
-        assert_eq!(
-            parametrized
-                .matches(&format!("{parameter_values:?}"))
-                .count(),
-            3
-        );
-
-        generate_custom_project(GeneratedBenchmark::Snapshots, root)
-            .expect("snapshot project should be generated");
-        let snapshots = fs::read_to_string(root.join("tests/test_snapshots.py"))
-            .expect("snapshot tests should be readable");
-        assert!(!root.join("tests/test_parametrized_matrix.py").exists());
-        assert_eq!(
-            snapshots.matches("def test_snapshot_").count(),
-            CUSTOM_SNAPSHOT_CASES
-        );
-        assert_eq!(snapshots.matches("record ").count(), CUSTOM_SNAPSHOT_LINES);
-
-        generate_custom_project(GeneratedBenchmark::Retries, root)
-            .expect("retry project should be generated");
-        let metadata = fs::read_to_string(root.join("pyproject.toml"))
-            .expect("project metadata should be readable");
-        let retries = fs::read_to_string(root.join("tests/test_retries.py"))
-            .expect("retry tests should be readable");
-        assert!(!root.join("tests/test_snapshots.py").exists());
-        assert!(metadata.contains("retry = 1"));
-        assert_eq!(
-            retries.matches("def test_retry_").count(),
-            CUSTOM_RETRY_CASES
-        );
-        assert!(retries.contains("\n    assert"));
-    }
+    use super::format_command_failure;
 
     #[test]
     fn command_failure_includes_status_stdout_and_stderr() {
