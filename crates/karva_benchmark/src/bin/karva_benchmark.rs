@@ -19,6 +19,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, WORKER_COUNT};
+use karva_cache::CACHE_DIR;
 use karva_cli::ExitStatus;
 use karva_static::ToolEnvVars;
 use regex::Regex;
@@ -209,6 +210,12 @@ struct RunMeasurement {
     output: Output,
 }
 
+/// Warmed cache directories retained to give every benchmark subject the same partition weights.
+struct DurationCacheSeed {
+    cache_dir: Utf8PathBuf,
+    directories: HashSet<Utf8PathBuf>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -253,6 +260,8 @@ fn compare(args: CompareArgs) -> Result<()> {
         eprintln!("Preparing benchmark project `{}`", config.name);
         let project = karva_benchmark::prepare_benchmark_project_environment(config)
             .with_context(|| format!("Failed to prepare benchmark project `{}`", config.name))?;
+        let duration_cache_seed =
+            prepare_duration_cache_seed(config, project.cwd(), &baseline_wheel)?;
         let mut baseline_wall_time_values = Vec::with_capacity(args.iterations);
         let mut baseline_memory_values = Vec::with_capacity(args.iterations);
         let mut candidate_wall_time_values = Vec::with_capacity(args.iterations);
@@ -277,11 +286,11 @@ fn compare(args: CompareArgs) -> Result<()> {
             };
 
             if iteration % 2 == 0 {
-                run_subject(config, project.cwd(), &mut baseline)?;
-                run_subject(config, project.cwd(), &mut candidate)?;
+                run_subject(config, project.cwd(), &duration_cache_seed, &mut baseline)?;
+                run_subject(config, project.cwd(), &duration_cache_seed, &mut candidate)?;
             } else {
-                run_subject(config, project.cwd(), &mut candidate)?;
-                run_subject(config, project.cwd(), &mut baseline)?;
+                run_subject(config, project.cwd(), &duration_cache_seed, &mut candidate)?;
+                run_subject(config, project.cwd(), &duration_cache_seed, &mut baseline)?;
             }
         }
 
@@ -497,14 +506,12 @@ fn selected_projects(names: &[String]) -> Result<Vec<&'static BenchmarkProject>>
 fn run_subject(
     config: &BenchmarkProject,
     project_root: &Utf8Path,
+    duration_cache_seed: &DurationCacheSeed,
     subject: &mut Subject<'_>,
 ) -> Result<()> {
     karva_benchmark::install_benchmark_tools(config, project_root, subject.wheel)
         .with_context(|| format!("Failed to install `{}` benchmark wheel", subject.label))?;
-    karva_benchmark::clean_project_cache(project_root)
-        .with_context(|| format!("Failed to clean benchmark cache for `{}`", config.name))?;
-    warm_project_cache(config, project_root)
-        .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
+    duration_cache_seed.restore()?;
 
     let measurement = run_project_cli(config, project_root)
         .with_context(|| format!("Failed to run `{}` with `{}`", config.name, subject.label))?;
@@ -525,6 +532,62 @@ fn run_subject(
     );
 
     Ok(())
+}
+
+fn prepare_duration_cache_seed(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+    baseline_wheel: &Utf8Path,
+) -> Result<DurationCacheSeed> {
+    karva_benchmark::install_benchmark_tools(config, project_root, baseline_wheel)
+        .context("Failed to install baseline benchmark wheel")?;
+    karva_benchmark::clean_project_cache(project_root)
+        .with_context(|| format!("Failed to clean benchmark cache for `{}`", config.name))?;
+    warm_project_cache(config, project_root)
+        .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
+    DurationCacheSeed::capture(project_root)
+}
+
+impl DurationCacheSeed {
+    fn capture(project_root: &Utf8Path) -> Result<Self> {
+        let cache_dir = project_root.join(CACHE_DIR);
+        let directories = cache_directories(&cache_dir)?;
+        anyhow::ensure!(
+            !directories.is_empty(),
+            "Warming benchmark cache created no run directories in `{cache_dir}`"
+        );
+        Ok(Self {
+            cache_dir,
+            directories,
+        })
+    }
+
+    fn restore(&self) -> Result<()> {
+        for directory in cache_directories(&self.cache_dir)? {
+            if !self.directories.contains(&directory) {
+                fs::remove_dir_all(&directory).with_context(|| {
+                    format!("Failed to remove benchmark measurement cache `{directory}`")
+                })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn cache_directories(cache_dir: &Utf8Path) -> Result<HashSet<Utf8PathBuf>> {
+    let mut directories = HashSet::new();
+    for entry in fs::read_dir(cache_dir)
+        .with_context(|| format!("Failed to read benchmark cache `{cache_dir}`"))?
+    {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let directory = Utf8PathBuf::try_from(entry.path())
+            .context("Benchmark cache directory path is not valid UTF-8")?;
+        directories.insert(directory);
+    }
+    Ok(directories)
 }
 
 fn run_project_cli(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<RunMeasurement> {
@@ -1220,10 +1283,10 @@ impl BenchmarkMetric {
     fn report_context(self) -> &'static str {
         match self {
             Self::WallTime => {
-                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
             Self::Memory => {
-                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
         }
     }
@@ -1329,14 +1392,35 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 #[cfg(test)]
 mod tests {
     use camino::Utf8Path;
+    use fs_err as fs;
+    use tempfile::tempdir;
 
     use super::{
-        BenchmarkMetric, ComparisonReport, DiagnosticComparison, EXTRA_LONG_PROJECT_ITERATIONS,
-        FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement,
-        ProjectComparison, TestStats, diagnostic_comparison, diagnostics_markdown_report,
-        is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
-        normalize_diagnostic_text, standalone_html, trend, write_code_block,
+        BenchmarkMetric, CACHE_DIR, ComparisonReport, DiagnosticComparison, DurationCacheSeed,
+        EXTRA_LONG_PROJECT_ITERATIONS, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
+        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, TestStats,
+        diagnostic_comparison, diagnostics_markdown_report, is_benchmarkable_exit,
+        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text,
+        standalone_html, trend, write_code_block,
     };
+
+    #[test]
+    fn duration_cache_seed_removes_measurement_runs() {
+        let temp_dir = tempdir().expect("temporary directory should be created");
+        let project_root = Utf8Path::from_path(temp_dir.path())
+            .expect("temporary directory path should be valid UTF-8");
+        let cache_dir = project_root.join(CACHE_DIR);
+        let seed_run = cache_dir.join("run-seed");
+        let measurement_run = cache_dir.join("run-measurement");
+        fs::create_dir_all(&seed_run).expect("seed cache should be created");
+        let seed = DurationCacheSeed::capture(project_root).expect("seed should be captured");
+        fs::create_dir_all(&measurement_run).expect("measurement cache should be created");
+
+        seed.restore().expect("seed should be restored");
+
+        assert!(seed_run.is_dir());
+        assert!(!measurement_run.exists());
+    }
 
     #[test]
     fn standalone_html_is_complete_and_escapes_report_content() {
@@ -1369,7 +1453,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :x: Merging this PR may alter performance
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **1** improved benchmark
         :x: **1** regressed benchmark
@@ -1448,7 +1532,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :warning: Benchmark includes changed test workloads
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs warm the duration cache before measuring and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **0** improved benchmarks
         :x: **0** regressed benchmarks
