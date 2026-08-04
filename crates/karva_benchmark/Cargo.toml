@@ -19,7 +19,6 @@ path = "src/bin/karva_benchmark.rs"
 anyhow = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true }
-divan = { workspace = true }
 fs-err = { workspace = true }
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
@@ -37,10 +36,7 @@ similar = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
-
-[[bench]]
-name = "karva_benchmark_walltime"
-harness = false
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

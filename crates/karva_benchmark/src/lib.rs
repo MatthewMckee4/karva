@@ -9,7 +9,6 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use divan::Bencher;
 use fs_err as fs;
 use karva_cache::{CACHE_DIR, clean_cache};
 use karva_cli::{OutputFormat, SubTestCommand};
@@ -17,11 +16,8 @@ use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
 use karva_metadata::{Options, ProjectMetadata, SrcOptions, TerminalOptions, TestOptions};
 use karva_project::Project;
 use karva_runner::RunOutput;
-use karva_static::ToolEnvVars;
+use karva_static::{ToolEnvVars, max_parallelism};
 use ruff_python_ast::PythonVersion;
-
-/// Fixed worker count used to remove scheduling variance from wall-time samples.
-pub const WORKER_COUNT: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
 /// Reproducible dependency-install strategy for a benchmark checkout.
@@ -80,7 +76,7 @@ pub const SYNTHETIC_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
+const REQUESTS_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "requests",
     repository: "https://github.com/psf/requests",
     commit: "d64b9ad4bf1c14e21e0df3f0f4320fec81180e91",
@@ -122,7 +118,7 @@ const HTTPX_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
+const H11_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "h11",
     repository: "https://github.com/python-hyper/h11",
     commit: "62c5068c971579d61fa1b55373390e12f25fd856",
@@ -136,7 +132,7 @@ pub const H11_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const MARKUPSAFE_PROJECT: BenchmarkProject = BenchmarkProject {
+const MARKUPSAFE_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "markupsafe",
     repository: "https://github.com/pallets/markupsafe",
     commit: "b2e4d9c7687be25695fffbe93a37622302b24fb1",
@@ -150,7 +146,7 @@ pub const MARKUPSAFE_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const SNIFFIO_PROJECT: BenchmarkProject = BenchmarkProject {
+const SNIFFIO_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "sniffio",
     repository: "https://github.com/python-trio/sniffio",
     commit: "6996e05d9b9debe32f42f709c8041e744f850478",
@@ -164,7 +160,7 @@ pub const SNIFFIO_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const ITSDANGEROUS_PROJECT: BenchmarkProject = BenchmarkProject {
+const ITSDANGEROUS_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "itsdangerous",
     repository: "https://github.com/pallets/itsdangerous",
     commit: "672971d66a2ef9f85151e53283113f33d642dabd",
@@ -178,7 +174,7 @@ pub const ITSDANGEROUS_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const BLINKER_PROJECT: BenchmarkProject = BenchmarkProject {
+const BLINKER_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "blinker",
     repository: "https://github.com/pallets-eco/blinker",
     commit: "c3364059663df1ddce32799d6b1922af89a345f6",
@@ -192,7 +188,7 @@ pub const BLINKER_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
+const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "jinja",
     repository: "https://github.com/pallets/jinja",
     commit: "5ef70112a1ff19c05324ff889dd30405b1002044",
@@ -206,7 +202,7 @@ pub const JINJA_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const INSTALLER_PROJECT: BenchmarkProject = BenchmarkProject {
+const INSTALLER_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "installer",
     repository: "https://github.com/pypa/installer",
     commit: "5a2134bebaadf0c5087ddbaff6cd77abbd28271d",
@@ -220,7 +216,7 @@ pub const INSTALLER_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
+const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "tomlkit",
     repository: "https://github.com/python-poetry/tomlkit",
     commit: "ae1b6790d99b21bc0a339a5825e7d5e40e7e6f6a",
@@ -234,7 +230,7 @@ pub const TOMLKIT_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const OUTCOME_PROJECT: BenchmarkProject = BenchmarkProject {
+const OUTCOME_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "outcome",
     repository: "https://github.com/python-trio/outcome",
     commit: "03ed6218b08001877745bb1a9e180c8c5cf7c903",
@@ -248,7 +244,7 @@ pub const OUTCOME_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: false,
 };
 
-pub const PLUGGY_PROJECT: BenchmarkProject = BenchmarkProject {
+const PLUGGY_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "pluggy",
     repository: "https://github.com/pytest-dev/pluggy",
     commit: "7fce99cb955846901b22b051909aa4f30dc16128",
@@ -262,7 +258,7 @@ pub const PLUGGY_PROJECT: BenchmarkProject = BenchmarkProject {
     try_import_fixtures: true,
 };
 
-pub const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
+const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
     name: "werkzeug",
     repository: "https://github.com/pallets/werkzeug",
     commit: "1b00618e787f40dfb21eba29caf8f8be7c8e1d93",
@@ -341,13 +337,12 @@ pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Resul
     Ok(Project::from_metadata(metadata))
 }
 
-/// Executes one silent single-worker benchmark iteration and validates success.
+/// Executes one silent benchmark iteration and validates success.
 pub fn try_run_project(project: &Project) -> Result<RunOutput> {
-    // Single worker keeps wall-time benchmarks deterministic across iterations:
-    // no inter-process scheduling jitter, shared-cache contention, or variance
-    // from OS worker balancing.
     let config = karva_runner::ParallelTestConfig {
-        num_workers: WORKER_COUNT,
+        num_workers: max_parallelism()
+            .context("Failed to determine benchmark worker count")?
+            .get(),
         no_cache: true,
         create_ctrlc_handler: false,
         last_failed: false,
@@ -383,17 +378,6 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
 /// Removes cached Karva run artifacts that would contaminate benchmark timing.
 pub fn clean_project_cache(project_root: &Utf8Path) -> Result<bool> {
     clean_cache(&project_root.join(CACHE_DIR)).context("Failed to remove Karva benchmark cache")
-}
-
-/// Registers one project workload with Divan.
-pub fn bench_project(bencher: Bencher, config: &'static BenchmarkProject) {
-    bencher
-        .with_inputs(move || {
-            prepare_benchmark_project(config).expect("Failed to prepare benchmark project")
-        })
-        .bench_local_refs(|project| {
-            try_run_project(project).expect("Karva benchmark run failed");
-        });
 }
 
 /// Looks up a pinned workload by report identifier.
