@@ -4,6 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_combine::Combine;
 use karva_macros::OptionsMetadata;
+use ruff_python_stdlib::identifiers::is_identifier;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -36,6 +37,19 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     required_version: Option<VersionReq>,
 
+    /// Project-wide custom tag registry. Empty descriptions are allowed.
+    #[option(
+        default = r#"{}"#,
+        value_type = "table",
+        example = r#"
+            [tool.karva.tags]
+            integration = "Uses an external service"
+            slow = ""
+        "#
+    )]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) tags: BTreeMap<String, String>,
+
     #[cfg_attr(feature = "schemars", schemars(schema_with = "profile_schema"))]
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     /// Named option profiles; `default` forms the base for every named profile.
@@ -60,6 +74,7 @@ impl Config {
     pub(crate) fn from_toml_str(content: &str) -> Result<Self, KarvaTomlError> {
         let config: Self = toml::from_str(content)?;
         validate_profile_names(&config.profile)?;
+        validate_tag_names(&config.tags)?;
         Ok(config)
     }
 
@@ -152,6 +167,15 @@ impl Config {
     }
 }
 
+fn validate_tag_names(tags: &BTreeMap<String, String>) -> Result<(), KarvaTomlError> {
+    for name in tags.keys() {
+        if !is_identifier(name) {
+            return Err(KarvaTomlError::InvalidTagName { name: name.clone() });
+        }
+    }
+    Ok(())
+}
+
 fn validate_profile_names(profiles: &BTreeMap<String, Options>) -> Result<(), KarvaTomlError> {
     for name in profiles.keys() {
         if name.is_empty() {
@@ -237,6 +261,10 @@ pub enum KarvaTomlError {
     /// Profile name violates naming or reserved-prefix rules.
     #[error("invalid profile name `{name}`: {reason}")]
     InvalidProfileName { name: String, reason: &'static str },
+
+    /// Registered tag is not addressable as a Python attribute.
+    #[error("invalid tag name `{name}`: tag names must be valid Python identifiers")]
+    InvalidTagName { name: String },
 }
 
 impl From<toml::de::Error> for KarvaTomlError {
@@ -301,5 +329,18 @@ mod tests {
         unexpected character 'n' while parsing major version number
 
         "#);
+    }
+
+    #[test]
+    fn invalid_tag_name_is_rejected() {
+        let error = Config::from_toml_str(
+            r#"
+[tags]
+"not valid" = ""
+"#,
+        )
+        .expect_err("invalid tag name");
+
+        assert_snapshot!(error, @"invalid tag name `not valid`: tag names must be valid Python identifiers");
     }
 }

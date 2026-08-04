@@ -33,6 +33,34 @@ required-version = ">=0.5.0"
 
 ---
 
+## `tags`
+
+Project-wide custom tag registry. Each key is a tag name and each value is an optional description for project documentation. Use an empty string when no description is needed.
+
+Enable [`strict-tags`](#strict-tags) in a profile to reject custom tags absent from this table.
+
+**Default value**: `{}`
+
+**Type**: `table`
+
+**Example usage** (`karva.toml`):
+
+```toml
+[tags]
+integration = "Uses an external service"
+slow = ""
+```
+
+The same table in `pyproject.toml` lives under `[tool.karva.tags]`:
+
+```toml
+[tool.karva.tags]
+integration = "Uses an external service"
+slow = ""
+```
+
+---
+
 Configuration groups combined across defaults, profiles, environment, and CLI.
 
 ## `env`
@@ -795,6 +823,24 @@ Defaults to unset, which disables slow-test detection.
 ```toml
 [tool.karva.profile.default.test]
 slow-timeout = 60.0
+```
+
+---
+
+### `strict-tags`
+
+Reject custom tags that are absent from the project-wide `[tags]` registry.
+Built-in Karva tags and pytest marks remain available without registration.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.karva.profile.default.test]
+strict-tags = true
 ```
 
 ---

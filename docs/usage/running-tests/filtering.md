@@ -14,7 +14,7 @@ karva test -E '(tag(fast) | tag(unit)) - tag(flaky)'
 ## Adding custom tags
 
 Any attribute under `karva.tags` that is not a built-in tag creates a custom
-tag. No registration is required:
+tag. Tags are permissive by default:
 
 ```python title="test_checkout.py"
 import karva
@@ -29,6 +29,23 @@ Pytest marks are also recognized as custom tags, so
 `@pytest.mark.integration` matches the same `tag(integration)` predicate.
 Arguments attached to custom tags do not affect filtering; filters match the
 tag name.
+
+Projects can register supported names once and enable strict validation in any
+profile:
+
+```toml title="karva.toml"
+[tags]
+integration = "Uses an external service"
+slow = ""
+
+[profile.ci.test]
+strict-tags = true
+```
+
+With strict validation, unregistered `karva.tags.*` decorators and
+`pytest.mark.*` marks fail collection. Karva validates tags on tests, fixtures,
+and individual parameter sets. Clear misspellings include a suggested
+registered name. Built-in tags and marks do not need registration.
 
 When `-E` is passed more than once, a test runs if it matches **any** of
 the expressions (OR across flags):
@@ -48,9 +65,9 @@ operators. Karva currently supports two predicates:
 
 - `test(<matcher>)` — evaluated against the fully qualified test name,
   e.g. `mod::sub::test_login`.
-- `tag(<matcher>)` — evaluated against each custom tag on the test;
-  matches if *any* tag matches. Both `karva.tags.*` decorators and
-  `pytest.mark.*` decorators contribute tags.
+- `tag(<matcher>)` — evaluated against each tag on the test; matches if *any*
+  tag matches. Built-in and custom `karva.tags.*` decorators and
+  `pytest.mark.*` decorators all contribute tags.
 
 Unknown predicate names are a parse error. The error message will
 suggest the valid names. If you expected one and got the other, make

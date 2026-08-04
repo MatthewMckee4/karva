@@ -65,30 +65,40 @@ pub fn collect_file(
 
     let module_type: ModuleType = path.into();
 
-    let mut parse_options = ParseOptions::from(Mode::Module);
-
-    parse_options = parse_options.with_target_version(settings.python_version);
+    let parse_options =
+        ParseOptions::from(Mode::Module).with_target_version(settings.python_version);
 
     let Some(parsed) = parse_unchecked(&source_text, parse_options).try_into_module() else {
         return Ok(None);
     };
 
-    let mut collected_module = CollectedModule::new(module_path, module_type, source_text);
+    let module_body = parsed.into_suite();
+    let function_defs = module_body
+        .iter()
+        .filter_map(|stmt| match stmt {
+            Stmt::FunctionDef(function_def) => Some(function_def.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mut collected_module = CollectedModule::new(
+        module_path,
+        module_type,
+        module_body.into_boxed_slice(),
+        source_text,
+    );
 
-    for stmt in parsed.into_syntax().body {
-        if let Stmt::FunctionDef(function_def) = stmt {
-            if settings.collect_fixtures && is_fixture_function(&function_def) {
-                collected_module.add_fixture_function_def(function_def);
-                continue;
-            }
+    for function_def in function_defs {
+        if settings.collect_fixtures && is_fixture_function(&function_def) {
+            collected_module.add_fixture_function_def(function_def);
+            continue;
+        }
 
-            if is_test_function_to_collect(
-                &function_def.name,
-                function_names,
-                settings.test_function_prefix,
-            ) {
-                collected_module.add_test_function_def(function_def);
-            }
+        if is_test_function_to_collect(
+            &function_def.name,
+            function_names,
+            settings.test_function_prefix,
+        ) {
+            collected_module.add_test_function_def(function_def);
         }
     }
 

@@ -22,6 +22,7 @@ fn show_config_default_profile() {
 
     [test]
     test-function-prefix = "test"
+    strict-tags = false
     try-import-fixtures = false
     retry = 0
     shuffle = false

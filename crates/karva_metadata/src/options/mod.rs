@@ -105,6 +105,7 @@ impl Options {
     /// Resolves sparse values into complete runtime settings and compiled overrides.
     pub fn to_settings(&self) -> ProjectSettings {
         ProjectSettings {
+            tags: BTreeMap::new(),
             env: self.env.clone(),
             terminal: self.terminal.clone().unwrap_or_default().to_settings(),
             src: self.src.clone().unwrap_or_default().to_settings(),
@@ -394,6 +395,18 @@ pub struct TestOptions {
     )]
     pub test_function_prefix: Option<String>,
 
+    /// Reject custom tags that are absent from the project-wide `[tags]` registry.
+    /// Built-in Karva tags and pytest marks remain available without registration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = "true | false",
+        example = r#"
+            strict-tags = true
+        "#
+    )]
+    pub strict_tags: Option<bool>,
+
     /// Whether to stop at the first test failure.
     ///
     /// This is a legacy alias for [`max_fail`](#max-fail): `true`
@@ -620,6 +633,7 @@ impl TestOptions {
                 .test_function_prefix
                 .clone()
                 .unwrap_or_else(|| "test".to_string()),
+            strict_tags: self.strict_tags.unwrap_or_default(),
             max_fail,
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),

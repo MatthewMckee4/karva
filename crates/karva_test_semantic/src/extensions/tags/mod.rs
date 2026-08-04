@@ -1,6 +1,11 @@
 //! Registration, inheritance, and execution hooks for Karva test tags.
 
-use std::{collections::HashSet, ffi::CString, ops::Deref, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    ffi::CString,
+    ops::Deref,
+    sync::Arc,
+};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -17,6 +22,7 @@ pub mod python;
 pub mod skip;
 pub mod timeout;
 mod use_fixtures;
+pub mod validation;
 
 use custom::CustomTag;
 use expect_fail::ExpectFailTag;
@@ -120,6 +126,58 @@ pub enum Tag {
 }
 
 impl Tag {
+    const PARAMETRIZE_NAME: &'static str = "parametrize";
+    const USE_FIXTURES_NAME: &'static str = "use_fixtures";
+    const SKIP_NAME: &'static str = "skip";
+    const EXPECT_FAIL_NAME: &'static str = "expect_fail";
+    const TIMEOUT_NAME: &'static str = "timeout";
+    const FAIL_SLOW_NAME: &'static str = "fail_slow";
+
+    const PYTEST_PARAMETRIZE_NAME: &'static str = "parametrize";
+    const PYTEST_SKIP_NAME: &'static str = "skip";
+    const PYTEST_SKIP_IF_NAME: &'static str = "skipif";
+    const PYTEST_TIMEOUT_NAME: &'static str = "timeout";
+    const PYTEST_USE_FIXTURES_NAME: &'static str = "usefixtures";
+    const PYTEST_EXPECT_FAIL_NAME: &'static str = "xfail";
+
+    const BUILTIN_NAMES: &'static [&'static str] = &[
+        Self::PARAMETRIZE_NAME,
+        Self::USE_FIXTURES_NAME,
+        Self::SKIP_NAME,
+        Self::EXPECT_FAIL_NAME,
+        Self::TIMEOUT_NAME,
+        Self::FAIL_SLOW_NAME,
+    ];
+
+    const PYTEST_BUILTIN_NAMES: &'static [&'static str] = &[
+        Self::PYTEST_PARAMETRIZE_NAME,
+        Self::PYTEST_SKIP_NAME,
+        Self::PYTEST_SKIP_IF_NAME,
+        Self::PYTEST_TIMEOUT_NAME,
+        Self::PYTEST_USE_FIXTURES_NAME,
+        Self::PYTEST_EXPECT_FAIL_NAME,
+    ];
+
+    fn name(&self) -> &str {
+        match self {
+            Self::Parametrize(_) => Self::PARAMETRIZE_NAME,
+            Self::UseFixtures(_) => Self::USE_FIXTURES_NAME,
+            Self::Skip(_) => Self::SKIP_NAME,
+            Self::ExpectFail(_) => Self::EXPECT_FAIL_NAME,
+            Self::Timeout(_) => Self::TIMEOUT_NAME,
+            Self::FailSlow(_) => Self::FAIL_SLOW_NAME,
+            Self::Custom(custom) => custom.name(),
+        }
+    }
+
+    fn is_builtin_name(name: &str) -> bool {
+        Self::BUILTIN_NAMES.contains(&name)
+    }
+
+    fn is_pytest_builtin_name(name: &str) -> bool {
+        Self::PYTEST_BUILTIN_NAMES.contains(&name)
+    }
+
     /// Converts a Pytest mark into an Karva Tag.
     ///
     /// This is used to allow Pytest marks to be used as Karva tags.
@@ -136,17 +194,17 @@ impl Tag {
         };
 
         match name.as_str() {
-            "parametrize" => ParametrizeTag::try_from_pytest_mark(py_mark, globals)
+            Self::PYTEST_PARAMETRIZE_NAME => ParametrizeTag::try_from_pytest_mark(py_mark, globals)
                 .map(|tag| tag.map(Self::Parametrize)),
-            "usefixtures" => {
+            Self::PYTEST_USE_FIXTURES_NAME => {
                 UseFixturesTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::UseFixtures))
             }
-            "skip" | "skipif" => {
+            Self::PYTEST_SKIP_NAME | Self::PYTEST_SKIP_IF_NAME => {
                 SkipTag::try_from_pytest_mark(py_mark, globals).map(|tag| tag.map(Self::Skip))
             }
-            "xfail" => ExpectFailTag::try_from_pytest_mark(py_mark, globals)
+            Self::PYTEST_EXPECT_FAIL_NAME => ExpectFailTag::try_from_pytest_mark(py_mark, globals)
                 .map(|tag| tag.map(Self::ExpectFail)),
-            "timeout" => {
+            Self::PYTEST_TIMEOUT_NAME => {
                 TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
             }
             // Any other marker is treated as a custom marker
@@ -236,7 +294,7 @@ pub struct RuntimeTags {
     expect_fail: Option<ExpectFailTag>,
     timeout: Option<TimeoutTag>,
     fail_slow: Option<FailSlowTag>,
-    custom_names: Vec<String>,
+    names: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -255,6 +313,7 @@ impl RuntimeTags {
 
     pub(crate) fn extend(&mut self, tags: &Tags) {
         for tag in &tags.inner {
+            self.names.push(tag.name().to_string());
             match tag {
                 Tag::Skip(skip) if matches!(self.skip, SkipPolicy::Run) && skip.should_skip() => {
                     self.skip = SkipPolicy::Skip(skip.reason());
@@ -266,7 +325,6 @@ impl RuntimeTags {
                 Tag::FailSlow(fail_slow) if self.fail_slow.is_none() => {
                     self.fail_slow = Some(*fail_slow);
                 }
-                Tag::Custom(custom) => self.custom_names.push(custom.name().to_string()),
                 _ => {}
             }
         }
@@ -279,8 +337,8 @@ impl RuntimeTags {
         }
     }
 
-    pub(crate) fn custom_tag_names(&self) -> Vec<&str> {
-        self.custom_names.iter().map(String::as_str).collect()
+    pub(crate) fn tag_names(&self) -> Vec<&str> {
+        self.names.iter().map(String::as_str).collect()
     }
 
     pub(crate) fn expect_fail_tag(&self) -> Option<ExpectFailTag> {
@@ -361,6 +419,25 @@ impl Tags {
 
     pub(crate) fn extend(&mut self, other: &Self) {
         self.inner.extend(other.inner.iter().cloned());
+    }
+
+    /// Returns unregistered custom names, including parameter-specific tags.
+    fn unknown_custom_names<'a>(&'a self, registered: &BTreeMap<String, String>) -> Vec<&'a str> {
+        let mut unknown = Vec::new();
+        for tag in &self.inner {
+            match tag {
+                Tag::Custom(custom) if !registered.contains_key(custom.name()) => {
+                    unknown.push(custom.name());
+                }
+                Tag::Parametrize(parametrize) => {
+                    for tags in parametrize.parameter_tags() {
+                        unknown.extend(tags.unknown_custom_names(registered));
+                    }
+                }
+                _ => {}
+            }
+        }
+        unknown
     }
 
     pub(crate) fn from_py_any(

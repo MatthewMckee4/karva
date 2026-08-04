@@ -39,6 +39,14 @@ pub struct SubTestCommand {
     #[clap(long, help_heading = "Filter options")]
     pub test_prefix: Option<String>,
 
+    /// Internal transport for resolved strict-tag validation.
+    #[arg(long, hide = true)]
+    pub strict_tags: Option<bool>,
+
+    /// Internal transport for one registered custom tag name.
+    #[arg(long, hide = true, action = clap::ArgAction::Append)]
+    pub registered_tag: Vec<String>,
+
     /// When set, .gitignore files will not be respected.
     #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
     pub no_ignore: Option<bool>,
@@ -454,10 +462,10 @@ pub struct TestCommand {
     /// Configuration profile to use.
     ///
     /// Profiles are defined as `[profile.<name>]` sections in `karva.toml`
-    /// (or `[tool.karva.profile.<name>]` in `pyproject.toml`) and may
-    /// override any of the `[src]`, `[terminal]`, and `[test]` settings.
+    /// (or `[tool.karva.profile.<name>]` in `pyproject.toml`) and may override
+    /// `env`, `src`, `terminal`, `test`, `coverage`, `junit`, and `overrides`.
     /// The selected profile is layered on top of any `[profile.default]`
-    /// overrides, which themselves layer on top of the top-level options.
+    /// overrides, which themselves layer on top of Karva's built-in defaults.
     ///
     /// Defaults to `default`.
     #[arg(
@@ -523,6 +531,7 @@ impl SubTestCommand {
             }),
             test: Some(TestOptions {
                 test_function_prefix: self.test_prefix,
+                strict_tags: self.strict_tags,
                 fail_fast,
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,

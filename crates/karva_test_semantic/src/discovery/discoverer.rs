@@ -17,6 +17,7 @@ use crate::discovery::{
     DiscoveredModule, DiscoveredPackage, DiscoveryError, DiscoveryIssue, DiscoveryOutput,
 };
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
+use crate::extensions::tags::validation::unknown_tags;
 use crate::utils::add_to_sys_path;
 
 /// Discovers test functions and fixtures from Python source files.
@@ -136,16 +137,37 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             path,
             module_type: _,
             source_text,
+            module_body,
             test_function_defs,
             fixture_function_defs,
         } = collected_module;
 
         let mut module = DiscoveredModule::new_with_source(path, source_text);
 
+        if self.context.settings().test().strict_tags {
+            let mut has_unknown_tags = false;
+            for function in test_function_defs.iter().chain(&fixture_function_defs) {
+                for unknown in unknown_tags(function, self.context.settings().tags()) {
+                    self.issues
+                        .push(DiscoveryIssue::Error(DiscoveryError::UnknownTag {
+                            source_file: module.source_file(),
+                            name: unknown.name,
+                            range: unknown.range,
+                            suggestion: unknown.suggestion,
+                        }));
+                    has_unknown_tags = true;
+                }
+            }
+            if has_unknown_tags {
+                return module;
+            }
+        }
+
         self.issues.extend(discover(
             self.context,
             py,
             &mut module,
+            module_body,
             test_function_defs,
             fixture_function_defs,
         ));

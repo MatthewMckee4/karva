@@ -131,7 +131,13 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let coverage = worker_coverage_config(&args.sub_command)?;
 
-    let mut settings = args.sub_command.into_options().to_settings();
+    let registered_tags = args.sub_command.registered_tag.clone();
+    let mut settings = args.sub_command.into_options().to_settings().with_tags(
+        registered_tags
+            .into_iter()
+            .map(|name| (name, String::new()))
+            .collect(),
+    );
     settings.set_filter(filter);
     settings.set_run_ignored(run_ignored);
 
