@@ -208,9 +208,6 @@ struct RunMeasurement {
 
     /// Peak resident set size in KiB.
     peak_rss_kib: f64,
-
-    /// Complete process status and streams used for correctness checks.
-    output: Output,
 }
 
 /// Warmed cache directories retained to give every benchmark subject the same partition weights.
@@ -222,6 +219,7 @@ struct DurationCacheSeed {
 /// Invocation and cache state shared by every subject for one benchmark project.
 struct BenchmarkContext {
     invocation: KarvaInvocation,
+    diagnostic_invocation: KarvaInvocation,
     duration_cache_seed: DurationCacheSeed,
 }
 
@@ -528,7 +526,10 @@ fn run_subject(
     subject.wall_time_values.push(measurement.wall_time);
     subject.memory_values.push(measurement.peak_rss_kib);
     if subject.diagnostic_output.is_none() {
-        *subject.diagnostic_output = Some(normalize_diagnostic_output(&measurement.output));
+        benchmark.duration_cache_seed.restore()?;
+        let output = run_invocation(&benchmark.diagnostic_invocation, project_root)?;
+        ensure_karva_completed(&output, config)?;
+        *subject.diagnostic_output = Some(normalize_diagnostic_output(&output));
     }
 
     eprintln!(
@@ -551,15 +552,17 @@ fn prepare_benchmark(
     num_workers: NonZeroUsize,
 ) -> Result<BenchmarkContext> {
     let invocation = karva_invocation(config, project_root, num_workers)?;
+    let diagnostic_invocation = karva_invocation(config, project_root, NonZeroUsize::MIN)?;
     karva_benchmark::install_benchmark_tools(config, project_root, baseline_wheel)
         .context("Failed to install baseline benchmark wheel")?;
     karva_benchmark::clean_project_cache(project_root)
         .with_context(|| format!("Failed to clean benchmark cache for `{}`", config.name))?;
-    warm_project_cache(config, project_root, &invocation)
+    warm_project_cache(config, project_root, &diagnostic_invocation)
         .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
     let duration_cache_seed = DurationCacheSeed::capture(project_root)?;
     Ok(BenchmarkContext {
         invocation,
+        diagnostic_invocation,
         duration_cache_seed,
     })
 }
@@ -636,7 +639,6 @@ fn run_project_cli(
         Ok(RunMeasurement {
             wall_time: elapsed.as_secs_f64(),
             peak_rss_kib,
-            output,
         })
     }
 
@@ -1309,10 +1311,10 @@ impl BenchmarkMetric {
     fn report_context(self) -> &'static str {
         match self {
             Self::WallTime => {
-                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Timed runs use available CPU parallelism and share one baseline-warmed duration cache so both revisions use the same test partition. Diagnostics use separate single-worker runs. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
             Self::Memory => {
-                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Timed runs use available CPU parallelism and share one baseline-warmed duration cache so both revisions use the same test partition. Diagnostics use separate single-worker runs. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
         }
     }
@@ -1481,7 +1483,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :x: Merging this PR may alter performance
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Timed runs use available CPU parallelism and share one baseline-warmed duration cache so both revisions use the same test partition. Diagnostics use separate single-worker runs. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **1** improved benchmark
         :x: **1** regressed benchmark
@@ -1560,7 +1562,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :warning: Benchmark includes changed test workloads
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Timed runs use available CPU parallelism and share one baseline-warmed duration cache so both revisions use the same test partition. Diagnostics use separate single-worker runs. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **0** improved benchmarks
         :x: **0** regressed benchmarks
