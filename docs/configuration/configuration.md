@@ -1,30 +1,31 @@
-<!-- WARNING: This file is auto-generated (cargo dev generate-all). Update the doc comments on the 'Options' struct in 'crates/karva_project/src/metadata/options.rs' if you want to change anything here. -->
+<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Update the doc comments on 'Config' and 'Options' in 'crates/karva_metadata/src/options/' if you want to change anything here. -->
 
 # Configuration
 
 Karva is configured through `karva.toml` (or the `[tool.karva]` table in `pyproject.toml`). All option groups live under a `[profile.<name>]` section; see [Profiles](profiles.md) for how to define and select profiles.
 
-The reference below documents every field supported inside a profile. Examples target the implicit `default` profile.
+The reference below documents every project and profile field. Profile examples target the implicit `default` profile.
+
+File-level configuration: a collection of named profiles.
+
+Every option group lives inside `[profile.<name>]`. The implicit `default`
+profile is always available; named profiles inherit from it and can
+override individual fields.
 
 ## `required-version`
 
-A SemVer requirement that the running karva binary must satisfy.
+`SemVer` requirement that the running karva binary must satisfy.
 
-If the installed karva version does not match the requirement, karva exits with a clear error before running any tests. This prevents confusing failures when CI or other contributors run with an older version that does not support features used elsewhere in the configuration.
-
-`required-version` is a top-level field, not part of any profile.
+When set, karva refuses to run if the installed version does not
+match the requirement. This is useful in CI and for shared
+repositories where every developer should be on a known-good
+version.
 
 **Default value**: `null`
 
-**Type**: SemVer requirement (`string`)
+**Type**: `string`
 
-**Example usage** (`karva.toml`):
-
-```toml
-required-version = ">=0.5.0"
-```
-
-The same field in `pyproject.toml` lives under `[tool.karva]`:
+**Example usage** (`pyproject.toml`):
 
 ```toml
 [tool.karva]
@@ -35,23 +36,18 @@ required-version = ">=0.5.0"
 
 ## `tags`
 
-Project-wide custom tag registry. Each key is a tag name and each value is an optional description for project documentation. Use an empty string when no description is needed.
+Project-wide custom tag registry. Each key is a tag name and each value
+is an optional description for project documentation. Empty descriptions
+are allowed.
 
-Enable [`strict-tags`](#strict-tags) in a profile to reject custom tags absent from this table.
+Enable [`strict-tags`](#strict-tags) in a profile to reject custom tags
+absent from this table.
 
 **Default value**: `{}`
 
 **Type**: `table`
 
-**Example usage** (`karva.toml`):
-
-```toml
-[tags]
-integration = "Uses an external service"
-slow = ""
-```
-
-The same table in `pyproject.toml` lives under `[tool.karva.tags]`:
+**Example usage** (`pyproject.toml`):
 
 ```toml
 [tool.karva.tags]

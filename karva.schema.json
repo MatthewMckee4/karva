@@ -25,7 +25,7 @@
       ]
     },
     "tags": {
-      "description": "Project-wide custom tag registry. Empty descriptions are allowed.",
+      "description": "Project-wide custom tag registry. Each key is a tag name and each value\nis an optional description for project documentation. Empty descriptions\nare allowed.\n\nEnable [`strict-tags`](#strict-tags) in a profile to reject custom tags\nabsent from this table.",
       "type": "object",
       "additionalProperties": {
         "type": "string"

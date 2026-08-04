@@ -3,7 +3,7 @@
 use std::fmt::Write;
 
 use itertools::Itertools;
-use karva_metadata::Options;
+use karva_metadata::{Config, Options};
 use ruff_options_metadata::{OptionField, OptionSet, OptionsMetadata, Visit};
 
 use crate::{Mode, apply_mode};
@@ -19,21 +19,28 @@ pub fn main(args: &Args) -> anyhow::Result<()> {
     let mut output = String::new();
 
     output.push_str(
-        "<!-- WARNING: This file is auto-generated (cargo dev generate-all). Update the doc comments on the 'Options' struct in 'crates/karva_project/src/metadata/options.rs' if you want to change anything here. -->\n\n",
+        "<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Update the doc comments on 'Config' and 'Options' in 'crates/karva_metadata/src/options/' if you want to change anything here. -->\n\n",
     );
 
     generate_set(
         &mut output,
+        Set::Toplevel(Config::metadata()),
+        &mut Vec::new(),
+        Root::Config,
+    );
+    generate_set(
+        &mut output,
         Set::Toplevel(Options::metadata()),
         &mut Vec::new(),
+        Root::Profile,
     );
 
     apply_mode(args.mode, "docs/configuration/configuration.md", &output)
 }
 
-fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
-    match &set {
-        Set::Toplevel(_) => {
+fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>, root: Root) {
+    match (&set, root) {
+        (Set::Toplevel(_), Root::Config) => {
             output.push_str("# Configuration\n\n");
             output.push_str(
                 "Karva is configured through `karva.toml` (or the `[tool.karva]` table in \
@@ -41,13 +48,12 @@ fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
                  see [Profiles](profiles.md) for how to define and select profiles.\n\n",
             );
             output.push_str(
-                "The reference below documents every field supported inside a profile. Examples \
+                "The reference below documents every project and profile field. Profile examples \
                  target the implicit `default` profile.\n\n",
             );
-            emit_required_version_section(output);
-            emit_tags_section(output);
         }
-        Set::Named { name, .. } => {
+        (Set::Toplevel(_), Root::Profile) => {}
+        (Set::Named { name, .. }, _) => {
             let title = parents
                 .iter()
                 .filter_map(|set| set.name())
@@ -75,7 +81,7 @@ fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
 
     // Generate the fields.
     for (name, field) in &fields {
-        emit_field(output, name, field, parents.as_slice());
+        emit_field(output, name, field, parents.as_slice(), root);
         output.push_str("---\n\n");
     }
 
@@ -88,6 +94,7 @@ fn generate_set(output: &mut String, set: Set, parents: &mut Vec<Set>) {
                 set: *sub_set,
             },
             parents,
+            root,
         );
     }
 
@@ -110,57 +117,18 @@ impl Set {
 
     fn metadata(&self) -> &OptionSet {
         match self {
-            Self::Toplevel(set) => set,
-            Self::Named { set, .. } => set,
+            Self::Toplevel(set) | Self::Named { set, .. } => set,
         }
     }
 }
 
-/// `required-version` lives at the root of `Config`, not inside any profile,
-/// so the metadata-driven walker does not pick it up. Emit a hand-rolled
-/// section for it just below the intro paragraph instead.
-fn emit_required_version_section(output: &mut String) {
-    output.push_str("## `required-version`\n\n");
-    output.push_str(
-        "A SemVer requirement that the running karva binary must satisfy.\n\n\
-         If the installed karva version does not match the requirement, karva exits with a \
-         clear error before running any tests. This prevents confusing failures when CI or \
-         other contributors run with an older version that does not support features used \
-         elsewhere in the configuration.\n\n\
-         `required-version` is a top-level field, not part of any profile.\n\n",
-    );
-    output.push_str("**Default value**: `null`\n\n");
-    output.push_str("**Type**: SemVer requirement (`string`)\n\n");
-    output.push_str("**Example usage** (`karva.toml`):\n\n");
-    output.push_str("```toml\nrequired-version = \">=0.5.0\"\n```\n\n");
-    output.push_str("The same field in `pyproject.toml` lives under `[tool.karva]`:\n\n");
-    output.push_str("```toml\n[tool.karva]\nrequired-version = \">=0.5.0\"\n```\n\n");
-    output.push_str("---\n\n");
+#[derive(Debug, Copy, Clone)]
+enum Root {
+    Config,
+    Profile,
 }
 
-/// `[tags]` is project-wide rather than profile-specific, so emit it beside
-/// `required-version` instead of routing it through profile metadata.
-fn emit_tags_section(output: &mut String) {
-    output.push_str("## `tags`\n\n");
-    output.push_str(
-        "Project-wide custom tag registry. Each key is a tag name and each value is an optional \
-         description for project documentation. Use an empty string when no description is needed.\n\n\
-         Enable [`strict-tags`](#strict-tags) in a profile to reject custom tags absent from this table.\n\n",
-    );
-    output.push_str("**Default value**: `{}`\n\n");
-    output.push_str("**Type**: `table`\n\n");
-    output.push_str("**Example usage** (`karva.toml`):\n\n");
-    output.push_str(
-        "```toml\n[tags]\nintegration = \"Uses an external service\"\nslow = \"\"\n```\n\n",
-    );
-    output.push_str("The same table in `pyproject.toml` lives under `[tool.karva.tags]`:\n\n");
-    output.push_str(
-        "```toml\n[tool.karva.tags]\nintegration = \"Uses an external service\"\nslow = \"\"\n```\n\n",
-    );
-    output.push_str("---\n\n");
-}
-
-fn emit_field(output: &mut String, name: &str, field: &OptionField, parents: &[Set]) {
+fn emit_field(output: &mut String, name: &str, field: &OptionField, parents: &[Set], root: Root) {
     let header_level = "#".repeat(parents.len() + 1);
 
     let _ = writeln!(output, "{header_level} `{name}`");
@@ -196,6 +164,7 @@ fn emit_field(output: &mut String, name: &str, field: &OptionField, parents: &[S
             field.scope,
             field.example,
             parents,
+            root,
             ConfigurationFile::PyprojectToml,
         ),
         field.example,
@@ -218,13 +187,14 @@ fn format_header(
     scope: Option<&str>,
     example: &str,
     parents: &[Set],
+    root: Root,
     configuration: ConfigurationFile,
 ) -> String {
-    // All option groups live under `[profile.<name>]` (nextest-style). The
-    // generated examples target the implicit `default` profile.
-    let parent_path = match configuration {
-        ConfigurationFile::PyprojectToml => "tool.karva.profile.default",
-        ConfigurationFile::KarvaToml => "profile.default",
+    let parent_path = match (root, configuration) {
+        (Root::Config, ConfigurationFile::PyprojectToml) => "tool.karva",
+        (Root::Config, ConfigurationFile::KarvaToml) => "",
+        (Root::Profile, ConfigurationFile::PyprojectToml) => "tool.karva.profile.default",
+        (Root::Profile, ConfigurationFile::KarvaToml) => "profile.default",
     };
 
     let header = std::iter::once(parent_path)
