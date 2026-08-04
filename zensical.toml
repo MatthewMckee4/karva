@@ -24,6 +24,7 @@ nav = [
         { "Overview" = "usage/index.md"},
         { "Running Tests" = [
             { "Filtering Tests" = "usage/running-tests/filtering.md"},
+            { "Randomizing Test Order" = "usage/running-tests/shuffle.md"},
             { "Parallel Execution" = "usage/running-tests/parallel.md"},
             { "Watch Mode" = "usage/running-tests/watch.md"},
             { "Cache" = "usage/running-tests/cache.md"},

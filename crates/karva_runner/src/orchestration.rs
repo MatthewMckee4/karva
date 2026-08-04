@@ -469,9 +469,7 @@ pub struct ParallelTestConfig {
     /// When set, restrict the run to the selected slice of collected tests.
     pub partition: Option<PartitionSelection>,
 
-    /// Ordering strategy for partition inputs. Normal runs shuffle tests
-    /// without duration history to avoid sticky first-run imbalance; benchmarks
-    /// use stable ordering for deterministic inputs.
+    /// Ordering strategy for partition inputs.
     pub test_ordering: TestOrdering,
 }
 

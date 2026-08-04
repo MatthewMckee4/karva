@@ -22,6 +22,7 @@ pub(super) fn write_result_report(
     project_root: &Utf8Path,
     elapsed: Duration,
     exit_status: ExitStatus,
+    random_seed: Option<u64>,
 ) -> Result<()> {
     let Some(path) = path else {
         return Ok(());
@@ -33,7 +34,7 @@ pub(super) fn write_result_report(
             .with_context(|| format!("failed to create result report directory `{parent}`"))?;
     }
 
-    let report = RunReport::new(results, elapsed, RunStatus::from(exit_status));
+    let report = RunReport::new(results, elapsed, RunStatus::from(exit_status), random_seed);
     let content = match format {
         ResultFormat::Json => {
             let mut content = serde_json::to_string_pretty(&report)?;
@@ -72,6 +73,7 @@ fn build_jsonl_report(report: &RunReport<'_>) -> Result<String> {
             status: report.status,
             elapsed_seconds: report.elapsed_seconds,
             stats: report.stats,
+            random_seed: report.random_seed,
         },
     )?;
     Ok(output)
@@ -115,6 +117,10 @@ struct RunReport<'a> {
 
     status: RunStatus,
 
+    /// Seed controlling randomized ordering, omitted when shuffling is disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    random_seed: Option<u64>,
+
     /// Whole-run wall-clock duration in seconds.
     elapsed_seconds: f64,
 
@@ -128,7 +134,12 @@ struct RunReport<'a> {
 }
 
 impl<'a> RunReport<'a> {
-    fn new(results: &'a AggregatedResults, elapsed: Duration, status: RunStatus) -> Self {
+    fn new(
+        results: &'a AggregatedResults,
+        elapsed: Duration,
+        status: RunStatus,
+        random_seed: Option<u64>,
+    ) -> Self {
         let tests = results.test_cases.iter().map(TestReport::new).collect();
         let run_diagnostics = (!results.run_diagnostics.is_empty()).then(|| {
             results
@@ -141,6 +152,7 @@ impl<'a> RunReport<'a> {
         Self {
             schema_version: SCHEMA_VERSION,
             status,
+            random_seed,
             elapsed_seconds: elapsed.as_secs_f64(),
             stats: StatsReport::new(results),
             tests,
@@ -389,6 +401,10 @@ impl<'a> DiagnosticReport<'a> {
 /// Terminal JSONL record summarizing completed run.
 struct RunFinishedRecord {
     status: RunStatus,
+
+    /// Seed controlling randomized ordering, omitted when shuffling is disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    random_seed: Option<u64>,
 
     /// Whole-run wall-clock duration in seconds.
     elapsed_seconds: f64,

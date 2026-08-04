@@ -93,6 +93,18 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     FiltersetSet::new(&sub_command.filter_expressions).context("invalid `--filter` expression")?;
 
+    let random_seed = project.settings().test().shuffle.then(|| {
+        project
+            .settings()
+            .test()
+            .random_seed
+            .unwrap_or_else(karva_runner::generate_random_seed)
+    });
+    if let Some(seed) = random_seed {
+        let mut stdout = printer.stream_for_message().lock();
+        writeln!(stdout, "Random seed: {seed}")?;
+    }
+
     let config = karva_runner::ParallelTestConfig {
         num_workers,
         no_cache,
@@ -100,7 +112,10 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         last_failed,
         profile,
         partition,
-        test_ordering: karva_runner::TestOrdering::ShuffleUnknownDurations,
+        test_ordering: random_seed.map_or(
+            karva_runner::TestOrdering::RandomizeUnmeasured,
+            karva_runner::TestOrdering::SeededShuffle,
+        ),
     };
 
     if watch {
@@ -127,6 +142,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
             project.cwd(),
             start_time.elapsed(),
             exit_status,
+            random_seed,
         )
     };
 

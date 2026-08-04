@@ -18,5 +18,6 @@ mod result_report;
 mod run_ignored;
 mod run_timeout;
 mod show_config;
+mod shuffle;
 mod version;
 mod watch;

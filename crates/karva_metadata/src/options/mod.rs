@@ -431,6 +431,34 @@ pub struct TestOptions {
     )]
     pub retry: Option<u32>,
 
+    /// Use seeded randomized ordering instead of duration-aware scheduling.
+    ///
+    /// Defaults to `false`. When enabled, Karva prints the seed used for the
+    /// run so the same order can be reproduced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = "true | false",
+        example = r#"
+            shuffle = true
+        "#
+    )]
+    pub shuffle: Option<bool>,
+
+    /// Seed used to randomize test order when [`shuffle`](#shuffle) is enabled.
+    ///
+    /// When omitted, Karva generates and prints a seed for the run. Setting a
+    /// seed does not enable shuffling by itself.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"null"#,
+        value_type = "u64",
+        example = r#"
+            random-seed = 170938
+        "#
+    )]
+    pub random_seed: Option<u64>,
+
     /// Whether tests that pass only after a retry should fail the run.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
@@ -573,6 +601,8 @@ impl TestOptions {
             max_fail,
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),
+            shuffle: self.shuffle.unwrap_or_default(),
+            random_seed: self.random_seed,
             flaky_result: self.flaky_result.unwrap_or_default(),
             filter: FiltersetSet::default(),
             run_ignored: RunIgnoredMode::default(),
@@ -1102,7 +1132,7 @@ nonsense = 42
           |
         4 | nonsense = 42
           | ^^^^^^^^
-        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `flaky-result`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
+        unknown field `nonsense`, expected one of `test-function-prefix`, `fail-fast`, `max-fail`, `try-import-fixtures`, `retry`, `shuffle`, `random-seed`, `flaky-result`, `no-tests`, `slow-timeout`, `timeout`, `fail-slow`, `run-timeout`, `termination-grace-period`
         "
         );
     }
@@ -1199,6 +1229,8 @@ max-fail = 0
             retry: Some(
                 5,
             ),
+            shuffle: None,
+            random_seed: None,
             flaky_result: None,
             no_tests: None,
             slow_timeout: None,
@@ -1232,6 +1264,8 @@ max-fail = 0
             retry: Some(
                 3,
             ),
+            shuffle: None,
+            random_seed: None,
             flaky_result: None,
             no_tests: None,
             slow_timeout: None,
@@ -1298,6 +1332,8 @@ retry = 2
                 retry: Some(
                     2,
                 ),
+                shuffle: None,
+                random_seed: None,
                 flaky_result: None,
                 no_tests: None,
                 slow_timeout: None,
@@ -1358,6 +1394,8 @@ retry = 5
                 retry: Some(
                     5,
                 ),
+                shuffle: None,
+                random_seed: None,
                 flaky_result: None,
                 no_tests: None,
                 slow_timeout: None,
