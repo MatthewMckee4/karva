@@ -6,12 +6,11 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
 
-// Receipt: 2,048 modules with 8 tests each exceeded the macOS process argument
-// limit when Karva spawned workers. 1,024 modules with 8 tests each ran in
-// 0.55 s at 92.1 MiB peak RSS on arm64 macOS with a local debug wheel on
-// 2026-08-04.
-pub(super) const MODULES: usize = 1_024;
-pub(super) const TESTS_PER_MODULE: usize = 8;
+// Receipt: 8,192 modules with one test each ran in 1.36 s at 124.1 MiB peak
+// RSS on arm64 macOS with a local debug wheel on 2026-08-04. Using 2,048
+// modules with eight tests each exceeded the macOS process argument limit.
+pub(super) const MODULES: usize = 8_192;
+pub(super) const TESTS_PER_MODULE: usize = 1;
 
 /// Generates many small modules, shaped on a small scale like:
 ///

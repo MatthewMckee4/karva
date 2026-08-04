@@ -6,10 +6,10 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
 
-// Receipt: 64 fixtures across 1,024 tests ran in 0.83 s at 47.5 MiB peak RSS
+// Receipt: 512 fixtures across 4,096 tests ran in 1.99 s at 84.9 MiB peak RSS
 // on arm64 macOS with a local debug wheel on 2026-08-04.
-pub(super) const DEPTH: usize = 64;
-pub(super) const TESTS: usize = 1_024;
+pub(super) const DEPTH: usize = 512;
+pub(super) const TESTS: usize = 4_096;
 
 /// Generates a deep fixture chain, shaped on a small scale like:
 ///

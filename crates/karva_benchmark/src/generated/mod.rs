@@ -152,7 +152,11 @@ mod tests {
             parametrized
                 .matches(&format!("{parameter_values:?}"))
                 .count(),
-            3
+            parametrized_matrix::PARAMETRIZE_DECORATORS
+        );
+        assert_eq!(
+            parametrized.matches("@pytest.mark.parametrize").count(),
+            parametrized_matrix::PARAMETRIZE_DECORATORS
         );
 
         generate_project(GeneratedBenchmark::Snapshots, root)
@@ -165,6 +169,7 @@ mod tests {
             snapshots::CASES
         );
         assert_eq!(snapshot_source.matches("record ").count(), snapshots::LINES);
+        assert!(snapshot_source.contains(&format!("range({})", snapshots::ASSERTIONS_PER_TEST)));
 
         generate_project(GeneratedBenchmark::Retries, root)
             .expect("retry project should be generated");
