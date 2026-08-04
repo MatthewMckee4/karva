@@ -2,7 +2,7 @@
 
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufWriter};
+use std::io::BufWriter;
 use std::path::Path;
 
 use colored::Colorize;
@@ -22,29 +22,6 @@ mod verbosity;
 pub use printer::{Printer, Stdout};
 pub use status_level::{FinalStatusLevel, StatusLevel};
 pub use verbosity::VerbosityLevel;
-
-/// Whether an error chain contains stdout's normal early-consumer shutdown signal.
-pub fn error_chain_contains_broken_pipe<'a>(
-    causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
-) -> bool {
-    causes.into_iter().any(|cause| {
-        cause
-            .downcast_ref::<io::Error>()
-            .is_some_and(|err| err.kind() == io::ErrorKind::BrokenPipe)
-    })
-}
-
-/// Writes Karva's top-level failure heading followed by each causal error.
-pub fn write_error_chain<'a>(
-    writer: &mut impl io::Write,
-    causes: impl IntoIterator<Item = &'a (dyn std::error::Error + 'static)>,
-) -> io::Result<()> {
-    writeln!(writer, "{}", "Karva failed".red().bold())?;
-    for cause in causes {
-        writeln!(writer, "  {} {cause}", "Cause:".bold())?;
-    }
-    Ok(())
-}
 
 /// Installs process-global tracing and returns resources that must outlive the run.
 pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
@@ -288,75 +265,5 @@ impl TerminalColor {
             Self::Always => "always",
             Self::Never => "never",
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io;
-
-    use super::{error_chain_contains_broken_pipe, setup_profile_file, write_error_chain};
-
-    struct FailingWriter {
-        kind: io::ErrorKind,
-    }
-
-    impl io::Write for FailingWriter {
-        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Err(io::Error::from(self.kind))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn profile_setup_disables_profiling_when_file_cannot_be_created() {
-        let setup = setup_profile_file::<tracing_subscriber::Registry>(".");
-
-        assert!(setup.layer.is_none());
-        assert!(setup.guard.is_none());
-        assert!(matches!(
-            setup.warning.as_deref(),
-            Some(warning) if warning.contains("profiling disabled")
-        ));
-    }
-
-    #[test]
-    fn write_error_chain_writes_header_and_causes() {
-        let first = io::Error::other("first");
-        let second = io::Error::other("second");
-        let causes: [&dyn std::error::Error; 2] = [&first, &second];
-
-        let mut output = Vec::new();
-        write_error_chain(&mut output, causes).expect("write should succeed");
-
-        let output = String::from_utf8(output).expect("valid UTF-8");
-        assert!(output.contains("Karva failed"));
-        assert!(output.contains("Cause:"));
-        assert!(output.contains("first"));
-        assert!(output.contains("second"));
-    }
-
-    #[test]
-    fn write_error_chain_propagates_write_failures() {
-        let cause = io::Error::other("cause");
-        let causes: [&dyn std::error::Error; 1] = [&cause];
-        let mut writer = FailingWriter {
-            kind: io::ErrorKind::PermissionDenied,
-        };
-
-        let err = write_error_chain(&mut writer, causes).expect_err("write should fail");
-
-        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
-    }
-
-    #[test]
-    fn error_chain_contains_broken_pipe_detects_io_cause() {
-        let cause = io::Error::from(io::ErrorKind::BrokenPipe);
-        let causes: [&dyn std::error::Error; 1] = [&cause];
-
-        assert!(error_chain_contains_broken_pipe(causes));
     }
 }

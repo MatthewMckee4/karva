@@ -170,6 +170,75 @@ output-format = "concise"
 }
 
 #[test]
+fn show_config_emits_resolved_environment() {
+    let context = TestContext::with_file(
+        "karva.toml",
+        r#"
+[profile.default.env]
+APP_ENV = "test"
+CACHE_DIR = { value = ".cache/tests", preserve = true }
+LIVE_API_TOKEN = { unset = true }
+
+[profile.ci.env]
+APP_ENV = "ci"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.show_config().args(["--profile", "ci"]), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    [env]
+    APP_ENV = "ci"
+
+    [env.CACHE_DIR]
+    value = ".cache/tests"
+    preserve = true
+
+    [env.LIVE_API_TOKEN]
+    unset = true
+
+    [src]
+    respect-ignore-files = true
+    include = []
+
+    [terminal]
+    output-format = "full"
+    show-python-output = false
+    status-level = "pass"
+    final-status-level = "pass"
+
+    [test]
+    test-function-prefix = "test"
+    try-import-fixtures = false
+    retry = 0
+    shuffle = false
+    flaky-result = "pass"
+    no-tests = "auto"
+
+    [coverage]
+    data-file = ".karva/coverage/data.json"
+    path-aliases = []
+    sources = []
+    include = []
+    omit = []
+    exclude-lines = []
+    partial-branches = []
+    contexts = []
+    precision = 0
+    append = false
+    report = "term"
+
+    [junit]
+    report-name = "karva-tests"
+    store-failure-output = true
+    flaky-fail-status = "failure"
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn show_config_emits_set_timeouts_and_coverage() {
     let context = TestContext::with_file(
         "karva.toml",
@@ -315,13 +384,13 @@ retry = 3
 ",
     );
 
-    assert_cmd_snapshot!(context.show_config().args(["--profile", "bogus"]), @r"
+    assert_cmd_snapshot!(context.show_config().args(["--profile", "bogus"]), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: profile `bogus` is not defined in configuration (available: ci, default)
     ");
 }

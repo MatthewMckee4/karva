@@ -3,6 +3,8 @@
 mod config;
 mod overrides;
 
+use std::collections::BTreeMap;
+
 use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
 use karva_macros::{Combine, OptionsMetadata};
@@ -24,12 +26,30 @@ use crate::settings::{
     SlowTimeoutSecs, SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings,
     TestTimeoutSecs,
 };
+use crate::{EnvironmentVariable, EnvironmentVariableName};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 /// Configuration groups combined across defaults, profiles, environment, and CLI.
 pub struct Options {
+    /// Environment variables applied to test workers before Python imports any
+    /// test modules or fixtures. Strings always set values. Use
+    /// `{ value = "...", preserve = true }` to keep an existing value, or
+    /// `{ unset = true }` to remove one. Karva's own variables are reserved.
+    #[option(
+        default = r#"{}"#,
+        value_type = "table",
+        example = r#"
+            [tool.karva.profile.default.env]
+            APP_ENV = "test"
+            CACHE_DIR = { value = ".cache/tests", preserve = true }
+            LIVE_API_TOKEN = { unset = true }
+        "#
+    )]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<EnvironmentVariableName, EnvironmentVariable>,
+
     /// Source discovery overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
@@ -68,6 +88,7 @@ pub struct Options {
 
 impl Combine for Options {
     fn combine_with(&mut self, other: Self) {
+        Combine::combine_with(&mut self.env, other.env);
         Combine::combine_with(&mut self.src, other.src);
         Combine::combine_with(&mut self.terminal, other.terminal);
         Combine::combine_with(&mut self.test, other.test);
@@ -84,6 +105,7 @@ impl Options {
     /// Resolves sparse values into complete runtime settings and compiled overrides.
     pub fn to_settings(&self) -> ProjectSettings {
         ProjectSettings {
+            env: self.env.clone(),
             terminal: self.terminal.clone().unwrap_or_default().to_settings(),
             src: self.src.clone().unwrap_or_default().to_settings(),
             test: self.test.clone().unwrap_or_default().to_settings(),

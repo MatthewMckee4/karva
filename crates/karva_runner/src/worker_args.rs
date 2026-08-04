@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use karva_cache::{RunCache, RunHash};
 use karva_cli::SubTestCommand;
 use karva_logging::TerminalColor;
-use karva_metadata::ProjectSettings;
+use karva_metadata::{EnvironmentVariable, ProjectSettings};
 use karva_project::Project;
 use karva_static::{EnvVars, PythonEnvVars, WorkerEnvVars};
 
@@ -75,6 +75,22 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partiti
             cmd.env(EnvVars::KARVA_SNAPSHOT_UPDATE, "0");
         }
         None => {}
+    }
+
+    for (name, variable) in spawn.project.settings().env() {
+        match variable {
+            EnvironmentVariable::Set(value) => {
+                cmd.env(name.as_str(), value);
+            }
+            EnvironmentVariable::Preserve(value) => {
+                if std::env::var_os(name.as_str()).is_none() {
+                    cmd.env(name.as_str(), value);
+                }
+            }
+            EnvironmentVariable::Unset => {
+                cmd.env_remove(name.as_str());
+            }
+        }
     }
 
     for path in partition.tests() {

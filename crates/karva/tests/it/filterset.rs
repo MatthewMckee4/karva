@@ -975,13 +975,13 @@ fn filterset_parenthesized_or_with_and() {
 #[test]
 fn filterset_invalid_regex() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(/[invalid/)"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(/[invalid/)"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: invalid regex `/[invalid/` in filter expression `test(/[invalid/)`: regex parse error:
         [invalid
@@ -993,13 +993,13 @@ fn filterset_invalid_regex() {
 #[test]
 fn filterset_invalid_regex_unclosed_group() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(/(unclosed/)"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(/(unclosed/)"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: invalid regex `/(unclosed/` in filter expression `test(/(unclosed/)`: regex parse error:
         (unclosed
@@ -1011,13 +1011,13 @@ fn filterset_invalid_regex_unclosed_group() {
 #[test]
 fn filterset_invalid_regex_invalid_repetition() {
     let context = TestContext::with_file("test.py", TWO_TESTS);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(/*invalid/)"), @r"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(/*invalid/)"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: invalid regex `/*invalid/` in filter expression `test(/*invalid/)`: regex parse error:
         *invalid
@@ -1037,7 +1037,7 @@ fn filterset_invalid_regex_bad_escape() {
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: invalid regex `/\p{Invalid}/` in filter expression `test(/\p{Invalid}/)`: regex parse error:
         \p{Invalid}
@@ -1052,13 +1052,13 @@ fn filterset_unknown_predicate() {
     let context = TestContext::with_file("test.py", "def test_x(): assert True\n");
     assert_cmd_snapshot!(
         context.command_no_parallel().arg("-E").arg("package(foo)"),
-        @r"
+        @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: unknown predicate `package` in filter expression `package(foo)` (expected `test` or `tag`)
     "
@@ -1070,13 +1070,13 @@ fn filterset_unclosed_paren() {
     let context = TestContext::with_file("test.py", "def test_x(): assert True\n");
     assert_cmd_snapshot!(
         context.command_no_parallel().arg("-E").arg("tag(slow"),
-        @r"
+        @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: expected closing `)` in filter expression `tag(slow`
     "
@@ -1088,13 +1088,13 @@ fn filterset_empty_matcher_body() {
     let context = TestContext::with_file("test.py", "def test_x(): assert True\n");
     assert_cmd_snapshot!(
         context.command_no_parallel().arg("-E").arg("tag()"),
-        @r"
+        @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: expected a matcher body in filter expression `tag()`
     "
@@ -1106,13 +1106,13 @@ fn filterset_empty_expression() {
     let context = TestContext::with_file("test.py", "def test_x(): assert True\n");
     assert_cmd_snapshot!(
         context.command_no_parallel().arg("-E").arg(""),
-        @r"
+        @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
+    karva failed
       Cause: invalid `--filter` expression
       Cause: empty filter expression ``
     "

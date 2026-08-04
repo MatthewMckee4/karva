@@ -1,3 +1,4 @@
+mod environment;
 mod overrides;
 mod profile;
 mod required_version;
@@ -1613,15 +1614,15 @@ def test_should_not_run(): pass
 fn test_config_file_flag_nonexistent_unix() {
     let context = TestContext::with_file("test.py", "def test_a(): pass");
 
-    assert_cmd_snapshot!(context.command().arg("--config-file").arg("nonexistent.toml"), @r"
+    assert_cmd_snapshot!(context.command().arg("--config-file").arg("nonexistent.toml"), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
-      Cause: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
+    karva failed
+      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`
+      Cause: Failed to read `<temp_dir>/nonexistent.toml`
       Cause: failed to open file `<temp_dir>/nonexistent.toml`: No such file or directory (os error 2)
     ");
 }
@@ -1632,15 +1633,15 @@ fn test_discovered_karva_toml_read_error_unix() {
     let context = TestContext::with_file("test.py", "def test_a(): pass");
     std::fs::create_dir(context.root().join("karva.toml")).expect("create directory config path");
 
-    assert_cmd_snapshot!(context.command(), @r"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 2
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/karva.toml`: failed to read from file `<temp_dir>/karva.toml`: Is a directory (os error 21)
-      Cause: Failed to read `<temp_dir>/karva.toml`: failed to read from file `<temp_dir>/karva.toml`: Is a directory (os error 21)
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
+      Cause: Failed to read `<temp_dir>/karva.toml`
       Cause: failed to read from file `<temp_dir>/karva.toml`: Is a directory (os error 21)
     ");
 }
@@ -1656,9 +1657,9 @@ fn test_config_file_flag_nonexistent_windows() {
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
-      Cause: Failed to read `<temp_dir>/nonexistent.toml`: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
+    karva failed
+      Cause: <temp_dir>/nonexistent.toml is not a valid `karva.toml`
+      Cause: Failed to read `<temp_dir>/nonexistent.toml`
       Cause: failed to open file `<temp_dir>/nonexistent.toml`: The system cannot find the file specified. (os error 2)
     ");
 }

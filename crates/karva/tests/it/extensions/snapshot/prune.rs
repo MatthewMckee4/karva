@@ -244,7 +244,7 @@ fn test_snapshot_prune_reports_source_read_errors() {
 
     ----- stderr -----
     warning: Prune uses static analysis and may not detect all unreferenced snapshots.
-    Karva failed
+    karva failed
       Cause: failed to read source file `<temp_dir>/test.py`: failed to read from file `<temp_dir>/test.py`: Is a directory (os error 21)
     ");
     #[cfg(not(unix))]
@@ -255,7 +255,7 @@ fn test_snapshot_prune_reports_source_read_errors() {
 
     ----- stderr -----
     warning: Prune uses static analysis and may not detect all unreferenced snapshots.
-    Karva failed
+    karva failed
       Cause: failed to read source file `<temp_dir>/test.py`: failed to open file `<temp_dir>/test.py`: Access is denied. (os error 5)
     ");
     assert!(

@@ -205,7 +205,7 @@ pub enum IncompatibleVersionError {
         installed: Version,
     },
     /// Build supplied a version string that is not valid semantic versioning.
-    #[error("internal error: failed to parse installed karva {version}: {source}")]
+    #[error("internal error: failed to parse installed karva {version}")]
     InvalidInstalledVersion {
         /// Invalid build version.
         version: String,
@@ -224,7 +224,7 @@ pub enum KarvaTomlError {
     TomlSyntax(#[from] toml::de::Error),
 
     /// Configuration file could not be read.
-    #[error("Failed to read `{path}`: {source}")]
+    #[error("Failed to read `{path}`")]
     FileReadError {
         /// Underlying filesystem failure.
         #[source]

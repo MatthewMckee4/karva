@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use karva_combine::Combine;
@@ -8,6 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::filter::{EvalContext, FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::options::{CovReport, OutputFormat};
+use crate::{EnvironmentVariable, EnvironmentVariableName};
 
 /// Project-relative native coverage artifact used when no path is configured.
 pub const DEFAULT_COVERAGE_DATA_FILE: &str = ".karva/coverage/data.json";
@@ -459,6 +461,8 @@ impl Combine for CoveragePrecision {
 #[serde(rename_all = "kebab-case")]
 /// Fully resolved settings after configuration profiles and CLI overrides combine.
 pub struct ProjectSettings {
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) env: BTreeMap<EnvironmentVariableName, EnvironmentVariable>,
     pub(super) src: SrcSettings,
     pub(super) terminal: TerminalSettings,
     pub(super) test: TestSettings,
@@ -508,6 +512,11 @@ impl OverrideSettings {
 }
 
 impl ProjectSettings {
+    /// Returns environment changes to apply to every worker process.
+    pub fn env(&self) -> &BTreeMap<EnvironmentVariableName, EnvironmentVariable> {
+        &self.env
+    }
+
     pub fn terminal(&self) -> &TerminalSettings {
         &self.terminal
     }

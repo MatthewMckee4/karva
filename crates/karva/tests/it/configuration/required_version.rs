@@ -45,8 +45,8 @@ required-version = ">=999.0.0"
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
+    karva failed
+      Cause: configuration at <temp_dir>/karva.toml is incompatible with this Karva version
       Cause: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
     "#);
 }
@@ -73,8 +73,8 @@ required-version = ">=999.0.0"
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/pyproject.toml: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
+    karva failed
+      Cause: configuration at <temp_dir>/pyproject.toml is incompatible with this Karva version
       Cause: the installed karva [VERSION] does not satisfy `required-version = ">=999.0.0"`
     "#);
 }
@@ -97,13 +97,8 @@ required-version = "not a version"
     ----- stdout -----
 
     ----- stderr -----
-    Karva failed
-      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`: TOML parse error at line 2, column 20
-      |
-    2 | required-version = "not a version"
-      |                    ^^^^^^^^^^^^^^^
-    unexpected character 'n' while parsing major version number
-
+    karva failed
+      Cause: <temp_dir>/karva.toml is not a valid `karva.toml`
       Cause: TOML parse error at line 2, column 20
       |
     2 | required-version = "not a version"

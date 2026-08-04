@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::num::{NonZeroU32, NonZeroUsize};
 
 use camino::Utf8PathBuf;
@@ -502,6 +503,7 @@ impl SubTestCommand {
         });
 
         Options {
+            env: BTreeMap::default(),
             src: Some(SrcOptions {
                 respect_ignore_files: self.no_ignore.map(|no_ignore| !no_ignore),
                 include: Some(self.paths),

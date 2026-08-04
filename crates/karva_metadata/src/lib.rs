@@ -5,12 +5,14 @@ use fs_err as fs;
 use ruff_python_ast::PythonVersion;
 use thiserror::Error;
 
+mod environment;
 pub mod filter;
 mod max_fail;
 mod options;
 mod pyproject;
 mod settings;
 
+pub use environment::{EnvironmentVariable, EnvironmentVariableName};
 pub use max_fail::MaxFail;
 pub use options::{
     Config, CovReport, CoverageOptions, IncompatibleVersionError, JunitOptions, Options,
@@ -333,7 +335,7 @@ pub enum ProjectMetadataError {
     NotADirectory(Utf8PathBuf),
 
     /// A discovered `pyproject.toml` could not be loaded.
-    #[error("{path} is not a valid `pyproject.toml`: {source}")]
+    #[error("{path} is not a valid `pyproject.toml`")]
     InvalidPyProject {
         /// Parsing or filesystem failure.
         source: Box<PyProjectError>,
@@ -343,7 +345,7 @@ pub enum ProjectMetadataError {
     },
 
     /// An explicit or discovered `karva.toml` could not be loaded.
-    #[error("{path} is not a valid `karva.toml`: {source}")]
+    #[error("{path} is not a valid `karva.toml`")]
     InvalidKarvaToml {
         /// Parsing, validation, or filesystem failure.
         source: Box<KarvaTomlError>,
@@ -353,7 +355,7 @@ pub enum ProjectMetadataError {
     },
 
     /// Running Karva version violates configured `required-version`.
-    #[error("{path}: {source}")]
+    #[error("configuration at {path} is incompatible with this Karva version")]
     IncompatibleVersion {
         /// Configuration path declaring requirement.
         path: Utf8PathBuf,

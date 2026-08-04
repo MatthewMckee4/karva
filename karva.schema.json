@@ -231,6 +231,41 @@
       "format": "uint",
       "minimum": 0
     },
+    "EnvironmentVariable": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "preserve": {
+              "const": true
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "preserve"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "unset": {
+              "const": true
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "unset"
+          ]
+        }
+      ]
+    },
     "FailSlowSecs": {
       "description": "A per-test duration budget expressed in seconds.\n\nWraps `f64` for the same reason as [`SlowTimeoutSecs`]. Unlike\n[`SlowTimeoutSecs`] (informational) or [`TestTimeoutSecs`] (kills the\ntest mid-flight), a test exceeding this budget is allowed to finish its\nfull lifecycle — including fixture teardown — and is then reported as a\nfailure (see `TestSettings::fail_slow`).",
       "type": "number",
@@ -397,6 +432,13 @@
               "type": "null"
             }
           ]
+        },
+        "env": {
+          "description": "Environment variables applied to test workers before Python imports any\ntest modules or fixtures. Strings always set values. Use\n`{ value = \"...\", preserve = true }` to keep an existing value, or\n`{ unset = true }` to remove one. Karva's own variables are reserved.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/EnvironmentVariable"
+          }
         },
         "junit": {
           "description": "`JUnit` report overrides.",
