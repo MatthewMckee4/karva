@@ -23,6 +23,12 @@
       "matchManagers": ["github-actions"]
     },
     {
+      "enabled": false,
+      "matchCurrentValue": "3.10",
+      "matchDepNames": ["python"],
+      "matchManagers": ["github-actions"]
+    },
+    {
       "groupName": "Python dependencies",
       "matchManagers": ["pep621"]
     },
