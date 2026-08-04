@@ -30,7 +30,7 @@ pub use show_config::ShowConfigCommand;
 pub use snapshot::{
     SnapshotAction, SnapshotCommand, SnapshotDeleteArgs, SnapshotFilterArgs, SnapshotPruneArgs,
 };
-pub use test::{SubTestCommand, TestCommand};
+pub use test::{RandomSeed, SubTestCommand, TestCommand};
 pub use verbosity::Verbosity;
 
 const STYLES: Styles = Styles::styled()

@@ -1,6 +1,7 @@
 use std::process::Output;
 
 use insta::assert_snapshot;
+use insta_cmd::assert_cmd_snapshot;
 use serde_json::Value;
 
 use crate::common::TestContext;
@@ -122,7 +123,7 @@ fn generated_seed_reproduces_single_worker_order() {
     );
 
     let first = run_shuffled(&context, 1, None, &[]);
-    let repeated = run_shuffled(&context, 1, Some(first.seed), &[]);
+    let repeated = run_shuffled(&context, 1, None, &["--random-seed=last"]);
 
     assert_snapshot!(
         snapshots(&[
@@ -151,6 +152,47 @@ fn generated_seed_reproduces_single_worker_order() {
     "
     );
     assert_eq!(first.orders, repeated.orders);
+    assert_eq!(first.seed, repeated.seed);
+}
+
+#[test]
+fn last_seed_requires_a_generated_seed() {
+    let context = TestContext::with_file("test_pass.py", "def test_pass(): pass");
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--shuffle", "--random-seed=last"]),
+        @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: No generated random seed found; run with `--shuffle` first
+    "
+    );
+}
+
+#[test]
+fn last_seed_requires_cache() {
+    let context = TestContext::with_file("test_pass.py", "def test_pass(): pass");
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--shuffle", "--random-seed=last", "--no-cache"]),
+        @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: `--random-seed=last` cannot be used with `--no-cache`
+    "
+    );
 }
 
 #[test]

@@ -42,6 +42,15 @@ random-seed = 170938
 `random-seed` does not enable shuffling by itself. Leave it unset to generate a
 new seed for each invocation.
 
+Use the most recently generated seed again without copying it from output:
+
+```bash
+uv run karva test --shuffle --random-seed last
+```
+
+Karva stores that seed in `.karva_cache/random-seed.json`. `last` is a CLI-only
+selector; configuration files accept integer seeds.
+
 ## Selection and scheduling
 
 Karva applies test selection before seeded ordering. `--last-failed` narrows the

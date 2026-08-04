@@ -297,6 +297,17 @@ pub fn read_last_failed(cache_dir: &Utf8Path) -> Result<Vec<String>> {
     Ok(read_json::<Vec<String>>(cache_dir, CacheFile::LastFailed)?.unwrap_or_default())
 }
 
+/// Persists the most recently generated random seed.
+pub fn write_random_seed(cache_dir: &Utf8Path, seed: u64) -> Result<()> {
+    fs::create_dir_all(cache_dir)?;
+    write_json(cache_dir, CacheFile::RandomSeed, &seed)
+}
+
+/// Reads the most recently generated random seed.
+pub fn read_random_seed(cache_dir: &Utf8Path) -> Result<Option<u64>> {
+    read_json(cache_dir, CacheFile::RandomSeed)
+}
+
 /// Lists subdirectories of `parent` whose name starts with `prefix`.
 ///
 /// Returns an empty vec if `parent` does not exist. Non-UTF-8 entries and
@@ -639,6 +650,19 @@ mod tests {
 
         let read = read_last_failed(&cache_dir).unwrap();
         assert!(read.is_empty());
+    }
+
+    #[test]
+    fn random_seed_roundtrips() {
+        let tmp = tempfile::tempdir().expect("create temp directory");
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).expect("UTF-8 temp path");
+
+        write_random_seed(&cache_dir, 170_938).expect("write random seed");
+
+        assert_eq!(
+            read_random_seed(&cache_dir).expect("read random seed"),
+            Some(170_938)
+        );
     }
 
     #[test]
