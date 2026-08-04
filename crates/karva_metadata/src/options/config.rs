@@ -220,8 +220,8 @@ pub enum IncompatibleVersionError {
 /// Failure while reading, decoding, or validating `karva.toml`.
 pub enum KarvaTomlError {
     /// TOML syntax or schema decoding failed.
-    #[error(transparent)]
-    TomlSyntax(#[from] toml::de::Error),
+    #[error("{}", format_toml_error(.0))]
+    TomlSyntax(toml::de::Error),
 
     /// Configuration file could not be read.
     #[error("Failed to read `{path}`")]
@@ -237,6 +237,24 @@ pub enum KarvaTomlError {
     /// Profile name violates naming or reserved-prefix rules.
     #[error("invalid profile name `{name}`: {reason}")]
     InvalidProfileName { name: String, reason: &'static str },
+}
+
+impl From<toml::de::Error> for KarvaTomlError {
+    fn from(error: toml::de::Error) -> Self {
+        Self::TomlSyntax(error)
+    }
+}
+
+/// Omits Serde's exhaustive valid-field list from unknown-field diagnostics.
+fn format_toml_error(error: &toml::de::Error) -> String {
+    let rendered = error.to_string();
+    if error.message().starts_with("unknown field `")
+        && let Some((message, _)) = rendered.rsplit_once(", expected ")
+    {
+        message.to_string()
+    } else {
+        rendered
+    }
 }
 
 #[cfg(test)]

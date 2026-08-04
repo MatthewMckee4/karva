@@ -444,7 +444,7 @@ test-function-prefix = "check"
       |
     2 | [test]
       |  ^^^^
-    unknown field `test`, expected `required-version` or `profile`
+    unknown field `test`
     ");
 }
 
