@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
-use ruff_python_ast::StmtFunctionDef;
+use ruff_python_ast::{Stmt, StmtFunctionDef};
 
 /// A collected module containing raw AST function definitions.
 /// This is populated during the parallel collection phase.
@@ -17,6 +17,9 @@ pub struct CollectedModule {
     /// The source text of the file (cached to avoid re-reading)
     pub source_text: String,
 
+    /// Complete module statements retained for source-aware semantic checks.
+    pub module_body: Box<[Stmt]>,
+
     /// Test function definitions (functions starting with test prefix)
     pub test_function_defs: Vec<StmtFunctionDef>,
 
@@ -25,11 +28,17 @@ pub struct CollectedModule {
 }
 
 impl CollectedModule {
-    pub(super) fn new(path: ModulePath, module_type: ModuleType, source_text: String) -> Self {
+    pub(super) fn new(
+        path: ModulePath,
+        module_type: ModuleType,
+        module_body: Box<[Stmt]>,
+        source_text: String,
+    ) -> Self {
         Self {
             path,
             module_type,
             source_text,
+            module_body,
             test_function_defs: Vec::new(),
             fixture_function_defs: Vec::new(),
         }

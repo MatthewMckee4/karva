@@ -32,7 +32,7 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     module: &'b mut DiscoveredModule,
 
     /// Complete module statements used to locate runtime-discovered module marks.
-    module_body: &'b [Stmt],
+    module_body: Box<[Stmt]>,
 
     /// Lazily-loaded Python module, imported only when needed to avoid side effects.
     py_module: Option<Bound<'py, PyModule>>,
@@ -52,7 +52,7 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
         py: Python<'py>,
         context: &'ctx Context<'a>,
         module: &'b mut DiscoveredModule,
-        module_body: &'b [Stmt],
+        module_body: Box<[Stmt]>,
     ) -> Self {
         Self {
             context,
@@ -159,7 +159,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     if self.context.settings().test().strict_tags {
                         let unknown = unknown_runtime_tags(
                             test_function.statement(),
-                            self.module_body,
+                            &self.module_body,
                             &test_function.tags,
                             self.context.settings().tags(),
                         );
@@ -331,7 +331,7 @@ pub fn discover(
     context: &Context,
     py: Python,
     module: &mut DiscoveredModule,
-    module_body: &[Stmt],
+    module_body: Box<[Stmt]>,
     test_function_defs: Vec<StmtFunctionDef>,
     fixture_function_defs: Vec<StmtFunctionDef>,
 ) -> Vec<DiscoveryIssue> {

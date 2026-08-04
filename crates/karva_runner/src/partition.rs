@@ -569,6 +569,7 @@ mod tests {
             test_function_prefix: "test_",
             respect_ignore_files: true,
             collect_fixtures: false,
+            retain_module_body: false,
         };
         let mut package = CollectedPackage::new(root);
         let mut test_paths = HashMap::new();
