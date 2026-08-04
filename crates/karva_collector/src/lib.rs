@@ -41,9 +41,6 @@ pub struct CollectionSettings<'a> {
 
     /// Whether to collect fixture function definitions in addition to test functions.
     pub collect_fixtures: bool,
-
-    /// Whether to retain the complete module body after collecting functions.
-    pub retain_module_body: bool,
 }
 
 /// Collects test functions and fixtures from a Python file.
@@ -83,13 +80,12 @@ pub fn collect_file(
             _ => None,
         })
         .collect::<Vec<_>>();
-    let retained_module_body = if settings.retain_module_body {
-        module_body.into_boxed_slice()
-    } else {
-        Box::default()
-    };
-    let mut collected_module =
-        CollectedModule::new(module_path, module_type, retained_module_body, source_text);
+    let mut collected_module = CollectedModule::new(
+        module_path,
+        module_type,
+        module_body.into_boxed_slice(),
+        source_text,
+    );
 
     for function_def in function_defs {
         if settings.collect_fixtures && is_fixture_function(&function_def) {
@@ -135,7 +131,6 @@ mod tests {
             test_function_prefix: "test_",
             respect_ignore_files: true,
             collect_fixtures: false,
-            retain_module_body: false,
         }
     }
 

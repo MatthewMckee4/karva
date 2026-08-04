@@ -68,7 +68,6 @@ impl<'a> Context<'a> {
             test_function_prefix: &self.settings.test().test_function_prefix,
             respect_ignore_files: self.settings.src().respect_ignore_files,
             collect_fixtures: true,
-            retain_module_body: self.settings.test().strict_tags,
         }
     }
 
