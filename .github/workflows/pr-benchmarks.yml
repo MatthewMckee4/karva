@@ -147,7 +147,7 @@ jobs:
           path: ${{ runner.temp }}/benchmark-wheels
 
   compare-benchmarks:
-    name: "compare benchmarks (${{ matrix.project }})"
+    name: "compare benchmarks (${{ matrix.name }})"
 
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -188,7 +188,8 @@ jobs:
           BASE_LABEL: main (${{ needs.build-wheels.outputs.base_short }})
           HEAD_LABEL: PR (${{ needs.build-wheels.outputs.head_short }})
           ITERATIONS: ${{ matrix.iterations }}
-          PROJECT: ${{ matrix.project }}
+          PROJECTS: ${{ matrix.projects }}
+          REPORT_NAME: ${{ matrix.name }}
         run: |
           set -euo pipefail
 
@@ -205,23 +206,23 @@ jobs:
             --candidate-label "${HEAD_LABEL}" \
             --candidate-wheel "${head_wheel}" \
             --iterations "${ITERATIONS}" \
-            --project "${PROJECT}" \
-            --output-wall-time-json "${report_dir}/${PROJECT}.json" \
-            --output-wall-time-markdown "${report_dir}/${PROJECT}.md" \
-            --output-memory-json "${memory_report_dir}/${PROJECT}.json" \
-            --output-memory-markdown "${memory_report_dir}/${PROJECT}.md"
+            --project "${PROJECTS}" \
+            --output-wall-time-json "${report_dir}/${REPORT_NAME}.json" \
+            --output-wall-time-markdown "${report_dir}/${REPORT_NAME}.md" \
+            --output-memory-json "${memory_report_dir}/${REPORT_NAME}.json" \
+            --output-memory-markdown "${memory_report_dir}/${REPORT_NAME}.md"
 
       - name: Upload benchmark report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-report-${{ matrix.project }}
-          path: ${{ runner.temp }}/benchmark-reports/${{ matrix.project }}.json
+          name: benchmark-report-${{ matrix.name }}
+          path: ${{ runner.temp }}/benchmark-reports/${{ matrix.name }}.json
 
       - name: Upload memory benchmark report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-memory-report-${{ matrix.project }}
-          path: ${{ runner.temp }}/benchmark-memory-reports/${{ matrix.project }}.json
+          name: benchmark-memory-report-${{ matrix.name }}
+          path: ${{ runner.temp }}/benchmark-memory-reports/${{ matrix.name }}.json
 
   comment:
     name: "comment benchmark report"

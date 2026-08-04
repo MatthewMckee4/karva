@@ -66,7 +66,7 @@ struct CompareArgs {
     #[arg(long, default_value_t = 3)]
     iterations: usize,
 
-    #[arg(long = "project", value_name = "NAME")]
+    #[arg(long = "project", value_name = "NAME", value_delimiter = ',')]
     projects: Vec<String>,
 
     #[arg(long, value_name = "PATH")]
@@ -111,9 +111,30 @@ struct Matrix {
 
 #[derive(Debug, Serialize)]
 struct MatrixProject {
-    project: &'static str,
+    name: &'static str,
+    projects: String,
     iterations: usize,
 }
+
+/// Run 30926602508 measured the nine 21-iteration projects at 12–33 seconds
+/// each. These three groups total 66–71 seconds of measured work, below the
+/// 107-second `requests` critical path, while avoiding six runner setups.
+const BENCHMARK_PROJECT_GROUPS: &[(&str, &[&str])] = &[
+    ("requests", &["requests"]),
+    ("fastapi", &["fastapi"]),
+    ("httpx", &["httpx"]),
+    ("werkzeug", &["werkzeug"]),
+    ("tomlkit", &["tomlkit"]),
+    (
+        "jinja-sniffio-itsdangerous",
+        &["jinja", "sniffio", "itsdangerous"],
+    ),
+    (
+        "h11-markupsafe-installer",
+        &["h11", "markupsafe", "installer"],
+    ),
+    ("blinker-outcome-pluggy", &["blinker", "outcome", "pluggy"]),
+];
 
 #[derive(Debug, Deserialize, Serialize)]
 /// Mergeable comparison report for one performance metric.
@@ -234,20 +255,34 @@ fn main() -> Result<()> {
 }
 
 fn list_projects() -> Result<()> {
-    let matrix = Matrix {
-        include: BENCHMARK_PROJECTS
-            .iter()
-            .map(|project| MatrixProject {
-                project: project.name,
-                iterations: matrix_iterations(project.name),
-            })
-            .collect(),
-    };
+    let matrix = project_matrix()?;
 
     serde_json::to_writer(io::stdout(), &matrix).context("Failed to write benchmark matrix")?;
     println!();
 
     Ok(())
+}
+
+fn project_matrix() -> Result<Matrix> {
+    let mut include = Vec::with_capacity(BENCHMARK_PROJECT_GROUPS.len());
+    for &(name, projects) in BENCHMARK_PROJECT_GROUPS {
+        let Some((first, remaining)) = projects.split_first() else {
+            anyhow::bail!("Benchmark project group `{name}` must not be empty");
+        };
+        let iterations = matrix_iterations(first);
+        anyhow::ensure!(
+            remaining
+                .iter()
+                .all(|project| matrix_iterations(project) == iterations),
+            "Benchmark project group `{name}` must use one iteration count",
+        );
+        include.push(MatrixProject {
+            name,
+            projects: projects.join(","),
+            iterations,
+        });
+    }
+    Ok(Matrix { include })
 }
 
 fn compare(args: CompareArgs) -> Result<()> {
@@ -1431,8 +1466,60 @@ mod tests {
         MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, TestStats,
         diagnostic_comparison, diagnostics_markdown_report, is_benchmarkable_exit,
         karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text,
-        standalone_html, trend, write_code_block,
+        project_matrix, standalone_html, trend, write_code_block,
     };
+
+    #[test]
+    fn project_matrix_groups_equal_iteration_workloads() {
+        let matrix = project_matrix().expect("project matrix should be valid");
+        let json = serde_json::to_string_pretty(&matrix).expect("project matrix should serialize");
+        insta::assert_snapshot!(json, @r#"
+        {
+          "include": [
+            {
+              "name": "requests",
+              "projects": "requests",
+              "iterations": 4
+            },
+            {
+              "name": "fastapi",
+              "projects": "fastapi",
+              "iterations": 7
+            },
+            {
+              "name": "httpx",
+              "projects": "httpx",
+              "iterations": 7
+            },
+            {
+              "name": "werkzeug",
+              "projects": "werkzeug",
+              "iterations": 7
+            },
+            {
+              "name": "tomlkit",
+              "projects": "tomlkit",
+              "iterations": 15
+            },
+            {
+              "name": "jinja-sniffio-itsdangerous",
+              "projects": "jinja,sniffio,itsdangerous",
+              "iterations": 21
+            },
+            {
+              "name": "h11-markupsafe-installer",
+              "projects": "h11,markupsafe,installer",
+              "iterations": 21
+            },
+            {
+              "name": "blinker-outcome-pluggy",
+              "projects": "blinker,outcome,pluggy",
+              "iterations": 21
+            }
+          ]
+        }
+        "#);
+    }
 
     #[test]
     fn duration_cache_seed_removes_measurement_runs() {
