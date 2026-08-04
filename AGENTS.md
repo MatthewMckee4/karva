@@ -89,7 +89,8 @@ files and lines, and distinguish blockers from improvements.
 - Focused tests: `just test -p <crate> [test_name]`.
 - Full suite: `just test`. It builds the Python wheel first and uses nextest
   when installed, otherwise `cargo test`.
-- Clippy: `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- Do not run `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+  locally; let CI run the full workspace Clippy check.
 - Run Karva with debug builds: `cargo run test tests/test_add.py`.
 - After configuration, CLI, environment variable, or reference changes, run
   `cargo run -p karva_dev generate-all` and review generated files.
