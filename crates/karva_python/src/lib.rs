@@ -36,7 +36,7 @@ pub(crate) fn karva_worker_run() -> i32 {
 
 #[pymodule]
 /// Registers CLI entry points and Karva's Python-facing testing API.
-pub(crate) fn _karva(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _karva(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(karva_run, m)?)?;
     m.add_function(wrap_pyfunction!(karva_worker_run, m)?)?;
     init_module(py, m)?;
