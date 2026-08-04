@@ -7,6 +7,7 @@
 )]
 
 use std::io::Write as _;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::LazyLock;
@@ -18,7 +19,7 @@ use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use fs_err::{self as fs, File};
-use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject, WORKER_COUNT};
+use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject};
 use karva_cache::CACHE_DIR;
 use karva_cli::ExitStatus;
 use karva_static::ToolEnvVars;
@@ -216,6 +217,12 @@ struct DurationCacheSeed {
     directories: HashSet<Utf8PathBuf>,
 }
 
+/// Invocation and cache state shared by every subject for one benchmark project.
+struct BenchmarkContext {
+    invocation: KarvaInvocation,
+    duration_cache_seed: DurationCacheSeed,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -246,6 +253,8 @@ fn list_projects() -> Result<()> {
 fn compare(args: CompareArgs) -> Result<()> {
     anyhow::ensure!(args.iterations > 0, "iterations must be greater than zero");
 
+    let num_workers =
+        karva_static::max_parallelism().context("Failed to determine benchmark worker count")?;
     let baseline_wheel = utf8_path(args.baseline_wheel)?;
     let candidate_wheel = utf8_path(args.candidate_wheel)?;
     let output_wall_time_json = utf8_path(args.output_wall_time_json)?;
@@ -260,8 +269,7 @@ fn compare(args: CompareArgs) -> Result<()> {
         eprintln!("Preparing benchmark project `{}`", config.name);
         let project = karva_benchmark::prepare_benchmark_project_environment(config)
             .with_context(|| format!("Failed to prepare benchmark project `{}`", config.name))?;
-        let duration_cache_seed =
-            prepare_duration_cache_seed(config, project.cwd(), &baseline_wheel)?;
+        let benchmark = prepare_benchmark(config, project.cwd(), &baseline_wheel, num_workers)?;
         let mut baseline_wall_time_values = Vec::with_capacity(args.iterations);
         let mut baseline_memory_values = Vec::with_capacity(args.iterations);
         let mut candidate_wall_time_values = Vec::with_capacity(args.iterations);
@@ -286,11 +294,11 @@ fn compare(args: CompareArgs) -> Result<()> {
             };
 
             if iteration % 2 == 0 {
-                run_subject(config, project.cwd(), &duration_cache_seed, &mut baseline)?;
-                run_subject(config, project.cwd(), &duration_cache_seed, &mut candidate)?;
+                run_subject(config, project.cwd(), &benchmark, &mut baseline)?;
+                run_subject(config, project.cwd(), &benchmark, &mut candidate)?;
             } else {
-                run_subject(config, project.cwd(), &duration_cache_seed, &mut candidate)?;
-                run_subject(config, project.cwd(), &duration_cache_seed, &mut baseline)?;
+                run_subject(config, project.cwd(), &benchmark, &mut candidate)?;
+                run_subject(config, project.cwd(), &benchmark, &mut baseline)?;
             }
         }
 
@@ -506,14 +514,14 @@ fn selected_projects(names: &[String]) -> Result<Vec<&'static BenchmarkProject>>
 fn run_subject(
     config: &BenchmarkProject,
     project_root: &Utf8Path,
-    duration_cache_seed: &DurationCacheSeed,
+    benchmark: &BenchmarkContext,
     subject: &mut Subject<'_>,
 ) -> Result<()> {
     karva_benchmark::install_benchmark_tools(config, project_root, subject.wheel)
         .with_context(|| format!("Failed to install `{}` benchmark wheel", subject.label))?;
-    duration_cache_seed.restore()?;
+    benchmark.duration_cache_seed.restore()?;
 
-    let measurement = run_project_cli(config, project_root)
+    let measurement = run_project_cli(config, project_root, &benchmark.invocation)
         .with_context(|| format!("Failed to run `{}` with `{}`", config.name, subject.label))?;
     subject.wall_time_values.push(measurement.wall_time);
     subject.memory_values.push(measurement.peak_rss_kib);
@@ -534,18 +542,24 @@ fn run_subject(
     Ok(())
 }
 
-fn prepare_duration_cache_seed(
+fn prepare_benchmark(
     config: &BenchmarkProject,
     project_root: &Utf8Path,
     baseline_wheel: &Utf8Path,
-) -> Result<DurationCacheSeed> {
+    num_workers: NonZeroUsize,
+) -> Result<BenchmarkContext> {
+    let invocation = karva_invocation(config, project_root, num_workers)?;
     karva_benchmark::install_benchmark_tools(config, project_root, baseline_wheel)
         .context("Failed to install baseline benchmark wheel")?;
     karva_benchmark::clean_project_cache(project_root)
         .with_context(|| format!("Failed to clean benchmark cache for `{}`", config.name))?;
-    warm_project_cache(config, project_root)
+    warm_project_cache(config, project_root, &invocation)
         .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
-    DurationCacheSeed::capture(project_root)
+    let duration_cache_seed = DurationCacheSeed::capture(project_root)?;
+    Ok(BenchmarkContext {
+        invocation,
+        duration_cache_seed,
+    })
 }
 
 impl DurationCacheSeed {
@@ -590,10 +604,13 @@ fn cache_directories(cache_dir: &Utf8Path) -> Result<HashSet<Utf8PathBuf>> {
     Ok(directories)
 }
 
-fn run_project_cli(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<RunMeasurement> {
+fn run_project_cli(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+    invocation: &KarvaInvocation,
+) -> Result<RunMeasurement> {
     #[cfg(target_os = "linux")]
     {
-        let invocation = karva_invocation(config, project_root)?;
         let report_path = memory_report_path(project_root, config.name);
 
         let start = Instant::now();
@@ -625,13 +642,17 @@ fn run_project_cli(config: &BenchmarkProject, project_root: &Utf8Path) -> Result
     {
         let _ = config;
         let _ = project_root;
+        let _ = invocation;
         anyhow::bail!("Memory benchmarks require Linux and GNU `/usr/bin/time`")
     }
 }
 
-fn warm_project_cache(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<()> {
-    let invocation = karva_invocation(config, project_root)?;
-    let output = run_invocation(&invocation, project_root)?;
+fn warm_project_cache(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+    invocation: &KarvaInvocation,
+) -> Result<()> {
+    let output = run_invocation(invocation, project_root)?;
     ensure_karva_completed(&output, config)
 }
 
@@ -644,16 +665,19 @@ fn run_invocation(invocation: &KarvaInvocation, project_root: &Utf8Path) -> Resu
     })
 }
 
-fn karva_invocation(config: &BenchmarkProject, project_root: &Utf8Path) -> Result<KarvaInvocation> {
+fn karva_invocation(
+    config: &BenchmarkProject,
+    project_root: &Utf8Path,
+    num_workers: NonZeroUsize,
+) -> Result<KarvaInvocation> {
     let bin_dir = venv_bin_dir(project_root);
     let binary = bin_dir.join(executable_name("karva"));
     let path = path_with_venv_first(&bin_dir)?;
-    let worker_count = WORKER_COUNT.to_string();
 
     let mut args = vec![
         "test".to_string(),
         "--num-workers".to_string(),
-        worker_count,
+        num_workers.to_string(),
         "--no-ignore".to_string(),
         "--output-format".to_string(),
         "concise".to_string(),
@@ -1283,10 +1307,10 @@ impl BenchmarkMetric {
     fn report_context(self) -> &'static str {
         match self {
             Self::WallTime => {
-                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
             Self::Memory => {
-                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
+                "Each benchmark compares median peak RSS from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and are configured per project. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better."
             }
         }
     }
@@ -1391,6 +1415,8 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroUsize;
+
     use camino::Utf8Path;
     use fs_err as fs;
     use tempfile::tempdir;
@@ -1453,7 +1479,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :x: Merging this PR may alter performance
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **1** improved benchmark
         :x: **1** regressed benchmark
@@ -1532,7 +1558,7 @@ mod tests {
         <!-- karva-benchmark-comparison -->
         ### :warning: Benchmark includes changed test workloads
 
-        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
+        Baseline: `main`. Candidate: `PR`. Each benchmark compares median CLI wall time from optimized wheels on one GitHub Actions runner, alternating install order. Runs use available CPU parallelism, share one baseline-warmed duration cache so both revisions use the same test partition, and include default per-test status output. Raw totals are directly comparable only when both revisions execute the same tests. Lower is better.
 
         :zap: **0** improved benchmarks
         :x: **0** regressed benchmarks
@@ -1797,12 +1823,21 @@ mod tests {
 
     #[test]
     fn cli_benchmark_invocation_uses_normal_cached_status_output() {
+        let num_workers = NonZeroUsize::MIN;
         let invocation = karva_invocation(
             &karva_benchmark::SYNTHETIC_PROJECT,
             Utf8Path::new("/tmp/project"),
+            num_workers,
         )
         .expect("invocation should build");
+        let worker_args = ["--num-workers".to_string(), num_workers.to_string()];
 
+        assert!(
+            invocation
+                .args
+                .windows(worker_args.len())
+                .any(|args| args == worker_args)
+        );
         assert!(
             !invocation
                 .args

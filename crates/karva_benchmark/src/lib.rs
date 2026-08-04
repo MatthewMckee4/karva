@@ -16,11 +16,8 @@ use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
 use karva_metadata::{Options, ProjectMetadata, SrcOptions, TerminalOptions, TestOptions};
 use karva_project::Project;
 use karva_runner::RunOutput;
-use karva_static::ToolEnvVars;
+use karva_static::{ToolEnvVars, max_parallelism};
 use ruff_python_ast::PythonVersion;
-
-/// Fixed worker count shared by wall-time and memory benchmark samples.
-pub const WORKER_COUNT: usize = 2;
 
 #[derive(Debug, Clone, Copy)]
 /// Reproducible dependency-install strategy for a benchmark checkout.
@@ -343,7 +340,9 @@ pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Resul
 /// Executes one silent benchmark iteration and validates success.
 pub fn try_run_project(project: &Project) -> Result<RunOutput> {
     let config = karva_runner::ParallelTestConfig {
-        num_workers: WORKER_COUNT,
+        num_workers: max_parallelism()
+            .context("Failed to determine benchmark worker count")?
+            .get(),
         no_cache: true,
         create_ctrlc_handler: false,
         last_failed: false,
