@@ -27,7 +27,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use similar::{Algorithm, TextDiff};
 
-const MATERIAL_CHANGE_PERCENT: f64 = 1.0;
+/// Run 30868873391 A/A attempts produced false changes up to 3.7% on GitHub's
+/// four-core runner; 5% keeps measured runner noise below the tripwire.
+const MATERIAL_CHANGE_PERCENT: f64 = 5.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
 const MEDIUM_PROJECT_ITERATIONS: usize = 15;
 const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
@@ -1469,8 +1471,8 @@ mod tests {
     fn markdown_report_renders_regressions() {
         let report = report_with_projects(vec![
             project("flat-project", 21, 1.0, 1.004),
-            project("faster-project", 21, 1.0, 0.99),
-            project("slower-project", 15, 1.0, 1.012),
+            project("faster-project", 21, 1.0, 0.94),
+            project("slower-project", 15, 1.0, 1.06),
         ]);
 
         let markdown = markdown_report(&report).expect("report should render");
@@ -1492,8 +1494,8 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
-        | :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+        | :zap: | WallTime | `faster-project` | 1.000 s | 940.0 ms | -6.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s | 1.060 s | +6.0% | 15 |
 
         <details>
         <summary>All benchmark scores</summary>
@@ -1501,8 +1503,8 @@ mod tests {
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
         | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
-        | :zap: | WallTime | `faster-project` | 1.000 s | 990.0 ms | -1.0% | 21 |
-        | :x: | WallTime | `slower-project` | 1.000 s | 1.012 s | +1.2% | 15 |
+        | :zap: | WallTime | `faster-project` | 1.000 s | 940.0 ms | -6.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s | 1.060 s | +6.0% | 15 |
 
         </details>
         ");
@@ -1790,10 +1792,10 @@ mod tests {
 
     #[test]
     fn trend_uses_material_change_threshold() {
-        assert_eq!(trend(-1.0), "faster");
-        assert_eq!(trend(1.0), "slower");
-        assert_eq!(trend(0.9), "flat");
-        assert_eq!(trend(-0.9), "flat");
+        assert_eq!(trend(-5.0), "faster");
+        assert_eq!(trend(5.0), "slower");
+        assert_eq!(trend(4.9), "flat");
+        assert_eq!(trend(-4.9), "flat");
     }
 
     #[test]
