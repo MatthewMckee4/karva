@@ -63,6 +63,15 @@ impl<D> Default for RunResults<D> {
 pub type AggregatedResults = RunResults<RenderedDiagnostic>;
 
 impl<D> RunResults<D> {
+    /// Preallocates storage for the controller's measured scheduling units.
+    pub fn with_test_capacity(test_capacity: usize) -> Self {
+        Self {
+            durations: HashMap::with_capacity(test_capacity),
+            test_cases: Vec::with_capacity(test_capacity),
+            ..Self::default()
+        }
+    }
+
     pub fn stats(&self) -> &TestResultStats {
         &self.stats
     }

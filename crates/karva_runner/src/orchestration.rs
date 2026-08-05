@@ -79,7 +79,6 @@ impl Worker {
     }
 }
 
-#[derive(Default)]
 /// Owns all live workers and guarantees they are reaped during shutdown.
 struct WorkerManager {
     workers: Vec<Worker>,
@@ -97,6 +96,20 @@ struct EventDispatcher {
     completed_workers: HashSet<usize>,
     in_flight: HashMap<usize, RunningTest>,
     results: AggregatedResults,
+}
+
+impl WorkerManager {
+    fn with_test_capacity(test_capacity: usize) -> Self {
+        Self {
+            workers: Vec::new(),
+            dispatcher: EventDispatcher {
+                expected_workers: HashSet::new(),
+                completed_workers: HashSet::new(),
+                in_flight: HashMap::new(),
+                results: AggregatedResults::with_test_capacity(test_capacity),
+            },
+        }
+    }
 }
 
 /// Controller-owned state for one executing test.
@@ -561,8 +574,9 @@ fn spawn_workers(
     spawn: &WorkerSpawn,
     partitions: &[Partition],
     forward_stdout: bool,
+    test_capacity: usize,
 ) -> Result<WorkerManager> {
-    let mut worker_manager = WorkerManager::default();
+    let mut worker_manager = WorkerManager::with_test_capacity(test_capacity);
 
     for (worker_id, partition) in partitions.iter().enumerate() {
         if partition.tests().is_empty() {
@@ -769,7 +783,7 @@ pub fn run_parallel_tests(
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
     let forward_stdout = printer.stream_for_test_result().is_enabled();
-    let mut worker_manager = spawn_workers(&spawn, &partitions, forward_stdout)?;
+    let mut worker_manager = spawn_workers(&spawn, &partitions, forward_stdout, scheduled_cases)?;
 
     let outcome = worker_manager.wait_for_completion(
         shutdown_rx,
