@@ -19,6 +19,7 @@ path = "src/bin/main.rs"
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_diagnostic = { workspace = true }
+karva_ipc = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
@@ -32,6 +33,7 @@ camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 fs-err = { workspace = true }
+tracing = { workspace = true }
 wild = { workspace = true }
 
 [lints]

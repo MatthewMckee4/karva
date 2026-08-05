@@ -20,7 +20,6 @@ karva_python_semantic = { workspace = true }
 
 camino = { workspace = true }
 colored = { workspace = true }
-fs-err = { workspace = true }
 pyo3 = { workspace = true, optional = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
@@ -30,7 +29,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

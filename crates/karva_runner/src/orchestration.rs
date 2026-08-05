@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdout, Stdio};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -16,6 +16,7 @@ use karva_cache::{
 };
 use karva_cli::{PartitionSelection, SubTestCommand};
 use karva_collector::{CollectedPackage, CollectionSettings};
+use karva_ipc::{ControllerServer, WorkerEvent};
 use karva_logging::Printer;
 use karva_logging::time::{format_duration, format_duration_bracketed};
 use karva_project::Project;
@@ -29,7 +30,7 @@ use crate::worker_args::{WorkerSpawn, worker_command};
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
 /// columns align. Mirrors the constant in `karva_diagnostic::reporter`.
 const LABEL_COLUMN_WIDTH: usize = 12;
-/// Delay before reading progress files so workers can publish current test state.
+/// Delay before cancellation snapshot so reader threads can publish current state.
 const CURRENT_TEST_SETTLE: Duration = Duration::from_millis(50);
 
 /// How `wait_for_completion` exited.
@@ -78,10 +79,21 @@ impl Worker {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 /// Owns all live workers and guarantees they are reaped during shutdown.
 struct WorkerManager {
     workers: Vec<Worker>,
+    expected_workers: HashSet<usize>,
+    completed_workers: HashSet<usize>,
+    in_flight: HashMap<usize, RunningTest>,
+    results: AggregatedResults,
+}
+
+/// Worker-reported snapshot of its current test.
+#[derive(Debug)]
+struct RunningTest {
+    name: Option<String>,
+    elapsed: Duration,
 }
 
 #[derive(Debug)]
@@ -122,7 +134,7 @@ fn forward_worker_stdout(stdout: ChildStdout) -> std::io::Result<()> {
     }
 }
 
-/// Snapshot of a worker's progress file taken before process termination.
+/// Snapshot of one worker's current test taken before process termination.
 struct InFlightTest {
     worker_id: usize,
     name: Option<String>,
@@ -137,7 +149,41 @@ struct InterruptedTest {
 
 impl WorkerManager {
     fn spawn(&mut self, worker_id: usize, child: Child, output: Option<WorkerOutputForwarder>) {
+        self.expected_workers.insert(worker_id);
         self.workers.push(Worker::new(worker_id, child, output));
+    }
+
+    /// Applies every queued worker event and reports whether fail-fast fired.
+    fn process_ipc(&mut self, server: &mut ControllerServer) -> Result<bool> {
+        server.accept_pending()?;
+        let mut fail_fast = false;
+        while let Some(message) = server.try_recv()? {
+            let worker_id = message.worker_id;
+            if !self.expected_workers.contains(&worker_id) {
+                anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
+            }
+            match message.event {
+                WorkerEvent::CurrentTest { name, elapsed } => {
+                    self.in_flight
+                        .insert(worker_id, RunningTest { name, elapsed });
+                }
+                WorkerEvent::FailFast => fail_fast = true,
+                WorkerEvent::Completed(results) => {
+                    if !self.completed_workers.insert(worker_id) {
+                        anyhow::bail!("Karva worker {worker_id} sent duplicate results");
+                    }
+                    self.in_flight.remove(&worker_id);
+                    self.results.merge_worker(results);
+                }
+            }
+        }
+        Ok(fail_fast)
+    }
+
+    fn finish_ipc(&mut self, server: &mut ControllerServer) -> Result<()> {
+        server.finish()?;
+        self.process_ipc(server)?;
+        Ok(())
     }
 
     fn reap_finished(&mut self, log_completion: bool) {
@@ -173,9 +219,8 @@ impl WorkerManager {
 
     /// Wait for all workers to complete.
     ///
-    /// Returns early if a message is received on `shutdown_rx`, if the cache
-    /// contains a fail-fast signal indicating a worker encountered a test
-    /// failure, or if `deadline` passes. Finished workers are reaped at the
+    /// Returns early if a message is received on `shutdown_rx`, a worker sends
+    /// a fail-fast event, or `deadline` passes. Finished workers are reaped at the
     /// top of each iteration before any of those conditions are checked, so a
     /// run that completes just as the deadline passes (or a signal arrives) is
     /// reported as `AllCompleted` rather than `TimedOut`/`Cancelled`.
@@ -185,11 +230,12 @@ impl WorkerManager {
     fn wait_for_completion(
         &mut self,
         shutdown_rx: Option<&Receiver<()>>,
-        cache: Option<&RunCache>,
+        server: &mut ControllerServer,
+        fail_fast_enabled: bool,
         deadline: Option<Instant>,
-    ) -> WaitOutcome {
+    ) -> Result<WaitOutcome> {
         if self.workers.is_empty() {
-            return WaitOutcome::AllCompleted;
+            return Ok(WaitOutcome::AllCompleted);
         }
 
         tracing::info!(
@@ -198,35 +244,44 @@ impl WorkerManager {
         );
 
         loop {
+            let fail_fast = self.process_ipc(server)?;
             self.reap_finished(true);
 
             if self.workers.is_empty() {
+                self.finish_ipc(server)?;
+                if self.completed_workers != self.expected_workers {
+                    let mut missing: Vec<_> = self
+                        .expected_workers
+                        .difference(&self.completed_workers)
+                        .copied()
+                        .collect();
+                    missing.sort_unstable();
+                    anyhow::bail!("Karva workers {missing:?} exited without sending results");
+                }
                 tracing::info!("All workers completed");
-                return WaitOutcome::AllCompleted;
+                return Ok(WaitOutcome::AllCompleted);
             }
 
             if let Some(rx) = shutdown_rx {
                 match rx.try_recv() {
                     Ok(()) | Err(TryRecvError::Disconnected) => {
                         tracing::info!("Shutdown requested — stopping remaining workers");
-                        return WaitOutcome::Cancelled;
+                        return Ok(WaitOutcome::Cancelled);
                     }
                     Err(TryRecvError::Empty) => {}
                 }
             }
 
-            if let Some(cache) = cache
-                && cache.has_fail_fast_signal()
-            {
+            if fail_fast_enabled && fail_fast {
                 tracing::info!("Fail-fast signal received — stopping remaining workers");
-                return WaitOutcome::FailFast;
+                return Ok(WaitOutcome::FailFast);
             }
 
             if let Some(deadline) = deadline
                 && Instant::now() >= deadline
             {
                 tracing::info!("Run timeout exceeded — stopping remaining workers");
-                return WaitOutcome::TimedOut;
+                return Ok(WaitOutcome::TimedOut);
             }
 
             std::thread::sleep(WORKER_POLL_INTERVAL);
@@ -310,11 +365,9 @@ impl WorkerManager {
 
     /// Stop remaining workers and emit nextest-style cancellation lines.
     ///
-    /// Each worker publishes a `current_test.json` file while a test is in
-    /// flight and clears it when the worker is between tests. We read those
-    /// files *before* killing — once we kill the worker, that file may be
-    /// removed by an in-flight finalizer or simply lost — and remember a
-    /// `(worker_id, test name, test start time)` snapshot for each.
+    /// Each worker keeps current state in memory and answers one query here.
+    /// We snapshot that state before killing and remember a
+    /// `(worker_id, test name, elapsed time)` record for each.
     ///
     /// Workers are killed, reaped, and have their forwarded stdout drained
     /// before we print so any in-flight `PASS`/`FAIL` lines land before the
@@ -322,42 +375,27 @@ impl WorkerManager {
     fn cancel_and_kill(
         &mut self,
         printer: Printer,
-        cache: &RunCache,
+        server: &mut ControllerServer,
         grace_period: Duration,
-    ) -> Vec<InterruptedTest> {
+    ) -> Result<Vec<InterruptedTest>> {
         if self.workers.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
+        self.process_ipc(server)?;
+        server.request_current_tests(self.workers.iter().map(|worker| worker.id));
         std::thread::sleep(CURRENT_TEST_SETTLE);
-
-        let now_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
-            .unwrap_or(0);
+        self.process_ipc(server)?;
 
         let in_flight: Vec<_> = self
             .workers
             .iter()
             .map(|worker| {
-                let current = match cache.read_current_test(worker.id) {
-                    Ok(current) => current,
-                    Err(err) => {
-                        tracing::warn!(
-                            worker_id = worker.id,
-                            "failed to read in-flight test state: {err}"
-                        );
-                        None
-                    }
-                };
-                let elapsed = current
-                    .as_ref()
-                    .map(|current| elapsed_since_start(now_ms, current.start_unix_ms, worker.id))
-                    .unwrap_or(Duration::ZERO);
+                let current = self.in_flight.get(&worker.id);
                 InFlightTest {
                     worker_id: worker.id,
-                    name: current.map(|c| c.name),
-                    elapsed,
+                    name: current.and_then(|current| current.name.clone()),
+                    elapsed: current.map_or(Duration::ZERO, |current| current.elapsed),
                 }
             })
             .collect();
@@ -401,7 +439,7 @@ impl WorkerManager {
             }
         }
 
-        in_flight
+        Ok(in_flight
             .into_iter()
             .filter_map(|test| {
                 test.name.map(|name| InterruptedTest {
@@ -409,7 +447,7 @@ impl WorkerManager {
                     duration: test.elapsed,
                 })
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -417,19 +455,6 @@ impl WorkerManager {
 struct WorkerProcess {
     worker_id: usize,
     process_id: u32,
-}
-
-fn elapsed_since_start(now_ms: u64, start_ms: u64, worker_id: usize) -> Duration {
-    let Some(elapsed_ms) = now_ms.checked_sub(start_ms) else {
-        tracing::warn!(
-            worker_id,
-            start_unix_ms = start_ms,
-            now_unix_ms = now_ms,
-            "in-flight test start time is in the future"
-        );
-        return Duration::ZERO;
-    };
-    Duration::from_millis(elapsed_ms)
 }
 
 /// Render a `module::function[params]` test name as it was serialised by
@@ -673,14 +698,15 @@ pub fn run_parallel_tests(
 
     let run_hash = RunHash::current_time();
     let cache = RunCache::new(&cache_dir, &run_hash);
+    let mut controller = ControllerServer::bind(&run_hash.inner())?;
 
     tracing::info!("Spawning {} workers", scheduled_workers);
 
     let worker_binary = find_karva_worker_binary(project.cwd())?;
     let spawn = WorkerSpawn {
         project,
-        cache_dir: &cache_dir,
         cache: &cache,
+        controller_address: controller.address()?,
         run_hash: &run_hash,
         args,
         num_workers,
@@ -691,12 +717,15 @@ pub fn run_parallel_tests(
     let forward_stdout = printer.stream_for_test_result().is_enabled();
     let mut worker_manager = spawn_workers(&spawn, &partitions, forward_stdout)?;
 
-    let max_fail_cache = project.settings().max_fail().has_limit().then_some(&cache);
-
-    let outcome = worker_manager.wait_for_completion(shutdown_rx, max_fail_cache, run_deadline);
+    let outcome = worker_manager.wait_for_completion(
+        shutdown_rx,
+        &mut controller,
+        project.settings().max_fail().has_limit(),
+        run_deadline,
+    )?;
     let termination_grace_period = project.settings().test().termination_grace_period();
     let interrupted_tests = if outcome == WaitOutcome::Cancelled {
-        worker_manager.cancel_and_kill(printer, &cache, termination_grace_period)
+        worker_manager.cancel_and_kill(printer, &mut controller, termination_grace_period)?
     } else {
         worker_manager.terminate_remaining(termination_grace_period);
         Vec::new()
@@ -704,7 +733,8 @@ pub fn run_parallel_tests(
 
     let timed_out = outcome == WaitOutcome::TimedOut;
 
-    let mut results = cache.aggregate_results()?;
+    worker_manager.finish_ipc(&mut controller)?;
+    let mut results = std::mem::take(&mut worker_manager.results);
     for test in interrupted_tests {
         results.register_interrupted_test(&test.name, test.duration);
     }
@@ -842,25 +872,5 @@ mod process_control {
 
     pub(super) fn is_running(_process_id: u32) -> bool {
         false
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use super::elapsed_since_start;
-
-    #[test]
-    fn elapsed_since_start_calculates_duration() {
-        assert_eq!(
-            elapsed_since_start(1_500, 1_000, 0),
-            Duration::from_millis(500)
-        );
-    }
-
-    #[test]
-    fn elapsed_since_start_handles_future_start_time() {
-        assert_eq!(elapsed_since_start(1_000, 1_500, 0), Duration::ZERO);
     }
 }

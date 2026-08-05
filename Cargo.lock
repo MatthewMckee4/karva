@@ -982,7 +982,6 @@ dependencies = [
  "annotate-snippets",
  "camino",
  "colored",
- "fs-err",
  "insta",
  "karva_logging",
  "karva_python_semantic",
@@ -991,7 +990,18 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "serde_json",
- "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "karva_ipc"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "crossbeam-channel",
+ "karva_cache",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
@@ -1098,6 +1108,7 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_collector",
+ "karva_ipc",
  "karva_logging",
  "karva_metadata",
  "karva_project",
@@ -1175,12 +1186,14 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_diagnostic",
+ "karva_ipc",
  "karva_logging",
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",
  "karva_static",
  "karva_test_semantic",
+ "tracing",
  "wild",
 ]
 

@@ -24,16 +24,10 @@ pub enum CacheFile {
     Durations,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
-    /// Per-run empty sentinel marking that fail-fast was triggered.
-    FailFastSignal,
     /// Cache-root JSON: list of last-run failed test names.
     LastFailed,
     /// Cache-root JSON: most recently generated random seed.
     RandomSeed,
-    /// Per-worker JSON: name + start time of the test currently executing,
-    /// or empty/absent when the worker is between tests. Used by the
-    /// orchestrator to render per-test `SIGINT` lines on Ctrl+C.
-    CurrentTest,
 }
 
 impl CacheFile {
@@ -43,10 +37,8 @@ impl CacheFile {
             Self::Results => "results.json",
             Self::Durations => "durations.json",
             Self::Coverage => "coverage.json",
-            Self::FailFastSignal => "fail-fast",
             Self::LastFailed => "last-failed.json",
             Self::RandomSeed => "random-seed.json",
-            Self::CurrentTest => "current_test.json",
         }
     }
 
@@ -98,46 +90,9 @@ pub fn read_json<T: DeserializeOwned>(dir: &Utf8Path, file: CacheFile) -> Result
         .map(Some)
 }
 
-/// Reads `dir/<file>` as raw text, or returns `Ok(None)` when the file does not exist.
-pub fn read_text(dir: &Utf8Path, file: CacheFile) -> Result<Option<String>> {
-    let path = file.path_in(dir);
-    match fs::read_to_string(&path) {
-        Ok(content) => Ok(Some(content)),
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
-        Err(err) => Err(err.into()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn read_text_missing_artifact_returns_none() {
-        let temp_dir = tempfile::tempdir().expect("create temp dir");
-        let cache_dir =
-            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
-
-        let content = read_text(&cache_dir, CacheFile::LastFailed).expect("read artifact");
-
-        assert!(content.is_none());
-    }
-
-    #[test]
-    fn read_text_reports_artifact_path_on_read_error() {
-        let temp_dir = tempfile::tempdir().expect("create temp dir");
-        let cache_dir =
-            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
-        let path = CacheFile::LastFailed.path_in(&cache_dir);
-        std::fs::create_dir(&path).expect("create directory at artifact path");
-
-        let error = read_text(&cache_dir, CacheFile::LastFailed).expect_err("read should fail");
-
-        assert!(
-            error.to_string().contains(path.as_str()),
-            "unexpected error: {error}"
-        );
-    }
 
     #[test]
     fn read_json_reports_artifact_path_on_parse_error() {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
@@ -14,20 +14,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::artifact::{CacheFile, read_json, read_text, write_json, write_text};
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
-
-/// Snapshot of the test a worker is currently executing.
-///
-/// Workers update this file at the start of each test and clear it on
-/// completion; the orchestrator reads it on Ctrl+C to render per-test
-/// `SIGINT` lines.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CurrentTest {
-    /// Fully qualified test name (`module::function[params]`).
-    pub name: String,
-
-    /// Wall-clock start of the test, milliseconds since the Unix epoch.
-    pub start_unix_ms: u64,
-}
 
 /// Aggregated test results collected from all worker processes.
 #[derive(Default)]
@@ -51,17 +37,16 @@ pub struct AggregatedResults {
     pub durations: HashMap<TestCacheKey, Duration>,
 }
 
-/// Serializable subset of one worker's results.
-///
-/// Durations live in a separate artifact so partitioning can read them without
-/// deserializing diagnostics and test histories.
+/// Serializable result payload transferred from one worker to the controller.
 #[derive(Default, Serialize, Deserialize)]
-struct WorkerResults {
+pub struct WorkerResults {
     stats: TestResultStats,
     run_diagnostics: Vec<RenderedDiagnostic>,
     #[serde(default)]
     failed_tests: Vec<TestCacheKey>,
     test_cases: Vec<TestCaseResult>,
+    #[serde(default)]
+    durations: HashMap<TestCacheKey, Duration>,
 }
 
 impl AggregatedResults {
@@ -100,7 +85,7 @@ impl AggregatedResults {
         self.durations.insert(function_name, duration);
     }
 
-    fn merge_worker(&mut self, worker: WorkerResults) {
+    pub fn merge_worker(&mut self, worker: WorkerResults) {
         for diagnostic in worker.run_diagnostics {
             if !self.run_diagnostics.contains(&diagnostic) {
                 self.run_diagnostics.push(diagnostic);
@@ -134,6 +119,7 @@ impl AggregatedResults {
             }
         }
         self.test_cases.extend(worker.test_cases);
+        self.durations.extend(worker.durations);
     }
 }
 
@@ -161,17 +147,6 @@ impl RunCache {
         Self { run_dir }
     }
 
-    /// Writes a fail-fast signal file to indicate a worker encountered a test failure.
-    pub fn write_fail_fast_signal(&self) -> Result<()> {
-        fs::create_dir_all(&self.run_dir)?;
-        write_text(&self.run_dir, CacheFile::FailFastSignal, "")
-    }
-
-    /// Checks whether any worker has written a fail-fast signal file.
-    pub fn has_fail_fast_signal(&self) -> bool {
-        CacheFile::FailFastSignal.path_in(&self.run_dir).exists()
-    }
-
     /// Reads and merges test results from all worker directories for this run.
     pub fn aggregate_results(&self) -> Result<AggregatedResults> {
         let mut results = AggregatedResults::default();
@@ -193,34 +168,6 @@ impl RunCache {
     /// coverage session ends.
     pub fn coverage_data_file(&self, worker_id: usize) -> Utf8PathBuf {
         CacheFile::Coverage.path_in(&self.worker_dir(worker_id))
-    }
-
-    /// Path to the per-worker file describing the test currently executing.
-    pub fn current_test_file(&self, worker_id: usize) -> Utf8PathBuf {
-        CacheFile::CurrentTest.path_in(&self.worker_dir(worker_id))
-    }
-
-    /// Reads the snapshot of which test the worker is currently running.
-    /// Returns `None` if the worker is between tests, hasn't started yet, or
-    /// has cleared its progress file after finishing a test.
-    pub fn read_current_test(&self, worker_id: usize) -> Result<Option<CurrentTest>> {
-        let worker_dir = self.worker_dir(worker_id);
-        let Some(content) = read_text(&worker_dir, CacheFile::CurrentTest)? else {
-            return Ok(None);
-        };
-
-        if content.trim().is_empty() {
-            return Ok(None);
-        }
-
-        serde_json::from_str(&content)
-            .with_context(|| {
-                format!(
-                    "failed to parse cache artifact `{}`",
-                    CacheFile::CurrentTest.path_in(&worker_dir)
-                )
-            })
-            .map(Some)
     }
 
     /// Returns paths to every per-worker coverage file that exists for this
@@ -247,36 +194,9 @@ impl RunCache {
         let worker_dir = self.worker_dir(worker_id);
         fs::create_dir_all(&worker_dir)?;
 
-        let TestRunResultParts {
-            run_diagnostics,
-            stats,
-            durations,
-            failed_tests,
-            test_cases,
-        } = result.into_parts();
-        let run_diagnostics = run_diagnostics
-            .iter()
-            .map(|diagnostic| render_diagnostic(diagnostic, cwd, *config))
-            .collect::<Vec<_>>();
-        let test_cases = test_cases
-            .into_iter()
-            .map(|case| {
-                case.try_map_diagnostic(|diagnostic| {
-                    Ok::<_, anyhow::Error>(render_diagnostic(diagnostic, cwd, *config))
-                })
-            })
-            .collect::<Result<Vec<TestCaseResult>>>()?;
+        let worker_results = render_worker_results(result, cwd, config)?;
 
-        let mut failed_tests = failed_tests.into_iter().collect::<Vec<_>>();
-        failed_tests.sort();
-        let worker_results = WorkerResults {
-            stats,
-            run_diagnostics,
-            failed_tests,
-            test_cases,
-        };
-
-        write_json(&worker_dir, CacheFile::Durations, &durations)?;
+        write_json(&worker_dir, CacheFile::Durations, &worker_results.durations)?;
         write_text(
             &worker_dir,
             CacheFile::Results,
@@ -286,15 +206,55 @@ impl RunCache {
     }
 }
 
+/// Renders worker-owned diagnostics and converts semantic names for transport.
+pub fn render_worker_results(
+    result: TestRunResult,
+    cwd: &Utf8Path,
+    config: &DisplayDiagnosticConfig,
+) -> Result<WorkerResults> {
+    let TestRunResultParts {
+        run_diagnostics,
+        stats,
+        durations,
+        failed_tests,
+        test_cases,
+    } = result.into_parts();
+    let run_diagnostics = run_diagnostics
+        .iter()
+        .map(|diagnostic| render_diagnostic(diagnostic, cwd, *config))
+        .collect::<Vec<_>>();
+    let test_cases = test_cases
+        .into_iter()
+        .map(|case| {
+            case.try_map_diagnostic(|diagnostic| {
+                Ok::<_, anyhow::Error>(render_diagnostic(diagnostic, cwd, *config))
+            })
+        })
+        .collect::<Result<Vec<TestCaseResult>>>()?;
+
+    let mut failed_tests = failed_tests.into_iter().collect::<Vec<_>>();
+    failed_tests.sort();
+
+    Ok(WorkerResults {
+        stats,
+        run_diagnostics,
+        failed_tests,
+        test_cases,
+        durations,
+    })
+}
+
 /// Reads results from a single worker directory into the accumulator.
 fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -> Result<()> {
     let Some(worker_results) = read_json::<WorkerResults>(worker_dir, CacheFile::Results)? else {
         return Ok(());
     };
+    let has_embedded_durations = !worker_results.durations.is_empty();
     results.merge_worker(worker_results);
 
-    if let Some(durations) =
-        read_json::<HashMap<TestCacheKey, Duration>>(worker_dir, CacheFile::Durations)?
+    if !has_embedded_durations
+        && let Some(durations) =
+            read_json::<HashMap<TestCacheKey, Duration>>(worker_dir, CacheFile::Durations)?
     {
         results.durations.extend(durations);
     }
@@ -504,6 +464,7 @@ mod tests {
                 run_diagnostics: Vec::new(),
                 failed_tests: Vec::new(),
                 test_cases,
+                durations: HashMap::new(),
             },
         );
     }
@@ -1110,69 +1071,5 @@ mod tests {
             },
         ]
         "#);
-    }
-
-    #[test]
-    fn read_current_test_treats_empty_progress_file_as_between_tests() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-750");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let progress_file = cache.current_test_file(0);
-        fs::create_dir_all(progress_file.parent().expect("progress file parent")).unwrap();
-        fs::write(progress_file, "").unwrap();
-
-        assert!(cache.read_current_test(0).unwrap().is_none());
-    }
-
-    #[test]
-    fn read_current_test_reports_path_on_read_error() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-760");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let progress_file = cache.current_test_file(0);
-        fs::create_dir_all(&progress_file).unwrap();
-
-        let error = cache
-            .read_current_test(0)
-            .expect_err("directory progress file should fail");
-
-        assert!(
-            error.to_string().contains(progress_file.as_str()),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn read_current_test_reports_path_on_parse_error() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-770");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let progress_file = cache.current_test_file(0);
-        fs::create_dir_all(progress_file.parent().expect("progress file parent")).unwrap();
-        fs::write(&progress_file, "not-json").unwrap();
-
-        let error = cache
-            .read_current_test(0)
-            .expect_err("malformed progress file should fail");
-
-        assert!(
-            error.to_string().contains(progress_file.as_str()),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn fail_fast_signal_round_trip() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-800");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-
-        assert!(!cache.has_fail_fast_signal());
-        cache.write_fail_fast_signal().unwrap();
-        assert!(cache.has_fail_fast_signal());
     }
 }

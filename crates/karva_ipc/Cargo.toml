@@ -1,0 +1,23 @@
+[package]
+name = "karva_ipc"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Private controller-worker protocol for Karva."
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+karva_cache = { workspace = true }
+
+anyhow = { workspace = true }
+crossbeam-channel = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
