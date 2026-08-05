@@ -55,6 +55,13 @@ impl FlakyTest {
     fn display(&self) -> DisplayFlakyTest<'_> {
         DisplayFlakyTest(self)
     }
+
+    pub(super) fn display_ordering(&self, other: &Self) -> std::cmp::Ordering {
+        self.module_name
+            .cmp(&other.module_name)
+            .then_with(|| self.function_name.cmp(&other.function_name))
+            .then_with(|| self.params.cmp(&other.params))
+    }
 }
 
 /// Terminal-display wrapper for one flaky result.

@@ -9,12 +9,11 @@ mod stats;
 
 use std::collections::{BTreeSet, HashMap};
 
-use camino::Utf8Path;
 use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 use serde::{Deserialize, Serialize};
 
+use crate::Diagnostic;
 use crate::reporter::Reporter;
-use crate::{Diagnostic, DisplayDiagnosticConfig, render_diagnostic};
 use kind::TestResultKind;
 
 pub use case::{
@@ -127,12 +126,13 @@ impl<D> RunResults<D> {
         self.stats.add(TestResultKind::Slow);
     }
 
-    fn sort_test_cases(&mut self) {
+    fn sort_results(&mut self) {
         self.test_cases.sort_by(|a, b| {
             a.module_name()
                 .cmp(b.module_name())
                 .then_with(|| a.name().cmp(b.name()))
         });
+        self.flaky_tests.sort_by(FlakyTest::display_ordering);
     }
 }
 
@@ -231,28 +231,8 @@ impl RunResults<Diagnostic> {
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
         self.run_diagnostics.sort_by(diagnostic_display_ordering);
-        self.sort_test_cases();
+        self.sort_results();
         self
-    }
-
-    /// Converts source-backed diagnostics into transport-safe renderings.
-    pub fn render(self, cwd: &Utf8Path, config: DisplayDiagnosticConfig) -> AggregatedResults {
-        AggregatedResults {
-            run_diagnostics: self
-                .run_diagnostics
-                .iter()
-                .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
-                .collect(),
-            stats: self.stats,
-            durations: self.durations,
-            failed_tests: self.failed_tests,
-            flaky_tests: self.flaky_tests,
-            test_cases: self
-                .test_cases
-                .into_iter()
-                .map(|case| case.render(cwd, config))
-                .collect(),
-        }
     }
 }
 
@@ -260,7 +240,7 @@ impl RunResults<RenderedDiagnostic> {
     /// Sorts cases into deterministic display order after event aggregation.
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
-        self.sort_test_cases();
+        self.sort_results();
         self
     }
 
