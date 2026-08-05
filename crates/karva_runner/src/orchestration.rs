@@ -793,6 +793,7 @@ pub fn run_parallel_tests(
     for test in interrupted_tests {
         results.register_interrupted_test(&test.name, test.duration);
     }
+    let results = results.into_sorted();
 
     if !config.no_cache {
         write_last_failed(&cache_dir, &results.failed_tests);

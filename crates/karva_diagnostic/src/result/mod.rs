@@ -126,6 +126,14 @@ impl<D> RunResults<D> {
     pub(crate) fn register_slow(&mut self) {
         self.stats.add(TestResultKind::Slow);
     }
+
+    fn sort_test_cases(&mut self) {
+        self.test_cases.sort_by(|a, b| {
+            a.module_name()
+                .cmp(b.module_name())
+                .then_with(|| a.name().cmp(b.name()))
+        });
+    }
 }
 
 impl RunResults<Diagnostic> {
@@ -226,11 +234,7 @@ impl RunResults<Diagnostic> {
     #[must_use]
     pub fn into_sorted(mut self) -> Self {
         self.run_diagnostics.sort_by(diagnostic_display_ordering);
-        self.test_cases.sort_by(|a, b| {
-            a.module_name()
-                .cmp(b.module_name())
-                .then_with(|| a.name().cmp(b.name()))
-        });
+        self.sort_test_cases();
         self
     }
 
@@ -256,6 +260,13 @@ impl RunResults<Diagnostic> {
 }
 
 impl RunResults<RenderedDiagnostic> {
+    /// Sorts cases into deterministic display order after event aggregation.
+    #[must_use]
+    pub fn into_sorted(mut self) -> Self {
+        self.sort_test_cases();
+        self
+    }
+
     /// Records one worker-rendered test outcome.
     pub fn register_rendered_test_case(
         &mut self,
