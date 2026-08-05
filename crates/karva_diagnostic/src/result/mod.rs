@@ -46,21 +46,21 @@ pub struct TestRunResult {
 }
 
 /// Owned components used to serialize one worker's completed run.
-pub(super) struct TestRunResultParts {
+pub struct TestRunResultParts {
     /// Diagnostics that describe the run rather than one test case.
-    pub(super) run_diagnostics: Vec<Diagnostic>,
+    pub run_diagnostics: Vec<Diagnostic>,
 
     /// Aggregated outcome counters.
-    pub(super) stats: TestResultStats,
+    pub stats: TestResultStats,
 
     /// Duration of each schedulable test or parameter case.
-    pub(super) durations: HashMap<TestCacheKey, std::time::Duration>,
+    pub durations: HashMap<TestCacheKey, std::time::Duration>,
 
     /// Scheduling keys for failed test variants.
-    pub(super) failed_tests: HashSet<TestCacheKey>,
+    pub failed_tests: HashSet<TestCacheKey>,
 
     /// Final outcome for each executed test variant.
-    pub(super) test_cases: Vec<TestExecutionResult>,
+    pub test_cases: Vec<TestExecutionResult>,
 }
 
 /// Orders diagnostics for display.

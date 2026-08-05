@@ -9,8 +9,8 @@ use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
 
 use crate::render::render_diagnostic;
-use crate::result::kind::TestResultKind;
 use crate::result::TestRunResultParts;
+use crate::result::kind::TestResultKind;
 use crate::{
     DisplayDiagnosticConfig, FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult,
     TestResultStats, TestRunResult,
@@ -197,7 +197,10 @@ mod tests {
         aggregated.merge_worker(worker);
 
         assert_eq!(aggregated.stats.failed(), 1);
-        assert_eq!(aggregated.failed_tests, ["mod::test_failure"]);
+        assert_eq!(
+            aggregated.failed_tests,
+            [TestCacheKey::function_name("mod::test_failure")]
+        );
         assert_eq!(
             aggregated.durations["mod::test_failure"],
             Duration::from_millis(10)
@@ -210,7 +213,10 @@ mod tests {
 
         aggregated.register_interrupted_test("mod::test_slow(value=1)", Duration::from_millis(24));
 
-        assert_eq!(aggregated.failed_tests, ["mod::test_slow"]);
+        assert_eq!(
+            aggregated.failed_tests,
+            [TestCacheKey::function_name("mod::test_slow")]
+        );
         assert!(aggregated.durations.contains_key("mod::test_slow"));
     }
 }
