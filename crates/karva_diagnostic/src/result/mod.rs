@@ -123,7 +123,7 @@ impl<D> RunResults<D> {
         self.test_cases.push(test_case);
     }
 
-    pub(crate) fn register_slow(&mut self) {
+    fn register_slow(&mut self) {
         self.stats.add(TestResultKind::Slow);
     }
 

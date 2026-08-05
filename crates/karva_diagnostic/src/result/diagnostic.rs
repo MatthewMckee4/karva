@@ -40,7 +40,7 @@ impl RenderedDiagnostic {
     }
 
     /// Creates the synthetic diagnostic used when shutdown interrupts a test.
-    pub(crate) fn interrupted(test_name: &str) -> Self {
+    pub(super) fn interrupted(test_name: &str) -> Self {
         let message = format!("Test `{test_name}` was interrupted");
         Self::new(
             "interrupted",

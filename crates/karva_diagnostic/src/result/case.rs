@@ -78,7 +78,7 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Builds a synthetic result when no semantic [`QualifiedTestName`] is available.
-    pub(crate) fn from_display_name(
+    pub(super) fn from_display_name(
         full_name: &str,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -147,7 +147,7 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Converts every diagnostic while preserving outcome and retry structure.
-    pub(crate) fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseResult<T> {
+    fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseResult<T> {
         TestCaseResult {
             module_name: self.module_name,
             name: self.name,
@@ -266,7 +266,7 @@ impl TestCaseRetry {
         self.max_attempts
     }
 
-    pub fn is_flaky_failure(&self) -> bool {
+    fn is_flaky_failure(&self) -> bool {
         self.flaky_failure
     }
 

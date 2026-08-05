@@ -71,7 +71,7 @@ impl TestResultStats {
     }
 
     /// Increments the counter represented by `kind`.
-    pub(crate) fn add(&mut self, kind: TestResultKind) {
+    pub(super) fn add(&mut self, kind: TestResultKind) {
         match kind {
             TestResultKind::Passed => self.passed += 1,
             TestResultKind::Failed => self.failed += 1,
