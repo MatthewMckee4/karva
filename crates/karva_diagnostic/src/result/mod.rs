@@ -63,11 +63,11 @@ impl<D> Default for RunResults<D> {
 pub type AggregatedResults = RunResults<RenderedDiagnostic>;
 
 impl<D> RunResults<D> {
-    /// Preallocates storage for the controller's measured scheduling units.
-    pub fn with_test_capacity(test_capacity: usize) -> Self {
+    /// Preallocates controller storage from measured scheduling units.
+    pub fn with_capacities(duration_capacity: usize, test_case_capacity: usize) -> Self {
         Self {
-            durations: HashMap::with_capacity(test_capacity),
-            test_cases: Vec::with_capacity(test_capacity),
+            durations: HashMap::with_capacity(duration_capacity),
+            test_cases: Vec::with_capacity(test_case_capacity),
             ..Self::default()
         }
     }
@@ -76,7 +76,12 @@ impl<D> RunResults<D> {
         &self.stats
     }
 
-    fn register_case(&mut self, cache_key: TestCacheKey, test_case: TestCaseResult<D>) {
+    fn register_case(
+        &mut self,
+        cache_key: TestCacheKey,
+        test_case: TestCaseResult<D>,
+        retain_case: bool,
+    ) {
         let result = test_case.outcome().result_kind();
         self.stats.add(result.clone().into());
 
@@ -103,7 +108,9 @@ impl<D> RunResults<D> {
             .entry(cache_key)
             .and_modify(|existing_duration| *existing_duration += duration)
             .or_insert(duration);
-        self.test_cases.push(test_case);
+        if retain_case {
+            self.test_cases.push(test_case);
+        }
     }
 
     fn register_slow(&mut self) {
@@ -133,8 +140,12 @@ impl RunResults<RenderedDiagnostic> {
         &mut self,
         cache_key: TestCacheKey,
         test_case: TestCaseResult,
+        retain_all_test_results: bool,
     ) {
-        self.register_case(cache_key, test_case);
+        let retain_case = retain_all_test_results
+            || test_case.outcome().is_non_success()
+            || test_case.retry().is_some();
+        self.register_case(cache_key, test_case, retain_case);
     }
 
     /// Records one worker-reported slow test.
@@ -177,6 +188,7 @@ impl RunResults<RenderedDiagnostic> {
                 duration,
                 None,
             ),
+            true,
         );
     }
 }
@@ -215,11 +227,44 @@ mod tests {
         );
         let mut aggregated = AggregatedResults::default();
 
-        aggregated.register_rendered_test_case(cache_key.clone(), result);
+        aggregated.register_rendered_test_case(cache_key.clone(), result, false);
 
         assert_eq!(aggregated.stats.failed(), 1);
         assert_eq!(aggregated.failed_tests, BTreeSet::from([cache_key.clone()]));
         assert_eq!(aggregated.durations[&cache_key], Duration::from_millis(10));
+    }
+
+    #[test]
+    fn discards_successful_case_body_by_default() {
+        let cache_key = TestCacheKey::function_name("mod::test_success");
+        let result = TestCaseResult::from_display_name(
+            "mod::test_success",
+            TestCaseOutcome::Passed,
+            Duration::from_millis(10),
+            None,
+        );
+        let mut aggregated = AggregatedResults::default();
+
+        aggregated.register_rendered_test_case(cache_key, result, false);
+
+        assert_eq!(aggregated.stats.passed(), 1);
+        assert!(aggregated.test_cases.is_empty());
+    }
+
+    #[test]
+    fn retains_successful_case_body_for_reports() {
+        let cache_key = TestCacheKey::function_name("mod::test_success");
+        let result = TestCaseResult::from_display_name(
+            "mod::test_success",
+            TestCaseOutcome::Passed,
+            Duration::from_millis(10),
+            None,
+        );
+        let mut aggregated = AggregatedResults::default();
+
+        aggregated.register_rendered_test_case(cache_key, result, true);
+
+        assert_eq!(aggregated.test_cases.len(), 1);
     }
 
     #[test]

@@ -137,6 +137,11 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
             karva_runner::TestOrdering::RandomizeUnmeasured,
             karva_runner::TestOrdering::SeededShuffle,
         ),
+        result_retention: if result_output.is_some() || project.settings().junit().path.is_some() {
+            karva_runner::TestResultRetention::All
+        } else {
+            karva_runner::TestResultRetention::FailuresAndRetries
+        },
     };
 
     if watch {

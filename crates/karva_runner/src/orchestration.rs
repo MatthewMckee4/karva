@@ -96,17 +96,23 @@ struct EventDispatcher {
     completed_workers: HashSet<usize>,
     in_flight: HashMap<usize, RunningTest>,
     results: AggregatedResults,
+    result_retention: TestResultRetention,
 }
 
 impl WorkerManager {
-    fn with_test_capacity(test_capacity: usize) -> Self {
+    fn with_test_capacity(test_capacity: usize, result_retention: TestResultRetention) -> Self {
+        let test_case_capacity = match result_retention {
+            TestResultRetention::FailuresAndRetries => 0,
+            TestResultRetention::All => test_capacity,
+        };
         Self {
             workers: Vec::new(),
             dispatcher: EventDispatcher {
                 expected_workers: HashSet::new(),
                 completed_workers: HashSet::new(),
                 in_flight: HashMap::new(),
-                results: AggregatedResults::with_test_capacity(test_capacity),
+                results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
+                result_retention,
             },
         }
     }
@@ -212,7 +218,11 @@ impl EventDispatcher {
                             result.full_name()
                         );
                     }
-                    self.results.register_rendered_test_case(cache_key, *result);
+                    self.results.register_rendered_test_case(
+                        cache_key,
+                        *result,
+                        matches!(self.result_retention, TestResultRetention::All),
+                    );
                 }
                 WorkerEvent::RunDiagnostic(diagnostic) => {
                     self.results.add_rendered_run_diagnostic(diagnostic);
@@ -564,6 +574,20 @@ pub struct ParallelTestConfig {
 
     /// Ordering strategy for partition inputs.
     pub test_ordering: TestOrdering,
+
+    /// Which completed test case bodies the controller retains.
+    pub result_retention: TestResultRetention,
+}
+
+/// Controls whether successful non-retried case bodies remain in memory.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum TestResultRetention {
+    /// Retain failures and retries needed for terminal reporting.
+    #[default]
+    FailuresAndRetries,
+
+    /// Retain every case for JSON or `JUnit` reports.
+    All,
 }
 
 /// Spawn worker processes for each partition
@@ -575,8 +599,9 @@ fn spawn_workers(
     partitions: &[Partition],
     forward_stdout: bool,
     test_capacity: usize,
+    result_retention: TestResultRetention,
 ) -> Result<WorkerManager> {
-    let mut worker_manager = WorkerManager::with_test_capacity(test_capacity);
+    let mut worker_manager = WorkerManager::with_test_capacity(test_capacity, result_retention);
 
     for (worker_id, partition) in partitions.iter().enumerate() {
         if partition.tests().is_empty() {
@@ -783,7 +808,13 @@ pub fn run_parallel_tests(
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
     let forward_stdout = printer.stream_for_test_result().is_enabled();
-    let mut worker_manager = spawn_workers(&spawn, &partitions, forward_stdout, scheduled_cases)?;
+    let mut worker_manager = spawn_workers(
+        &spawn,
+        &partitions,
+        forward_stdout,
+        scheduled_cases,
+        config.result_retention,
+    )?;
 
     let outcome = worker_manager.wait_for_completion(
         shutdown_rx,
