@@ -358,10 +358,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 total_duration,
             );
         }
-        self.package_runner
-            .context
-            .report_test_finished(&settings.qualified_test_name);
-
         if prior_attempts.is_empty() {
             self.package_runner.state.register_test_case_result(
                 self.package_runner.context,
@@ -383,6 +379,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 .collect::<Vec<_>>();
             execution_attempts.push(final_attempt.into_execution_attempt());
             self.package_runner.state.register_retried_result(
+                self.package_runner.context,
                 &settings.qualified_test_name,
                 outcome,
                 total_duration,

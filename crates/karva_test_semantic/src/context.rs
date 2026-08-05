@@ -77,12 +77,6 @@ impl<'a> Context<'a> {
         self.reporter.report_test_started(test_case_name);
     }
 
-    /// Pair to [`Self::report_test_started`]: clears the in-flight marker
-    /// once the test completes (passed, failed, or skipped).
-    pub fn report_test_finished(&self, test_case_name: &QualifiedTestName) {
-        self.reporter.report_test_finished(test_case_name);
-    }
-
     /// Returns the parser target matching the embedded interpreter.
     pub fn python_version(&self) -> PythonVersion {
         self.python_version
@@ -176,6 +170,7 @@ impl RunState {
     /// lines already showed every attempt.
     pub fn register_retried_result(
         &mut self,
+        context: &Context<'_>,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
@@ -191,11 +186,13 @@ impl RunState {
             retry,
             captured_output,
             attempts,
+            Some(context.reporter),
         );
         passed
     }
 
-    pub(super) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.result.add_run_diagnostic(diagnostic);
+    pub(super) fn add_run_diagnostic(&mut self, context: &Context<'_>, diagnostic: Diagnostic) {
+        self.result
+            .add_run_diagnostic(diagnostic, Some(context.reporter));
     }
 }

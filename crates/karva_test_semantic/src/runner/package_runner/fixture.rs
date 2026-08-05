@@ -83,7 +83,7 @@ impl PackageRunner<'_, '_> {
     /// Cleans one scope and promotes teardown failures to run diagnostics.
     pub(super) fn report_scope_cleanup(&mut self, py: Python<'_>, scope: ScopeKey<'_>) {
         for diagnostic in self.clean_up_scope(py, scope) {
-            self.state.add_run_diagnostic(diagnostic);
+            self.state.add_run_diagnostic(self.context, diagnostic);
         }
     }
 

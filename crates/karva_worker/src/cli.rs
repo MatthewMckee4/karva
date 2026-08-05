@@ -7,7 +7,7 @@ use clap::Parser;
 use colored::Colorize;
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
 use karva_diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter};
-use karva_ipc::{WorkerClient, WorkerEvent, WorkerState};
+use karva_ipc::WorkerClient;
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
@@ -141,12 +141,23 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     settings.set_filter(filter);
     settings.set_run_ignored(run_ignored);
 
+    let diagnostic_format = match settings.terminal().output_format {
+        OutputFormat::Full => DiagnosticFormat::Full,
+        OutputFormat::Concise => DiagnosticFormat::Concise,
+    };
+    let diagnostic_config = DisplayDiagnosticConfig::new(
+        diagnostic_format,
+        colored::control::SHOULD_COLORIZE.should_colorize(),
+    );
     let client = WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
-    let state = WorkerState::default();
-    client.listen_for_commands(state.clone())?;
-    let reporter = WorkerReporter::new(TestCaseReporter::new(printer), state);
+    let reporter = WorkerReporter::new(
+        TestCaseReporter::new(printer),
+        client.clone(),
+        cwd.clone(),
+        diagnostic_config,
+    );
 
-    let result = karva_test_semantic::run_tests(
+    drop(karva_test_semantic::run_tests(
         &cwd,
         &settings,
         python_version,
@@ -154,29 +165,10 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         test_paths,
         coverage.as_ref(),
         !verbosity.is_default(),
-    );
-
-    let diagnostic_format = match settings.terminal().output_format {
-        OutputFormat::Full => DiagnosticFormat::Full,
-        OutputFormat::Concise => DiagnosticFormat::Concise,
-    };
-    let config = DisplayDiagnosticConfig::new(
-        diagnostic_format,
-        colored::control::SHOULD_COLORIZE.should_colorize(),
-    );
-
-    // Propagate the stop signal to sibling workers whenever this worker has
-    // reached (or exceeded) its configured max-fail budget. The budget is
-    // enforced locally per worker inside `PackageRunner`, so hitting any
-    // failure here while `max_fail` is set means we ran out of budget.
-    let failed_count =
-        u32::try_from(result.stats().failed() + result.stats().errors()).unwrap_or(u32::MAX);
-    let results = result.render(&cwd, config);
-
-    if settings.max_fail().is_exceeded_by(failed_count) {
-        client.send_event(WorkerEvent::FailFast)?;
-    }
-    client.complete(results)?;
+    ));
+    reporter.finish()?;
+    drop(reporter);
+    client.complete()?;
 
     Ok(ExitStatus::Success)
 }

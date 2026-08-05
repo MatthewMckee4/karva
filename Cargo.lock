@@ -1000,6 +1000,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "karva_diagnostic",
+ "karva_python_semantic",
  "serde",
  "serde_json",
  "tracing",
@@ -1192,6 +1193,7 @@ dependencies = [
  "karva_python_semantic",
  "karva_static",
  "karva_test_semantic",
+ "tracing",
  "wild",
 ]
 

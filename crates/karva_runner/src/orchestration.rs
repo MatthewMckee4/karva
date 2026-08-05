@@ -20,6 +20,7 @@ use karva_diagnostic::AggregatedResults;
 use karva_ipc::{ControllerServer, WorkerEvent};
 use karva_logging::Printer;
 use karva_logging::time::{format_duration, format_duration_bracketed};
+use karva_metadata::MaxFail;
 use karva_project::Project;
 use karva_python_semantic::TestCacheKey;
 
@@ -31,8 +32,6 @@ use crate::worker_args::{WorkerSpawn, worker_command};
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
 /// columns align. Mirrors the constant in `karva_diagnostic::reporter`.
 const LABEL_COLUMN_WIDTH: usize = 12;
-/// Delay before cancellation snapshot so reader threads can publish current state.
-const CURRENT_TEST_SETTLE: Duration = Duration::from_millis(50);
 
 /// How `wait_for_completion` exited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,11 +99,11 @@ struct EventDispatcher {
     results: AggregatedResults,
 }
 
-/// Worker-reported snapshot of its current test.
+/// Controller-owned state for one executing test.
 #[derive(Debug)]
 struct RunningTest {
-    name: Option<String>,
-    elapsed: Duration,
+    name: String,
+    started: Instant,
 }
 
 #[derive(Debug)]
@@ -163,31 +162,62 @@ impl EventDispatcher {
         self.expected_workers.insert(worker_id);
     }
 
-    /// Applies every queued worker event and reports whether fail-fast fired.
-    fn dispatch_pending(&mut self, server: &mut ControllerServer) -> Result<bool> {
+    /// Applies every queued worker event to controller-owned run state.
+    fn dispatch_pending(&mut self, server: &mut ControllerServer) -> Result<()> {
         server.accept_pending()?;
-        let mut fail_fast = false;
         while let Some(message) = server.try_recv()? {
             let worker_id = message.worker_id;
             if !self.expected_workers.contains(&worker_id) {
                 anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
             }
             match message.event {
-                WorkerEvent::CurrentTest { name, elapsed } => {
-                    self.in_flight
-                        .insert(worker_id, RunningTest { name, elapsed });
-                }
-                WorkerEvent::FailFast => fail_fast = true,
-                WorkerEvent::Completed(results) => {
-                    if !self.completed_workers.insert(worker_id) {
-                        anyhow::bail!("Karva worker {worker_id} sent duplicate results");
+                WorkerEvent::TestStarted { name } => {
+                    if self
+                        .in_flight
+                        .insert(
+                            worker_id,
+                            RunningTest {
+                                name,
+                                started: Instant::now(),
+                            },
+                        )
+                        .is_some()
+                    {
+                        anyhow::bail!(
+                            "Karva worker {worker_id} started a test before finishing its previous test"
+                        );
                     }
-                    self.in_flight.remove(&worker_id);
-                    self.results.merge_worker(results);
+                }
+                WorkerEvent::TestSlow => self.results.register_slow_test(),
+                WorkerEvent::TestFinished { cache_key, result } => {
+                    if let Some(running) = self.in_flight.remove(&worker_id)
+                        && running.name != result.full_name()
+                    {
+                        anyhow::bail!(
+                            "Karva worker {worker_id} started `{}` but finished `{}`",
+                            running.name,
+                            result.full_name()
+                        );
+                    }
+                    self.results.register_rendered_test_case(cache_key, result);
+                }
+                WorkerEvent::RunDiagnostic(diagnostic) => {
+                    self.results.add_rendered_run_diagnostic(diagnostic);
+                }
+                WorkerEvent::WorkerFinished => {
+                    if !self.completed_workers.insert(worker_id) {
+                        anyhow::bail!("Karva worker {worker_id} completed more than once");
+                    }
+                    if let Some(running) = self.in_flight.get(&worker_id) {
+                        anyhow::bail!(
+                            "Karva worker {worker_id} completed while `{}` was still running",
+                            running.name
+                        );
+                    }
                 }
             }
         }
-        Ok(fail_fast)
+        Ok(())
     }
 
     fn finish(&mut self, server: &mut ControllerServer) -> Result<()> {
@@ -236,8 +266,8 @@ impl WorkerManager {
 
     /// Wait for all workers to complete.
     ///
-    /// Returns early if a message is received on `shutdown_rx`, a worker sends
-    /// a fail-fast event, or `deadline` passes. Finished workers are reaped at the
+    /// Returns early if a message is received on `shutdown_rx`, the global
+    /// failure budget is exhausted, or `deadline` passes. Finished workers are reaped at the
     /// top of each iteration before any of those conditions are checked, so a
     /// run that completes just as the deadline passes (or a signal arrives) is
     /// reported as `AllCompleted` rather than `TimedOut`/`Cancelled`.
@@ -248,7 +278,7 @@ impl WorkerManager {
         &mut self,
         shutdown_rx: Option<&Receiver<()>>,
         server: &mut ControllerServer,
-        fail_fast_enabled: bool,
+        max_fail: MaxFail,
         deadline: Option<Instant>,
     ) -> Result<WaitOutcome> {
         if self.workers.is_empty() {
@@ -261,7 +291,7 @@ impl WorkerManager {
         );
 
         loop {
-            let fail_fast = self.dispatcher.dispatch_pending(server)?;
+            self.dispatcher.dispatch_pending(server)?;
             self.reap_finished(true);
 
             if self.workers.is_empty() {
@@ -290,8 +320,11 @@ impl WorkerManager {
                 }
             }
 
-            if fail_fast_enabled && fail_fast {
-                tracing::info!("Fail-fast signal received — stopping remaining workers");
+            let failures =
+                self.dispatcher.results.stats().failed() + self.dispatcher.results.stats().errors();
+            let failures = u32::try_from(failures).unwrap_or(u32::MAX);
+            if max_fail.is_exceeded_by(failures) {
+                tracing::info!("Failure budget exhausted — stopping remaining workers");
                 return Ok(WaitOutcome::FailFast);
             }
 
@@ -387,9 +420,8 @@ impl WorkerManager {
 
     /// Stop remaining workers and emit nextest-style cancellation lines.
     ///
-    /// Each worker keeps current state in memory and answers one query here.
-    /// We snapshot that state before killing and remember a
-    /// `(worker_id, test name, elapsed time)` record for each.
+    /// Controller lifecycle events identify tests still in flight after every
+    /// worker has stopped and its event stream has drained.
     ///
     /// Workers are killed, reaped, and have their forwarded stdout drained
     /// before we print so any in-flight `PASS`/`FAIL` lines land before the
@@ -405,27 +437,28 @@ impl WorkerManager {
         }
 
         self.dispatcher.dispatch_pending(server)?;
-        server.request_current_tests(self.workers.iter().map(|worker| worker.id));
-        std::thread::sleep(CURRENT_TEST_SETTLE);
-        self.dispatcher.dispatch_pending(server)?;
-
-        let in_flight: Vec<_> = self
+        let worker_ids = self
             .workers
             .iter()
-            .map(|worker| {
-                let current = self.dispatcher.in_flight.get(&worker.id);
+            .map(|worker| worker.id)
+            .collect::<Vec<_>>();
+        self.terminate_remaining(grace_period);
+        self.dispatcher.finish(server)?;
+
+        let in_flight: Vec<_> = worker_ids
+            .into_iter()
+            .map(|worker_id| {
+                let current = self.dispatcher.in_flight.get(&worker_id);
                 InFlightTest {
-                    worker_id: worker.id,
-                    name: current.and_then(|current| current.name.clone()),
-                    elapsed: current.map_or(Duration::ZERO, |current| current.elapsed),
+                    worker_id,
+                    name: current.map(|current| current.name.clone()),
+                    elapsed: current.map_or(Duration::ZERO, |current| current.started.elapsed()),
                 }
             })
             .collect();
 
         let running_tests = in_flight.iter().filter(|test| test.name.is_some()).count();
         let test_label = if running_tests == 1 { "test" } else { "tests" };
-
-        self.terminate_remaining(grace_period);
 
         let mut stdout = printer.stream_for_test_result().lock();
         let cancel_label = "Cancelling".yellow().bold();
@@ -742,7 +775,7 @@ pub fn run_parallel_tests(
     let outcome = worker_manager.wait_for_completion(
         shutdown_rx,
         &mut controller,
-        project.settings().max_fail().has_limit(),
+        project.settings().max_fail(),
         run_deadline,
     )?;
     let termination_grace_period = project.settings().test().termination_grace_period();

@@ -1,9 +1,10 @@
 use std::time::Duration;
 
+use camino::Utf8Path;
 use karva_python_semantic::QualifiedTestName;
 use serde::{Deserialize, Serialize};
 
-use crate::Diagnostic;
+use crate::{Diagnostic, DisplayDiagnosticConfig, render_diagnostic};
 
 use super::diagnostic::RenderedDiagnostic;
 use super::kind::IndividualTestResultKind;
@@ -161,6 +162,17 @@ impl<D> TestCaseResult<D> {
                 .map(|attempt| attempt.map_diagnostic(&mut map))
                 .collect(),
         }
+    }
+}
+
+impl TestCaseResult<Diagnostic> {
+    /// Converts source-backed diagnostics into transport-safe renderings.
+    pub fn render(
+        self,
+        cwd: &Utf8Path,
+        config: DisplayDiagnosticConfig,
+    ) -> TestCaseResult<RenderedDiagnostic> {
+        self.map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
     }
 }
 

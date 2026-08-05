@@ -46,16 +46,6 @@ impl TestResultStats {
         self.failed() == 0 && self.errors() == 0
     }
 
-    /// Adds counters from another worker or partial run.
-    pub(crate) fn merge(&mut self, other: &Self) {
-        self.passed += other.passed;
-        self.failed += other.failed;
-        self.errors += other.errors;
-        self.skipped += other.skipped;
-        self.flaky += other.flaky;
-        self.slow += other.slow;
-    }
-
     pub fn passed(&self) -> usize {
         self.passed
     }
@@ -236,20 +226,6 @@ mod tests {
     fn test_deserialize_unknown_field() {
         let result = serde_json::from_str::<TestResultStats>(r#"{"invalid": 1}"#);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_merge() {
-        let mut a = TestResultStats::default();
-        a.add(TestResultKind::Passed);
-
-        let mut b = TestResultStats::default();
-        b.add(TestResultKind::Passed);
-        b.add(TestResultKind::Failed);
-
-        a.merge(&b);
-        assert_eq!(a.passed(), 2);
-        assert_eq!(a.failed(), 1);
     }
 
     #[test]

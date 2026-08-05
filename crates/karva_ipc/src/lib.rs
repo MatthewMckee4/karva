@@ -4,32 +4,38 @@
 //! the project filesystem. JSON values form a self-delimiting stream; keeping
 //! the wire format serde-based avoids platform-specific pipe implementations.
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::{BufReader, BufWriter, ErrorKind, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
-use karva_diagnostic::AggregatedResults;
+use karva_diagnostic::{RenderedDiagnostic, TestCaseResult};
+use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
 
 /// One runtime state change sent from a worker to the controller.
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
-    /// On-demand snapshot used to report a worker during cancellation.
-    CurrentTest {
-        name: Option<String>,
-        elapsed: Duration,
+    /// Test began executing on this worker.
+    TestStarted { name: String },
+
+    /// Test exceeded the configured slow-test threshold.
+    TestSlow,
+
+    /// Test completed with its transport-safe result.
+    TestFinished {
+        cache_key: TestCacheKey,
+        result: TestCaseResult,
     },
 
-    /// Worker exhausted its local failure budget.
-    FailFast,
+    /// Diagnostic describing the run rather than one test.
+    RunDiagnostic(RenderedDiagnostic),
 
-    /// Worker completed and produced its full result set.
-    Completed(AggregatedResults),
+    /// Worker completed normally after sending every result.
+    WorkerFinished,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -38,72 +44,10 @@ enum WireMessage {
     Event(WorkerEvent),
 }
 
-#[derive(Serialize, Deserialize)]
-enum ControllerCommand {
-    ReadCurrentTest,
-}
-
 enum Incoming {
-    Connected {
-        worker_id: usize,
-        writer: BufWriter<TcpStream>,
-    },
+    Connected { worker_id: usize },
     Event(ControllerEvent),
     Error(String),
-}
-
-#[derive(Default, Clone)]
-/// In-memory test state queried by the controller only during cancellation.
-pub struct WorkerState {
-    current: Arc<Mutex<Option<CurrentTest>>>,
-}
-
-struct CurrentTest {
-    name: String,
-    started: Instant,
-}
-
-impl WorkerState {
-    /// Records a test immediately before execution starts.
-    pub fn start(&self, name: String) {
-        if let Ok(mut current) = self.current.lock() {
-            *current = Some(CurrentTest {
-                name,
-                started: Instant::now(),
-            });
-        } else {
-            tracing::warn!("Karva worker state lock poisoned");
-        }
-    }
-
-    /// Clears state immediately after the current test finishes.
-    pub fn finish(&self) {
-        if let Ok(mut current) = self.current.lock() {
-            *current = None;
-        } else {
-            tracing::warn!("Karva worker state lock poisoned");
-        }
-    }
-
-    fn event(&self) -> WorkerEvent {
-        let Ok(current) = self.current.lock() else {
-            tracing::warn!("Karva worker state lock poisoned");
-            return WorkerEvent::CurrentTest {
-                name: None,
-                elapsed: Duration::ZERO,
-            };
-        };
-        current.as_ref().map_or(
-            WorkerEvent::CurrentTest {
-                name: None,
-                elapsed: Duration::ZERO,
-            },
-            |current| WorkerEvent::CurrentTest {
-                name: Some(current.name.clone()),
-                elapsed: current.started.elapsed(),
-            },
-        )
-    }
 }
 
 /// Event attributed to the worker authenticated by the stream handshake.
@@ -144,46 +88,15 @@ impl WorkerClient {
         self.send(&WireMessage::Event(event))
     }
 
-    /// Sends the terminal result payload and gracefully closes the connection.
-    pub fn complete(self, results: AggregatedResults) -> Result<()> {
-        self.send(&WireMessage::Event(WorkerEvent::Completed(results)))?;
+    /// Marks the worker complete and gracefully closes the connection.
+    pub fn complete(self) -> Result<()> {
+        self.send(&WireMessage::Event(WorkerEvent::WorkerFinished))?;
         self.writer
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva controller connection lock poisoned"))?
             .get_ref()
             .shutdown(Shutdown::Both)
             .context("failed to close Karva controller connection")
-    }
-
-    /// Starts a dormant reader that answers controller state queries.
-    pub fn listen_for_commands(&self, state: WorkerState) -> Result<()> {
-        let stream = self
-            .writer
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Karva controller connection lock poisoned"))?
-            .get_ref()
-            .try_clone()
-            .context("failed to clone Karva controller connection")?;
-        let client = self.clone();
-        thread::spawn(move || {
-            let commands = serde_json::Deserializer::from_reader(BufReader::new(stream))
-                .into_iter::<ControllerCommand>();
-            for command in commands {
-                match command {
-                    Ok(ControllerCommand::ReadCurrentTest) => {
-                        if let Err(error) = client.send_event(state.event()) {
-                            tracing::warn!("failed to send current test to controller: {error:#}");
-                            return;
-                        }
-                    }
-                    Err(error) => {
-                        tracing::warn!("failed to read Karva controller command: {error}");
-                        return;
-                    }
-                }
-            }
-        });
-        Ok(())
     }
 
     fn send(&self, message: &WireMessage) -> Result<()> {
@@ -210,7 +123,7 @@ pub struct ControllerServer {
     sender: Sender<Incoming>,
     receiver: Receiver<Incoming>,
     readers: Vec<JoinHandle<()>>,
-    workers: HashMap<usize, BufWriter<TcpStream>>,
+    workers: HashSet<usize>,
 }
 
 impl ControllerServer {
@@ -228,7 +141,7 @@ impl ControllerServer {
             sender,
             receiver,
             readers: Vec::new(),
-            workers: HashMap::new(),
+            workers: HashSet::new(),
         })
     }
 
@@ -267,26 +180,14 @@ impl ControllerServer {
     pub fn try_recv(&mut self) -> Result<Option<ControllerEvent>> {
         loop {
             match self.receiver.try_recv() {
-                Ok(Incoming::Connected { worker_id, writer }) => {
-                    if self.workers.insert(worker_id, writer).is_some() {
+                Ok(Incoming::Connected { worker_id }) => {
+                    if !self.workers.insert(worker_id) {
                         bail!("Karva worker {worker_id} connected more than once");
                     }
                 }
                 Ok(Incoming::Event(event)) => return Ok(Some(event)),
                 Ok(Incoming::Error(error)) => bail!(error),
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => return Ok(None),
-            }
-        }
-    }
-
-    /// Requests an in-memory state snapshot from every connected live worker.
-    pub fn request_current_tests(&mut self, worker_ids: impl IntoIterator<Item = usize>) {
-        for worker_id in worker_ids {
-            let Some(writer) = self.workers.get_mut(&worker_id) else {
-                continue;
-            };
-            if let Err(error) = write_command(writer, &ControllerCommand::ReadCurrentTest) {
-                tracing::warn!(worker_id, "failed to query current test: {error:#}");
             }
         }
     }
@@ -304,9 +205,6 @@ impl ControllerServer {
 }
 
 fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incoming>) -> Result<()> {
-    let writer = stream
-        .try_clone()
-        .context("failed to clone Karva worker connection")?;
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(first) = messages.next() else {
@@ -320,16 +218,7 @@ fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incomin
     if run_id != expected_run_id {
         bail!("Karva worker connected with run id `{run_id}`, expected `{expected_run_id}`");
     }
-    writer
-        .set_nodelay(true)
-        .context("failed to configure Karva worker connection")?;
-    if sender
-        .send(Incoming::Connected {
-            worker_id,
-            writer: BufWriter::new(writer),
-        })
-        .is_err()
-    {
+    if sender.send(Incoming::Connected { worker_id }).is_err() {
         return Ok(());
     }
 
@@ -360,18 +249,6 @@ fn is_clean_disconnect(error: &serde_json::Error) -> bool {
     )
 }
 
-fn write_command(writer: &mut BufWriter<TcpStream>, command: &ControllerCommand) -> Result<()> {
-    serde_json::to_writer(&mut *writer, command)
-        .context("failed to serialize Karva controller command")?;
-    writer
-        .write_all(b"\n")
-        .context("failed to frame Karva controller command")?;
-    writer
-        .flush()
-        .context("failed to send Karva controller command")?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,7 +259,9 @@ mod tests {
         let client = WorkerClient::connect(server.address().expect("address"), "run-id", 7)
             .expect("connect worker");
         client
-            .send_event(WorkerEvent::FailFast)
+            .send_event(WorkerEvent::TestStarted {
+                name: "mod::test".to_string(),
+            })
             .expect("send event");
         drop(client);
 
@@ -394,7 +273,10 @@ mod tests {
             .expect("queued event");
 
         assert_eq!(event.worker_id, 7);
-        assert!(matches!(event.event, WorkerEvent::FailFast));
+        assert!(matches!(
+            event.event,
+            WorkerEvent::TestStarted { name } if name == "mod::test"
+        ));
     }
 
     #[test]
@@ -425,13 +307,11 @@ mod tests {
     }
 
     #[test]
-    fn completion_closes_connection_after_sending_results() {
+    fn completion_closes_connection_after_terminal_event() {
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
         let client = WorkerClient::connect(server.address().expect("address"), "run-id", 7)
             .expect("connect worker");
-        client
-            .complete(AggregatedResults::default())
-            .expect("complete worker");
+        client.complete().expect("complete worker");
 
         server.accept_pending().expect("accept worker");
         server.finish().expect("finish readers");
@@ -441,6 +321,6 @@ mod tests {
             .expect("queued event");
 
         assert_eq!(event.worker_id, 7);
-        assert!(matches!(event.event, WorkerEvent::Completed(_)));
+        assert!(matches!(event.event, WorkerEvent::WorkerFinished));
     }
 }

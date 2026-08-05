@@ -4,9 +4,10 @@ use std::time::Duration;
 use colored::Colorize;
 use karva_logging::time::format_duration_bracketed;
 use karva_logging::{Printer, StatusLevel};
-use karva_python_semantic::QualifiedTestName;
+use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
-use crate::result::IndividualTestResultKind;
+use crate::Diagnostic;
+use crate::result::{IndividualTestResultKind, TestExecutionResult};
 
 /// A reporter for test execution time logging to the user.
 pub trait Reporter: Send + Sync {
@@ -50,11 +51,14 @@ pub trait Reporter: Send + Sync {
         let _ = test_name;
     }
 
-    /// Called when a test finishes (passed, failed, or skipped) so the
-    /// reporter can clear any in-flight state recorded by
-    /// [`Self::report_test_started`]. Default no-op.
-    fn report_test_finished(&self, test_name: &QualifiedTestName) {
-        let _ = test_name;
+    /// Called with the final result after each test completes.
+    fn report_test_completed(&self, cache_key: &TestCacheKey, result: &TestExecutionResult) {
+        let _ = (cache_key, result);
+    }
+
+    /// Called when a run-level diagnostic is recorded.
+    fn report_run_diagnostic(&self, diagnostic: &Diagnostic) {
+        let _ = diagnostic;
     }
 }
 

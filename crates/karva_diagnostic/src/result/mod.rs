@@ -130,7 +130,10 @@ impl<D> RunResults<D> {
 
 impl RunResults<Diagnostic> {
     /// Adds a diagnostic not owned by one test case.
-    pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
+    pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic, reporter: Option<&dyn Reporter>) {
+        if let Some(reporter) = reporter {
+            reporter.report_run_diagnostic(&diagnostic);
+        }
         self.run_diagnostics.push(diagnostic);
     }
 
@@ -152,6 +155,7 @@ impl RunResults<Diagnostic> {
                 test_case.outcome().result_kind(),
                 duration,
             );
+            reporter.report_test_completed(&cache_key, &test_case);
         }
         self.register_case(cache_key, test_case);
     }
@@ -170,6 +174,7 @@ impl RunResults<Diagnostic> {
         retry: TestCaseRetry,
         captured_output: Option<CapturedTestOutput>,
         attempts: Vec<TestExecutionAttempt>,
+        reporter: Option<&dyn Reporter>,
     ) {
         let cache_key = test_case_name.cache_key();
         let test_case = TestCaseResult::retried(
@@ -180,6 +185,9 @@ impl RunResults<Diagnostic> {
             captured_output,
             attempts,
         );
+        if let Some(reporter) = reporter {
+            reporter.report_test_completed(&cache_key, &test_case);
+        }
         self.register_case(cache_key, test_case);
     }
 
@@ -241,15 +249,34 @@ impl RunResults<Diagnostic> {
             test_cases: self
                 .test_cases
                 .into_iter()
-                .map(|case| {
-                    case.map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
-                })
+                .map(|case| case.render(cwd, config))
                 .collect(),
         }
     }
 }
 
 impl RunResults<RenderedDiagnostic> {
+    /// Records one worker-rendered test outcome.
+    pub fn register_rendered_test_case(
+        &mut self,
+        cache_key: TestCacheKey,
+        test_case: TestCaseResult,
+    ) {
+        self.register_case(cache_key, test_case);
+    }
+
+    /// Records one worker-reported slow test.
+    pub fn register_slow_test(&mut self) {
+        self.register_slow();
+    }
+
+    /// Adds one deduplicated worker-rendered run diagnostic.
+    pub fn add_rendered_run_diagnostic(&mut self, diagnostic: RenderedDiagnostic) {
+        if !self.run_diagnostics.contains(&diagnostic) {
+            self.run_diagnostics.push(diagnostic);
+        }
+    }
+
     /// Whether every test and run-level diagnostic completed successfully.
     pub fn is_success(&self) -> bool {
         self.stats.is_success() && !self.has_run_errors()
@@ -280,20 +307,6 @@ impl RunResults<RenderedDiagnostic> {
             ),
         );
     }
-
-    /// Merges one completed worker result into the controller-owned run.
-    pub fn merge_worker(&mut self, worker: Self) {
-        for diagnostic in worker.run_diagnostics {
-            if !self.run_diagnostics.contains(&diagnostic) {
-                self.run_diagnostics.push(diagnostic);
-            }
-        }
-        self.stats.merge(&worker.stats);
-        self.durations.extend(worker.durations);
-        self.failed_tests.extend(worker.failed_tests);
-        self.flaky_tests.extend(worker.flaky_tests);
-        self.test_cases.extend(worker.test_cases);
-    }
 }
 
 fn interrupted_test_cache_key(name: &str) -> TestCacheKey {
@@ -315,26 +328,22 @@ mod tests {
     use crate::Severity;
 
     #[test]
-    fn merges_worker_results() {
+    fn registers_worker_result() {
         let cache_key = TestCacheKey::function_name("mod::test_failure");
-        let mut worker = AggregatedResults::default();
-        worker.register_case(
-            cache_key.clone(),
-            TestCaseResult::from_display_name(
-                "mod::test_failure(value=1)",
-                TestCaseOutcome::failed(RenderedDiagnostic::new(
-                    "test-failure",
-                    Severity::Error,
-                    "failed",
-                    "error[test-failure]: failed\n",
-                )),
-                Duration::from_millis(10),
-                None,
-            ),
+        let result = TestCaseResult::from_display_name(
+            "mod::test_failure(value=1)",
+            TestCaseOutcome::failed(RenderedDiagnostic::new(
+                "test-failure",
+                Severity::Error,
+                "failed",
+                "error[test-failure]: failed\n",
+            )),
+            Duration::from_millis(10),
+            None,
         );
         let mut aggregated = AggregatedResults::default();
 
-        aggregated.merge_worker(worker);
+        aggregated.register_rendered_test_case(cache_key.clone(), result);
 
         assert_eq!(aggregated.stats.failed(), 1);
         assert_eq!(aggregated.failed_tests, BTreeSet::from([cache_key.clone()]));

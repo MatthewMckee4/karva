@@ -46,9 +46,10 @@ pub fn run_tests(
         let cov_session = coverage.and_then(|cfg| match CoverageSession::start(py, cwd, cfg) {
             Ok(session) => Some(session),
             Err(err) => {
-                state.add_run_diagnostic(failed_to_start_coverage_diagnostic(
-                    &err.value(py).to_string(),
-                ));
+                state.add_run_diagnostic(
+                    &context,
+                    failed_to_start_coverage_diagnostic(&err.value(py).to_string()),
+                );
                 None
             }
         });
@@ -58,7 +59,7 @@ pub fn run_tests(
         for issue in discovery.issues {
             match issue {
                 DiscoveryIssue::Error(error) => {
-                    state.add_run_diagnostic(error.into_diagnostic());
+                    state.add_run_diagnostic(&context, error.into_diagnostic());
                 }
                 DiscoveryIssue::SkippedModule {
                     module_path,
