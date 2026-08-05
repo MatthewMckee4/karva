@@ -1,5 +1,4 @@
 use annotate_snippets::{Level, Renderer, Snippet};
-use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_diagnostic::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
 use ruff_source_file::SourceFile;
@@ -27,17 +26,17 @@ impl DisplayDiagnosticConfig {
 pub fn render_diagnostic(
     diagnostic: &Diagnostic,
     cwd: &Utf8Path,
-    config: &DisplayDiagnosticConfig,
-) -> Result<RenderedDiagnostic> {
+    config: DisplayDiagnosticConfig,
+) -> RenderedDiagnostic {
     let rendered = render(diagnostic, cwd, config.format, false);
     let colored_rendered = render(diagnostic, cwd, config.format, config.color);
-    Ok(RenderedDiagnostic::new(
+    RenderedDiagnostic::new(
         diagnostic.code(),
         diagnostic.severity(),
         diagnostic.primary_message(),
         rendered,
     )
-    .with_colored_rendered(colored_rendered))
+    .with_colored_rendered(colored_rendered)
 }
 
 fn render(
@@ -208,9 +207,8 @@ mod tests {
         let rendered = render_diagnostic(
             &diagnostic,
             &cwd,
-            &DisplayDiagnosticConfig::new(DiagnosticFormat::Full, false),
-        )
-        .expect("render diagnostic");
+            DisplayDiagnosticConfig::new(DiagnosticFormat::Full, false),
+        );
 
         assert_eq!(rendered.code(), "test-failure");
         assert_eq!(rendered.message(), "Test `test_example` failed");
@@ -229,9 +227,8 @@ mod tests {
         let rendered = render_diagnostic(
             &diagnostic,
             &cwd,
-            &DisplayDiagnosticConfig::new(DiagnosticFormat::Full, true),
-        )
-        .expect("render diagnostic");
+            DisplayDiagnosticConfig::new(DiagnosticFormat::Full, true),
+        );
 
         assert!(!rendered.rendered().contains('\u{1b}'));
         assert!(rendered.rendered_for_terminal().contains('\u{1b}'));

@@ -258,12 +258,14 @@ impl RunCache {
         } = result.into_parts();
         let run_diagnostics = run_diagnostics
             .iter()
-            .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|diagnostic| render_diagnostic(diagnostic, cwd, *config))
+            .collect::<Vec<_>>();
         let test_cases = test_cases
             .into_iter()
             .map(|case| {
-                case.try_map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
+                case.try_map_diagnostic(|diagnostic| {
+                    Ok::<_, anyhow::Error>(render_diagnostic(diagnostic, cwd, *config))
+                })
             })
             .collect::<Result<Vec<TestCaseResult>>>()?;
 
