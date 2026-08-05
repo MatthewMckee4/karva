@@ -6,15 +6,13 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
-    FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult, TestResultKind,
-    TestResultStats, TestRunResult, TestRunResultParts,
+    DisplayDiagnosticConfig, FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult,
+    TestResultKind, TestResultStats, TestRunResult, TestRunResultParts, render_diagnostic,
 };
 use karva_python_semantic::TestCacheKey;
-use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::artifact::{CacheFile, read_json, read_text, write_json, write_text};
-use crate::diagnostics::render_diagnostic;
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
 /// Snapshot of the test a worker is currently executing.
@@ -453,7 +451,7 @@ mod tests {
     use camino::Utf8PathBuf;
     use insta::assert_debug_snapshot;
     use karva_diagnostic::CapturedTestOutput;
-    use ruff_db::diagnostic::Severity;
+    use karva_diagnostic::Severity;
 
     use super::*;
 
