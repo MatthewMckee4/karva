@@ -199,3 +199,23 @@ impl Diagnostic {
         &self.sub_diagnostics
     }
 }
+
+/// Sorts source-backed diagnostics into deterministic display order.
+pub fn sort_diagnostics_for_display(diagnostics: &mut [Diagnostic]) {
+    diagnostics.sort_by(
+        |a, b| match (a.primary_annotation(), b.primary_annotation()) {
+            (Some(a), Some(b)) => a
+                .span()
+                .source_file()
+                .cmp(b.span().source_file())
+                .then_with(|| a.span().range().start().cmp(&b.span().range().start()))
+                .then_with(|| a.span().range().end().cmp(&b.span().range().end())),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a
+                .code()
+                .cmp(b.code())
+                .then_with(|| a.primary_message().cmp(b.primary_message())),
+        },
+    );
+}

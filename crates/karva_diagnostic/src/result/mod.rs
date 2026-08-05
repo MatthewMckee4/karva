@@ -9,11 +9,9 @@ mod stats;
 
 use std::collections::{BTreeSet, HashMap};
 
-use karva_python_semantic::{QualifiedTestName, TestCacheKey};
+use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
 
-use crate::Diagnostic;
-use crate::reporter::Reporter;
 use kind::TestResultKind;
 
 pub use case::{
@@ -61,32 +59,8 @@ impl<D> Default for RunResults<D> {
     }
 }
 
-/// Worker-side results retaining source-backed diagnostics.
-pub type TestRunResult = RunResults<Diagnostic>;
-
 /// Controller-side results containing transport-safe diagnostics.
 pub type AggregatedResults = RunResults<RenderedDiagnostic>;
-
-/// Orders diagnostics for display.
-///
-/// Diagnostics with a source file sort by source and span; span-less diagnostics
-/// sort after them by code and message.
-fn diagnostic_display_ordering(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Ordering {
-    match (a.primary_annotation(), b.primary_annotation()) {
-        (Some(a), Some(b)) => a
-            .span()
-            .source_file()
-            .cmp(b.span().source_file())
-            .then_with(|| a.span().range().start().cmp(&b.span().range().start()))
-            .then_with(|| a.span().range().end().cmp(&b.span().range().end())),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => a
-            .code()
-            .cmp(b.code())
-            .then_with(|| a.primary_message().cmp(b.primary_message())),
-    }
-}
 
 impl<D> RunResults<D> {
     pub fn stats(&self) -> &TestResultStats {
@@ -134,93 +108,6 @@ impl<D> RunResults<D> {
                 .then_with(|| a.name().cmp(b.name()))
         });
         self.flaky_tests.sort_by(FlakyTest::display_ordering);
-    }
-}
-
-impl RunResults<Diagnostic> {
-    /// Adds a diagnostic not owned by one test case.
-    pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.run_diagnostics.push(diagnostic);
-    }
-
-    /// Records one final test outcome and reports it immediately when requested.
-    pub fn register_test_case_result(
-        &mut self,
-        test_case_name: &QualifiedTestName,
-        outcome: TestExecutionOutcome,
-        duration: std::time::Duration,
-        captured_output: Option<CapturedTestOutput>,
-        reporter: Option<&dyn Reporter>,
-    ) {
-        let cache_key = test_case_name.cache_key();
-        let test_case = TestCaseResult::new(test_case_name, outcome, duration, captured_output);
-
-        if let Some(reporter) = reporter {
-            reporter.report_test_case_result(
-                test_case_name,
-                test_case.outcome().result_kind(),
-                duration,
-            );
-            reporter.report_test_completed(&cache_key, &test_case);
-        }
-        self.register_case(cache_key, test_case);
-    }
-
-    /// Register the final outcome of a test that went through retries.
-    /// Updates summary stats and durations but does not emit a separate
-    /// `report_test_case_result` line — the per-attempt `TRY N STATUS`
-    /// lines are the user-visible output for a retried test.
-    ///
-    /// When the final outcome is `Passed`, the test is counted as flaky.
-    pub fn register_retried_result(
-        &mut self,
-        cache_key: TestCacheKey,
-        test_case: TestExecutionResult,
-        reporter: Option<&dyn Reporter>,
-    ) {
-        if let Some(reporter) = reporter {
-            reporter.report_test_completed(&cache_key, &test_case);
-        }
-        self.register_case(cache_key, test_case);
-    }
-
-    /// Forward a per-attempt notification to the reporter without touching
-    /// summary stats. Called once per attempt of a retried test, including
-    /// the final attempt.
-    pub fn report_test_attempt(
-        &self,
-        test_case_name: &QualifiedTestName,
-        attempt: u32,
-        result: IndividualTestResultKind,
-        duration: std::time::Duration,
-        reporter: Option<&dyn Reporter>,
-    ) {
-        if let Some(reporter) = reporter {
-            reporter.report_test_attempt(test_case_name, attempt, result, duration);
-        }
-    }
-
-    /// Mark a test as slow: increments the slow counter and emits a `SLOW`
-    /// line through the reporter. The test's actual outcome (pass/fail) is
-    /// registered separately.
-    pub fn register_slow_test(
-        &mut self,
-        test_case_name: &QualifiedTestName,
-        duration: std::time::Duration,
-        reporter: Option<&dyn Reporter>,
-    ) {
-        self.register_slow();
-        if let Some(reporter) = reporter {
-            reporter.report_test_slow(test_case_name, duration);
-        }
-    }
-
-    /// Sorts diagnostics and cases into deterministic display order.
-    #[must_use]
-    pub fn into_sorted(mut self) -> Self {
-        self.run_diagnostics.sort_by(diagnostic_display_ordering);
-        self.sort_results();
-        self
     }
 }
 

@@ -81,8 +81,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
     /// Registers a discovery or setup error against one test.
     fn register_error_test(&mut self, test: &DiscoveredTestFunction, error: TestError) {
-        self.state.register_test_case_result(
-            self.context,
+        self.context.register_test_case_result(
             &QualifiedTestName::new(test.name().clone()),
             error.into_outcome(),
             std::time::Duration::ZERO,

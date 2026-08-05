@@ -92,10 +92,10 @@ impl Reporter for WorkerReporter {
         });
     }
 
-    fn report_test_completed(&self, cache_key: &TestCacheKey, result: &TestExecutionResult) {
+    fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
         self.send(WorkerEvent::TestFinished {
             cache_key: cache_key.clone(),
-            result: Box::new(result.clone().render(&self.cwd, self.diagnostic_config)),
+            result: Box::new(result.render(&self.cwd, self.diagnostic_config)),
         });
     }
 }

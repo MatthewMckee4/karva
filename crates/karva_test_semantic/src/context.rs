@@ -2,7 +2,7 @@ use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
     CapturedTestOutput, Diagnostic, IndividualTestResultKind, Reporter, TestExecutionOutcome,
-    TestExecutionResult, TestRunResult,
+    TestExecutionResult, sort_diagnostics_for_display,
 };
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
@@ -26,10 +26,10 @@ pub struct Context<'a> {
     verbose: bool,
 }
 
-/// Mutable result state owned by the active execution path.
+/// Run-level diagnostics retained until execution completes.
 #[derive(Default)]
 pub struct RunState {
-    result: TestRunResult,
+    run_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> Context<'a> {
@@ -84,16 +84,22 @@ impl<'a> Context<'a> {
 }
 
 impl RunState {
-    pub(super) fn into_result(self) -> TestRunResult {
-        self.result.into_sorted()
+    pub(super) fn into_result(mut self) -> Vec<Diagnostic> {
+        sort_diagnostics_for_display(&mut self.run_diagnostics);
+        self.run_diagnostics
     }
 
-    /// Stores and reports a final non-retried test outcome.
+    pub(super) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.run_diagnostics.push(diagnostic);
+    }
+}
+
+impl Context<'_> {
+    /// Reports a final non-retried test outcome.
     ///
     /// Returns whether the outcome counts as successful for failure-budget accounting.
     pub fn register_test_case_result(
-        &mut self,
-        context: &Context<'_>,
+        &self,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
         duration: std::time::Duration,
@@ -101,29 +107,25 @@ impl RunState {
     ) -> bool {
         let passed = !outcome.is_non_success();
 
-        self.result.register_test_case_result(
+        let cache_key = test_case_name.cache_key();
+        let test_case =
+            TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
+        self.reporter.report_test_case_result(
             test_case_name,
-            outcome,
+            test_case.outcome().result_kind(),
             duration,
-            captured_output,
-            Some(context.reporter),
         );
+        self.reporter.report_test_completed(&cache_key, test_case);
 
         passed
     }
 
-    pub(super) fn register_module_skip(
-        &mut self,
-        context: &Context<'_>,
-        module_path: &ModulePath,
-        reason: Option<String>,
-    ) {
+    pub(super) fn register_module_skip(&self, module_path: &ModulePath, reason: Option<String>) {
         let name = QualifiedTestName::new(QualifiedFunctionName::new(
             "<module>".to_string(),
             module_path.clone(),
         ));
         self.register_test_case_result(
-            context,
             &name,
             TestExecutionOutcome::Skipped { reason },
             std::time::Duration::ZERO,
@@ -131,57 +133,39 @@ impl RunState {
         );
     }
 
-    /// Forward a per-attempt outcome to the reporter. Does not touch
-    /// summary stats; the test's final outcome is registered separately
-    /// via [`Self::register_retried_result`].
+    /// Forwards a per-attempt outcome to the reporter.
     pub fn report_test_attempt(
         &self,
-        context: &Context<'_>,
         test_case_name: &QualifiedTestName,
         attempt: u32,
         result: IndividualTestResultKind,
         duration: std::time::Duration,
     ) {
-        self.result.report_test_attempt(
-            test_case_name,
-            attempt,
-            result,
-            duration,
-            Some(context.reporter),
-        );
+        self.reporter
+            .report_test_attempt(test_case_name, attempt, result, duration);
     }
 
     /// Mark a test as slow: increments the slow counter and emits the
     /// `SLOW` reporter line. Called once per test variant whose total
     /// runtime exceeded the configured `slow-timeout`.
     pub fn register_slow_test(
-        &mut self,
-        context: &Context<'_>,
+        &self,
         test_case_name: &QualifiedTestName,
         duration: std::time::Duration,
     ) {
-        self.result
-            .register_slow_test(test_case_name, duration, Some(context.reporter));
+        self.reporter.report_test_slow(test_case_name, duration);
     }
 
-    /// Register the final outcome of a retried test. Updates summary stats
-    /// (counting the test as flaky if it ultimately passed) without
-    /// emitting a duplicate result line — the per-attempt `TRY N STATUS`
-    /// lines already showed every attempt.
+    /// Reports the final outcome of a retried test without emitting a duplicate
+    /// result line; per-attempt `TRY N STATUS` lines already showed each attempt.
     pub fn register_retried_result(
-        &mut self,
-        context: &Context<'_>,
+        &self,
         test_case_name: &QualifiedTestName,
         test_case: TestExecutionResult,
     ) -> bool {
         let passed = !test_case.outcome().is_non_success() && !test_case.is_flaky_failure();
         let cache_key = test_case_name.cache_key();
-        self.result
-            .register_retried_result(cache_key, test_case, Some(context.reporter));
+        self.reporter.report_test_completed(&cache_key, test_case);
         passed
-    }
-
-    pub(super) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
-        self.result.add_run_diagnostic(diagnostic);
     }
 }

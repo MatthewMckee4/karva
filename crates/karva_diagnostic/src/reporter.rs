@@ -50,8 +50,8 @@ pub trait Reporter: Send + Sync {
         let _ = test_name;
     }
 
-    /// Called with the final result after each test completes.
-    fn report_test_completed(&self, cache_key: &TestCacheKey, result: &TestExecutionResult) {
+    /// Takes ownership of the final result after each test completes.
+    fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
         let _ = (cache_key, result);
     }
 }

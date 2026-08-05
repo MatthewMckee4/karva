@@ -12,10 +12,12 @@ pub use result::{
     AggregatedResults, CapturedTestOutput, DisplayFlakyTests, FixtureFailure, FixtureUsage,
     FlakyTest, IndividualTestResultKind, RenderedDiagnostic, RunResults, TestCaseAttempt,
     TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome,
-    TestExecutionResult, TestResultStats, TestRunResult,
+    TestExecutionResult, TestResultStats,
 };
 
-pub use diagnostic::{Annotation, Diagnostic, Severity, Span, SubDiagnostic};
+pub use diagnostic::{
+    Annotation, Diagnostic, Severity, Span, SubDiagnostic, sort_diagnostics_for_display,
+};
 pub use render::{DiagnosticFormat, DisplayDiagnosticConfig, render_diagnostic};
 #[cfg(feature = "traceback")]
 pub use traceback::{Traceback, TracebackFrame, TracebackFrameSource};

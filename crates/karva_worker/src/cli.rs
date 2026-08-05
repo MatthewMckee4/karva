@@ -170,7 +170,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     );
     reporter.finish()?;
     drop(reporter);
-    for diagnostic in &result.run_diagnostics {
+    for diagnostic in &result {
         client.send_event(WorkerEvent::RunDiagnostic(render_diagnostic(
             diagnostic,
             &cwd,

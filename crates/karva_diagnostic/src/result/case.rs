@@ -36,7 +36,7 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
 
 impl<D> TestCaseResult<D> {
     /// Builds a result for a test executed once.
-    pub(super) fn new(
+    pub fn new(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
