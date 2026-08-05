@@ -9,9 +9,9 @@ mod stats;
 
 use std::collections::{HashMap, HashSet};
 
-use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 use crate::Diagnostic;
 use crate::reporter::Reporter;
+use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
 pub use case::{
     FixtureFailure, FixtureUsage, TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry,
