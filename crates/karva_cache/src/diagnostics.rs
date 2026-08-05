@@ -114,36 +114,52 @@ fn render_message(
             files.push((source_file, vec![annotation]));
         }
     }
-    for (_, annotations) in &mut files {
-        annotations.sort_by_key(|annotation| annotation.span().range().start());
-    }
-
     let paths = files
         .iter()
         .map(|(source_file, _)| display_path(source_file, cwd).into_string())
         .collect::<Vec<_>>();
     let snippets = files
-        .iter()
+        .iter_mut()
         .zip(&paths)
-        .map(|((source_file, annotations), path)| {
-            Snippet::source(source_file.source_text())
-                .origin(path)
-                .fold(true)
-                .annotations(annotations.iter().map(|annotation| {
-                    let range = annotation.span().range();
-                    let level = if annotation.is_primary() {
-                        Level::Error
-                    } else {
-                        Level::Warning
-                    };
-                    let rendered_annotation =
-                        level.span(usize::from(range.start())..usize::from(range.end()));
-                    if let Some(message) = annotation.message_text() {
-                        rendered_annotation.label(message)
-                    } else {
-                        rendered_annotation
-                    }
-                }))
+        .flat_map(|((source_file, annotations), path)| {
+            let groups = if annotations.windows(2).all(|pair| {
+                source_file
+                    .to_source_code()
+                    .line_column(pair[0].span().range().start())
+                    .line
+                    == source_file
+                        .to_source_code()
+                        .line_column(pair[1].span().range().start())
+                        .line
+            }) {
+                annotations.sort_by_key(|annotation| annotation.span().range().start());
+                vec![annotations.clone()]
+            } else {
+                annotations
+                    .iter()
+                    .map(|annotation| vec![*annotation])
+                    .collect()
+            };
+            groups.into_iter().map(move |annotations| {
+                Snippet::source(source_file.source_text())
+                    .origin(path)
+                    .fold(true)
+                    .annotations(annotations.into_iter().map(|annotation| {
+                        let range = annotation.span().range();
+                        let level = if annotation.is_primary() {
+                            Level::Error
+                        } else {
+                            Level::Warning
+                        };
+                        let rendered_annotation =
+                            level.span(usize::from(range.start())..usize::from(range.end()));
+                        if let Some(message) = annotation.message_text() {
+                            rendered_annotation.label(message)
+                        } else {
+                            rendered_annotation
+                        }
+                    }))
+            })
         });
     let mut diagnostic = level(severity).title(message).snippets(snippets);
     if let Some(code) = code {
