@@ -1,5 +1,3 @@
-use std::process::Output;
-
 use insta::assert_snapshot;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
@@ -45,7 +43,7 @@ fn lifecycle_seeds_repeat_across_retries() {
     success: true
     exit_code: 0
     ----- stdout -----
-    Random seed: 170938
+    Random seed: [SEED]
     ────────────
          Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
        FLAKY 2/2 [TIME] test_random::test_random(seeded_fixture=None)
@@ -105,23 +103,26 @@ fn seeds_do_not_depend_on_scheduling_or_selection() {
 
 fn run_observed(context: &TestContext, args: &[&str]) -> String {
     context.write_file("observed.txt", "");
-    let output = context
-        .command()
+    let mut command = context.command();
+    command
         .args(["--random-seed=170938", "--status-level=none"])
-        .args(args)
-        .output()
-        .expect("run seeded tests");
-    assert_success(&output);
-    context.read_file("observed.txt")
-}
+        .args(args);
+    let mut settings = insta::Settings::clone_current();
+    settings.add_filter(r"\d+ tests? run: \d+ passed", "[TESTS]");
+    settings.add_filter(r"\d+ skipped", "[SKIPPED]");
+    insta::allow_duplicates! {
+        settings.bind(|| assert_cmd_snapshot!(command, @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        Random seed: [SEED]
+        ────────────
+             Summary [TIME] [TESTS], [SKIPPED]
 
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "stdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
+        ----- stderr -----
+        "));
+    }
+    context.read_file("observed.txt")
 }
 
 #[test]
@@ -140,12 +141,21 @@ fn parametrized_variants_receive_distinct_seeds() {
         "#,
     );
 
-    let output = context
-        .command_no_parallel()
-        .args(["--random-seed=170938", "--status-level=none"])
-        .output()
-        .expect("run parametrized tests");
-    assert_success(&output);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--random-seed=170938", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Random seed: [SEED]
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
 
     assert_ne!(
         context.read_file("seed-1.txt"),
@@ -173,7 +183,7 @@ fn failure_diagnostics_include_seeds() {
     success: false
     exit_code: 1
     ----- stdout -----
-    Random seed: 170938
+    Random seed: [SEED]
 
     failures:
 
@@ -192,7 +202,7 @@ fn failure_diagnostics_include_seeds() {
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
 
-    Random seed: 170938
+    Random seed: [SEED]
     Phase seeds: setup=6637454972422594998, call=2091077975967582004, teardown=15821255015519234932
 
     ────────────
@@ -225,7 +235,7 @@ fn reports_include_seeds(
         success: true
         exit_code: 0
         ----- stdout -----
-        Random seed: 170938
+        Random seed: [SEED]
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 
