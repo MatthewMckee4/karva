@@ -47,7 +47,7 @@ impl TestResultStats {
     }
 
     /// Adds counters from another worker or partial run.
-    pub fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.passed += other.passed;
         self.failed += other.failed;
         self.errors += other.errors;
@@ -81,7 +81,7 @@ impl TestResultStats {
     }
 
     /// Increments the counter represented by `kind`.
-    pub fn add(&mut self, kind: TestResultKind) {
+    pub(crate) fn add(&mut self, kind: TestResultKind) {
         match kind {
             TestResultKind::Passed => self.passed += 1,
             TestResultKind::Failed => self.failed += 1,

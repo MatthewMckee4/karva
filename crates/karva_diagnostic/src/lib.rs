@@ -12,8 +12,8 @@ pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{
     CapturedTestOutput, DisplayFlakyTests, FixtureFailure, FixtureUsage, FlakyTest,
     IndividualTestResultKind, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
-    TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult, TestResultKind,
-    TestResultStats, TestRunResult, TestRunResultParts,
+    TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
+    TestResultStats, TestRunResult,
 };
 
 pub use aggregate::{AggregatedResults, WorkerResults, render_worker_results};

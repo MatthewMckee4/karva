@@ -1184,7 +1184,6 @@ dependencies = [
  "camino",
  "clap",
  "colored",
- "fs-err",
  "karva_cli",
  "karva_diagnostic",
  "karva_ipc",
@@ -1194,7 +1193,6 @@ dependencies = [
  "karva_python_semantic",
  "karva_static",
  "karva_test_semantic",
- "tracing",
  "wild",
 ]
 

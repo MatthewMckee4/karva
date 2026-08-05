@@ -5,13 +5,13 @@ use karva_ipc::WorkerState;
 use karva_python_semantic::QualifiedTestName;
 
 /// Sends lifecycle state to the controller while preserving terminal output.
-pub(super) struct WorkerReporter {
+pub struct WorkerReporter {
     output: TestCaseReporter,
     state: WorkerState,
 }
 
 impl WorkerReporter {
-    pub(super) fn new(output: TestCaseReporter, state: WorkerState) -> Self {
+    pub fn new(output: TestCaseReporter, state: WorkerState) -> Self {
         Self { output, state }
     }
 }

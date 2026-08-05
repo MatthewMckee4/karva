@@ -15,7 +15,7 @@ pub struct RenderedDiagnostic {
 
 impl RenderedDiagnostic {
     /// Creates a diagnostic with plain rendering and no terminal-specific variant.
-    pub fn new(
+    pub(crate) fn new(
         code: impl Into<String>,
         severity: Severity,
         message: impl Into<String>,
@@ -40,7 +40,7 @@ impl RenderedDiagnostic {
     }
 
     /// Creates the synthetic diagnostic used when shutdown interrupts a test.
-    pub fn interrupted(test_name: &str) -> Self {
+    pub(crate) fn interrupted(test_name: &str) -> Self {
         let message = format!("Test `{test_name}` was interrupted");
         Self::new(
             "interrupted",

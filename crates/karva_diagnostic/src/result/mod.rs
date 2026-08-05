@@ -3,7 +3,7 @@
 mod case;
 mod diagnostic;
 mod flaky;
-mod kind;
+pub mod kind;
 mod output;
 mod stats;
 
@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 use crate::Diagnostic;
 use crate::reporter::Reporter;
 use karva_python_semantic::{QualifiedTestName, TestCacheKey};
+use kind::TestResultKind;
 
 pub use case::{
     FixtureFailure, FixtureUsage, TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry,
@@ -19,7 +20,7 @@ pub use case::{
 };
 pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTests, FlakyTest};
-pub use kind::{IndividualTestResultKind, TestResultKind};
+pub use kind::IndividualTestResultKind;
 pub use output::CapturedTestOutput;
 pub use stats::TestResultStats;
 
@@ -45,21 +46,21 @@ pub struct TestRunResult {
 }
 
 /// Owned components used to serialize one worker's completed run.
-pub struct TestRunResultParts {
+pub(super) struct TestRunResultParts {
     /// Diagnostics that describe the run rather than one test case.
-    pub run_diagnostics: Vec<Diagnostic>,
+    pub(super) run_diagnostics: Vec<Diagnostic>,
 
     /// Aggregated outcome counters.
-    pub stats: TestResultStats,
+    pub(super) stats: TestResultStats,
 
     /// Duration of each schedulable test or parameter case.
-    pub durations: HashMap<TestCacheKey, std::time::Duration>,
+    pub(super) durations: HashMap<TestCacheKey, std::time::Duration>,
 
     /// Scheduling keys for failed test variants.
-    pub failed_tests: HashSet<TestCacheKey>,
+    pub(super) failed_tests: HashSet<TestCacheKey>,
 
     /// Final outcome for each executed test variant.
-    pub test_cases: Vec<TestExecutionResult>,
+    pub(super) test_cases: Vec<TestExecutionResult>,
 }
 
 /// Orders diagnostics for display.
@@ -217,7 +218,7 @@ impl TestRunResult {
     }
 
     /// Decomposes this run for rendering and transport to the controller.
-    pub fn into_parts(self) -> TestRunResultParts {
+    pub(crate) fn into_parts(self) -> TestRunResultParts {
         TestRunResultParts {
             run_diagnostics: self.run_diagnostics,
             stats: self.stats,

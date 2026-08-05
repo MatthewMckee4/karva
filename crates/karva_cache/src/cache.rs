@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::BuildHasher;
 use std::io::ErrorKind;
 use std::time::Duration;
 
@@ -163,9 +164,9 @@ pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<TestCacheKe
 }
 
 /// Replaces the duration history used to balance the next test run.
-pub fn write_durations(
+pub fn write_durations<S: BuildHasher>(
     cache_dir: &Utf8Path,
-    durations: &HashMap<TestCacheKey, Duration>,
+    durations: &HashMap<TestCacheKey, Duration, S>,
 ) -> Result<()> {
     fs::create_dir_all(cache_dir)?;
     write_json(cache_dir, CacheFile::Durations, durations)

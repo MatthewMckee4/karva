@@ -30,7 +30,7 @@ pub struct FlakyTest {
 
 impl FlakyTest {
     /// Splits a displayed test name into function and parameter components.
-    pub fn from_display_name(
+    pub(crate) fn from_display_name(
         module_name: &str,
         name: &str,
         passed_on: u32,

@@ -9,9 +9,11 @@ use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
 
 use crate::render::render_diagnostic;
+use crate::result::kind::TestResultKind;
+use crate::result::TestRunResultParts;
 use crate::{
     DisplayDiagnosticConfig, FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult,
-    TestResultKind, TestResultStats, TestRunResult,
+    TestResultStats, TestRunResult,
 };
 
 /// Test results merged across every worker in one invocation.
@@ -118,7 +120,7 @@ pub fn render_worker_results(
     cwd: &Utf8Path,
     config: &DisplayDiagnosticConfig,
 ) -> Result<WorkerResults> {
-    let crate::TestRunResultParts {
+    let TestRunResultParts {
         run_diagnostics,
         stats,
         durations,

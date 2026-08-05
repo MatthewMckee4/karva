@@ -1,4 +1,5 @@
 use std::fmt;
+#[cfg(test)]
 use std::num::ParseIntError;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,6 +19,7 @@ pub struct RunHash {
     uuid: Uuid,
 }
 
+#[cfg(test)]
 #[derive(Debug)]
 /// Why a strict run identifier could not be decoded.
 pub enum ParseRunHashError {
@@ -46,6 +48,7 @@ pub enum ParseRunHashError {
     },
 }
 
+#[cfg(test)]
 impl fmt::Display for ParseRunHashError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -59,6 +62,7 @@ impl fmt::Display for ParseRunHashError {
     }
 }
 
+#[cfg(test)]
 impl std::error::Error for ParseRunHashError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -98,7 +102,8 @@ impl RunHash {
     /// Unlike [`RunHash::from_existing`], this rejects malformed input. Use it
     /// for process boundaries where an invalid run ID means caller state is
     /// corrupt rather than merely an old cache directory name.
-    pub fn parse_existing(hash: &str) -> Result<Self, ParseRunHashError> {
+    #[cfg(test)]
+    fn parse_existing(hash: &str) -> Result<Self, ParseRunHashError> {
         let inner = hash.strip_prefix(RUN_PREFIX).unwrap_or(hash);
         let Some((timestamp, uuid)) = inner.split_once('-') else {
             if inner.is_empty() {
@@ -137,7 +142,7 @@ impl RunHash {
     }
 
     /// Returns the directory name used in the cache (`run-<ms>-<uuid>`).
-    pub(super) fn dir_name(&self) -> String {
+    fn dir_name(&self) -> String {
         format!("{RUN_PREFIX}{}", self.inner())
     }
 

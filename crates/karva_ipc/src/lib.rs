@@ -323,7 +323,12 @@ fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incomin
     }
 
     for message in messages {
-        let event = match message.context("failed to read Karva worker event")? {
+        let message = match message {
+            Ok(message) => message,
+            Err(error) if is_clean_disconnect(&error) => return Ok(()),
+            Err(error) => return Err(error).context("failed to read Karva worker event"),
+        };
+        let event = match message {
             WireMessage::Event(event) => event,
             WireMessage::Hello { .. } => bail!("Karva worker sent more than one handshake"),
         };
@@ -335,6 +340,13 @@ fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incomin
         }
     }
     Ok(())
+}
+
+fn is_clean_disconnect(error: &serde_json::Error) -> bool {
+    matches!(
+        error.io_error_kind(),
+        Some(ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted)
+    )
 }
 
 fn write_command(writer: &mut BufWriter<TcpStream>, command: &ControllerCommand) -> Result<()> {
@@ -388,5 +400,16 @@ mod tests {
         };
 
         assert!(error.to_string().contains("expected `expected`"));
+    }
+
+    #[test]
+    fn reset_connections_are_clean_disconnects() {
+        for kind in [ErrorKind::ConnectionReset, ErrorKind::ConnectionAborted] {
+            let error = serde_json::Error::io(std::io::Error::from(kind));
+            assert!(is_clean_disconnect(&error));
+        }
+
+        let error = serde_json::Error::io(std::io::Error::from(ErrorKind::InvalidData));
+        assert!(!is_clean_disconnect(&error));
     }
 }

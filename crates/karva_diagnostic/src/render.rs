@@ -23,6 +23,7 @@ impl DisplayDiagnosticConfig {
     }
 }
 
+/// Renders a worker diagnostic into transport-safe plain and terminal forms.
 pub fn render_diagnostic(
     diagnostic: &Diagnostic,
     cwd: &Utf8Path,
