@@ -28,11 +28,11 @@ impl Span {
         self
     }
 
-    pub fn source_file(&self) -> &SourceFile {
+    pub(crate) fn source_file(&self) -> &SourceFile {
         &self.source_file
     }
 
-    pub fn range(&self) -> TextRange {
+    pub(crate) fn range(&self) -> TextRange {
         self.range
     }
 }
@@ -83,15 +83,15 @@ impl Annotation {
         self
     }
 
-    pub fn is_primary(&self) -> bool {
+    pub(crate) fn is_primary(&self) -> bool {
         self.kind == AnnotationKind::Primary
     }
 
-    pub fn span(&self) -> &Span {
+    pub(crate) fn span(&self) -> &Span {
         &self.span
     }
 
-    pub fn message_text(&self) -> Option<&str> {
+    pub(crate) fn message_text(&self) -> Option<&str> {
         self.message.as_deref()
     }
 }
@@ -117,15 +117,15 @@ impl SubDiagnostic {
         self.annotations.push(annotation);
     }
 
-    pub fn severity(&self) -> Severity {
+    pub(crate) fn severity(&self) -> Severity {
         self.severity
     }
 
-    pub fn message(&self) -> &str {
+    pub(crate) fn message(&self) -> &str {
         &self.message
     }
 
-    pub fn annotations(&self) -> &[Annotation] {
+    pub(crate) fn annotations(&self) -> &[Annotation] {
         &self.annotations
     }
 }
@@ -169,33 +169,33 @@ impl Diagnostic {
         self.concise_message = Some(message.into());
     }
 
-    pub fn code(&self) -> &'static str {
+    pub(crate) fn code(&self) -> &'static str {
         self.code
     }
 
-    pub fn severity(&self) -> Severity {
+    pub(crate) fn severity(&self) -> Severity {
         self.severity
     }
 
-    pub fn primary_message(&self) -> &str {
+    pub(crate) fn primary_message(&self) -> &str {
         &self.message
     }
 
-    pub fn concise_message(&self) -> &str {
+    pub(crate) fn concise_message(&self) -> &str {
         self.concise_message.as_deref().unwrap_or(&self.message)
     }
 
-    pub fn primary_annotation(&self) -> Option<&Annotation> {
+    pub(crate) fn primary_annotation(&self) -> Option<&Annotation> {
         self.annotations
             .iter()
             .find(|annotation| annotation.is_primary())
     }
 
-    pub fn annotations(&self) -> &[Annotation] {
+    pub(crate) fn annotations(&self) -> &[Annotation] {
         &self.annotations
     }
 
-    pub fn sub_diagnostics(&self) -> &[SubDiagnostic] {
+    pub(crate) fn sub_diagnostics(&self) -> &[SubDiagnostic] {
         &self.sub_diagnostics
     }
 }

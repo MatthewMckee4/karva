@@ -32,7 +32,7 @@ impl RenderedDiagnostic {
 
     /// Stores a colored rendering only when it differs from plain output.
     #[must_use]
-    pub fn with_colored_rendered(mut self, rendered: String) -> Self {
+    pub(crate) fn with_colored_rendered(mut self, rendered: String) -> Self {
         if rendered != self.rendered {
             self.colored_rendered = Some(rendered);
         }
