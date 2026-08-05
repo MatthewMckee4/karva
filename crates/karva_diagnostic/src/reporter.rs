@@ -6,7 +6,6 @@ use karva_logging::time::format_duration_bracketed;
 use karva_logging::{Printer, StatusLevel};
 use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
-use crate::Diagnostic;
 use crate::result::{IndividualTestResultKind, TestExecutionResult};
 
 /// A reporter for test execution time logging to the user.
@@ -54,11 +53,6 @@ pub trait Reporter: Send + Sync {
     /// Called with the final result after each test completes.
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: &TestExecutionResult) {
         let _ = (cache_key, result);
-    }
-
-    /// Called when a run-level diagnostic is recorded.
-    fn report_run_diagnostic(&self, diagnostic: &Diagnostic) {
-        let _ = diagnostic;
     }
 }
 

@@ -6,8 +6,10 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
-use karva_diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter};
-use karva_ipc::WorkerClient;
+use karva_diagnostic::{
+    DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
+};
+use karva_ipc::{WorkerClient, WorkerEvent};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
@@ -157,7 +159,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_config,
     );
 
-    drop(karva_test_semantic::run_tests(
+    let result = karva_test_semantic::run_tests(
         &cwd,
         &settings,
         python_version,
@@ -165,9 +167,17 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         test_paths,
         coverage.as_ref(),
         !verbosity.is_default(),
-    ));
+    );
     reporter.finish()?;
     drop(reporter);
+    for diagnostic in &result.run_diagnostics {
+        client.send_event(WorkerEvent::RunDiagnostic(render_diagnostic(
+            diagnostic,
+            &cwd,
+            diagnostic_config,
+        )))?;
+    }
+    drop(result);
     client.complete()?;
 
     Ok(ExitStatus::Success)

@@ -138,10 +138,7 @@ impl<D> RunResults<D> {
 
 impl RunResults<Diagnostic> {
     /// Adds a diagnostic not owned by one test case.
-    pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic, reporter: Option<&dyn Reporter>) {
-        if let Some(reporter) = reporter {
-            reporter.report_run_diagnostic(&diagnostic);
-        }
+    pub fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
         self.run_diagnostics.push(diagnostic);
     }
 

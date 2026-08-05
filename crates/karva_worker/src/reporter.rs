@@ -4,8 +4,8 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use karva_diagnostic::{
-    Diagnostic, DisplayDiagnosticConfig, IndividualTestResultKind, Reporter, TestCaseReporter,
-    TestExecutionResult, render_diagnostic,
+    DisplayDiagnosticConfig, IndividualTestResultKind, Reporter, TestCaseReporter,
+    TestExecutionResult,
 };
 use karva_ipc::{WorkerClient, WorkerEvent};
 use karva_python_semantic::{QualifiedTestName, TestCacheKey};
@@ -97,13 +97,5 @@ impl Reporter for WorkerReporter {
             cache_key: cache_key.clone(),
             result: result.clone().render(&self.cwd, self.diagnostic_config),
         });
-    }
-
-    fn report_run_diagnostic(&self, diagnostic: &Diagnostic) {
-        self.send(WorkerEvent::RunDiagnostic(render_diagnostic(
-            diagnostic,
-            &self.cwd,
-            self.diagnostic_config,
-        )));
     }
 }

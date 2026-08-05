@@ -191,8 +191,7 @@ impl RunState {
         passed
     }
 
-    pub(super) fn add_run_diagnostic(&mut self, context: &Context<'_>, diagnostic: Diagnostic) {
-        self.result
-            .add_run_diagnostic(diagnostic, Some(context.reporter));
+    pub(super) fn add_run_diagnostic(&mut self, diagnostic: Diagnostic) {
+        self.result.add_run_diagnostic(diagnostic);
     }
 }
