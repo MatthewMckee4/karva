@@ -9,7 +9,7 @@ use karva_diagnostic::{Diagnostic, FixtureFailure, TestExecutionOutcome};
 #[derive(Clone)]
 pub(super) struct TestError {
     /// Primary diagnostic displayed for every affected test.
-    diagnostic: Diagnostic,
+    diagnostic: Box<Diagnostic>,
 
     /// Diagnostics caused by the same failure after the primary error.
     related: Vec<Diagnostic>,
@@ -22,7 +22,7 @@ impl TestError {
     /// Creates an error with no related diagnostics or fixture causality.
     pub(super) fn new(diagnostic: Diagnostic) -> Self {
         Self {
-            diagnostic,
+            diagnostic: Box::new(diagnostic),
             related: Vec::new(),
             fixture_failures: Vec::new(),
         }
@@ -35,7 +35,7 @@ impl TestError {
         fixture_failures: Vec<FixtureFailure>,
     ) -> Self {
         Self {
-            diagnostic,
+            diagnostic: Box::new(diagnostic),
             related,
             fixture_failures,
         }
@@ -54,7 +54,7 @@ impl TestError {
     /// Converts this error into an owned test outcome.
     pub(super) fn into_outcome(self) -> TestExecutionOutcome {
         TestExecutionOutcome::error_with_fixture_failures(
-            self.diagnostic,
+            *self.diagnostic,
             self.related,
             self.fixture_failures,
         )
