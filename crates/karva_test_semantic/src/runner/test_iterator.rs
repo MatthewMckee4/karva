@@ -48,6 +48,11 @@ pub(super) struct TestVariant<'a> {
 
     /// Combined tags from the test and its parameter set.
     pub(super) tags: RuntimeTags,
+
+    /// Original parametrize index in the test's full case list (`None` for
+    /// non-parametrized tests). Used to form a stable per-case cache key
+    /// even when the worker only ran a filtered subset of cases.
+    pub(super) case_index: Option<usize>,
 }
 
 impl TestVariant<'_> {
@@ -66,9 +71,15 @@ impl TestVariant<'_> {
 pub(super) struct TestVariantIterator<'a> {
     /// Discovered Python function shared by all emitted variants.
     test: &'a DiscoveredTestFunction,
-    /// Consumed as we iterate, so `values` and `tags` on each
-    /// `ParametrizationArgs` are moved into the emitted variant (not cloned).
+    /// Consumed as we iterate, so parameter values and tags move into variants.
     param_args: ParameterPlanIterator,
+    /// Restricts execution to the selected indices while retaining their
+    /// positions in the full parametrize expansion.
+    case_filter: Option<&'a [usize]>,
+    /// Index of the next item in the full parametrize expansion.
+    next_case_index: usize,
+    /// Whether emitted variants need a stable parametrize index.
+    parametrized: bool,
     /// Runtime policy shared by every parameter variant.
     runtime_tags: RuntimeTags,
     /// Resolved fixtures passed as test arguments.
@@ -129,6 +140,9 @@ impl<'a> TestVariantIterator<'a> {
         Self {
             test,
             param_args: plan.parameters.into_iter(),
+            case_filter: test.case_filter.as_deref(),
+            next_case_index: 0,
+            parametrized: test.tags.has_parametrize(),
             runtime_tags: plan.runtime_tags,
             fixture_plan: plan.fixture_plan,
             fixture_dependencies: plan.fixture_dependencies,
@@ -142,7 +156,21 @@ impl<'a> Iterator for TestVariantIterator<'a> {
     type Item = TestVariant<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let param_args = self.param_args.next()?;
+        let (case_index, param_args) = loop {
+            let param_args = self.param_args.next()?;
+            if !self.parametrized {
+                break (None, param_args);
+            }
+
+            let case_index = self.next_case_index;
+            self.next_case_index += 1;
+            if self
+                .case_filter
+                .is_none_or(|indices| indices.contains(&case_index))
+            {
+                break (Some(case_index), param_args);
+            }
+        };
 
         let mut tags = self.runtime_tags.clone();
         tags.extend(&param_args.tags);
@@ -156,6 +184,7 @@ impl<'a> Iterator for TestVariantIterator<'a> {
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),
             auto_use_fixtures: Rc::clone(&self.auto_use_fixtures),
             tags,
+            case_index,
         })
     }
 

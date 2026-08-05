@@ -10,7 +10,7 @@ pub use result::{
     CapturedTestOutput, DisplayFlakyTests, FixtureFailure, FixtureUsage, FlakyTest,
     IndividualTestResultKind, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
     TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult, TestResultKind,
-    TestResultStats, TestRunResult,
+    TestResultStats, TestRunResult, TestRunResultParts,
 };
 
 #[cfg(feature = "traceback")]

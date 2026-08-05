@@ -19,10 +19,11 @@ use karva_collector::{CollectedPackage, CollectionSettings};
 use karva_logging::Printer;
 use karva_logging::time::{format_duration, format_duration_bracketed};
 use karva_project::Project;
+use karva_python_semantic::TestCacheKey;
 
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
-use crate::partition::{Partition, TestOrdering, partition_collected_tests};
+use crate::partition::{Partition, TestOrdering, partition_collected_tests, scheduled_test_count};
 use crate::worker_args::{WorkerSpawn, worker_command};
 
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
@@ -593,7 +594,7 @@ pub fn run_parallel_tests(
 
     let collected = collect_tests(project)?;
 
-    let total_tests = collected.test_count();
+    let total_tests = scheduled_test_count(&collected);
     let max_useful_workers = total_tests.div_ceil(MIN_TESTS_PER_WORKER).max(1);
     let num_workers = config.num_workers.min(max_useful_workers);
 
@@ -629,16 +630,25 @@ pub fn run_parallel_tests(
         config.partition,
         config.test_ordering,
     );
-    let scheduled_tests: usize = partitions
+    let scheduled_cases: usize = partitions
         .iter()
         .map(|partition| partition.tests().len())
         .sum();
+    let scheduled_tests = if config.last_failed || config.partition.is_some() {
+        partitions
+            .iter()
+            .flat_map(Partition::function_roots)
+            .collect::<HashSet<_>>()
+            .len()
+    } else {
+        collected.test_count()
+    };
     let scheduled_workers = partitions
         .iter()
         .filter(|partition| !partition.tests().is_empty())
         .count();
 
-    if scheduled_tests > 0 {
+    if scheduled_cases > 0 {
         let mut stdout = printer.stream_for_test_result().lock();
         let label = format!("{:>12}", "Starting").green().bold();
         let test_label = if scheduled_tests == 1 {
@@ -718,7 +728,7 @@ pub fn run_parallel_tests(
 
 const MIN_TESTS_PER_WORKER: usize = 5;
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);
-fn previous_durations(cache_dir: &Utf8Path, no_cache: bool) -> HashMap<String, Duration> {
+fn previous_durations(cache_dir: &Utf8Path, no_cache: bool) -> HashMap<TestCacheKey, Duration> {
     if no_cache {
         return HashMap::new();
     }
@@ -732,7 +742,7 @@ fn previous_durations(cache_dir: &Utf8Path, no_cache: bool) -> HashMap<String, D
     }
 }
 
-fn last_failed_set(cache_dir: &Utf8Path, enabled: bool) -> HashSet<String> {
+fn last_failed_set(cache_dir: &Utf8Path, enabled: bool) -> HashSet<TestCacheKey> {
     if !enabled {
         return HashSet::new();
     }
@@ -746,7 +756,7 @@ fn last_failed_set(cache_dir: &Utf8Path, enabled: bool) -> HashSet<String> {
     }
 }
 
-fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[String]) {
+fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[TestCacheKey]) {
     if let Err(err) = persist_last_failed(cache_dir, failed_tests) {
         tracing::warn!("Failed to write last-failed cache: {err}");
     }

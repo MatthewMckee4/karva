@@ -16,6 +16,31 @@ karva test -n 4
 karva test --no-parallel
 ```
 
+## Parametrized tests
+
+Karva can distribute cases from one parametrized test across workers when the
+parameter values are written directly as a list or tuple literal:
+
+```python
+@karva.tags.parametrize("value", [1, 2, 3])
+def test_value(value):
+    pass
+```
+
+Values provided through a variable, comprehension, generator, or function call
+cannot be counted before a worker imports the module. Karva keeps those cases
+together on one worker:
+
+```python
+values = [1, 2, 3]
+
+@karva.tags.parametrize("value", values)
+def test_value(value):
+    pass
+```
+
+All cases still run; only their distribution across workers changes.
+
 ## Partitioning shared resources
 
 Workers do not coordinate. If your tests touch a shared resource — a database, a port, a temp directory — partition it on `KARVA_WORKER_ID` rather than locking:

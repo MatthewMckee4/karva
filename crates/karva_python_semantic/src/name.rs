@@ -1,5 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::module_name;
 
@@ -50,11 +50,67 @@ impl Serialize for QualifiedFunctionName {
     }
 }
 
+/// Stable duration and last-failed identity for a function or parameter case.
+#[derive(Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TestCacheKey(String);
+
+impl TestCacheKey {
+    /// Creates a function-level key.
+    fn function(function: &QualifiedFunctionName) -> Self {
+        Self(function.to_string())
+    }
+
+    /// Creates a function-level key from its serialized name.
+    pub fn function_name(function: &str) -> Self {
+        Self(function.to_string())
+    }
+
+    /// Creates a case-level key from its stable expansion index.
+    pub fn parameter_case(function: &QualifiedFunctionName, index: usize) -> Self {
+        Self(format!("{function}[{index}]"))
+    }
+
+    /// Returns the qualified function portion without a case index.
+    pub fn test_function_name(&self) -> &str {
+        self.0
+            .split_once('[')
+            .map_or(&self.0, |(function, _)| function)
+    }
+}
+
+impl std::borrow::Borrow<str> for TestCacheKey {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for TestCacheKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::fmt::Display for TestCacheKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Serialize for TestCacheKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
 /// User-visible test identity, optionally specialized to one parameter variant.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTestName {
     function_name: QualifiedFunctionName,
     parameters: Option<String>,
+    case_index: Option<usize>,
 }
 
 impl QualifiedTestName {
@@ -63,6 +119,7 @@ impl QualifiedTestName {
         Self {
             function_name,
             parameters: None,
+            case_index: None,
         }
     }
 
@@ -71,7 +128,16 @@ impl QualifiedTestName {
         Self {
             function_name,
             parameters: Some(parameters),
+            case_index: None,
         }
+    }
+
+    /// Attach a parametrize case index. Used for stable cache/duration keys
+    /// that survive renaming of parameter values across runs.
+    #[must_use]
+    pub fn with_case_index(mut self, case_index: Option<usize>) -> Self {
+        self.case_index = case_index;
+        self
     }
 
     /// Return the underlying qualified function name.
@@ -82,6 +148,18 @@ impl QualifiedTestName {
     /// Returns the rendered contents of the parameter list, without parentheses.
     pub fn parameters(&self) -> Option<&str> {
         self.parameters.as_deref()
+    }
+
+    /// Stable string identifier for cache and partitioning, of the form
+    /// `module::test_name` (no parametrize) or `module::test_name[idx]`.
+    ///
+    /// Distinct from `Display`, which renders the human-facing name with
+    /// parameter values.
+    pub fn cache_key(&self) -> TestCacheKey {
+        match self.case_index {
+            Some(index) => TestCacheKey::parameter_case(&self.function_name, index),
+            None => TestCacheKey::function(&self.function_name),
+        }
     }
 }
 
@@ -157,5 +235,17 @@ mod tests {
 
         assert_eq!(name.to_string(), "tests.test::test_example(value=1)");
         assert_eq!(name.parameters(), Some("value=1"));
+    }
+
+    #[test]
+    fn parameterized_test_cache_key_uses_stable_case_index() {
+        let name = QualifiedTestName::with_parameters(function_name(), "value=1".to_string())
+            .with_case_index(Some(2));
+
+        assert_eq!(name.cache_key().to_string(), "tests.test::test_example[2]");
+        assert_eq!(
+            name.cache_key().test_function_name(),
+            "tests.test::test_example"
+        );
     }
 }

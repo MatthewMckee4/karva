@@ -145,6 +145,7 @@ impl<'a> ParallelCollector<'a> {
                 TestPath::Function(TestPathFunction {
                     path: file_path,
                     function_name,
+                    parametrize_index: _,
                 }) => {
                     if let Some(module) =
                         collect_file(&file_path, self.cwd, &self.settings, &[function_name])?

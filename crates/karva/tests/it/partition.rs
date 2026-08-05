@@ -214,7 +214,7 @@ def test_a(value):
 
 @karva.tags.parametrize("value", [3, 4])
 def test_b(value):
-    assert False
+    assert os.environ["KARVA_ATTEMPT"] == "2"
 "#,
     );
 
@@ -226,17 +226,132 @@ def test_b(value):
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 1 test across 1 worker
+        Starting 2 tests across 1 worker
       TRY 1 FAIL [TIME] test_mod::test_a(value=1)
       TRY 2 PASS [TIME] test_mod::test_a(value=1)
-      TRY 1 FAIL [TIME] test_mod::test_a(value=2)
-      TRY 2 PASS [TIME] test_mod::test_a(value=2)
+      TRY 1 FAIL [TIME] test_mod::test_b(value=3)
+      TRY 2 PASS [TIME] test_mod::test_b(value=3)
     ────────────
          Summary [TIME] 2 tests run: 2 passed (2 flaky), 0 skipped
        FLAKY 2/2 [TIME] test_mod::test_a(value=1)
-       FLAKY 2/2 [TIME] test_mod::test_a(value=2)
+       FLAKY 2/2 [TIME] test_mod::test_b(value=3)
 
     ----- stderr -----
     "
     );
+}
+
+#[test]
+fn cached_parametrize_cases_partition_across_workers() {
+    let context = TestContext::with_file(
+        "test_mod.py",
+        r#"
+import os
+import time
+import karva
+
+@karva.tags.parametrize("value", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+def test_value(value):
+    time.sleep(value / 1000)
+    if os.environ.get("RECORD_WORKERS") == "1":
+        worker = os.environ["KARVA_WORKER_ID"]
+        with open(f"worker-{worker}.txt", "a", encoding="utf-8") as output:
+            output.write(f"{value}\n")
+"#,
+    );
+
+    let first = context
+        .command_no_parallel()
+        .arg("--status-level=none")
+        .output()
+        .expect("seed duration cache");
+    assert!(first.status.success(), "{first:?}");
+
+    let second = context
+        .command()
+        .args(["--num-workers=2", "--status-level=none"])
+        .env("RECORD_WORKERS", "1")
+        .output()
+        .expect("partition cached cases");
+    assert!(second.status.success(), "{second:?}");
+
+    let mut first_worker = context
+        .read_file("worker-0.txt")
+        .lines()
+        .map(str::parse::<usize>)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("worker 0 case indices");
+    let second_worker = context
+        .read_file("worker-1.txt")
+        .lines()
+        .map(str::parse::<usize>)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("worker 1 case indices");
+    assert!(!first_worker.is_empty());
+    assert!(!second_worker.is_empty());
+    first_worker.extend(second_worker);
+    first_worker.sort_unstable();
+    assert_eq!(first_worker, (0..10).collect::<Vec<_>>());
+}
+
+#[test]
+fn dynamic_parametrize_cases_remain_atomic() {
+    let context = TestContext::with_file(
+        "test_mod.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("value", range(10))
+def test_value(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--num-workers=2", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 10 tests run: 10 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn last_failed_selects_one_parametrize_case() {
+    let context = TestContext::with_file(
+        "test_mod.py",
+        r#"
+from pathlib import Path
+import karva
+
+@karva.tags.parametrize("value", [0, 1, 2])
+def test_value(value):
+    if Path("fixed").exists():
+        Path("executed").write_text(str(value), encoding="utf-8")
+    assert value != 1 or Path("fixed").exists()
+"#,
+    );
+
+    let first = context
+        .command_no_parallel()
+        .arg("--status-level=none")
+        .output()
+        .expect("record failed case");
+    assert!(!first.status.success());
+
+    context.write_file("fixed", "");
+    let second = context
+        .command_no_parallel()
+        .args(["--last-failed", "--status-level=none"])
+        .output()
+        .expect("rerun failed case");
+    assert!(second.status.success(), "{second:?}");
+    assert_eq!(context.read_file("executed"), "1");
 }

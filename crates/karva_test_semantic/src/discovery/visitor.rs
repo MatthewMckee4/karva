@@ -140,7 +140,11 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         }
     }
 
-    fn process_test_function(&mut self, stmt_function_def: StmtFunctionDef) {
+    fn process_test_function(
+        &mut self,
+        stmt_function_def: StmtFunctionDef,
+        case_filter: Option<Vec<usize>>,
+    ) {
         self.try_import_module();
 
         let Some(py_module) = self.py_module.as_ref() else {
@@ -154,6 +158,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 py_module,
                 Rc::new(stmt_function_def),
                 py_function.unbind(),
+                case_filter,
             ) {
                 Ok(test_function) => {
                     if self.context.settings().test().strict_tags {
@@ -332,7 +337,7 @@ pub fn discover(
     py: Python,
     module: &mut DiscoveredModule,
     module_body: Box<[Stmt]>,
-    test_function_defs: Vec<StmtFunctionDef>,
+    test_function_defs: Vec<(StmtFunctionDef, Option<Vec<usize>>)>,
     fixture_function_defs: Vec<StmtFunctionDef>,
 ) -> Vec<DiscoveryIssue> {
     let is_conftest = module
@@ -344,21 +349,21 @@ pub fn discover(
 
     let duplicate_test_indices = duplicate_definition_indices(
         &test_function_defs,
-        |test_function_def| test_function_def.name.to_string(),
-        |test_function_def| test_function_def.range,
+        |(test_function_def, _)| test_function_def.name.to_string(),
+        |(test_function_def, _)| test_function_def.range,
         |name, first_definition, duplicate_definition| {
             visitor
                 .issues
                 .push(DiscoveryIssue::Error(DiscoveryError::DuplicateTest {
                     source_file: visitor.module.source_file(),
                     test_name: name.to_string(),
-                    first_definition: Rc::new(first_definition.clone()),
-                    duplicate_definition: Rc::new(duplicate_definition.clone()),
+                    first_definition: Rc::new(first_definition.0.clone()),
+                    duplicate_definition: Rc::new(duplicate_definition.0.clone()),
                 }));
         },
     );
 
-    for (index, test_function_def) in test_function_defs.into_iter().enumerate() {
+    for (index, (test_function_def, case_filter)) in test_function_defs.into_iter().enumerate() {
         if duplicate_test_indices.contains(&index) {
             continue;
         }
@@ -373,7 +378,7 @@ pub fn discover(
             continue;
         }
 
-        visitor.process_test_function(test_function_def);
+        visitor.process_test_function(test_function_def, case_filter);
     }
 
     let mut fixtures = Vec::with_capacity(fixture_function_defs.len());

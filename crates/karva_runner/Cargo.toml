@@ -18,6 +18,7 @@ karva_collector = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
+karva_python_semantic = { workspace = true }
 karva_static = { workspace = true }
 karva_version = { workspace = true }
 
