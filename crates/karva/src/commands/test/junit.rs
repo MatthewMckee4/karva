@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
-use karva_cache::AggregatedResults;
+use karva_diagnostic::AggregatedResults;
 use karva_diagnostic::{
     FixtureFailure, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
 };

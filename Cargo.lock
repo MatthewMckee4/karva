@@ -888,7 +888,6 @@ dependencies = [
  "camino",
  "fs-err",
  "insta",
- "karva_diagnostic",
  "karva_python_semantic",
  "serde",
  "serde_json",
@@ -980,6 +979,7 @@ name = "karva_diagnostic"
 version = "0.0.0"
 dependencies = [
  "annotate-snippets",
+ "anyhow",
  "camino",
  "colored",
  "insta",
@@ -990,6 +990,7 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 
@@ -999,7 +1000,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
- "karva_cache",
+ "karva_diagnostic",
  "serde",
  "serde_json",
  "tracing",
@@ -1108,6 +1109,7 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_collector",
+ "karva_diagnostic",
  "karva_ipc",
  "karva_logging",
  "karva_metadata",
@@ -1183,7 +1185,6 @@ dependencies = [
  "clap",
  "colored",
  "fs-err",
- "karva_cache",
  "karva_cli",
  "karva_diagnostic",
  "karva_ipc",

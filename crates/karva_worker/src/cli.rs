@@ -5,10 +5,9 @@ use anyhow::Context as _;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_cache::render_worker_results;
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
 use karva_diagnostic::{
-    DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter,
+    DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_worker_results,
 };
 use karva_ipc::{WorkerClient, WorkerEvent, WorkerState};
 use karva_logging::{Printer, set_colored_override, setup_tracing};

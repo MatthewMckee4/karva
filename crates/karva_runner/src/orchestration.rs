@@ -11,11 +11,12 @@ use crossbeam_channel::{Receiver, TryRecvError};
 
 use crate::shutdown::shutdown_receiver;
 use karva_cache::{
-    AggregatedResults, CACHE_DIR, RunCache, RunHash, read_last_failed, read_recent_durations,
+    CACHE_DIR, RunArtifacts, RunHash, read_last_failed, read_recent_durations, write_durations,
     write_last_failed as persist_last_failed,
 };
 use karva_cli::{PartitionSelection, SubTestCommand};
 use karva_collector::{CollectedPackage, CollectionSettings};
+use karva_diagnostic::AggregatedResults;
 use karva_ipc::{ControllerServer, WorkerEvent};
 use karva_logging::Printer;
 use karva_logging::time::{format_duration, format_duration_bracketed};
@@ -697,7 +698,7 @@ pub fn run_parallel_tests(
     }
 
     let run_hash = RunHash::current_time();
-    let cache = RunCache::new(&cache_dir, &run_hash);
+    let artifacts = RunArtifacts::new(&cache_dir, &run_hash);
     let mut controller = ControllerServer::bind(&run_hash.inner())?;
 
     tracing::info!("Spawning {} workers", scheduled_workers);
@@ -705,7 +706,7 @@ pub fn run_parallel_tests(
     let worker_binary = find_karva_worker_binary(project.cwd())?;
     let spawn = WorkerSpawn {
         project,
-        cache: &cache,
+        artifacts: &artifacts,
         controller_address: controller.address()?,
         run_hash: &run_hash,
         args,
@@ -741,12 +742,15 @@ pub fn run_parallel_tests(
 
     if !config.no_cache {
         write_last_failed(&cache_dir, &results.failed_tests);
+        if let Err(err) = write_durations(&cache_dir, &results.durations) {
+            tracing::warn!("Failed to write test durations to cache: {err}");
+        }
     }
 
     let coverage_files = if project.settings().coverage().sources.is_empty() {
         Vec::new()
     } else {
-        cache.coverage_files()?
+        artifacts.coverage_files()?
     };
 
     Ok(RunOutput {

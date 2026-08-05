@@ -3,7 +3,7 @@ name = "karva_cache"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true
-description = "Cache directory layout, result serialization, and duration tracking for Karva."
+description = "Persistent test history and coverage artifact layout for Karva."
 homepage.workspace = true
 documentation.workspace = true
 repository.workspace = true
@@ -11,7 +11,6 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-karva_diagnostic = { workspace = true }
 karva_python_semantic = { workspace = true }
 
 anyhow = { workspace = true }

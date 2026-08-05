@@ -11,10 +11,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
-use karva_cache::{
-    AggregatedResults, CACHE_DIR, DisplayFlakyTests, read_random_seed, write_random_seed,
-};
+use karva_cache::{CACHE_DIR, read_random_seed, write_random_seed};
 use karva_cli::{CovReport as CliCovReport, RandomSeed, TestCommand};
+use karva_diagnostic::{AggregatedResults, DisplayFlakyTests};
 use karva_logging::{Printer, Stdout, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{CovReport, NoTestsMode, ProjectMetadata, ProjectOptionsOverrides};

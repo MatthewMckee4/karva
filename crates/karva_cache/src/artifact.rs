@@ -18,9 +18,7 @@ use tempfile::NamedTempFile;
 /// One of the well-known files in the cache directory hierarchy.
 #[derive(Clone, Copy)]
 pub enum CacheFile {
-    /// Per-worker JSON: completed test results.
-    Results,
-    /// Per-worker JSON: map of test id to wall-clock duration.
+    /// Cache-root JSON, or legacy per-worker JSON: test wall-clock durations.
     Durations,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
@@ -34,7 +32,6 @@ impl CacheFile {
     /// Returns the on-disk filename for this artifact.
     pub const fn filename(self) -> &'static str {
         match self {
-            Self::Results => "results.json",
             Self::Durations => "durations.json",
             Self::Coverage => "coverage.json",
             Self::LastFailed => "last-failed.json",
@@ -52,11 +49,6 @@ impl CacheFile {
 pub fn write_json<T: Serialize>(dir: &Utf8Path, file: CacheFile, value: &T) -> Result<()> {
     let json = serde_json::to_vec_pretty(value)?;
     write_bytes(dir, file, &json)
-}
-
-/// Writes `content` to `dir/<file>`.
-pub fn write_text(dir: &Utf8Path, file: CacheFile, content: impl AsRef<[u8]>) -> Result<()> {
-    write_bytes(dir, file, content.as_ref())
 }
 
 fn write_bytes(dir: &Utf8Path, file: CacheFile, content: &[u8]) -> Result<()> {
@@ -109,19 +101,5 @@ mod tests {
             error.to_string().contains(path.as_str()),
             "unexpected error: {error}"
         );
-    }
-
-    #[test]
-    fn write_text_replaces_existing_artifact() {
-        let temp_dir = tempfile::tempdir().expect("create temp dir");
-        let cache_dir =
-            Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).expect("UTF-8 temp path");
-
-        write_text(&cache_dir, CacheFile::LastFailed, "old").expect("write old artifact");
-        write_text(&cache_dir, CacheFile::LastFailed, "new").expect("replace artifact");
-
-        let body = std::fs::read_to_string(CacheFile::LastFailed.path_in(&cache_dir))
-            .expect("read artifact");
-        assert_eq!(body, "new");
     }
 }

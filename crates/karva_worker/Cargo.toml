@@ -16,7 +16,6 @@ name = "karva-worker"
 path = "src/bin/main.rs"
 
 [dependencies]
-karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_diagnostic = { workspace = true }
 karva_ipc = { workspace = true }

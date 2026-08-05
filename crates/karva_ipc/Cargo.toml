@@ -11,7 +11,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-karva_cache = { workspace = true }
+karva_diagnostic = { workspace = true }
 
 anyhow = { workspace = true }
 crossbeam-channel = { workspace = true }

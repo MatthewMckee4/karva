@@ -3,7 +3,7 @@ use std::process::Command;
 
 use camino::Utf8PathBuf;
 
-use karva_cache::{RunCache, RunHash};
+use karva_cache::{RunArtifacts, RunHash};
 use karva_cli::SubTestCommand;
 use karva_logging::TerminalColor;
 use karva_metadata::{EnvironmentVariable, ProjectSettings};
@@ -17,8 +17,8 @@ pub struct WorkerSpawn<'a> {
     /// Project whose tests the worker executes.
     pub project: &'a Project,
 
-    /// Run-scoped cache used to derive worker artifact paths.
-    pub cache: &'a RunCache,
+    /// Run-scoped files used to collect worker coverage data.
+    pub artifacts: &'a RunArtifacts,
 
     /// Loopback endpoint receiving worker runtime state.
     pub controller_address: SocketAddr,
@@ -101,7 +101,7 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partiti
     cmd.args(inner_cli_args(spawn.project.settings(), spawn.args));
 
     if spawn.coverage_enabled {
-        let data_file = spawn.cache.coverage_data_file(worker_id);
+        let data_file = spawn.artifacts.coverage_data_file(worker_id);
         cmd.arg("--cov-data-file").arg(data_file.as_str());
     }
 

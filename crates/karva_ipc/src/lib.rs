@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
-use karva_cache::WorkerResults;
+use karva_diagnostic::WorkerResults;
 use serde::{Deserialize, Serialize};
 
 /// One runtime state change sent from a worker to the controller.

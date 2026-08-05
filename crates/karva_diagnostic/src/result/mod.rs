@@ -216,7 +216,7 @@ impl TestRunResult {
         self
     }
 
-    /// Decomposes this run for serialization into the worker cache.
+    /// Decomposes this run for rendering and transport to the controller.
     pub fn into_parts(self) -> TestRunResultParts {
         TestRunResultParts {
             run_diagnostics: self.run_diagnostics,
