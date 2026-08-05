@@ -139,9 +139,8 @@ env_vars! {
         /// every worker. Encodes `<ms>-<uuid>`: a millisecond Unix timestamp
         /// followed by a UUID v4. The timestamp prefix sorts chronologically
         /// across runs; the UUID makes the id unique even when multiple jobs
-        /// start in the same millisecond. The same value names the run's
-        /// cache directory under `.karva_cache/run-<ms>-<uuid>`, which makes
-        /// correlating logs to cached artifacts straightforward.
+        /// start in the same millisecond. When coverage is enabled, the same
+        /// value names its directory under `.karva_cache/run-<ms>-<uuid>`.
         pub const KARVA_RUN_ID: &'static str = "KARVA_RUN_ID";
 
         /// Absolute path to the directory Karva resolved as the project root.

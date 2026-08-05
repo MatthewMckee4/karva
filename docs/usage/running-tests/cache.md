@@ -1,39 +1,39 @@
 # Cache
 
-Karva keeps a small on-disk cache of previous test runs. Today it powers two things: per-test duration history (used to schedule the slowest tests first under parallelism) and the list of tests that failed in the last run.
+Karva keeps only reusable history on disk: per-test durations for parallel scheduling and the test names used by `--last-failed`. Live worker state and complete results travel over loopback IPC and remain in memory.
 
-The cache lives under the platform cache directory, namespaced per project root.
+The cache lives in `.karva_cache` under the project root. Coverage runs also write per-worker coverage artifacts there.
 
 ## Re-running just the failures
 
 `--last-failed` (or `--lf`) restricts the run to whichever tests failed in the previous invocation:
 
 ```bash
-karva test --last-failed
+uv run karva test --last-failed
 ```
 
 A typical fix-it-up loop:
 
 ```bash
-karva test                # see the failures
-karva test --last-failed  # iterate on just those
-karva test                # confirm the full suite passes again
+uv run karva test                # see the failures
+uv run karva test --last-failed  # iterate on just those
+uv run karva test                # confirm the full suite passes again
 ```
 
 Combine with `--watch` to keep iterating until they all pass:
 
 ```bash
-karva test --watch --last-failed
+uv run karva test --watch --last-failed
 ```
 
 If the last run had no failures, `--last-failed` runs nothing.
 
-## Disabling cache reads
+## Disabling the cache
 
-`--no-cache` disables reading the cache for the current run. Tests are scheduled without duration hints and `--last-failed` becomes a no-op. Cache files are still written so subsequent runs without `--no-cache` have fresh data.
+`--no-cache` disables reading and writing reusable test history for the current run. Tests are scheduled without duration hints and `--last-failed` becomes a no-op. Coverage artifacts are still written when coverage is enabled.
 
 ```bash
-karva test --no-cache
+uv run karva test --no-cache
 ```
 
 ## Managing the cache
@@ -41,8 +41,8 @@ karva test --no-cache
 Two `karva cache` subcommands manage cache contents directly:
 
 ```bash
-karva cache prune  # keep only the most recent run
-karva cache clean  # remove the cache directory entirely
+uv run karva cache prune  # keep only the newest coverage/legacy run directory
+uv run karva cache clean  # remove the cache directory entirely
 ```
 
-`prune` is the safer of the two — it reclaims space without losing the data the next `--last-failed` would use. Reach for `clean` if the cache gets corrupted, or after upgrading karva across a cache-format change.
+`prune` preserves reusable history. Reach for `clean` if the cache gets corrupted or after a cache-format change.

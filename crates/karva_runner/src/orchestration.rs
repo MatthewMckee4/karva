@@ -84,6 +84,16 @@ impl Worker {
 /// Owns all live workers and guarantees they are reaped during shutdown.
 struct WorkerManager {
     workers: Vec<Worker>,
+    dispatcher: EventDispatcher,
+}
+
+/// Linearizes worker events into controller-owned run state.
+///
+/// Process supervision deliberately stays in [`WorkerManager`]. This mirrors
+/// nextest's dispatcher/executor boundary and leaves reporting or recording
+/// consumers independent of the transport and child-process lifecycle.
+#[derive(Default)]
+struct EventDispatcher {
     expected_workers: HashSet<usize>,
     completed_workers: HashSet<usize>,
     in_flight: HashMap<usize, RunningTest>,
@@ -148,14 +158,13 @@ struct InterruptedTest {
     duration: Duration,
 }
 
-impl WorkerManager {
-    fn spawn(&mut self, worker_id: usize, child: Child, output: Option<WorkerOutputForwarder>) {
+impl EventDispatcher {
+    fn register_worker(&mut self, worker_id: usize) {
         self.expected_workers.insert(worker_id);
-        self.workers.push(Worker::new(worker_id, child, output));
     }
 
     /// Applies every queued worker event and reports whether fail-fast fired.
-    fn process_ipc(&mut self, server: &mut ControllerServer) -> Result<bool> {
+    fn dispatch_pending(&mut self, server: &mut ControllerServer) -> Result<bool> {
         server.accept_pending()?;
         let mut fail_fast = false;
         while let Some(message) = server.try_recv()? {
@@ -181,10 +190,17 @@ impl WorkerManager {
         Ok(fail_fast)
     }
 
-    fn finish_ipc(&mut self, server: &mut ControllerServer) -> Result<()> {
+    fn finish(&mut self, server: &mut ControllerServer) -> Result<()> {
         server.finish()?;
-        self.process_ipc(server)?;
+        self.dispatch_pending(server)?;
         Ok(())
+    }
+}
+
+impl WorkerManager {
+    fn spawn(&mut self, worker_id: usize, child: Child, output: Option<WorkerOutputForwarder>) {
+        self.dispatcher.register_worker(worker_id);
+        self.workers.push(Worker::new(worker_id, child, output));
     }
 
     fn reap_finished(&mut self, log_completion: bool) {
@@ -245,15 +261,16 @@ impl WorkerManager {
         );
 
         loop {
-            let fail_fast = self.process_ipc(server)?;
+            let fail_fast = self.dispatcher.dispatch_pending(server)?;
             self.reap_finished(true);
 
             if self.workers.is_empty() {
-                self.finish_ipc(server)?;
-                if self.completed_workers != self.expected_workers {
+                self.dispatcher.finish(server)?;
+                if self.dispatcher.completed_workers != self.dispatcher.expected_workers {
                     let mut missing: Vec<_> = self
+                        .dispatcher
                         .expected_workers
-                        .difference(&self.completed_workers)
+                        .difference(&self.dispatcher.completed_workers)
                         .copied()
                         .collect();
                     missing.sort_unstable();
@@ -301,6 +318,7 @@ impl WorkerManager {
         let processes: Vec<_> = self
             .workers
             .iter()
+            .filter(|worker| !self.dispatcher.completed_workers.contains(&worker.id))
             .map(|worker| WorkerProcess {
                 worker_id: worker.id,
                 process_id: worker.child.id(),
@@ -308,6 +326,9 @@ impl WorkerManager {
             .collect();
 
         for worker in &mut self.workers {
+            if self.dispatcher.completed_workers.contains(&worker.id) {
+                continue;
+            }
             #[cfg(unix)]
             let terminate_result = process_control::terminate(&worker.child);
             #[cfg(not(unix))]
@@ -383,16 +404,16 @@ impl WorkerManager {
             return Ok(Vec::new());
         }
 
-        self.process_ipc(server)?;
+        self.dispatcher.dispatch_pending(server)?;
         server.request_current_tests(self.workers.iter().map(|worker| worker.id));
         std::thread::sleep(CURRENT_TEST_SETTLE);
-        self.process_ipc(server)?;
+        self.dispatcher.dispatch_pending(server)?;
 
         let in_flight: Vec<_> = self
             .workers
             .iter()
             .map(|worker| {
-                let current = self.in_flight.get(&worker.id);
+                let current = self.dispatcher.in_flight.get(&worker.id);
                 InFlightTest {
                     worker_id: worker.id,
                     name: current.and_then(|current| current.name.clone()),
@@ -734,8 +755,8 @@ pub fn run_parallel_tests(
 
     let timed_out = outcome == WaitOutcome::TimedOut;
 
-    worker_manager.finish_ipc(&mut controller)?;
-    let mut results = std::mem::take(&mut worker_manager.results);
+    worker_manager.dispatcher.finish(&mut controller)?;
+    let mut results = std::mem::take(&mut worker_manager.dispatcher.results);
     for test in interrupted_tests {
         results.register_interrupted_test(&test.name, test.duration);
     }
