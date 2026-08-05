@@ -174,11 +174,11 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let failed_count =
         u32::try_from(result.stats().failed() + result.stats().errors()).unwrap_or(u32::MAX);
     let results = render_worker_results(result, &cwd, &config)?;
-    client.send_event(WorkerEvent::Completed(results))?;
 
     if settings.max_fail().is_exceeded_by(failed_count) {
         client.send_event(WorkerEvent::FailFast)?;
     }
+    client.complete(results)?;
 
     Ok(ExitStatus::Success)
 }

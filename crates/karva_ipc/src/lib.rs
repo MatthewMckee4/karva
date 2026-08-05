@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, ErrorKind, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -142,6 +142,17 @@ impl WorkerClient {
     /// Sends one state change immediately so cancellation sees current state.
     pub fn send_event(&self, event: WorkerEvent) -> Result<()> {
         self.send(&WireMessage::Event(event))
+    }
+
+    /// Sends the terminal result payload and gracefully closes the connection.
+    pub fn complete(self, results: WorkerResults) -> Result<()> {
+        self.send(&WireMessage::Event(WorkerEvent::Completed(results)))?;
+        self.writer
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva controller connection lock poisoned"))?
+            .get_ref()
+            .shutdown(Shutdown::Both)
+            .context("failed to close Karva controller connection")
     }
 
     /// Starts a dormant reader that answers controller state queries.
@@ -411,5 +422,25 @@ mod tests {
 
         let error = serde_json::Error::io(std::io::Error::from(ErrorKind::InvalidData));
         assert!(!is_clean_disconnect(&error));
+    }
+
+    #[test]
+    fn completion_closes_connection_after_sending_results() {
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        let client = WorkerClient::connect(server.address().expect("address"), "run-id", 7)
+            .expect("connect worker");
+        client
+            .complete(WorkerResults::default())
+            .expect("complete worker");
+
+        server.accept_pending().expect("accept worker");
+        server.finish().expect("finish readers");
+        let event = server
+            .try_recv()
+            .expect("receive event")
+            .expect("queued event");
+
+        assert_eq!(event.worker_id, 7);
+        assert!(matches!(event.event, WorkerEvent::Completed(_)));
     }
 }
