@@ -218,7 +218,7 @@ impl TestRunResult {
     }
 
     /// Decomposes this run for rendering and transport to the controller.
-    pub(crate) fn into_parts(self) -> TestRunResultParts {
+    pub(super) fn into_parts(self) -> TestRunResultParts {
         TestRunResultParts {
             run_diagnostics: self.run_diagnostics,
             stats: self.stats,
