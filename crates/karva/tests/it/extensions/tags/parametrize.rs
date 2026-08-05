@@ -119,6 +119,9 @@ def test_value(left, right):
       |
     5 |     arg_values=[(1, 2), (3,)],
       |                         ^^^^ contains 1 value
+      |
+     ::: test.py:6:15
+      |
     6 |     arg_names=("left", "right"),
       |               ----------------- expects 2 values
       |
@@ -162,6 +165,9 @@ def test_value(left, right):
       |
     5 |     argvalues=[(1, 2), (3,)],
       |                        ^^^^ contains 1 value
+      |
+     ::: test.py:6:15
+      |
     6 |     argnames=("left," "right"),
       |               --------------- expects 2 values
       |
@@ -483,12 +489,15 @@ def test_value(value):
     test::test_value:
 
     error[invalid-parametrize]: Parameter `value` is parametrized more than once
-     --> test.py:6:9
+     --> test.py:7:9
+      |
+    7 |         "value",
+      |         ^^^^^^^ duplicate parameter
+      |
+     ::: test.py:6:9
       |
     6 |         "value",
       |         ------- first parametrized here
-    7 |         "value",
-      |         ^^^^^^^ duplicate parameter
       |
 
     ────────────
@@ -623,12 +632,15 @@ def test_value(value):
         test::test_value:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
-         --> test.py:5:14
+         --> test.py:6:14
+          |
+        6 | @parametrize("value", [2])
+          |              ^^^^^^^ duplicate parameter
+          |
+         ::: test.py:5:14
           |
         5 | @parametrize("value", [1])
           |              ------- first parametrized here
-        6 | @parametrize("value", [2])
-          |              ^^^^^^^ duplicate parameter
           |
 
         ────────────
@@ -673,6 +685,9 @@ def test_value(value):
           |
         5 | @parametrize("missing", [1])
           |              ^^^^^^^^^ not accepted by test
+          |
+         ::: test.py:6:15
+          |
         6 | def test_value(value):
           |               ------- available parameter
           |
@@ -716,6 +731,9 @@ def test_value(value):
       |
     6 | @cases(("value", "missing"), [(1, 2)])
       |                  ^^^^^^^^^ not accepted by test
+      |
+     ::: test.py:7:15
+      |
     7 | def test_value(value):
       |               ------- available parameter
       |
@@ -849,6 +867,9 @@ def test_value(value):
           |
         5 | @parametrize("", [1])
           |              ^^ empty parameter name
+          |
+         ::: test.py:6:15
+          |
         6 | def test_value(value):
           |               ------- available parameter
           |
@@ -895,6 +916,9 @@ def test_value(value):
           |
         5 | @parametrize("not valid", [1])
           |              ^^^^^^^^^^^ invalid parameter name
+          |
+         ::: test.py:6:15
+          |
         6 | def test_value(value):
           |               ------- available parameter
           |
@@ -954,6 +978,9 @@ def test_invalid(
        |
     12 |   @karva.tags.parametrize("", [1])
        |                           ^^ empty parameter name
+       |
+      ::: test.py:13:15
+       |
     13 |   def test_empty(
        |  _______________-
     14 | |     value,
@@ -968,6 +995,9 @@ def test_invalid(
        |
     18 |   @karva.tags.parametrize("not valid", [1])
        |                           ^^^^^^^^^^^ invalid parameter name
+       |
+      ::: test.py:19:17
+       |
     19 |   def test_invalid(
        |  _________________-
     20 | |     value: int = 1,
@@ -982,6 +1012,9 @@ def test_invalid(
       |
     4 |   @karva.tags.parametrize("missing", [1])
       |                           ^^^^^^^^^ not accepted by test
+      |
+     ::: test.py:5:17
+      |
     5 |   def test_unknown(
       |  _________________-
     6 | |     value,
