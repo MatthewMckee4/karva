@@ -1146,6 +1146,7 @@ dependencies = [
  "markdown",
  "pretty_assertions",
  "ruff_options_metadata",
+ "ruff_python_trivia",
  "schemars",
  "serde_json",
 ]

@@ -1,4 +1,4 @@
-<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Update the doc comments on 'Config' and 'Options' in 'crates/karva_metadata/src/options/' if you want to change anything here. -->
+<!-- WARNING: This file is auto-generated (cargo dev generate-all). Update the doc comments on 'Config' and 'Options' in 'crates/karva_metadata/src/options/' if you want to change anything here. -->
 
 # Configuration
 
@@ -6,13 +6,15 @@ Karva is configured through `karva.toml` (or the `[tool.karva]` table in `pyproj
 
 The reference below documents every project and profile field. Profile examples target the implicit `default` profile.
 
+## Global
+
 File-level configuration: a collection of named profiles.
 
 Every option group lives inside `[profile.<name>]`. The implicit `default`
 profile is always available; named profiles inherit from it and can
 override individual fields.
 
-## `required-version`
+### `required-version`
 
 `SemVer` requirement that the running karva binary must satisfy.
 
@@ -25,16 +27,24 @@ version.
 
 **Type**: `string`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva]
-required-version = ">=0.5.0"
-```
+=== "karva.toml"
+
+    ```toml
+    required-version = ">=0.5.0"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva]
+    required-version = ">=0.5.0"
+    ```
 
 ---
 
-## `tags`
+### `tags`
 
 Project-wide custom tag registry. Each key is a tag name and each value
 is an optional description for project documentation. Empty descriptions
@@ -47,19 +57,31 @@ absent from this table.
 
 **Type**: `table`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.tags]
-integration = "Uses an external service"
-slow = ""
-```
+=== "karva.toml"
+
+    ```toml
+    [tags]
+    integration = "Uses an external service"
+    slow = ""
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.tags]
+    integration = "Uses an external service"
+    slow = ""
+    ```
 
 ---
 
+## Profiles
+
 Configuration groups combined across defaults, profiles, environment, and CLI.
 
-## `env`
+### `env`
 
 Environment variables applied to test workers before Python imports any
 test modules or fixtures. Strings always set values. Use
@@ -70,22 +92,33 @@ test modules or fixtures. Strings always set values. Use
 
 **Type**: `table`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.env]
-APP_ENV = "test"
-CACHE_DIR = { value = ".cache/tests", preserve = true }
-LIVE_API_TOKEN = { unset = true }
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.env]
+    APP_ENV = "test"
+    CACHE_DIR = { value = ".cache/tests", preserve = true }
+    LIVE_API_TOKEN = { unset = true }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.env]
+    APP_ENV = "test"
+    CACHE_DIR = { value = ".cache/tests", preserve = true }
+    LIVE_API_TOKEN = { unset = true }
+    ```
 
 ---
 
-## `coverage`
+### `coverage`
 
 Controls measured Python sources and coverage report generation.
 
-### `append`
+#### `append`
 
 Add a test run to compatible native data instead of replacing it.
 
@@ -93,16 +126,25 @@ Add a test run to compatible native data instead of replacing it.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-append = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    append = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    append = true
+    ```
 
 ---
 
-### `branch`
+#### `branch`
 
 Whether to measure branch coverage in addition to line coverage.
 
@@ -110,16 +152,25 @@ Whether to measure branch coverage in addition to line coverage.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-branch = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    branch = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    branch = true
+    ```
 
 ---
 
-### `context`
+#### `context`
 
 Static context component attached to every observation in the run.
 
@@ -127,16 +178,25 @@ Static context component attached to every observation in the run.
 
 **Type**: `str`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-context = "python=3.14"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    context = "python=3.14"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    context = "python=3.14"
+    ```
 
 ---
 
-### `contexts`
+#### `contexts`
 
 Include execution attributed to contexts matching these regular expressions.
 
@@ -144,16 +204,25 @@ Include execution attributed to contexts matching these regular expressions.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-contexts = ["python=3\\.14", "test_checkout"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    contexts = ["python=3\\.14", "test_checkout"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    contexts = ["python=3\\.14", "test_checkout"]
+    ```
 
 ---
 
-### `data-file`
+#### `data-file`
 
 Native coverage artifact read and written by coverage commands.
 
@@ -163,16 +232,25 @@ Relative paths are resolved from the project root.
 
 **Type**: `path`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-data-file = ".karva/coverage/data.json"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    data-file = ".karva/coverage/data.json"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    data-file = ".karva/coverage/data.json"
+    ```
 
 ---
 
-### `exclude-lines`
+#### `exclude-lines`
 
 Regular expressions excluding matching source lines or whole clauses.
 
@@ -180,16 +258,25 @@ Regular expressions excluding matching source lines or whole clauses.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-exclude-lines = ["if TYPE_CHECKING:"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    exclude-lines = ["if TYPE_CHECKING:"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    exclude-lines = ["if TYPE_CHECKING:"]
+    ```
 
 ---
 
-### `fail-under`
+#### `fail-under`
 
 Minimum total coverage percentage required for the run to succeed.
 
@@ -202,16 +289,25 @@ already non-zero).
 
 **Type**: `float (0..=100)`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-fail-under = 90
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    fail-under = 90
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    fail-under = 90
+    ```
 
 ---
 
-### `include`
+#### `include`
 
 Include only coverage report files matching these globs.
 
@@ -223,16 +319,25 @@ under the configured coverage sources are included unless omitted.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-include = ["src/**"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    include = ["src/**"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    include = ["src/**"]
+    ```
 
 ---
 
-### `omit`
+#### `omit`
 
 Exclude coverage report files matching these globs.
 
@@ -244,16 +349,25 @@ applied after include filters.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-omit = ["**/migrations/*"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    omit = ["**/migrations/*"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    omit = ["**/migrations/*"]
+    ```
 
 ---
 
-### `partial-branches`
+#### `partial-branches`
 
 Regular expressions marking intentionally partial branch lines.
 
@@ -261,16 +375,25 @@ Regular expressions marking intentionally partial branch lines.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-partial-branches = ["if platform.system"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    partial-branches = ["if platform.system"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    partial-branches = ["if platform.system"]
+    ```
 
 ---
 
-### `path-aliases`
+#### `path-aliases`
 
 Ordered `FROM=TO` path mappings applied when native artifacts are read.
 
@@ -281,16 +404,25 @@ or artifacts produced under a different CI checkout layout.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-path-aliases = ["/workspace=.", "C:/repo=."]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    path-aliases = ["/workspace=.", "C:/repo=."]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    path-aliases = ["/workspace=.", "C:/repo=."]
+    ```
 
 ---
 
-### `precision`
+#### `precision`
 
 Decimal places shown in coverage percentages.
 
@@ -298,16 +430,25 @@ Decimal places shown in coverage percentages.
 
 **Type**: `non-negative integer`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-precision = 2
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    precision = 2
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    precision = 2
+    ```
 
 ---
 
-### `report`
+#### `report`
 
 Coverage report type.
 
@@ -319,16 +460,25 @@ uncovered line numbers per file. `none` persists native data only.
 
 **Type**: `none | term | term-missing | xml | json | html | lcov`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-report = "term-missing"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    report = "term-missing"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    report = "term-missing"
+    ```
 
 ---
 
-### `report-path`
+#### `report-path`
 
 Optional output path for machine-readable coverage reports.
 
@@ -341,16 +491,25 @@ project root.
 
 **Type**: `path`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-report-path = "build/coverage.xml"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    report-path = "build/coverage.xml"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    report-path = "build/coverage.xml"
+    ```
 
 ---
 
-### `sources`
+#### `sources`
 
 Source paths or importable Python names to measure coverage for.
 
@@ -362,20 +521,29 @@ working directory, matching pytest-cov's bare `--cov`.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.coverage]
-sources = ["src"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.coverage]
+    sources = ["src"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.coverage]
+    sources = ["src"]
+    ```
 
 ---
 
-## `junit`
+### `junit`
 
 Controls `JUnit` XML output, captured streams, and flaky-test representation.
 
-### `flaky-fail-status`
+#### `flaky-fail-status`
 
 How flaky tests configured to fail are represented in `JUnit`.
 
@@ -383,16 +551,25 @@ How flaky tests configured to fail are represented in `JUnit`.
 
 **Type**: `failure | success`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.junit]
-flaky-fail-status = "success"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.junit]
+    flaky-fail-status = "success"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.junit]
+    flaky-fail-status = "success"
+    ```
 
 ---
 
-### `path`
+#### `path`
 
 Output path for the `JUnit` XML report.
 
@@ -402,16 +579,25 @@ When unset, no `JUnit` report is written.
 
 **Type**: `path`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.junit]
-path = "reports/test-results.xml"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.junit]
+    path = "reports/test-results.xml"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.junit]
+    path = "reports/test-results.xml"
+    ```
 
 ---
 
-### `report-name`
+#### `report-name`
 
 Name of the top-level `JUnit` test suite collection.
 
@@ -419,16 +605,25 @@ Name of the top-level `JUnit` test suite collection.
 
 **Type**: `string`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.junit]
-report-name = "karva-tests"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.junit]
+    report-name = "karva-tests"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.junit]
+    report-name = "karva-tests"
+    ```
 
 ---
 
-### `store-failure-output`
+#### `store-failure-output`
 
 Whether to include captured stdout and stderr for failing tests.
 
@@ -436,16 +631,25 @@ Whether to include captured stdout and stderr for failing tests.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.junit]
-store-failure-output = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.junit]
+    store-failure-output = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.junit]
+    store-failure-output = true
+    ```
 
 ---
 
-### `store-success-output`
+#### `store-success-output`
 
 Whether to include captured stdout and stderr for passing tests.
 
@@ -453,20 +657,29 @@ Whether to include captured stdout and stderr for passing tests.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.junit]
-store-success-output = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.junit]
+    store-success-output = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.junit]
+    store-success-output = true
+    ```
 
 ---
 
-## `src`
+### `src`
 
 Controls test-path discovery and whether filesystem ignore rules are honored.
 
-### `include`
+#### `include`
 
 A list of files and directories to check.
 Including a file or directory will make it so that it (and its contents)
@@ -481,16 +694,25 @@ it checks the project root.
 
 **Type**: `list[str]`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.src]
-include = ["tests"]
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.src]
+    include = ["tests"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.src]
+    include = ["tests"]
+    ```
 
 ---
 
-### `respect-ignore-files`
+#### `respect-ignore-files`
 
 Whether to automatically exclude files that are ignored by `.ignore`,
 `.gitignore`, `.git/info/exclude`, and global `gitignore` files.
@@ -500,20 +722,29 @@ Enabled by default.
 
 **Type**: `bool`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.src]
-respect-ignore-files = false
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.src]
+    respect-ignore-files = false
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.src]
+    respect-ignore-files = false
+    ```
 
 ---
 
-## `terminal`
+### `terminal`
 
 Controls diagnostic formatting, captured output, and displayed test statuses.
 
-### `final-status-level`
+#### `final-status-level`
 
 Test summary information to display at the end of the run.
 
@@ -526,16 +757,25 @@ Defaults to `pass`.
 
 **Type**: `none | fail | retry | slow | pass | skip | all`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.terminal]
-final-status-level = "fail"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.terminal]
+    final-status-level = "fail"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.terminal]
+    final-status-level = "fail"
+    ```
 
 ---
 
-### `output-format`
+#### `output-format`
 
 The format to use for printing diagnostic messages.
 
@@ -545,16 +785,25 @@ Defaults to `full`.
 
 **Type**: `full | concise`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.terminal]
-output-format = "concise"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.terminal]
+    output-format = "concise"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.terminal]
+    output-format = "concise"
+    ```
 
 ---
 
-### `show-python-output`
+#### `show-python-output`
 
 Whether to show the python output.
 
@@ -564,16 +813,25 @@ This is the output the `print` goes to etc.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.terminal]
-show-python-output = false
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.terminal]
+    show-python-output = false
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.terminal]
+    show-python-output = false
+    ```
 
 ---
 
-### `status-level`
+#### `status-level`
 
 Test result statuses to display during the run.
 
@@ -588,20 +846,29 @@ Defaults to `pass`.
 
 **Type**: `none | fail | retry | slow | pass | skip | all`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.terminal]
-status-level = "fail"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.terminal]
+    status-level = "fail"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.terminal]
+    status-level = "fail"
+    ```
 
 ---
 
-## `test`
+### `test`
 
 Controls test selection, retries, timeouts, and failure policies.
 
-### `fail-fast`
+#### `fail-fast`
 
 Whether to stop at the first test failure.
 
@@ -615,16 +882,25 @@ Defaults to `false`.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-fail-fast = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    fail-fast = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    fail-fast = true
+    ```
 
 ---
 
-### `fail-slow`
+#### `fail-slow`
 
 Duration budget (in seconds) for a test's full lifecycle (fixture
 setup, the test call, and fixture teardown).
@@ -647,16 +923,25 @@ applied to the test.
 
 **Type**: `float (seconds)`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-fail-slow = 0.25
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    fail-slow = 0.25
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    fail-slow = 0.25
+    ```
 
 ---
 
-### `flaky-result`
+#### `flaky-result`
 
 Whether tests that pass only after a retry should fail the run.
 
@@ -664,16 +949,25 @@ Whether tests that pass only after a retry should fail the run.
 
 **Type**: `pass | fail`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-flaky-result = "fail"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    flaky-result = "fail"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    flaky-result = "fail"
+    ```
 
 ---
 
-### `max-fail`
+#### `max-fail`
 
 Stop scheduling new tests once this many tests have failed.
 
@@ -688,16 +982,25 @@ When both [`fail_fast`](#fail-fast) and `max-fail` are set,
 
 **Type**: `positive integer`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-max-fail = 3
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    max-fail = 3
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    max-fail = 3
+    ```
 
 ---
 
-### `no-tests`
+#### `no-tests`
 
 Configures behavior when no tests are found to run.
 
@@ -709,16 +1012,25 @@ passes silently when filters were given. Use `fail` to always fail,
 
 **Type**: `auto | pass | warn | fail`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-no-tests = "warn"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    no-tests = "warn"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    no-tests = "warn"
+    ```
 
 ---
 
-### `random-seed`
+#### `random-seed`
 
 Seed used to randomize test order when [`shuffle`](#shuffle) is enabled.
 
@@ -729,16 +1041,25 @@ seed does not enable shuffling by itself.
 
 **Type**: `u64`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-random-seed = 170938
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    random-seed = 170938
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    random-seed = 170938
+    ```
 
 ---
 
-### `retry`
+#### `retry`
 
 When set, we will retry failed tests up to this number of times.
 
@@ -746,16 +1067,25 @@ When set, we will retry failed tests up to this number of times.
 
 **Type**: `u32`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-retry = 3
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    retry = 3
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    retry = 3
+    ```
 
 ---
 
-### `run-timeout`
+#### `run-timeout`
 
 Wall-clock limit (in seconds) for the entire run.
 
@@ -770,16 +1100,25 @@ Defaults to unset, which lets the run take as long as it needs.
 
 **Type**: `float (seconds)`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-run-timeout = 1800.0
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    run-timeout = 1800.0
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    run-timeout = 1800.0
+    ```
 
 ---
 
-### `shuffle`
+#### `shuffle`
 
 Use seeded randomized ordering instead of duration-aware scheduling.
 
@@ -790,16 +1129,25 @@ run so the same order can be reproduced.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-shuffle = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    shuffle = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    shuffle = true
+    ```
 
 ---
 
-### `slow-timeout`
+#### `slow-timeout`
 
 Threshold (in seconds) after which a test is flagged as slow.
 
@@ -814,16 +1162,25 @@ Defaults to unset, which disables slow-test detection.
 
 **Type**: `float (seconds)`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-slow-timeout = 60.0
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    slow-timeout = 60.0
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    slow-timeout = 60.0
+    ```
 
 ---
 
-### `strict-tags`
+#### `strict-tags`
 
 Reject custom tags that are absent from the project-wide `[tags]` registry.
 Built-in Karva tags and pytest marks remain available without registration.
@@ -832,16 +1189,25 @@ Built-in Karva tags and pytest marks remain available without registration.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-strict-tags = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    strict-tags = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    strict-tags = true
+    ```
 
 ---
 
-### `termination-grace-period`
+#### `termination-grace-period`
 
 Grace period (in seconds) between graceful worker termination and
 force-kill.
@@ -856,16 +1222,25 @@ Defaults to 10 seconds.
 
 **Type**: `float (seconds)`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-termination-grace-period = 10.0
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    termination-grace-period = 10.0
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    termination-grace-period = 10.0
+    ```
 
 ---
 
-### `test-function-prefix`
+#### `test-function-prefix`
 
 The prefix to use for test functions.
 
@@ -875,16 +1250,25 @@ Defaults to `test`.
 
 **Type**: `string`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-test-function-prefix = "test"
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    test-function-prefix = "test"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    test-function-prefix = "test"
+    ```
 
 ---
 
-### `timeout`
+#### `timeout`
 
 Hard per-test timeout (in seconds).
 
@@ -900,16 +1284,25 @@ applied to the test.
 
 **Type**: `float (seconds)`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-timeout = 120.0
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    timeout = 120.0
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    timeout = 120.0
+    ```
 
 ---
 
-### `try-import-fixtures`
+#### `try-import-fixtures`
 
 When set, we will try to import functions in each test file as well as parsing the ast to find them.
 
@@ -919,12 +1312,21 @@ This is often slower, so it is not recommended for most projects.
 
 **Type**: `true | false`
 
-**Example usage** (`pyproject.toml`):
+**Example usage**:
 
-```toml
-[tool.karva.profile.default.test]
-try-import-fixtures = true
-```
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    try-import-fixtures = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    try-import-fixtures = true
+    ```
 
 ---
 
