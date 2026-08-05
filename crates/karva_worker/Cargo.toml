@@ -32,7 +32,6 @@ camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 fs-err = { workspace = true }
-ruff_db = { workspace = true }
 wild = { workspace = true }
 
 [lints]

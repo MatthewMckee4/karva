@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use camino::Utf8PathBuf;
-use ruff_db::diagnostic::DiagnosticFormat;
 
 use karva_metadata::{
     FlakyResult as FlakyResultMode, JunitFlakyFailStatus as JunitFlakyFailStatusMode, NoTestsMode,
@@ -98,15 +97,6 @@ pub enum ResultFormat {
     /// Write newline-delimited JSON records.
     #[value(name = "jsonl")]
     Jsonl,
-}
-
-impl From<OutputFormat> for DiagnosticFormat {
-    fn from(value: OutputFormat) -> Self {
-        match value {
-            OutputFormat::Full => Self::Full,
-            OutputFormat::Concise => Self::Concise,
-        }
-    }
 }
 
 impl From<OutputFormat> for karva_metadata::OutputFormat {

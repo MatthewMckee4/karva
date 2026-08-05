@@ -1,7 +1,6 @@
 //! Test-owned execution errors shared across runner lifecycle boundaries.
 
-use karva_diagnostic::{FixtureFailure, TestExecutionOutcome};
-use ruff_db::diagnostic::Diagnostic;
+use karva_diagnostic::{Diagnostic, FixtureFailure, TestExecutionOutcome};
 
 /// Primary test error plus related diagnostics and fixture causality.
 ///

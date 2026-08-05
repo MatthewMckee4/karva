@@ -2,10 +2,9 @@
 
 use std::time::Duration;
 
-use karva_diagnostic::TestExecutionOutcome;
+use karva_diagnostic::{Diagnostic, TestExecutionOutcome};
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
-use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 

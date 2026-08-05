@@ -1,11 +1,11 @@
-use ruff_db::diagnostic::Severity;
 use serde::{Deserialize, Serialize};
+
+use crate::Severity;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Diagnostic serialized for controller-side display after worker execution.
 pub struct RenderedDiagnostic {
     code: String,
-    #[serde(with = "SerializableSeverity")]
     severity: Severity,
     message: String,
     rendered: String,
@@ -81,21 +81,12 @@ impl RenderedDiagnostic {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Severity", rename_all = "lowercase")]
-enum SerializableSeverity {
-    Info,
-    Warning,
-    Error,
-    Fatal,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn serializes_ruff_severity() {
+    fn serializes_severity() {
         for (severity, name) in [
             (Severity::Info, "info"),
             (Severity::Warning, "warning"),

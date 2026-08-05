@@ -1,32 +1,38 @@
-use std::path::Path;
+use annotate_snippets::{Level, Renderer, Snippet};
+use anyhow::Result;
+use camino::{Utf8Path, Utf8PathBuf};
+use karva_diagnostic::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
+use ruff_source_file::SourceFile;
 
-use anyhow::{Result, bail};
-use camino::Utf8Path;
-use karva_diagnostic::RenderedDiagnostic;
-use ruff_db::diagnostic::{
-    Diagnostic, DisplayDiagnosticConfig, DummyFileResolver, FileResolver, Input, UnifiedFile,
-};
-use ruff_db::files::File;
-use ruff_notebook::NotebookIndex;
+/// Shape used when rendering diagnostics for users.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiagnosticFormat {
+    Full,
+    Concise,
+}
 
-/// Karva creates diagnostics from `ruff_source_file::SourceFile` values, not
-/// from Ruff's ty/Salsa database. Validate that contract before entering
-/// Ruff's renderer so an unsupported span is reported as a cache write error
-/// instead of becoming a renderer panic.
+/// Terminal-specific diagnostic rendering settings.
+#[derive(Debug, Clone, Copy)]
+pub struct DisplayDiagnosticConfig {
+    format: DiagnosticFormat,
+    color: bool,
+}
+
+impl DisplayDiagnosticConfig {
+    pub fn new(format: DiagnosticFormat, color: bool) -> Self {
+        Self { format, color }
+    }
+}
+
 pub fn render_diagnostic(
     diagnostic: &Diagnostic,
     cwd: &Utf8Path,
     config: &DisplayDiagnosticConfig,
 ) -> Result<RenderedDiagnostic> {
-    ensure_source_file_spans(diagnostic)?;
-
-    let resolver = DiagnosticFileResolver::new(cwd);
-    let rendered = diagnostic
-        .display(&resolver, &config.clone().color(false))
-        .to_string();
-    let colored_rendered = diagnostic.display(&resolver, config).to_string();
+    let rendered = render(diagnostic, cwd, config.format, false);
+    let colored_rendered = render(diagnostic, cwd, config.format, config.color);
     Ok(RenderedDiagnostic::new(
-        diagnostic.id().as_str(),
+        diagnostic.code(),
         diagnostic.severity(),
         diagnostic.primary_message(),
         rendered,
@@ -34,69 +40,149 @@ pub fn render_diagnostic(
     .with_colored_rendered(colored_rendered))
 }
 
-fn ensure_source_file_spans(diagnostic: &Diagnostic) -> Result<()> {
-    for annotation in diagnostic
-        .primary_annotation()
-        .into_iter()
-        .chain(diagnostic.secondary_annotations())
-    {
-        ensure_source_file_span(annotation.get_span().file())?;
+fn render(
+    diagnostic: &Diagnostic,
+    cwd: &Utf8Path,
+    format: DiagnosticFormat,
+    color: bool,
+) -> String {
+    if format == DiagnosticFormat::Concise {
+        return render_concise(diagnostic, cwd);
     }
 
-    for sub_diagnostic in diagnostic.sub_diagnostics() {
-        for annotation in sub_diagnostic.annotations() {
-            ensure_source_file_span(annotation.get_span().file())?;
+    let mut rendered = render_message(
+        diagnostic.severity(),
+        Some(diagnostic.code()),
+        diagnostic.primary_message(),
+        diagnostic.annotations(),
+        cwd,
+        color,
+    );
+    for diagnostic in diagnostic.sub_diagnostics() {
+        rendered.push_str(&render_message(
+            diagnostic.severity(),
+            None,
+            diagnostic.message(),
+            diagnostic.annotations(),
+            cwd,
+            color,
+        ));
+    }
+    rendered.push('\n');
+    rendered
+}
+
+fn render_concise(diagnostic: &Diagnostic, cwd: &Utf8Path) -> String {
+    let severity = severity_name(diagnostic.severity());
+    if let Some(annotation) = diagnostic.primary_annotation() {
+        let span = annotation.span();
+        let location = span
+            .source_file()
+            .to_source_code()
+            .line_column(span.range().start());
+        format!(
+            "{}:{location}: {severity}[{}] {}\n",
+            display_path(span.source_file(), cwd),
+            diagnostic.code(),
+            diagnostic.concise_message()
+        )
+    } else {
+        format!(
+            "{severity}[{}] {}\n",
+            diagnostic.code(),
+            diagnostic.concise_message()
+        )
+    }
+}
+
+fn render_message(
+    severity: Severity,
+    code: Option<&str>,
+    message: &str,
+    annotations: &[Annotation],
+    cwd: &Utf8Path,
+    color: bool,
+) -> String {
+    let mut files: Vec<(&SourceFile, Vec<&Annotation>)> = Vec::new();
+    for annotation in annotations {
+        let source_file = annotation.span().source_file();
+        if let Some((_, file_annotations)) = files
+            .iter_mut()
+            .find(|(existing, _)| *existing == source_file)
+        {
+            file_annotations.push(annotation);
+        } else {
+            files.push((source_file, vec![annotation]));
         }
     }
+    for (_, annotations) in &mut files {
+        annotations.sort_by_key(|annotation| annotation.span().range().start());
+    }
 
-    Ok(())
+    let paths = files
+        .iter()
+        .map(|(source_file, _)| display_path(source_file, cwd).into_string())
+        .collect::<Vec<_>>();
+    let snippets = files
+        .iter()
+        .zip(&paths)
+        .map(|((source_file, annotations), path)| {
+            Snippet::source(source_file.source_text())
+                .origin(path)
+                .fold(true)
+                .annotations(annotations.iter().map(|annotation| {
+                    let range = annotation.span().range();
+                    let level = if annotation.is_primary() {
+                        Level::Error
+                    } else {
+                        Level::Warning
+                    };
+                    let rendered_annotation =
+                        level.span(usize::from(range.start())..usize::from(range.end()));
+                    if let Some(message) = annotation.message_text() {
+                        rendered_annotation.label(message)
+                    } else {
+                        rendered_annotation
+                    }
+                }))
+        });
+    let mut diagnostic = level(severity).title(message).snippets(snippets);
+    if let Some(code) = code {
+        diagnostic = diagnostic.id(code);
+    }
+    let renderer = if color {
+        Renderer::styled()
+    } else {
+        Renderer::plain()
+    };
+    format!("{}\n", renderer.render(diagnostic))
 }
 
-fn ensure_source_file_span(file: &UnifiedFile) -> Result<()> {
-    if matches!(file, UnifiedFile::Ty(_)) {
-        bail!("cannot render ty-backed diagnostics without a Ruff database");
-    }
-    Ok(())
+fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
+    let path = Utf8Path::new(source_file.name());
+    path.strip_prefix(cwd).unwrap_or(path).to_path_buf()
 }
 
-struct DiagnosticFileResolver<'a> {
-    cwd: &'a Utf8Path,
-}
-
-impl<'a> DiagnosticFileResolver<'a> {
-    fn new(cwd: &'a Utf8Path) -> Self {
-        Self { cwd }
+fn level(severity: Severity) -> Level {
+    match severity {
+        Severity::Info => Level::Info,
+        Severity::Warning => Level::Warning,
+        Severity::Error | Severity::Fatal => Level::Error,
     }
 }
 
-impl FileResolver for DiagnosticFileResolver<'_> {
-    fn path(&self, file: File) -> &str {
-        DummyFileResolver.path(file)
-    }
-
-    fn input(&self, file: File) -> Input {
-        DummyFileResolver.input(file)
-    }
-
-    fn notebook_index(&self, _file: &UnifiedFile) -> Option<NotebookIndex> {
-        None
-    }
-
-    fn is_notebook(&self, _file: &UnifiedFile) -> bool {
-        false
-    }
-
-    fn current_directory(&self) -> &Path {
-        self.cwd.as_std_path()
+fn severity_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Info => "info",
+        Severity::Warning => "warning",
+        Severity::Error => "error",
+        Severity::Fatal => "fatal",
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use camino::Utf8PathBuf;
-    use ruff_db::diagnostic::{
-        Annotation, Diagnostic, DiagnosticId, DisplayDiagnosticConfig, LintName, Severity, Span,
-    };
+    use karva_diagnostic::{Annotation, Diagnostic, Severity, Span};
     use ruff_source_file::SourceFileBuilder;
     use ruff_text_size::{TextRange, TextSize};
 
@@ -104,14 +190,14 @@ mod tests {
 
     #[test]
     fn renders_source_file_diagnostics() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let cwd = Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).unwrap();
-
+        let temp_dir = tempfile::tempdir().expect("create temporary directory");
+        let cwd =
+            Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).expect("temporary path is UTF-8");
         let source = "def test_example():\n    assert False\n";
         let source_file =
             SourceFileBuilder::new(cwd.join("test_sample.py").as_str(), source).finish();
         let mut diagnostic = Diagnostic::new(
-            DiagnosticId::Lint(LintName::of("test-failure")),
+            "test-failure",
             Severity::Error,
             "Test `test_example` failed",
         );
@@ -119,8 +205,12 @@ mod tests {
             Span::from(source_file).with_range(TextRange::new(TextSize::new(4), TextSize::new(16))),
         ));
 
-        let config = DisplayDiagnosticConfig::new("karva").context(0);
-        let rendered = render_diagnostic(&diagnostic, &cwd, &config).expect("render diagnostic");
+        let rendered = render_diagnostic(
+            &diagnostic,
+            &cwd,
+            &DisplayDiagnosticConfig::new(DiagnosticFormat::Full, false),
+        )
+        .expect("render diagnostic");
 
         assert_eq!(rendered.code(), "test-failure");
         assert_eq!(rendered.message(), "Test `test_example` failed");
@@ -134,16 +224,12 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("create temporary directory");
         let cwd =
             Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).expect("temporary path is UTF-8");
-        let diagnostic = Diagnostic::new(
-            DiagnosticId::Lint(LintName::of("test-failure")),
-            Severity::Error,
-            "failed",
-        );
+        let diagnostic = Diagnostic::new("test-failure", Severity::Error, "failed");
 
         let rendered = render_diagnostic(
             &diagnostic,
             &cwd,
-            &DisplayDiagnosticConfig::new("karva").color(true),
+            &DisplayDiagnosticConfig::new(DiagnosticFormat::Full, true),
         )
         .expect("render diagnostic");
 

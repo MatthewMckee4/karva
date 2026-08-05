@@ -1,12 +1,11 @@
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
-    CapturedTestOutput, IndividualTestResultKind, Reporter, TestCaseRetry, TestExecutionAttempt,
-    TestExecutionOutcome, TestRunResult,
+    CapturedTestOutput, Diagnostic, IndividualTestResultKind, Reporter, TestCaseRetry,
+    TestExecutionAttempt, TestExecutionOutcome, TestRunResult,
 };
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
-use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::PythonVersion;
 
 /// Immutable configuration and reporting services shared by one test run.

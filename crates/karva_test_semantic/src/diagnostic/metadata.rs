@@ -1,4 +1,4 @@
-use ruff_db::diagnostic::{Diagnostic, DiagnosticId, LintName, Severity};
+use karva_diagnostic::{Diagnostic, Severity};
 
 /// Defines a type of diagnostic that can be reported during test execution.
 ///
@@ -7,7 +7,7 @@ use ruff_db::diagnostic::{Diagnostic, DiagnosticId, LintName, Severity};
 #[derive(Debug, Clone)]
 pub struct DiagnosticType {
     /// The unique identifier for this diagnostic type.
-    pub name: LintName,
+    pub name: &'static str,
 
     /// A one-sentence summary of what this diagnostic catches.
     #[expect(unused)]
@@ -28,7 +28,7 @@ macro_rules! declare_diagnostic_type {
     ) => {
         $( #[doc = $doc] )+
         $vis static $name: $crate::diagnostic::metadata::DiagnosticType = $crate::diagnostic::metadata::DiagnosticType {
-            name: ruff_db::diagnostic::LintName::of(ruff_macros::kebab_case!($name)),
+            name: ruff_macros::kebab_case!($name),
             summary: $summary,
             $( $key: $value, )*
         };
@@ -37,6 +37,6 @@ macro_rules! declare_diagnostic_type {
 
 impl DiagnosticType {
     pub(super) fn diagnostic(&self, message: impl std::fmt::Display) -> Diagnostic {
-        Diagnostic::new(DiagnosticId::Lint(self.name), self.severity, message)
+        Diagnostic::new(self.name, self.severity, message.to_string())
     }
 }

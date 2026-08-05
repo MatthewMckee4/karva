@@ -31,6 +31,7 @@ karva_test_semantic = { path = "crates/karva_test_semantic" }
 karva_version = { path = "crates/karva_version" }
 karva_worker = { path = "crates/karva_worker" }
 
+annotate-snippets = { version = "0.11.5" }
 anyhow = { version = "1.0.102" }
 argfile = { version = "1.0.0" }
 camino = { version = "1.2", features = ["serde1"] }
@@ -60,9 +61,7 @@ pyo3 = { version = "0.29.0", features = ["abi3-py310"] }
 quote = { version = "1.0.45" }
 regex = { version = "1.12.3" }
 rstest = { version = "0.26" }
-ruff_db = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_macros = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
-ruff_notebook = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_options_metadata = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff/", branch = "main" }
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff/", branch = "main" }

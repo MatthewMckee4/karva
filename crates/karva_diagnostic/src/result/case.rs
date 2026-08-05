@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use karva_python_semantic::QualifiedTestName;
-use ruff_db::diagnostic::Diagnostic;
 use serde::{Deserialize, Serialize};
+
+use crate::Diagnostic;
 
 use super::diagnostic::RenderedDiagnostic;
 use super::kind::IndividualTestResultKind;
@@ -476,11 +477,11 @@ pub enum FixtureUsage {
     AutoUse,
 }
 
-/// Worker-side test result retaining Ruff diagnostics.
+/// Worker-side test result retaining structured diagnostics.
 pub type TestExecutionResult = TestCaseResult<Diagnostic>;
-/// Worker-side test outcome retaining Ruff diagnostics.
+/// Worker-side test outcome retaining structured diagnostics.
 pub type TestExecutionOutcome = TestCaseOutcome<Diagnostic>;
-/// Worker-side retry attempt retaining Ruff diagnostics.
+/// Worker-side retry attempt retaining structured diagnostics.
 pub type TestExecutionAttempt = TestCaseAttempt<Diagnostic>;
 
 #[cfg(test)]

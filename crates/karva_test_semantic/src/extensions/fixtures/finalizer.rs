@@ -1,11 +1,10 @@
 use std::rc::Rc;
 
 use camino::Utf8PathBuf;
+use karva_diagnostic::Diagnostic;
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use thiserror::Error;
-
-use ruff_db::diagnostic::Diagnostic;
 
 use crate::diagnostic::invalid_fixture_finalizer_diagnostic;
 use crate::extensions::fixtures::FixtureScope;
