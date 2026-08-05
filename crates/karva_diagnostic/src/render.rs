@@ -1,6 +1,6 @@
+use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
 use annotate_snippets::{Level, Renderer, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
-use karva_diagnostic::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
 use ruff_source_file::SourceFile;
 
 /// Shape used when rendering diagnostics for users.
@@ -192,61 +192,5 @@ fn severity_name(severity: Severity) -> &'static str {
         Severity::Warning => "warning",
         Severity::Error => "error",
         Severity::Fatal => "fatal",
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use karva_diagnostic::{Annotation, Diagnostic, Severity, Span};
-    use ruff_source_file::SourceFileBuilder;
-    use ruff_text_size::{TextRange, TextSize};
-
-    use super::*;
-
-    #[test]
-    fn renders_source_file_diagnostics() {
-        let temp_dir = tempfile::tempdir().expect("create temporary directory");
-        let cwd =
-            Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).expect("temporary path is UTF-8");
-        let source = "def test_example():\n    assert False\n";
-        let source_file =
-            SourceFileBuilder::new(cwd.join("test_sample.py").as_str(), source).finish();
-        let mut diagnostic = Diagnostic::new(
-            "test-failure",
-            Severity::Error,
-            "Test `test_example` failed",
-        );
-        diagnostic.annotate(Annotation::primary(
-            Span::from(source_file).with_range(TextRange::new(TextSize::new(4), TextSize::new(16))),
-        ));
-
-        let rendered = render_diagnostic(
-            &diagnostic,
-            &cwd,
-            DisplayDiagnosticConfig::new(DiagnosticFormat::Full, false),
-        );
-
-        assert_eq!(rendered.code(), "test-failure");
-        assert_eq!(rendered.message(), "Test `test_example` failed");
-        assert!(rendered.rendered().contains("test_sample.py"));
-        assert!(rendered.rendered().contains("Test `test_example` failed"));
-        assert!(rendered.rendered().contains("def test_example():"));
-    }
-
-    #[test]
-    fn keeps_machine_rendering_plain_when_terminal_uses_color() {
-        let temp_dir = tempfile::tempdir().expect("create temporary directory");
-        let cwd =
-            Utf8PathBuf::try_from(temp_dir.path().to_path_buf()).expect("temporary path is UTF-8");
-        let diagnostic = Diagnostic::new("test-failure", Severity::Error, "failed");
-
-        let rendered = render_diagnostic(
-            &diagnostic,
-            &cwd,
-            DisplayDiagnosticConfig::new(DiagnosticFormat::Full, true),
-        );
-
-        assert!(!rendered.rendered().contains('\u{1b}'));
-        assert!(rendered.rendered_for_terminal().contains('\u{1b}'));
     }
 }

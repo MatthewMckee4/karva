@@ -5,9 +5,11 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use fs_err as fs;
-use karva_cache::{DiagnosticFormat, DisplayDiagnosticConfig, RunCache, RunHash};
+use karva_cache::{RunCache, RunHash};
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
-use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
+use karva_diagnostic::{
+    DiagnosticFormat, DisplayDiagnosticConfig, DummyReporter, Reporter, TestCaseReporter,
+};
 use karva_logging::{Printer, StatusLevel, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};

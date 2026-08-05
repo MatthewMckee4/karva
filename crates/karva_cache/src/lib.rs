@@ -2,7 +2,6 @@
 
 pub(crate) mod artifact;
 pub(crate) mod cache;
-pub(crate) mod diagnostics;
 pub(crate) mod hash;
 
 pub use cache::{
@@ -10,7 +9,6 @@ pub use cache::{
     read_last_failed, read_random_seed, read_recent_durations, write_last_failed,
     write_random_seed,
 };
-pub use diagnostics::{DiagnosticFormat, DisplayDiagnosticConfig};
 pub use hash::RunHash;
 pub use karva_diagnostic::{DisplayFlakyTests, FlakyTest};
 

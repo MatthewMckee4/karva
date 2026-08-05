@@ -14,11 +14,9 @@ license.workspace = true
 karva_diagnostic = { workspace = true }
 karva_python_semantic = { workspace = true }
 
-annotate-snippets = { workspace = true }
 anyhow = { workspace = true }
 camino = { workspace = true }
 fs-err = { workspace = true }
-ruff_source_file = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
@@ -26,7 +24,6 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
-ruff_text_size = { workspace = true }
 
 [lints]
 workspace = true

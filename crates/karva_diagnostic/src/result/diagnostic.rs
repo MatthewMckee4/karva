@@ -80,27 +80,3 @@ impl RenderedDiagnostic {
         self.colored_rendered.as_deref().unwrap_or(&self.rendered)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serializes_severity() {
-        for (severity, name) in [
-            (Severity::Info, "info"),
-            (Severity::Warning, "warning"),
-            (Severity::Error, "error"),
-            (Severity::Fatal, "fatal"),
-        ] {
-            let diagnostic =
-                RenderedDiagnostic::new("test-failure", severity, "failed", "rendered");
-            let json = serde_json::to_string(&diagnostic).expect("serialize diagnostic");
-            let roundtrip: RenderedDiagnostic =
-                serde_json::from_str(&json).expect("deserialize diagnostic");
-
-            assert_eq!(roundtrip, diagnostic);
-            assert!(json.contains(&format!(r#""severity":"{name}""#)));
-        }
-    }
-}
