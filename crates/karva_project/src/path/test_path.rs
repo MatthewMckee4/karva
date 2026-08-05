@@ -28,6 +28,34 @@ pub struct TestPathFunction {
 
     /// Function selector exactly as supplied after `::`.
     pub function_name: String,
+
+    /// Restrict execution to one parametrize case index, or run every case.
+    pub parametrize_index: Option<usize>,
+}
+
+/// Parse a trailing `[idx]` suffix on a function name into `(name, index)`.
+///
+/// Returns `(name, None)` if no suffix is present; returns `Err` if the
+/// brackets are malformed (missing `]`, non-numeric content, or empty).
+fn parse_parametrize_suffix(value: &str) -> Result<(&str, Option<usize>), TestPathError> {
+    let Some(open) = value.rfind('[') else {
+        if value.contains(']') {
+            return Err(TestPathError::MalformedCaseIndex(value.to_string()));
+        }
+        return Ok((value, None));
+    };
+    let Some(close_rel) = value[open..].find(']') else {
+        return Err(TestPathError::MalformedCaseIndex(value.to_string()));
+    };
+    let close = open + close_rel;
+    if close + 1 != value.len() || value[..open].contains('[') || value[..open].contains(']') {
+        return Err(TestPathError::MalformedCaseIndex(value.to_string()));
+    }
+    let inner = &value[open + 1..close];
+    let index = inner
+        .parse::<usize>()
+        .map_err(|_| TestPathError::MalformedCaseIndex(value.to_string()))?;
+    Ok((&value[..open], Some(index)))
 }
 
 /// Parse a `path::function` specification.
@@ -41,8 +69,15 @@ fn parse_function_spec(value: &str) -> Result<Option<TestPathFunction>, TestPath
     };
 
     let file_part = &value[..separator_pos];
-    let function_name = &value[separator_pos + 2..];
+    let function_part = &value[separator_pos + 2..];
 
+    if function_part.is_empty() {
+        return Err(TestPathError::MissingFunctionName(Utf8PathBuf::from(
+            file_part,
+        )));
+    }
+
+    let (function_name, case_index) = parse_parametrize_suffix(function_part)?;
     if function_name.is_empty() {
         return Err(TestPathError::MissingFunctionName(Utf8PathBuf::from(
             file_part,
@@ -62,6 +97,7 @@ fn parse_function_spec(value: &str) -> Result<Option<TestPathFunction>, TestPath
     Ok(Some(TestPathFunction {
         path,
         function_name: function_name.to_string(),
+        parametrize_index: case_index,
     }))
 }
 
@@ -124,6 +160,8 @@ pub enum TestPathError {
     InvalidUtf8Path(Utf8PathBuf),
     #[error("path `{0}` is missing a function name")]
     MissingFunctionName(Utf8PathBuf),
+    #[error("function selector `{0}` has a malformed parametrize index")]
+    MalformedCaseIndex(String),
 }
 
 #[cfg(test)]
@@ -268,10 +306,12 @@ mod tests {
         if let Ok(TestPath::Function(TestPathFunction {
             path: result_path,
             function_name,
+            parametrize_index,
         })) = result
         {
             assert_eq!(result_path, path);
             assert_eq!(function_name, "test_function");
+            assert_eq!(parametrize_index, None);
         } else {
             panic!("Expected Ok(TestUtf8Path::Function), got {result:?}");
         }
@@ -290,6 +330,48 @@ mod tests {
         if let Ok(TestPath::Function(TestPathFunction { function_name, .. })) = result {
             assert_eq!(function_name, "test_function");
         }
+    }
+
+    #[test]
+    fn test_function_specification_with_parametrize_index() {
+        let env = TestEnv::new();
+        let path = env.create_file("test.py", "def test_function(): pass");
+
+        let function_spec = format!("{path}::test_function[3]");
+        let result = TestPath::new(&function_spec);
+
+        if let Ok(TestPath::Function(TestPathFunction {
+            function_name,
+            parametrize_index,
+            ..
+        })) = result
+        {
+            assert_eq!(function_name, "test_function");
+            assert_eq!(parametrize_index, Some(3));
+        } else {
+            panic!("Expected Ok(TestPath::Function), got {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_function_specification_malformed_case_index() {
+        let env = TestEnv::new();
+        let path = env.create_file("test.py", "def test_function(): pass");
+
+        let function_spec = format!("{path}::test_function[oops]");
+        let result = TestPath::new(&function_spec);
+
+        assert!(matches!(result, Err(TestPathError::MalformedCaseIndex(_))));
+    }
+
+    #[test]
+    fn test_function_specification_rejects_unmatched_case_bracket() {
+        let env = TestEnv::new();
+        let path = env.create_file("test.py", "def test_function(): pass");
+
+        let result = TestPath::new(&format!("{path}::test_function]"));
+
+        assert!(matches!(result, Err(TestPathError::MalformedCaseIndex(_))));
     }
 
     #[test]

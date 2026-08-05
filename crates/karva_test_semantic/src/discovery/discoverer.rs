@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_collector::{CollectedModule, CollectedPackage};
-use karva_project::path::{TestPath, TestPathError};
+use karva_project::path::{TestPath, TestPathError, TestPathFunction};
 use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
 use ruff_python_ast::{PythonVersion, Stmt};
@@ -19,6 +20,13 @@ use crate::discovery::{
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::extensions::tags::validation::unknown_tags;
 use crate::utils::add_to_sys_path;
+
+/// Maps `(file path, function name)` to the parametrize indices the worker
+/// should run for that function.
+///
+/// `None` means the function appeared without an `[idx]` suffix at least once,
+/// so every case should run. `Some(indices)` means only those indices.
+type CaseFilterMap = HashMap<(Utf8PathBuf, String), Option<Vec<usize>>>;
 
 /// Discovers test functions and fixtures from Python source files.
 ///
@@ -54,7 +62,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             };
         }
 
-        let test_paths = test_paths
+        let test_paths: Vec<TestPathFunction> = test_paths
             .into_iter()
             .filter_map(|path| match path {
                 Ok(path) => match path {
@@ -64,6 +72,8 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
                 Err(_) => None,
             })
             .collect();
+
+        let case_filter = build_case_filter(&test_paths);
 
         let collector =
             TestFunctionCollector::new(self.context.cwd(), self.context.collection_settings());
@@ -80,7 +90,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             }
         };
 
-        let mut session_package = self.convert_package(py, collected_package);
+        let mut session_package = self.convert_package(py, collected_package, &case_filter);
 
         session_package.shrink();
 
@@ -101,6 +111,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         &mut self,
         py: Python,
         collected_package: CollectedPackage,
+        case_filter: &CaseFilterMap,
     ) -> DiscoveredPackage {
         let CollectedPackage {
             path,
@@ -112,17 +123,27 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         let mut discovered_package = DiscoveredPackage::new(path);
 
         if let Some(collected_module) = configuration_module {
-            discovered_package
-                .set_configuration_module(Some(self.convert_module(py, collected_module)));
+            discovered_package.set_configuration_module(Some(self.convert_module(
+                py,
+                collected_module,
+                case_filter,
+            )));
         }
 
         for collected_module in modules.into_values() {
-            discovered_package.add_direct_module(self.convert_module(py, collected_module));
+            discovered_package.add_direct_module(self.convert_module(
+                py,
+                collected_module,
+                case_filter,
+            ));
         }
 
         for collected_subpackage in packages.into_values() {
-            discovered_package
-                .add_direct_subpackage(self.convert_package(py, collected_subpackage));
+            discovered_package.add_direct_subpackage(self.convert_package(
+                py,
+                collected_subpackage,
+                case_filter,
+            ));
         }
 
         discovered_package
@@ -132,6 +153,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         &mut self,
         py: Python,
         collected_module: CollectedModule,
+        case_filter: &CaseFilterMap,
     ) -> DiscoveredModule {
         let CollectedModule {
             path,
@@ -142,6 +164,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             fixture_function_defs,
         } = collected_module;
 
+        let module_file_path = path.path().clone();
         let mut module = DiscoveredModule::new_with_source(path, source_text);
 
         if self.context.settings().test().strict_tags {
@@ -163,6 +186,22 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             }
         }
 
+        let test_function_defs: Vec<_> = if case_filter.is_empty() {
+            test_function_defs
+                .into_iter()
+                .map(|def| (def, None))
+                .collect()
+        } else {
+            test_function_defs
+                .into_iter()
+                .map(|def| {
+                    let key = (module_file_path.clone(), def.name.to_string());
+                    let filter = case_filter.get(&key).cloned().unwrap_or(None);
+                    (def, filter)
+                })
+                .collect()
+        };
+
         self.issues.extend(discover(
             self.context,
             py,
@@ -174,6 +213,43 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 
         module
     }
+}
+
+/// Build a `(file path, function name) -> Option<Vec<usize>>` map from the
+/// resolved test path selectors. `None` means "run every parametrize case",
+/// `Some(indices)` means "run only these case indices."
+///
+/// Multiple selectors for the same function are unioned: any bare selector
+/// (no `[idx]`) wins and yields `None`; otherwise the indices are merged.
+fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
+    if test_paths
+        .iter()
+        .all(|test_path| test_path.parametrize_index.is_none())
+    {
+        return CaseFilterMap::new();
+    }
+
+    let mut filter: CaseFilterMap = HashMap::new();
+
+    for test_path in test_paths {
+        let key = (test_path.path.clone(), test_path.function_name.clone());
+        match filter.get_mut(&key) {
+            Some(None) => {}
+            Some(existing @ Some(_)) if test_path.parametrize_index.is_none() => *existing = None,
+            Some(Some(indices)) => {
+                if let Some(index) = test_path.parametrize_index
+                    && !indices.contains(&index)
+                {
+                    indices.push(index);
+                }
+            }
+            None => {
+                filter.insert(key, test_path.parametrize_index.map(|index| vec![index]));
+            }
+        }
+    }
+
+    filter
 }
 
 /// Discovers all fixtures defined in `karva._builtins` by importing the module at

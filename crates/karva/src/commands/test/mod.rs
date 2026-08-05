@@ -20,7 +20,7 @@ use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{CovReport, NoTestsMode, ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::Project;
 use karva_project::path::absolute;
-use karva_python_semantic::current_python_version;
+use karva_python_semantic::{TestCacheKey, current_python_version};
 
 use crate::ExitStatus;
 use crate::utils::cwd;
@@ -589,7 +589,7 @@ fn write_captured_stream(stdout: &mut Stdout, stream_name: &str, content: &str) 
 
 fn write_durations_block(
     stdout: &mut Stdout,
-    test_durations: &HashMap<String, Duration>,
+    test_durations: &HashMap<TestCacheKey, Duration>,
     durations: Option<usize>,
     needs_leading_blank: bool,
 ) -> Result<()> {
@@ -613,7 +613,7 @@ fn write_durations_block(
             stdout,
             "  {} ({})",
             name,
-            karva_logging::time::format_duration(*duration)
+            karva_logging::time::format_duration(duration)
         )?;
     }
     // Trailing blank so the summary divider doesn't bump up against the
@@ -622,8 +622,21 @@ fn write_durations_block(
     Ok(())
 }
 
-fn sorted_test_durations(test_durations: &HashMap<String, Duration>) -> Vec<(&String, &Duration)> {
-    let mut sorted: Vec<_> = test_durations.iter().collect();
+fn sorted_test_durations(
+    test_durations: &HashMap<TestCacheKey, Duration>,
+) -> Vec<(String, Duration)> {
+    let mut function_durations = HashMap::new();
+    for (name, duration) in test_durations {
+        function_durations
+            .entry(name.test_function_name())
+            .and_modify(|total| *total += *duration)
+            .or_insert(*duration);
+    }
+
+    let mut sorted: Vec<_> = function_durations
+        .into_iter()
+        .map(|(name, duration)| (name.to_string(), duration))
+        .collect();
     sorted.sort_by(|(a_name, a_duration), (b_name, b_duration)| {
         b_duration.cmp(a_duration).then_with(|| a_name.cmp(b_name))
     });
@@ -635,21 +648,58 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
+    use karva_python_semantic::{ModulePath, QualifiedFunctionName, TestCacheKey};
+
     use super::sorted_test_durations;
 
     #[test]
     fn sorted_test_durations_breaks_ties_by_name() {
         let durations = HashMap::from([
-            ("test_b".to_string(), Duration::from_millis(10)),
-            ("test_slow".to_string(), Duration::from_millis(20)),
-            ("test_a".to_string(), Duration::from_millis(10)),
+            (
+                TestCacheKey::function_name("test_b"),
+                Duration::from_millis(10),
+            ),
+            (
+                TestCacheKey::function_name("test_slow"),
+                Duration::from_millis(20),
+            ),
+            (
+                TestCacheKey::function_name("test_a"),
+                Duration::from_millis(10),
+            ),
         ]);
 
         let names: Vec<_> = sorted_test_durations(&durations)
             .into_iter()
-            .map(|(name, _)| name.as_str())
+            .map(|(name, _)| name)
             .collect();
 
         assert_eq!(names, ["test_slow", "test_a", "test_b"]);
+    }
+
+    #[test]
+    fn sorted_test_durations_aggregates_parameter_cases() {
+        let function = QualifiedFunctionName::new(
+            "test_example".to_string(),
+            ModulePath::new_with_name("test.py", "tests.test".to_string()),
+        );
+        let durations = HashMap::from([
+            (
+                TestCacheKey::parameter_case(&function, 0),
+                Duration::from_millis(10),
+            ),
+            (
+                TestCacheKey::parameter_case(&function, 1),
+                Duration::from_millis(20),
+            ),
+        ]);
+
+        assert_eq!(
+            sorted_test_durations(&durations),
+            [(
+                "tests.test::test_example".to_string(),
+                Duration::from_millis(30)
+            )]
+        );
     }
 }

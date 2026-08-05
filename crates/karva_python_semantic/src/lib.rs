@@ -6,7 +6,7 @@ mod function_kind;
 mod name;
 
 pub use function_kind::FunctionKind;
-pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName};
+pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use pyo3::Python;
 use ruff_python_ast::{Expr, PythonVersion, StmtFunctionDef};
 

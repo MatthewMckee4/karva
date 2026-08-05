@@ -7,9 +7,9 @@ mod kind;
 mod output;
 mod stats;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName};
+use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 use ruff_db::diagnostic::Diagnostic;
 
 use crate::reporter::Reporter;
@@ -35,11 +35,32 @@ pub struct TestRunResult {
     /// Stats generated during test execution.
     stats: TestResultStats,
 
-    /// The duration of each test function.
-    durations: HashMap<QualifiedFunctionName, std::time::Duration>,
+    /// Duration of each schedulable test or parameter case.
+    durations: HashMap<TestCacheKey, std::time::Duration>,
+
+    /// Scheduling keys for failed test variants.
+    failed_tests: HashSet<TestCacheKey>,
 
     /// Final outcome for each executed test variant.
     test_cases: Vec<TestExecutionResult>,
+}
+
+/// Owned components used to serialize one worker's completed run.
+pub struct TestRunResultParts {
+    /// Diagnostics that describe the run rather than one test case.
+    pub run_diagnostics: Vec<Diagnostic>,
+
+    /// Aggregated outcome counters.
+    pub stats: TestResultStats,
+
+    /// Duration of each schedulable test or parameter case.
+    pub durations: HashMap<TestCacheKey, std::time::Duration>,
+
+    /// Scheduling keys for failed test variants.
+    pub failed_tests: HashSet<TestCacheKey>,
+
+    /// Final outcome for each executed test variant.
+    pub test_cases: Vec<TestExecutionResult>,
 }
 
 /// Orders diagnostics for display.
@@ -85,7 +106,7 @@ impl TestRunResult {
         let result = outcome.result_kind();
         self.stats.add(result.clone().into());
 
-        let function_name = test_case_name.function_name().clone();
+        let cache_key = test_case_name.cache_key();
         self.test_cases.push(TestCaseResult::new(
             test_case_name,
             outcome,
@@ -93,12 +114,19 @@ impl TestRunResult {
             captured_output,
         ));
 
+        if matches!(
+            result,
+            IndividualTestResultKind::Failed | IndividualTestResultKind::Error
+        ) {
+            self.failed_tests.insert(cache_key.clone());
+        }
+
         if let Some(reporter) = reporter {
             reporter.report_test_case_result(test_case_name, result, duration);
         }
 
         self.durations
-            .entry(function_name)
+            .entry(cache_key)
             .and_modify(|existing_duration| *existing_duration += duration)
             .or_insert(duration);
     }
@@ -121,7 +149,7 @@ impl TestRunResult {
         let result = outcome.result_kind();
         self.stats.add(result.clone().into());
 
-        let function_name = test_case_name.function_name().clone();
+        let cache_key = test_case_name.cache_key();
         self.test_cases.push(TestCaseResult::retried(
             test_case_name,
             outcome,
@@ -131,12 +159,17 @@ impl TestRunResult {
             attempts,
         ));
 
-        if matches!(&result, IndividualTestResultKind::Passed) {
+        if matches!(
+            result,
+            IndividualTestResultKind::Failed | IndividualTestResultKind::Error
+        ) {
+            self.failed_tests.insert(cache_key.clone());
+        } else if matches!(result, IndividualTestResultKind::Passed) {
             self.stats.add(TestResultKind::Flaky);
         }
 
         self.durations
-            .entry(function_name)
+            .entry(cache_key)
             .and_modify(|existing_duration| *existing_duration += duration)
             .or_insert(duration);
     }
@@ -185,19 +218,13 @@ impl TestRunResult {
     }
 
     /// Decomposes this run for serialization into the worker cache.
-    pub fn into_parts(
-        self,
-    ) -> (
-        Vec<Diagnostic>,
-        TestResultStats,
-        HashMap<QualifiedFunctionName, std::time::Duration>,
-        Vec<TestExecutionResult>,
-    ) {
-        (
-            self.run_diagnostics,
-            self.stats,
-            self.durations,
-            self.test_cases,
-        )
+    pub fn into_parts(self) -> TestRunResultParts {
+        TestRunResultParts {
+            run_diagnostics: self.run_diagnostics,
+            stats: self.stats,
+            durations: self.durations,
+            failed_tests: self.failed_tests,
+            test_cases: self.test_cases,
+        }
     }
 }

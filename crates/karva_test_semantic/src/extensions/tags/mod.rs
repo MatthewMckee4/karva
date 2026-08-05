@@ -495,6 +495,13 @@ impl Tags {
         Ok(Some(Self { inner: tags }))
     }
 
+    /// Returns whether the test has at least one parametrize tag.
+    pub(crate) fn has_parametrize(&self) -> bool {
+        self.inner
+            .iter()
+            .any(|tag| matches!(tag, Tag::Parametrize(_)))
+    }
+
     pub(crate) fn validate_parametrize(
         &self,
         function: &StmtFunctionDef,

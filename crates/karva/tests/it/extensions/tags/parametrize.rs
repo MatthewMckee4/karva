@@ -1374,7 +1374,7 @@ def test_function(a: int, b: int, c: int):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command(), @"
+    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----

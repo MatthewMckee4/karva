@@ -56,6 +56,8 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     params: HashMap<String, Arc<Py<PyAny>>>,
     /// User-defined parameter ID used in the displayed test name.
     id: Option<String>,
+    /// Stable index in the function's full parametrize expansion.
+    case_index: Option<usize>,
     /// Compiled fixture arena for this test.
     fixture_plan: Rc<FixturePlan>,
     /// Fixtures passed as Python keyword arguments.
@@ -84,6 +86,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test,
             params,
             id,
+            case_index,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -97,6 +100,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test,
             params,
             id,
+            case_index,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -227,7 +231,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             QualifiedTestName::with_parameters(name.clone(), parameters)
         } else {
             QualifiedTestName::new(name.clone())
-        };
+        }
+        .with_case_index(self.case_index);
         let qualified_name = qualified_test_name.to_string();
         let tag_names = self.tags.tag_names();
         let evaluation_context = EvalContext {
@@ -397,7 +402,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             QualifiedTestName::with_parameters(self.test.name().clone(), id.clone())
         } else {
             QualifiedTestName::new(self.test.name().clone())
-        };
+        }
+        .with_case_index(self.case_index);
 
         if !filter.is_empty() {
             let display_name = qualified.to_string();

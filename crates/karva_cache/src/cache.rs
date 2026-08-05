@@ -7,8 +7,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_diagnostic::{
     FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult, TestResultKind,
-    TestResultStats, TestRunResult,
+    TestResultStats, TestRunResult, TestRunResultParts,
 };
+use karva_python_semantic::TestCacheKey;
 use ruff_db::diagnostic::DisplayDiagnosticConfig;
 use serde::{Deserialize, Serialize};
 
@@ -40,7 +41,7 @@ pub struct AggregatedResults {
     pub run_diagnostics: Vec<RenderedDiagnostic>,
 
     /// Base test names used to seed the next run's `--last-failed` selection.
-    pub failed_tests: Vec<String>,
+    pub failed_tests: Vec<TestCacheKey>,
 
     /// Tests that passed only after one or more failed attempts.
     pub flaky_tests: Vec<FlakyTest>,
@@ -48,8 +49,8 @@ pub struct AggregatedResults {
     /// Full result and retry history for every executed test case.
     pub test_cases: Vec<TestCaseResult>,
 
-    /// Total duration keyed by unparameterized qualified test name.
-    pub durations: HashMap<String, Duration>,
+    /// Total duration keyed by qualified function or parameter case.
+    pub durations: HashMap<TestCacheKey, Duration>,
 }
 
 /// Serializable subset of one worker's results.
@@ -60,6 +61,8 @@ pub struct AggregatedResults {
 struct WorkerResults {
     stats: TestResultStats,
     run_diagnostics: Vec<RenderedDiagnostic>,
+    #[serde(default)]
+    failed_tests: Vec<TestCacheKey>,
     test_cases: Vec<TestCaseResult>,
 }
 
@@ -106,11 +109,19 @@ impl AggregatedResults {
             }
         }
         self.stats.merge(&worker.stats);
-        if !worker.stats.is_success() || worker.stats.flaky() > 0 {
+        if worker.failed_tests.is_empty() {
+            self.failed_tests.extend(
+                worker
+                    .test_cases
+                    .iter()
+                    .filter(|case| case.outcome().is_non_success())
+                    .map(|case| base_test_name(case.full_name())),
+            );
+        } else {
+            self.failed_tests.extend(worker.failed_tests);
+        }
+        if worker.stats.flaky() > 0 {
             for case in &worker.test_cases {
-                if case.outcome().is_non_success() {
-                    self.failed_tests.push(base_test_name(case.full_name()));
-                }
                 if let Some(retry) = case.retry()
                     && matches!(case.outcome(), TestCaseOutcome::Passed)
                 {
@@ -128,15 +139,15 @@ impl AggregatedResults {
     }
 }
 
-fn base_test_name(name: &str) -> String {
+fn base_test_name(name: &str) -> TestCacheKey {
     let Some((module, function)) = name.rsplit_once("::") else {
-        return name.to_string();
+        return TestCacheKey::function_name(name);
     };
     let function = function
         .split_once('(')
         .or_else(|| function.split_once('['))
         .map_or(function, |(base, _)| base);
-    format!("{module}::{function}")
+    TestCacheKey::function_name(&format!("{module}::{function}"))
 }
 
 /// Reads and writes test results in the cache directory for a specific run.
@@ -238,7 +249,13 @@ impl RunCache {
         let worker_dir = self.worker_dir(worker_id);
         fs::create_dir_all(&worker_dir)?;
 
-        let (run_diagnostics, stats, durations, test_cases) = result.into_parts();
+        let TestRunResultParts {
+            run_diagnostics,
+            stats,
+            durations,
+            failed_tests,
+            test_cases,
+        } = result.into_parts();
         let run_diagnostics = run_diagnostics
             .iter()
             .map(|diagnostic| render_diagnostic(diagnostic, cwd, config))
@@ -250,9 +267,12 @@ impl RunCache {
             })
             .collect::<Result<Vec<TestCaseResult>>>()?;
 
+        let mut failed_tests = failed_tests.into_iter().collect::<Vec<_>>();
+        failed_tests.sort();
         let worker_results = WorkerResults {
             stats,
             run_diagnostics,
+            failed_tests,
             test_cases,
         };
 
@@ -274,7 +294,7 @@ fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -
     results.merge_worker(worker_results);
 
     if let Some(durations) =
-        read_json::<HashMap<String, Duration>>(worker_dir, CacheFile::Durations)?
+        read_json::<HashMap<TestCacheKey, Duration>>(worker_dir, CacheFile::Durations)?
     {
         results.durations.extend(durations);
     }
@@ -285,7 +305,7 @@ fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -
 /// Writes the list of failed tests to the cache directory root.
 ///
 /// This overwrites any previous last-failed list.
-pub fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[String]) -> Result<()> {
+pub fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[TestCacheKey]) -> Result<()> {
     fs::create_dir_all(cache_dir)?;
     write_json(cache_dir, CacheFile::LastFailed, &failed_tests)
 }
@@ -293,8 +313,8 @@ pub fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[String]) -> Resul
 /// Reads the list of previously failed tests from the cache directory root.
 ///
 /// Returns an empty list if the file does not exist.
-pub fn read_last_failed(cache_dir: &Utf8Path) -> Result<Vec<String>> {
-    Ok(read_json::<Vec<String>>(cache_dir, CacheFile::LastFailed)?.unwrap_or_default())
+pub fn read_last_failed(cache_dir: &Utf8Path) -> Result<Vec<TestCacheKey>> {
+    Ok(read_json::<Vec<TestCacheKey>>(cache_dir, CacheFile::LastFailed)?.unwrap_or_default())
 }
 
 /// Persists the most recently generated random seed.
@@ -373,7 +393,7 @@ fn collect_run_dirs(cache_dir: &Utf8Path) -> Result<Vec<String>> {
 ///
 /// Finds the most recent `run-{timestamp}` directory, then aggregates
 /// all durations from all worker directories within it.
-pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<String, Duration>> {
+pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<TestCacheKey, Duration>> {
     let run_dirs = collect_run_dirs(cache_dir)?;
     let Some(most_recent) = run_dirs.last() else {
         return Ok(HashMap::new());
@@ -383,7 +403,7 @@ pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<String, Dur
     let mut aggregated_durations = HashMap::new();
     for worker_dir in list_worker_dirs(&run_dir)? {
         if let Some(durations) =
-            read_json::<HashMap<String, Duration>>(&worker_dir, CacheFile::Durations)?
+            read_json::<HashMap<TestCacheKey, Duration>>(&worker_dir, CacheFile::Durations)?
         {
             aggregated_durations.extend(durations);
         }
@@ -482,6 +502,7 @@ mod tests {
             &WorkerResults {
                 stats,
                 run_diagnostics: Vec::new(),
+                failed_tests: Vec::new(),
                 test_cases,
             },
         );
@@ -632,7 +653,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
 
-        let failed = vec!["mod::test_a".to_string(), "mod::test_b".to_string()];
+        let failed = vec![
+            TestCacheKey::function_name("mod::test_a"),
+            TestCacheKey::function_name("mod::test_b"),
+        ];
         write_last_failed(&cache_dir, &failed).unwrap();
 
         assert_debug_snapshot!(read_last_failed(&cache_dir).unwrap(), @r#"
@@ -670,8 +694,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
 
-        write_last_failed(&cache_dir, &["old".to_string()]).unwrap();
-        write_last_failed(&cache_dir, &["new".to_string()]).unwrap();
+        write_last_failed(&cache_dir, &[TestCacheKey::function_name("old")]).unwrap();
+        write_last_failed(&cache_dir, &[TestCacheKey::function_name("new")]).unwrap();
 
         assert_debug_snapshot!(read_last_failed(&cache_dir).unwrap(), @r#"
         [
@@ -686,7 +710,7 @@ mod tests {
         let cache_dir = Utf8PathBuf::try_from(tmp.path().join("nested").join("cache")).unwrap();
         assert!(!cache_dir.exists());
 
-        write_last_failed(&cache_dir, &["x".to_string()]).unwrap();
+        write_last_failed(&cache_dir, &[TestCacheKey::function_name("x")]).unwrap();
 
         assert!(cache_dir.exists());
         assert_debug_snapshot!(read_last_failed(&cache_dir).unwrap(), @r#"
@@ -887,7 +911,7 @@ mod tests {
         ]
         "#);
 
-        let mut durations: Vec<(String, Duration)> = results.durations.into_iter().collect();
+        let mut durations: Vec<(TestCacheKey, Duration)> = results.durations.into_iter().collect();
         durations.sort();
         assert_debug_snapshot!(durations, @r#"
         [
