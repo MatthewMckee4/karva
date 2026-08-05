@@ -69,9 +69,16 @@ pub struct WorkerClient {
 
 struct WorkerConnection {
     writer: Arc<Mutex<BufWriter<TcpStream>>>,
+    current_test: Arc<Mutex<CurrentTestState>>,
     stop: Arc<AtomicBool>,
     flush_error: Arc<Mutex<Option<String>>>,
     flusher: Mutex<Option<JoinHandle<()>>>,
+}
+
+#[derive(Default)]
+struct CurrentTestState {
+    latest: Option<String>,
+    sent: Option<String>,
 }
 
 impl WorkerClient {
@@ -83,12 +90,14 @@ impl WorkerClient {
             .set_nodelay(true)
             .context("failed to configure Karva controller connection")?;
         let writer = Arc::new(Mutex::new(BufWriter::new(stream)));
+        let current_test = Arc::new(Mutex::new(CurrentTestState::default()));
         let stop = Arc::new(AtomicBool::new(false));
         let flush_error = Arc::new(Mutex::new(None));
-        let flusher = spawn_flusher(&writer, &stop, &flush_error)?;
+        let flusher = spawn_flusher(&writer, &current_test, &stop, &flush_error)?;
         let client = Self {
             connection: Arc::new(WorkerConnection {
                 writer,
+                current_test,
                 stop,
                 flush_error,
                 flusher: Mutex::new(Some(flusher)),
@@ -106,6 +115,19 @@ impl WorkerClient {
 
     /// Queues one state change, flushing failures immediately for global fail-fast.
     pub fn send_event(&self, event: WorkerEvent) -> Result<()> {
+        let mut current_test = self
+            .connection
+            .current_test
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
+        if let WorkerEvent::TestStarted { name } = &event {
+            current_test.latest = Some(name.clone());
+            return Ok(());
+        }
+        if matches!(event, WorkerEvent::TestFinished { .. }) {
+            current_test.latest = None;
+            current_test.sent = None;
+        }
         let flush = matches!(
             &event,
             WorkerEvent::TestFinished { result, .. } if result.outcome().is_non_success()
@@ -115,6 +137,7 @@ impl WorkerClient {
 
     /// Marks the worker complete and gracefully closes the connection.
     pub fn complete(self) -> Result<()> {
+        self.flush_current_test()?;
         self.write(
             &WireMessage::Event(Box::new(WorkerEvent::WorkerFinished)),
             false,
@@ -172,6 +195,25 @@ impl WorkerClient {
             .context("failed to send Karva worker event")
     }
 
+    fn flush_current_test(&self) -> Result<()> {
+        let mut current_test = self
+            .connection
+            .current_test
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
+        if current_test.latest != current_test.sent {
+            if let Some(name) = current_test.latest.as_ref() {
+                self.write(
+                    &WireMessage::Event(Box::new(WorkerEvent::TestStarted { name: name.clone() })),
+                    false,
+                )?;
+            }
+            let latest = current_test.latest.clone();
+            current_test.sent.clone_from(&latest);
+        }
+        Ok(())
+    }
+
     fn check_flush_error(&self) -> Result<()> {
         if let Some(error) = self
             .connection
@@ -193,10 +235,12 @@ const EVENT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 
 fn spawn_flusher(
     writer: &Arc<Mutex<BufWriter<TcpStream>>>,
+    current_test: &Arc<Mutex<CurrentTestState>>,
     stop: &Arc<AtomicBool>,
     flush_error: &Arc<Mutex<Option<String>>>,
 ) -> Result<JoinHandle<()>> {
     let writer = Arc::clone(writer);
+    let current_test = Arc::clone(current_test);
     let stop = Arc::clone(stop);
     let flush_error = Arc::clone(flush_error);
     thread::Builder::new()
@@ -207,10 +251,7 @@ fn spawn_flusher(
                 if stop.load(Ordering::Acquire) {
                     return;
                 }
-                let result = writer
-                    .lock()
-                    .map_err(|_| "Karva controller connection lock poisoned".to_string())
-                    .and_then(|mut writer| writer.flush().map_err(|error| error.to_string()));
+                let result = flush_worker_events(&writer, &current_test);
                 if let Err(error) = result {
                     if let Ok(mut flush_error) = flush_error.lock() {
                         *flush_error = Some(error);
@@ -220,6 +261,31 @@ fn spawn_flusher(
             }
         })
         .context("failed to start Karva worker event flusher")
+}
+
+fn flush_worker_events(
+    writer: &Mutex<BufWriter<TcpStream>>,
+    current_test: &Mutex<CurrentTestState>,
+) -> Result<(), String> {
+    let mut current_test = current_test
+        .lock()
+        .map_err(|_| "Karva worker current-test lock poisoned".to_string())?;
+    let mut writer = writer
+        .lock()
+        .map_err(|_| "Karva controller connection lock poisoned".to_string())?;
+    if current_test.latest != current_test.sent {
+        if let Some(name) = current_test.latest.as_ref() {
+            serde_json::to_writer(
+                &mut *writer,
+                &WireMessage::Event(Box::new(WorkerEvent::TestStarted { name: name.clone() })),
+            )
+            .map_err(|error| error.to_string())?;
+            writer.write_all(b"\n").map_err(|error| error.to_string())?;
+        }
+        let latest = current_test.latest.clone();
+        current_test.sent.clone_from(&latest);
+    }
+    writer.flush().map_err(|error| error.to_string())
 }
 
 impl Drop for WorkerConnection {
@@ -381,7 +447,7 @@ mod tests {
                 name: "mod::test".to_string(),
             })
             .expect("send event");
-        drop(client);
+        client.complete().expect("complete worker");
 
         server.accept_pending().expect("accept worker");
         server.finish().expect("finish readers");
