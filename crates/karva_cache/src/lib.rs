@@ -2,7 +2,6 @@
 
 pub(crate) mod artifact;
 pub(crate) mod cache;
-pub(crate) mod diagnostics;
 pub(crate) mod hash;
 
 pub use cache::{

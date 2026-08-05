@@ -1,16 +1,15 @@
-//! Converts collection and execution failures into source-backed `ruff_db` diagnostics.
+//! Converts collection and execution failures into source-backed diagnostics.
 //!
 //! Discovery and execution failures are rendered here without mutating run state.
 
 use camino::Utf8Path;
 use karva_collector::CollectionError;
-use karva_diagnostic::{Traceback, TracebackFrame};
+use karva_diagnostic::{
+    Annotation, Diagnostic, Severity, Span, SubDiagnostic, Traceback, TracebackFrame,
+};
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
-use ruff_db::diagnostic::{
-    Annotation, Diagnostic, Severity, Span, SubDiagnostic, SubDiagnosticSeverity,
-};
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 use ruff_text_size::TextRange;
@@ -278,7 +277,7 @@ fn annotate_first_definition(
     stmt_function_def: &StmtFunctionDef,
 ) {
     let mut sub = SubDiagnostic::new(
-        SubDiagnosticSeverity::Info,
+        Severity::Info,
         format!("First definition of `{name}` is here"),
     );
     let span = Span::from(source_file).with_range(stmt_function_def.name.range);
@@ -302,7 +301,7 @@ fn report_dependency_chain(
             .map_or(fixture_name, |next| next.name.as_str());
 
         let mut sub = SubDiagnostic::new(
-            SubDiagnosticSeverity::Info,
+            Severity::Info,
             format!("Fixture `{}` requires `{next_name}`", entry.name),
         );
 
@@ -470,7 +469,7 @@ fn fixture_cycle_diagnostic(cycle: &[FixtureResolutionEntry]) -> Diagnostic {
             continue;
         };
         let mut sub = SubDiagnostic::new(
-            SubDiagnosticSeverity::Info,
+            Severity::Info,
             format!("Fixture `{}` requires `{}`", fixture.name, dependency.name),
         );
         let span = Span::from(fixture.definition.source_file().clone())
@@ -511,7 +510,7 @@ fn fixture_scope_mismatch_diagnostic(
     for (index, path_fixture) in dependency_path.iter().enumerate() {
         let next_fixture = dependency_path.get(index + 1).unwrap_or(fixture);
         let mut sub = SubDiagnostic::new(
-            SubDiagnosticSeverity::Info,
+            Severity::Info,
             format!(
                 "Fixture `{}` depends on fixture `{}`",
                 path_fixture.name, next_fixture.name
@@ -524,7 +523,7 @@ fn fixture_scope_mismatch_diagnostic(
     }
 
     let mut dependency_sub = SubDiagnostic::new(
-        SubDiagnosticSeverity::Info,
+        Severity::Info,
         format!(
             "Fixture `{}` has `{}` scope",
             dependency.name,
@@ -552,7 +551,7 @@ fn fixture_missing_fixtures_diagnostic(
 
     for rejected_fixture in rejected_fixtures {
         let mut sub = SubDiagnostic::new(
-            SubDiagnosticSeverity::Info,
+            Severity::Info,
             format!(
                 "Fixture `{}` was rejected during discovery: {}",
                 rejected_fixture.name(),
@@ -759,7 +758,7 @@ fn handle_failed_function_call(
                 if let [caller, callee] = pair {
                     let message = format!("Called `{}` here", callee.function_name);
                     if let Some(source) = &caller.source {
-                        let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
+                        let mut sub = SubDiagnostic::new(Severity::Info, message);
                         sub.annotate(Annotation::primary(
                             Span::from(source.source_file.clone()).with_range(source.location),
                         ));
@@ -787,7 +786,7 @@ fn handle_failed_function_call(
         if let Some(failure) = failure {
             let message = format!("{} failed here", function_kind.capitalised());
             if let Some(source) = &failure.source {
-                let mut sub = SubDiagnostic::new(SubDiagnosticSeverity::Info, message);
+                let mut sub = SubDiagnostic::new(Severity::Info, message);
                 sub.annotate(Annotation::primary(
                     Span::from(source.source_file.clone()).with_range(source.location),
                 ));

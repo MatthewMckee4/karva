@@ -5,10 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use camino::Utf8Path;
-use karva_diagnostic::{FixtureFailure, FixtureUsage};
+use karva_diagnostic::{Diagnostic, FixtureFailure, FixtureUsage};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
-use ruff_db::diagnostic::Diagnostic;
 
 use crate::diagnostic::fixture_resolution_diagnostic;
 use crate::discovery::models::definition::FunctionDefinition;

@@ -1,11 +1,11 @@
-use ruff_db::diagnostic::Severity;
 use serde::{Deserialize, Serialize};
+
+use crate::Severity;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Diagnostic serialized for controller-side display after worker execution.
 pub struct RenderedDiagnostic {
     code: String,
-    #[serde(with = "SerializableSeverity")]
     severity: Severity,
     message: String,
     rendered: String,
@@ -32,7 +32,7 @@ impl RenderedDiagnostic {
 
     /// Stores a colored rendering only when it differs from plain output.
     #[must_use]
-    pub fn with_colored_rendered(mut self, rendered: String) -> Self {
+    pub(crate) fn with_colored_rendered(mut self, rendered: String) -> Self {
         if rendered != self.rendered {
             self.colored_rendered = Some(rendered);
         }
@@ -78,38 +78,5 @@ impl RenderedDiagnostic {
     /// Returns rendering appropriate for a color-capable terminal.
     pub fn rendered_for_terminal(&self) -> &str {
         self.colored_rendered.as_deref().unwrap_or(&self.rendered)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Severity", rename_all = "lowercase")]
-enum SerializableSeverity {
-    Info,
-    Warning,
-    Error,
-    Fatal,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serializes_ruff_severity() {
-        for (severity, name) in [
-            (Severity::Info, "info"),
-            (Severity::Warning, "warning"),
-            (Severity::Error, "error"),
-            (Severity::Fatal, "fatal"),
-        ] {
-            let diagnostic =
-                RenderedDiagnostic::new("test-failure", severity, "failed", "rendered");
-            let json = serde_json::to_string(&diagnostic).expect("serialize diagnostic");
-            let roundtrip: RenderedDiagnostic =
-                serde_json::from_str(&json).expect("deserialize diagnostic");
-
-            assert_eq!(roundtrip, diagnostic);
-            assert!(json.contains(&format!(r#""severity":"{name}""#)));
-        }
     }
 }

@@ -1,7 +1,7 @@
 //! Scope-aware storage and execution for fixture teardown callbacks.
 
+use karva_diagnostic::Diagnostic;
 use pyo3::prelude::*;
-use ruff_db::diagnostic::Diagnostic;
 
 use crate::extensions::fixtures::{Finalizer, FixtureScope};
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};

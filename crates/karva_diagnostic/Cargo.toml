@@ -14,6 +14,7 @@ license.workspace = true
 traceback = ["pyo3"]
 
 [dependencies]
+annotate-snippets = { workspace = true }
 karva_logging = { workspace = true }
 karva_python_semantic = { workspace = true }
 
@@ -21,7 +22,6 @@ camino = { workspace = true }
 colored = { workspace = true }
 fs-err = { workspace = true }
 pyo3 = { workspace = true, optional = true }
-ruff_db = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
 serde = { workspace = true }

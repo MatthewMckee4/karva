@@ -7,14 +7,15 @@ use colored::Colorize;
 use fs_err as fs;
 use karva_cache::{RunCache, RunHash};
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
-use karva_diagnostic::{DummyReporter, Reporter, TestCaseReporter};
+use karva_diagnostic::{
+    DiagnosticFormat, DisplayDiagnosticConfig, DummyReporter, Reporter, TestCaseReporter,
+};
 use karva_logging::{Printer, StatusLevel, set_colored_override, setup_tracing};
-use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::FiltersetSet;
+use karva_metadata::{OutputFormat, RunIgnoredMode};
 use karva_project::path::{TestPath, TestPathError, absolute};
 use karva_python_semantic::current_python_version;
 use karva_static::EnvVars;
-use ruff_db::diagnostic::DisplayDiagnosticConfig;
 
 /// Command-line arguments for the `karva_worker` process.
 ///
@@ -172,12 +173,14 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         !verbosity.is_default(),
     );
 
-    let diagnostic_format = settings.terminal().output_format.into();
-
-    let config = DisplayDiagnosticConfig::new("karva")
-        .format(diagnostic_format)
-        .color(colored::control::SHOULD_COLORIZE.should_colorize())
-        .context(0);
+    let diagnostic_format = match settings.terminal().output_format {
+        OutputFormat::Full => DiagnosticFormat::Full,
+        OutputFormat::Concise => DiagnosticFormat::Concise,
+    };
+    let config = DisplayDiagnosticConfig::new(
+        diagnostic_format,
+        colored::control::SHOULD_COLORIZE.should_colorize(),
+    );
 
     // Propagate the stop signal to sibling workers whenever this worker has
     // reached (or exceeded) its configured max-fail budget. The budget is

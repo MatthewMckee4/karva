@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use camino::Utf8PathBuf;
 use karva_collector::CollectionError;
+use karva_diagnostic::Diagnostic;
 use karva_python_semantic::ModulePath;
-use ruff_db::diagnostic::Diagnostic;
 use ruff_python_ast::StmtFunctionDef;
 use ruff_source_file::SourceFile;
 use ruff_text_size::TextRange;

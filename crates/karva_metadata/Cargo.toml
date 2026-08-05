@@ -26,7 +26,6 @@ camino = { workspace = true }
 fs-err = { workspace = true }
 globset = { workspace = true }
 regex = { workspace = true }
-ruff_db = { workspace = true }
 ruff_options_metadata = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_stdlib = { workspace = true }

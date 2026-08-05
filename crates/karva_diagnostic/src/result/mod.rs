@@ -9,10 +9,9 @@ mod stats;
 
 use std::collections::{HashMap, HashSet};
 
-use karva_python_semantic::{QualifiedTestName, TestCacheKey};
-use ruff_db::diagnostic::Diagnostic;
-
+use crate::Diagnostic;
 use crate::reporter::Reporter;
+use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
 pub use case::{
     FixtureFailure, FixtureUsage, TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry,
@@ -65,21 +64,21 @@ pub struct TestRunResultParts {
 
 /// Orders diagnostics for display.
 ///
-/// `Diagnostic::ruff_start_ordering` panics when either diagnostic has no
-/// primary span pointing at a `SourceFile`, which is the case for karva
-/// diagnostics like `failed-to-import-module` that describe a whole module
-/// rather than a location within it. Diagnostics with a source file sort by
-/// that ordering first; span-less diagnostics sort after them, by id and
-/// then message, so they still appear rather than being dropped or causing
-/// the sort to panic.
+/// Diagnostics with a source file sort by source and span; span-less diagnostics
+/// sort after them by code and message.
 fn diagnostic_display_ordering(a: &Diagnostic, b: &Diagnostic) -> std::cmp::Ordering {
-    match (a.ruff_source_file(), b.ruff_source_file()) {
-        (Some(_), Some(_)) => a.ruff_start_ordering(b),
+    match (a.primary_annotation(), b.primary_annotation()) {
+        (Some(a), Some(b)) => a
+            .span()
+            .source_file()
+            .cmp(b.span().source_file())
+            .then_with(|| a.span().range().start().cmp(&b.span().range().start()))
+            .then_with(|| a.span().range().end().cmp(&b.span().range().end())),
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (None, None) => a
-            .id()
-            .cmp(&b.id())
+            .code()
+            .cmp(b.code())
             .then_with(|| a.primary_message().cmp(b.primary_message())),
     }
 }

@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
 use karva_macros::{Combine, OptionsMetadata};
-use ruff_db::diagnostic::DiagnosticFormat;
 use serde::{Deserialize, Serialize};
 
 pub use config::{Config, IncompatibleVersionError, KarvaTomlError, UnknownProfile};
@@ -1077,15 +1076,6 @@ impl OutputFormat {
         match self {
             Self::Full => "full",
             Self::Concise => "concise",
-        }
-    }
-}
-
-impl From<OutputFormat> for DiagnosticFormat {
-    fn from(value: OutputFormat) -> Self {
-        match value {
-            OutputFormat::Full => Self::Full,
-            OutputFormat::Concise => Self::Concise,
         }
     }
 }
