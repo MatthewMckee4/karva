@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
-use karva_diagnostic::WorkerResults;
+use karva_diagnostic::AggregatedResults;
 use serde::{Deserialize, Serialize};
 
 /// One runtime state change sent from a worker to the controller.
@@ -29,7 +29,7 @@ pub enum WorkerEvent {
     FailFast,
 
     /// Worker completed and produced its full result set.
-    Completed(WorkerResults),
+    Completed(AggregatedResults),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -145,7 +145,7 @@ impl WorkerClient {
     }
 
     /// Sends the terminal result payload and gracefully closes the connection.
-    pub fn complete(self, results: WorkerResults) -> Result<()> {
+    pub fn complete(self, results: AggregatedResults) -> Result<()> {
         self.send(&WireMessage::Event(WorkerEvent::Completed(results)))?;
         self.writer
             .lock()
@@ -430,7 +430,7 @@ mod tests {
         let client = WorkerClient::connect(server.address().expect("address"), "run-id", 7)
             .expect("connect worker");
         client
-            .complete(WorkerResults::default())
+            .complete(AggregatedResults::default())
             .expect("complete worker");
 
         server.accept_pending().expect("accept worker");

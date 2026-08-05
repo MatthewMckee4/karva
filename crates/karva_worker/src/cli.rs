@@ -6,9 +6,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
-use karva_diagnostic::{
-    DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_worker_results,
-};
+use karva_diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter};
 use karva_ipc::{WorkerClient, WorkerEvent, WorkerState};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
@@ -173,7 +171,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     // failure here while `max_fail` is set means we ran out of budget.
     let failed_count =
         u32::try_from(result.stats().failed() + result.stats().errors()).unwrap_or(u32::MAX);
-    let results = render_worker_results(result, &cwd, &config)?;
+    let results = result.render(&cwd, config);
 
     if settings.max_fail().is_exceeded_by(failed_count) {
         client.send_event(WorkerEvent::FailFast)?;

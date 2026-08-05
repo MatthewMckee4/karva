@@ -146,24 +146,21 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Converts every diagnostic while preserving outcome and retry structure.
-    pub(crate) fn try_map_diagnostic<T, E>(
-        self,
-        mut map: impl FnMut(&D) -> Result<T, E>,
-    ) -> Result<TestCaseResult<T>, E> {
-        Ok(TestCaseResult {
+    pub(crate) fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseResult<T> {
+        TestCaseResult {
             module_name: self.module_name,
             name: self.name,
             full_name: self.full_name,
-            outcome: self.outcome.try_map_diagnostic(&mut map)?,
+            outcome: self.outcome.map_diagnostic(&mut map),
             duration: self.duration,
             retry: self.retry,
             captured_output: self.captured_output,
             attempts: self
                 .attempts
                 .into_iter()
-                .map(|attempt| attempt.try_map_diagnostic(&mut map))
-                .collect::<Result<Vec<_>, _>>()?,
-        })
+                .map(|attempt| attempt.map_diagnostic(&mut map))
+                .collect(),
+        }
     }
 }
 
@@ -209,16 +206,13 @@ impl<D> TestCaseAttempt<D> {
         self.captured_output.as_ref()
     }
 
-    fn try_map_diagnostic<T, E>(
-        self,
-        mut map: impl FnMut(&D) -> Result<T, E>,
-    ) -> Result<TestCaseAttempt<T>, E> {
-        Ok(TestCaseAttempt {
+    fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseAttempt<T> {
+        TestCaseAttempt {
             attempt: self.attempt,
-            outcome: self.outcome.try_map_diagnostic(&mut map)?,
+            outcome: self.outcome.map_diagnostic(&mut map),
             duration: self.duration,
             captured_output: self.captured_output,
-        })
+        }
     }
 }
 
@@ -391,36 +385,33 @@ impl<D> TestCaseOutcome<D> {
         }
     }
 
-    fn try_map_diagnostic<T, E>(
-        self,
-        mut map: impl FnMut(&D) -> Result<T, E>,
-    ) -> Result<TestCaseOutcome<T>, E> {
-        Ok(match self {
+    fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseOutcome<T> {
+        match self {
             Self::Passed => TestCaseOutcome::Passed,
             Self::Failed {
                 diagnostic,
                 related,
             } => TestCaseOutcome::Failed {
-                diagnostic: map(&diagnostic)?,
+                diagnostic: map(&diagnostic),
                 related: related
                     .into_iter()
                     .map(|diagnostic| map(&diagnostic))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect(),
             },
             Self::Error {
                 diagnostic,
                 related,
                 fixture_failures,
             } => TestCaseOutcome::Error {
-                diagnostic: map(&diagnostic)?,
+                diagnostic: map(&diagnostic),
                 related: related
                     .into_iter()
                     .map(|diagnostic| map(&diagnostic))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect(),
                 fixture_failures,
             },
             Self::Skipped { reason } => TestCaseOutcome::Skipped { reason },
-        })
+        }
     }
 }
 

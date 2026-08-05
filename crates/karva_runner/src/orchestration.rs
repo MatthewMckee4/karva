@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdout, Stdio};
 use std::thread::{self, JoinHandle};
@@ -811,8 +811,9 @@ fn last_failed_set(cache_dir: &Utf8Path, enabled: bool) -> HashSet<TestCacheKey>
     }
 }
 
-fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &[TestCacheKey]) {
-    if let Err(err) = persist_last_failed(cache_dir, failed_tests) {
+fn write_last_failed(cache_dir: &Utf8Path, failed_tests: &BTreeSet<TestCacheKey>) {
+    let failed_tests = failed_tests.iter().cloned().collect::<Vec<_>>();
+    if let Err(err) = persist_last_failed(cache_dir, &failed_tests) {
         tracing::warn!("Failed to write last-failed cache: {err}");
     }
 }
