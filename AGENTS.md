@@ -86,9 +86,28 @@ files and lines, and distinguish blockers from improvements.
 
 ## Verification
 
-- Focused tests: `just test -p <crate> [test_name]`.
-- Full suite: `just test`. It builds the Python wheel first and uses nextest
-  when installed, otherwise `cargo test`.
+- Run the narrowest check that covers the change. For Rust-only behavior, use
+  `cargo nextest run -p <crate> [test_name]` when nextest is installed,
+  otherwise `cargo test -p <crate> [test_name]`. Use `just test -p <crate> [test_name]` only when the test crosses the Python, worker, or CLI boundary
+  and therefore needs the wheel.
+- Batch related edits into a coherent implementation before testing. Do not run
+  tests after every small edit. Test earlier only when the result determines
+  the next implementation step or checks risky, uncertain behavior.
+- Do not test `karva_benchmark` locally unless the task changes the benchmark
+  crate, benchmark projects, benchmark reports, or benchmark workflows. CI is
+  responsible for routine benchmark-crate coverage.
+- Do not run the full suite locally by default. Run `just test` only for
+  cross-cutting changes, when focused coverage is insufficient, or when the
+  user explicitly requests it. Otherwise rely on focused checks and CI.
+- Do not rerun a successful check unless relevant inputs changed after it ran.
+- Start long-running checks as soon as the code is coherent, then continue
+  with independent work such as reviewing the diff, checking snapshots, or
+  preparing documentation. Wait only when the result blocks further work.
+- Run at most one Cargo build or test command per target directory at a time.
+  Run independent non-Cargo checks concurrently when useful.
+- Do not watch or poll CI while useful local work remains. Check CI once local
+  work is complete, and avoid repeated polling when no state change is
+  expected.
 - Do not run `cargo clippy --workspace --all-targets --all-features -- -D warnings`
   locally; let CI run the full workspace Clippy check.
 - Run Karva with debug builds: `cargo run test tests/test_add.py`.
