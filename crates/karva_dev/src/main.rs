@@ -1,6 +1,6 @@
 //! This crate implements an internal CLI for developers of Karva.
 //!
-//! Within the Karva repository you can run it with `cargo run -p karva_dev`.
+//! Within the Karva repository you can run it with `cargo dev`.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -19,7 +19,7 @@ mod generate_options;
 
 const ROOT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../");
 
-const REGENERATE_ALL_COMMAND: &str = "cargo run -p karva_dev generate-all";
+const REGENERATE_ALL_COMMAND: &str = "cargo dev generate-all";
 
 #[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum, Default)]
 pub(crate) enum Mode {

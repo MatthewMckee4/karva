@@ -1,33 +1,30 @@
 //! Generate a Markdown-compatible reference for the karva command-line interface.
 use std::cmp::max;
 
-use anyhow::Result;
 use clap::{Command, CommandFactory};
 use itertools::Itertools;
 use karva_cli::Args as Cli;
 
 use crate::{Mode, apply_mode};
 
+const FILE_NAME: &str = "docs/reference/cli.md";
+const HEADER: &str = "<!-- WARNING: This file is auto-generated (cargo dev generate-all). Edit the doc comments in 'crates/karva/src/args.rs' if you want to change anything here. -->\n\n# CLI Reference\n\n";
 const SHOW_HIDDEN_COMMANDS: &[&str] = &["generate-shell-completion"];
-
-fn render_html(markdown_text: &str) -> String {
-    markdown::to_html(markdown_text)
-        .replace('[', "&#91;")
-        .replace(']', "&#93;")
-}
 
 #[derive(clap::Args)]
 pub struct Args {
+    /// Write the generated reference to stdout (rather than to `docs/reference/cli.md`).
     #[arg(long, default_value_t, value_enum)]
     pub mode: Mode,
 }
 
-pub fn main(args: &Args) -> Result<()> {
-    apply_mode(args.mode, "docs/reference/cli.md", &generate())
+pub fn main(args: &Args) -> anyhow::Result<()> {
+    apply_mode(args.mode, FILE_NAME, &generate())
 }
 
 fn generate() -> String {
     let mut output = String::new();
+    output.push_str(HEADER);
 
     let mut karva = Cli::command();
 
@@ -36,12 +33,15 @@ fn generate() -> String {
     karva.build();
 
     let mut parents = Vec::new();
-
-    output.push_str("<!-- WARNING: This file is auto-generated (cargo run -p karva_dev generate-all). Edit the doc comments in 'crates/karva/src/args.rs' if you want to change anything here. -->\n\n");
-    output.push_str("# CLI Reference\n\n");
     generate_command(&mut output, &karva, &mut parents);
 
     output
+}
+
+fn render_html(markdown_text: &str) -> String {
+    markdown::to_html(markdown_text)
+        .replace('[', "&#91;")
+        .replace(']', "&#93;")
 }
 
 #[expect(clippy::format_push_string)]
@@ -279,10 +279,10 @@ fn emit_possible_options(opt: &clap::Arg, output: &mut String) {
 
 #[cfg(test)]
 mod tests {
-
     use anyhow::Result;
 
-    use super::{Args, Mode, main};
+    use super::{Args, main};
+    use crate::Mode;
 
     #[test]
     #[cfg(unix)]

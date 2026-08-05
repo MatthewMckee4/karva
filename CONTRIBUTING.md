@@ -27,7 +27,7 @@ Run the documentation generator after changing configuration options, CLI
 arguments, or environment variable definitions:
 
 ```sh
-cargo run -p karva_dev generate-all
+cargo dev generate-all
 ```
 
 Files under `docs/reference/` and `docs/configuration/configuration.md` are

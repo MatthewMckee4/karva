@@ -37,7 +37,12 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     required_version: Option<VersionReq>,
 
-    /// Project-wide custom tag registry. Empty descriptions are allowed.
+    /// Project-wide custom tag registry. Each key is a tag name and each value
+    /// is an optional description for project documentation. Empty descriptions
+    /// are allowed.
+    ///
+    /// Enable [`strict-tags`](#strict-tags) in a profile to reject custom tags
+    /// absent from this table.
     #[option(
         default = r#"{}"#,
         value_type = "table",
