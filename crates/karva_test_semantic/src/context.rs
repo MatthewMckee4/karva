@@ -1,8 +1,8 @@
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
-    CapturedTestOutput, Diagnostic, IndividualTestResultKind, Reporter, TestCaseRetry,
-    TestExecutionAttempt, TestExecutionOutcome, TestRunResult,
+    CapturedTestOutput, Diagnostic, IndividualTestResultKind, Reporter, TestExecutionOutcome,
+    TestExecutionResult, TestRunResult,
 };
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
@@ -172,22 +172,12 @@ impl RunState {
         &mut self,
         context: &Context<'_>,
         test_case_name: &QualifiedTestName,
-        outcome: TestExecutionOutcome,
-        duration: std::time::Duration,
-        retry: TestCaseRetry,
-        captured_output: Option<CapturedTestOutput>,
-        attempts: Vec<TestExecutionAttempt>,
+        test_case: TestExecutionResult,
     ) -> bool {
-        let passed = !outcome.is_non_success() && !retry.is_flaky_failure();
-        self.result.register_retried_result(
-            test_case_name,
-            outcome,
-            duration,
-            retry,
-            captured_output,
-            attempts,
-            Some(context.reporter),
-        );
+        let passed = !test_case.outcome().is_non_success() && !test_case.is_flaky_failure();
+        let cache_key = test_case_name.cache_key();
+        self.result
+            .register_retried_result(cache_key, test_case, Some(context.reporter));
         passed
     }
 

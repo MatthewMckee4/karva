@@ -28,7 +28,7 @@ pub enum WorkerEvent {
     /// Test completed with its transport-safe result.
     TestFinished {
         cache_key: TestCacheKey,
-        result: TestCaseResult,
+        result: Box<TestCaseResult>,
     },
 
     /// Diagnostic describing the run rather than one test.
@@ -41,7 +41,7 @@ pub enum WorkerEvent {
 #[derive(Serialize, Deserialize)]
 enum WireMessage {
     Hello { run_id: String, worker_id: usize },
-    Event(WorkerEvent),
+    Event(Box<WorkerEvent>),
 }
 
 enum Incoming {
@@ -56,7 +56,7 @@ pub struct ControllerEvent {
     pub worker_id: usize,
 
     /// Runtime state change received from that worker.
-    pub event: WorkerEvent,
+    pub event: Box<WorkerEvent>,
 }
 
 /// Cloneable worker-side writer shared with execution reporters.
@@ -85,12 +85,12 @@ impl WorkerClient {
 
     /// Sends one state change immediately so cancellation sees current state.
     pub fn send_event(&self, event: WorkerEvent) -> Result<()> {
-        self.send(&WireMessage::Event(event))
+        self.send(&WireMessage::Event(Box::new(event)))
     }
 
     /// Marks the worker complete and gracefully closes the connection.
     pub fn complete(self) -> Result<()> {
-        self.send(&WireMessage::Event(WorkerEvent::WorkerFinished))?;
+        self.send(&WireMessage::Event(Box::new(WorkerEvent::WorkerFinished)))?;
         self.writer
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva controller connection lock poisoned"))?
@@ -274,7 +274,7 @@ mod tests {
 
         assert_eq!(event.worker_id, 7);
         assert!(matches!(
-            event.event,
+            *event.event,
             WorkerEvent::TestStarted { name } if name == "mod::test"
         ));
     }
@@ -321,6 +321,6 @@ mod tests {
             .expect("queued event");
 
         assert_eq!(event.worker_id, 7);
-        assert!(matches!(event.event, WorkerEvent::WorkerFinished));
+        assert!(matches!(*event.event, WorkerEvent::WorkerFinished));
     }
 }

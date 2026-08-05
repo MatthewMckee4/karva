@@ -115,10 +115,11 @@ impl<D> RunResults<D> {
             ));
         }
 
+        let duration = test_case.duration();
         self.durations
             .entry(cache_key)
-            .and_modify(|existing_duration| *existing_duration += test_case.duration())
-            .or_insert(test_case.duration());
+            .and_modify(|existing_duration| *existing_duration += duration)
+            .or_insert(duration);
         self.test_cases.push(test_case);
     }
 
@@ -173,23 +174,10 @@ impl RunResults<Diagnostic> {
     /// When the final outcome is `Passed`, the test is counted as flaky.
     pub fn register_retried_result(
         &mut self,
-        test_case_name: &QualifiedTestName,
-        outcome: TestExecutionOutcome,
-        duration: std::time::Duration,
-        retry: TestCaseRetry,
-        captured_output: Option<CapturedTestOutput>,
-        attempts: Vec<TestExecutionAttempt>,
+        cache_key: TestCacheKey,
+        test_case: TestExecutionResult,
         reporter: Option<&dyn Reporter>,
     ) {
-        let cache_key = test_case_name.cache_key();
-        let test_case = TestCaseResult::retried(
-            test_case_name,
-            outcome,
-            duration,
-            retry,
-            captured_output,
-            attempts,
-        );
         if let Some(reporter) = reporter {
             reporter.report_test_completed(&cache_key, &test_case);
         }

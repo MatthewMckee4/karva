@@ -63,7 +63,7 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Builds a result whose final outcome followed earlier failed attempts.
-    pub(super) fn retried(
+    pub fn retried(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -126,7 +126,7 @@ impl<D> TestCaseResult<D> {
         self.retry.as_ref()
     }
 
-    pub(crate) fn is_flaky_failure(&self) -> bool {
+    pub fn is_flaky_failure(&self) -> bool {
         self.retry
             .as_ref()
             .is_some_and(TestCaseRetry::is_flaky_failure)

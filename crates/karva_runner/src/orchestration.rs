@@ -170,7 +170,7 @@ impl EventDispatcher {
             if !self.expected_workers.contains(&worker_id) {
                 anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
             }
-            match message.event {
+            match *message.event {
                 WorkerEvent::TestStarted { name } => {
                     if self
                         .in_flight
@@ -199,7 +199,7 @@ impl EventDispatcher {
                             result.full_name()
                         );
                     }
-                    self.results.register_rendered_test_case(cache_key, result);
+                    self.results.register_rendered_test_case(cache_key, *result);
                 }
                 WorkerEvent::RunDiagnostic(diagnostic) => {
                     self.results.add_rendered_run_diagnostic(diagnostic);
@@ -437,11 +437,10 @@ impl WorkerManager {
         }
 
         self.dispatcher.dispatch_pending(server)?;
-        let worker_ids = self
-            .workers
-            .iter()
-            .map(|worker| worker.id)
-            .collect::<Vec<_>>();
+        let mut worker_ids = Vec::with_capacity(self.workers.len());
+        for worker in &self.workers {
+            worker_ids.push(worker.id);
+        }
         self.terminate_remaining(grace_period);
         self.dispatcher.finish(server)?;
 

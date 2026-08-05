@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_coverage::CoveragePhase;
-use karva_diagnostic::{CapturedTestOutput, TestCaseRetry, TestExecutionOutcome};
+use karva_diagnostic::{
+    CapturedTestOutput, TestCaseRetry, TestExecutionOutcome, TestExecutionResult,
+};
 use karva_metadata::filter::EvalContext;
 use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
@@ -378,8 +380,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 .map(TestLifecycleAttempt::into_execution_attempt)
                 .collect::<Vec<_>>();
             execution_attempts.push(final_attempt.into_execution_attempt());
-            self.package_runner.state.register_retried_result(
-                self.package_runner.context,
+            let test_case = TestExecutionResult::retried(
                 &settings.qualified_test_name,
                 outcome,
                 total_duration,
@@ -387,6 +388,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                     .with_failure_policy(flaky_failure, junit_flaky_failure),
                 captured_output,
                 execution_attempts,
+            );
+            self.package_runner.state.register_retried_result(
+                self.package_runner.context,
+                &settings.qualified_test_name,
+                test_case,
             )
         }
     }

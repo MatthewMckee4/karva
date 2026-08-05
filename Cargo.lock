@@ -989,7 +989,6 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "serde_json",
- "tempfile",
  "tracing",
 ]
 
@@ -1003,7 +1002,6 @@ dependencies = [
  "karva_python_semantic",
  "serde",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
