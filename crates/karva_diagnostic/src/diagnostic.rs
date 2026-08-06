@@ -102,7 +102,6 @@ pub struct SubDiagnostic {
     severity: Severity,
     message: String,
     annotations: Vec<Annotation>,
-    suggestions: Vec<Suggestion>,
 }
 
 impl SubDiagnostic {
@@ -111,17 +110,11 @@ impl SubDiagnostic {
             severity,
             message: message.into(),
             annotations: Vec::new(),
-            suggestions: Vec::new(),
         }
     }
 
     pub fn annotate(&mut self, annotation: Annotation) {
         self.annotations.push(annotation);
-    }
-
-    /// Add a source replacement to render using the diagnostic renderer.
-    pub fn suggest(&mut self, suggestion: Suggestion) {
-        self.suggestions.push(suggestion);
     }
 
     pub(super) fn severity(&self) -> Severity {
@@ -134,55 +127,6 @@ impl SubDiagnostic {
 
     pub(super) fn annotations(&self) -> &[Annotation] {
         &self.annotations
-    }
-
-    pub(super) fn suggestions(&self) -> &[Suggestion] {
-        &self.suggestions
-    }
-}
-
-/// Source replacement rendered as a diff within a supporting diagnostic.
-#[derive(Debug, Clone)]
-pub struct Suggestion {
-    span: Span,
-    replacement: String,
-}
-
-impl Suggestion {
-    /// Create a replacement, trimming unchanged prefixes and suffixes so the
-    /// renderer highlights only the changed source.
-    pub fn new(mut span: Span, replacement: impl Into<String>) -> Self {
-        let mut replacement = replacement.into();
-        let range = span.range();
-        let source = span.source_file().source_text();
-        let original = &source[usize::from(range.start())..usize::from(range.end())];
-        let prefix = original
-            .chars()
-            .zip(replacement.chars())
-            .take_while(|(original, replacement)| original == replacement)
-            .map(|(character, _)| character.len_utf8())
-            .sum::<usize>();
-        let suffix = original[prefix..]
-            .chars()
-            .rev()
-            .zip(replacement[prefix..].chars().rev())
-            .take_while(|(original, replacement)| original == replacement)
-            .map(|(character, _)| character.len_utf8())
-            .sum::<usize>();
-        span.range = TextRange::new(
-            range.start() + TextSize::of(&original[..prefix]),
-            range.end() - TextSize::of(&original[original.len() - suffix..]),
-        );
-        replacement = replacement[prefix..replacement.len() - suffix].to_string();
-        Self { span, replacement }
-    }
-
-    pub(super) fn span(&self) -> &Span {
-        &self.span
-    }
-
-    pub(super) fn replacement(&self) -> &str {
-        &self.replacement
     }
 }
 
