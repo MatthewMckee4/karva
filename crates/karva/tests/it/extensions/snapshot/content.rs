@@ -243,8 +243,7 @@ def test_poem():
     2   │ -violets are blue
       2 │ +violets are purple
       3 │ +sugar is sweet
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_poem.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

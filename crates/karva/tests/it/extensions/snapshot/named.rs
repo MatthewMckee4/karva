@@ -114,8 +114,7 @@ def test_hello():
     info: Snapshot mismatch for 'test_hello--greeting' in snapshots/test__test_hello--greeting.snap:
     1   │ -hello world
       1 │ +goodbye world
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_hello--greeting.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

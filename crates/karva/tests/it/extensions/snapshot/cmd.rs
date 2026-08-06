@@ -107,8 +107,7 @@ def test_echo():
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_echo'.
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_echo.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -622,8 +621,7 @@ def test_change():
     4   │ -first
       4 │ +second
     5 5 │  ----- stderr -----
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_change.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

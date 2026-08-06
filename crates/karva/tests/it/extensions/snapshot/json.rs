@@ -456,8 +456,7 @@ def test_json():
     2   │ -  "key": "original"
       2 │ +  "key": "changed"
     3 3 │  }
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_json.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
