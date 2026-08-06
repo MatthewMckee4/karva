@@ -68,10 +68,12 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
+      |
     4 | def test_hello():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:5:5
+      |
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_hello' in snapshots/test__test_hello.snap:
@@ -147,10 +149,12 @@ def test_user_data():
 
     error[test-failure]: Test `test_user_data` failed
      --> test.py:7:5
+      |
     7 | def test_user_data():
       |     ^^^^^^^^^^^^^^
     info: Test failed here
      --> test.py:9:5
+      |
     9 |     karva.assert_json_snapshot(result)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_user_data' in snapshots/test__test_user_data.snap:
@@ -328,10 +332,12 @@ def test_second():
 
     error[test-failure]: Test `test_second` failed
      --> test.py:7:5
+      |
     7 | def test_second():
       |     ^^^^^^^^^^^
     info: Test failed here
      --> test.py:8:5
+      |
     8 |     karva.assert_json_snapshot({"value": 99})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_second' in snapshots/test__test_second.snap:

@@ -88,10 +88,12 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
+      |
     4 | def test_hello():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:5:5
+      |
     5 |     karva.assert_snapshot("goodbye", inline="hello")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Inline snapshot mismatch for 'test_hello'.

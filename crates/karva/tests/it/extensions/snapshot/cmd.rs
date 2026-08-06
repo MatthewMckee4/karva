@@ -100,10 +100,12 @@ def test_echo():
 
     error[test-failure]: Test `test_echo` failed
      --> test.py:5:5
+      |
     5 | def test_echo():
       |     ^^^^^^^^^
     info: Test failed here
      --> test.py:7:5
+      |
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_echo'.
@@ -528,10 +530,12 @@ def test_inline_wrong():
 
     error[test-failure]: Test `test_inline_wrong` failed
      --> test.py:5:5
+      |
     5 | def test_inline_wrong():
       |     ^^^^^^^^^^^^^^^^^
     info: Test failed here
      --> test.py:7:5
+      |
     7 |     karva.assert_cmd_snapshot(cmd, inline="wrong value")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Inline snapshot mismatch for 'test_inline_wrong'.
@@ -608,10 +612,12 @@ def test_change():
 
     error[test-failure]: Test `test_change` failed
      --> test.py:5:5
+      |
     5 | def test_change():
       |     ^^^^^^^^^^^
     info: Test failed here
      --> test.py:7:5
+      |
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_change' in snapshots/test__test_change.snap:
@@ -656,10 +662,12 @@ def test_bad_cmd():
 
     error[test-failure]: Test `test_bad_cmd` failed
      --> test.py:4:5
+      |
     4 | def test_bad_cmd():
       |     ^^^^^^^^^^^^
     info: Test failed here
      --> test.py:6:5
+      |
     6 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Failed to run command `nonexistent_program_xyz_12345` (NotFound)
@@ -1029,10 +1037,12 @@ def test_both_args():
 
     error[test-failure]: Test `test_both_args` failed
      --> test.py:5:5
+      |
     5 | def test_both_args():
       |     ^^^^^^^^^^^^^^
     info: Test failed here
      --> test.py:7:5
+      |
     7 |     karva.assert_cmd_snapshot(cmd, inline="x", name="y")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert_snapshot() cannot use both 'inline' and 'name' arguments
