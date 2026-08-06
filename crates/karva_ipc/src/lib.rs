@@ -23,7 +23,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
     /// Test began executing on this worker.
-    TestStarted { name: String },
+    TestStarted {
+        name: String,
+        cache_key: TestCacheKey,
+    },
 
     /// Test exceeded the configured slow-test threshold.
     TestSlow,
@@ -50,6 +53,7 @@ enum WireMessage {
 
 enum Incoming {
     Connected { worker_id: usize },
+    Disconnected { worker_id: usize },
     Event(ControllerEvent),
     Error(String),
 }
@@ -79,8 +83,14 @@ struct WorkerConnection {
 
 #[derive(Default)]
 struct CurrentTestState {
-    latest: Option<String>,
-    sent: Option<String>,
+    latest: Option<CurrentTest>,
+    sent: Option<CurrentTest>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct CurrentTest {
+    name: String,
+    cache_key: TestCacheKey,
 }
 
 impl WorkerClient {
@@ -130,8 +140,11 @@ impl WorkerClient {
             .current_test
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
-        if let WorkerEvent::TestStarted { name } = &event {
-            current_test.latest = Some(name.clone());
+        if let WorkerEvent::TestStarted { name, cache_key } = &event {
+            current_test.latest = Some(CurrentTest {
+                name: name.clone(),
+                cache_key: cache_key.clone(),
+            });
             return Ok(());
         }
         if matches!(event, WorkerEvent::TestFinished { .. }) {
@@ -212,9 +225,12 @@ impl WorkerClient {
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
         if current_test.latest != current_test.sent {
-            if let Some(name) = current_test.latest.as_ref() {
+            if let Some(test) = current_test.latest.as_ref() {
                 self.write(
-                    &WireMessage::Event(Box::new(WorkerEvent::TestStarted { name: name.clone() })),
+                    &WireMessage::Event(Box::new(WorkerEvent::TestStarted {
+                        name: test.name.clone(),
+                        cache_key: test.cache_key.clone(),
+                    })),
                     false,
                 )?;
             }
@@ -298,10 +314,13 @@ fn flush_worker_events(
         .lock()
         .map_err(|_| "Karva controller connection lock poisoned".to_string())?;
     if current_test.latest != current_test.sent {
-        if let Some(name) = current_test.latest.as_ref() {
+        if let Some(test) = current_test.latest.as_ref() {
             serde_json::to_writer(
                 &mut *writer,
-                &WireMessage::Event(Box::new(WorkerEvent::TestStarted { name: name.clone() })),
+                &WireMessage::Event(Box::new(WorkerEvent::TestStarted {
+                    name: test.name.clone(),
+                    cache_key: test.cache_key.clone(),
+                })),
             )
             .map_err(|error| error.to_string())?;
             writer.write_all(b"\n").map_err(|error| error.to_string())?;
@@ -332,6 +351,7 @@ pub struct ControllerServer {
     receiver: Receiver<Incoming>,
     readers: Vec<JoinHandle<()>>,
     workers: HashSet<usize>,
+    disconnected_workers: HashSet<usize>,
     worker_paths: Arc<Mutex<HashMap<usize, Vec<String>>>>,
 }
 
@@ -351,6 +371,7 @@ impl ControllerServer {
             receiver,
             readers: Vec::new(),
             workers: HashSet::new(),
+            disconnected_workers: HashSet::new(),
             worker_paths: Arc::new(Mutex::new(HashMap::new())),
         })
     }
@@ -416,11 +437,24 @@ impl ControllerServer {
                         bail!("Karva worker {worker_id} connected more than once");
                     }
                 }
+                Ok(Incoming::Disconnected { worker_id }) => {
+                    self.disconnected_workers.insert(worker_id);
+                }
                 Ok(Incoming::Event(event)) => return Ok(Some(event)),
                 Ok(Incoming::Error(error)) => bail!(error),
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => return Ok(None),
             }
         }
+    }
+
+    /// Whether the worker's event stream reached EOF after every queued event.
+    pub fn worker_disconnected(&self, worker_id: usize) -> bool {
+        self.disconnected_workers.contains(&worker_id)
+    }
+
+    /// Whether the worker completed its controller handshake.
+    pub fn worker_connected(&self, worker_id: usize) -> bool {
+        self.workers.contains(&worker_id)
     }
 
     /// Joins every accepted reader after worker processes have exited.
@@ -478,7 +512,7 @@ fn read_worker(
     for message in messages {
         let message = match message {
             Ok(message) => message,
-            Err(error) if is_clean_disconnect(&error) => return Ok(()),
+            Err(error) if is_clean_disconnect(&error) => break,
             Err(error) => return Err(error).context("failed to read Karva worker event"),
         };
         let event = match message {
@@ -493,6 +527,7 @@ fn read_worker(
             return Ok(());
         }
     }
+    sender.send(Incoming::Disconnected { worker_id }).ok();
     Ok(())
 }
 
@@ -530,6 +565,7 @@ mod tests {
             client
                 .send_event(WorkerEvent::TestStarted {
                     name: "mod::test".to_string(),
+                    cache_key: TestCacheKey::function_name("mod::test"),
                 })
                 .expect("send event");
             client.complete().expect("complete worker");
@@ -546,7 +582,9 @@ mod tests {
         assert_eq!(event.worker_id, 7);
         assert!(matches!(
             *event.event,
-            WorkerEvent::TestStarted { name } if name == "mod::test"
+            WorkerEvent::TestStarted { name, cache_key }
+                if name == "mod::test"
+                    && cache_key == TestCacheKey::function_name("mod::test")
         ));
     }
 

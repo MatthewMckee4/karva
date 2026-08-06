@@ -11,7 +11,7 @@ use karva_python_semantic::TestCacheKey;
 use crate::artifact::{CacheFile, read_json, write_json};
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
-/// Resolves run-scoped files that workers must persist, currently coverage only.
+/// Resolves run-scoped files shared between the controller and workers.
 pub struct RunArtifacts {
     /// Run-scoped directory containing every worker's artifacts.
     run_dir: Utf8PathBuf,
@@ -47,6 +47,18 @@ impl RunArtifacts {
             }
         }
         Ok(files)
+    }
+
+    /// Creates the controller-owned stderr spool for one worker.
+    pub fn create_worker_stderr_file(
+        &self,
+        worker_id: usize,
+    ) -> Result<(Utf8PathBuf, std::fs::File)> {
+        let worker_dir = self.worker_dir(worker_id);
+        fs::create_dir_all(&worker_dir)?;
+        let path = CacheFile::WorkerStderr.path_in(&worker_dir);
+        let file = std::fs::File::create(&path)?;
+        Ok((path, file))
     }
 }
 

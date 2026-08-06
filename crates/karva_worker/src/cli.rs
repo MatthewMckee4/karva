@@ -14,7 +14,7 @@ use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
 use karva_project::path::{TestPath, TestPathError, absolute};
-use karva_python_semantic::current_python_version;
+use karva_python_semantic::{current_python_version, enable_faulthandler};
 use karva_static::EnvVars;
 
 use crate::reporter::WorkerReporter;
@@ -111,6 +111,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let cwd = cwd()?;
 
     let python_version = current_python_version();
+    enable_faulthandler().context("Failed to enable Python faulthandler")?;
 
     let filter = FiltersetSet::new(&args.sub_command.filter_expressions)
         .context("invalid `--filter` expression")?;

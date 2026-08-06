@@ -78,6 +78,11 @@ impl<'a> Context<'a> {
         self.reporter.report_test_started(test_case_name);
     }
 
+    /// Refines the active test name after fixture-derived parameters resolve.
+    pub fn report_test_identified(&self, test_case_name: &QualifiedTestName) {
+        self.reporter.report_test_identified(test_case_name);
+    }
+
     /// Returns the parser target matching the embedded interpreter.
     pub fn python_version(&self) -> PythonVersion {
         self.python_version

@@ -83,6 +83,11 @@ impl TestContext {
         // asyncio numbers tasks per event loop, so the counter depends on how
         // much of the suite ran first and on the interpreter version.
         settings.add_filter(r"Task-\d+", "Task-[N]");
+        settings.add_filter(r"Current thread 0x[0-9a-f]+", "Current thread [THREAD]");
+        settings.add_filter(
+            r#"File "[^"]+/shared-venv-[^/]+/bin/karva-worker""#,
+            r#"File "<venv>/bin/karva-worker""#,
+        );
         settings.add_filter(
             r"(?:File exists \(os error 17\)|Cannot create a file when that file already exists\. \(os error 183\))",
             "[FILE EXISTS]",
