@@ -13,7 +13,7 @@ use std::process::{Command, Output};
 use std::sync::LazyLock;
 #[cfg(target_os = "linux")]
 use std::time::Instant;
-use std::{collections::HashSet, io};
+use std::{collections::HashMap, collections::HashSet, io};
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -210,10 +210,18 @@ struct RunMeasurement {
     peak_rss_kib: f64,
 }
 
-/// Warmed cache directories retained to give every benchmark subject the same partition weights.
+/// Warmed cache state retained to give every benchmark subject the same partition weights.
 struct DurationCacheSeed {
     cache_dir: Utf8PathBuf,
     directories: HashSet<Utf8PathBuf>,
+    files: HashMap<Utf8PathBuf, Vec<u8>>,
+}
+
+#[derive(Default)]
+/// Root entries captured from a warmed benchmark cache.
+struct CacheContents {
+    directories: HashSet<Utf8PathBuf>,
+    files: HashMap<Utf8PathBuf, Vec<u8>>,
 }
 
 /// Invocation and cache state shared by every subject for one benchmark project.
@@ -570,43 +578,59 @@ fn prepare_benchmark(
 impl DurationCacheSeed {
     fn capture(project_root: &Utf8Path) -> Result<Self> {
         let cache_dir = project_root.join(CACHE_DIR);
-        let directories = cache_directories(&cache_dir)?;
+        let CacheContents { directories, files } = cache_contents(&cache_dir)?;
         anyhow::ensure!(
-            !directories.is_empty(),
-            "Warming benchmark cache created no run directories in `{cache_dir}`"
+            !directories.is_empty() || !files.is_empty(),
+            "Warming benchmark cache created no reusable state in `{cache_dir}`"
         );
         Ok(Self {
             cache_dir,
             directories,
+            files,
         })
     }
 
     fn restore(&self) -> Result<()> {
-        for directory in cache_directories(&self.cache_dir)? {
+        let CacheContents { directories, files } = cache_contents(&self.cache_dir)?;
+        for directory in directories {
             if !self.directories.contains(&directory) {
                 fs::remove_dir_all(&directory).with_context(|| {
                     format!("Failed to remove benchmark measurement cache `{directory}`")
                 })?;
             }
         }
+        for file in files.keys() {
+            if !self.files.contains_key(file) {
+                fs::remove_file(file).with_context(|| {
+                    format!("Failed to remove benchmark measurement cache `{file}`")
+                })?;
+            }
+        }
+        for (file, contents) in &self.files {
+            fs::write(file, contents)
+                .with_context(|| format!("Failed to restore benchmark cache `{file}`"))?;
+        }
         Ok(())
     }
 }
 
-fn cache_directories(cache_dir: &Utf8Path) -> Result<HashSet<Utf8PathBuf>> {
-    let mut directories = HashSet::new();
+fn cache_contents(cache_dir: &Utf8Path) -> Result<CacheContents> {
+    let mut contents = CacheContents::default();
     for entry in fs::read_dir(cache_dir)
         .with_context(|| format!("Failed to read benchmark cache `{cache_dir}`"))?
     {
         let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-        let directory = Utf8PathBuf::try_from(entry.path())
+        let path = Utf8PathBuf::try_from(entry.path())
             .context("Benchmark cache directory path is not valid UTF-8")?;
-        directories.insert(directory);
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            contents.directories.insert(path);
+        } else if file_type.is_file() {
+            let file_contents = fs::read(&path)?;
+            contents.files.insert(path, file_contents);
+        }
     }
-    Ok(directories)
+    Ok(contents)
 }
 
 fn run_project_cli(
@@ -1444,21 +1468,31 @@ mod tests {
     };
 
     #[test]
-    fn duration_cache_seed_removes_measurement_runs() {
+    fn duration_cache_seed_restores_warmed_state() {
         let temp_dir = tempdir().expect("temporary directory should be created");
         let project_root = Utf8Path::from_path(temp_dir.path())
             .expect("temporary directory path should be valid UTF-8");
         let cache_dir = project_root.join(CACHE_DIR);
         let seed_run = cache_dir.join("run-seed");
         let measurement_run = cache_dir.join("run-measurement");
+        let duration_file = cache_dir.join("durations.json");
+        let measurement_file = cache_dir.join("last-failed.json");
         fs::create_dir_all(&seed_run).expect("seed cache should be created");
+        fs::write(&duration_file, b"seed").expect("duration cache should be created");
         let seed = DurationCacheSeed::capture(project_root).expect("seed should be captured");
         fs::create_dir_all(&measurement_run).expect("measurement cache should be created");
+        fs::write(&duration_file, b"measurement").expect("duration cache should be replaced");
+        fs::write(&measurement_file, b"measurement").expect("measurement cache should be created");
 
         seed.restore().expect("seed should be restored");
 
         assert!(seed_run.is_dir());
         assert!(!measurement_run.exists());
+        assert_eq!(
+            fs::read(duration_file).expect("read duration cache"),
+            b"seed"
+        );
+        assert!(!measurement_file.exists());
     }
 
     #[test]
