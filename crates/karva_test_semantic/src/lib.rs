@@ -17,7 +17,7 @@ pub use python::init_module;
 
 use camino::Utf8Path;
 use karva_coverage::CoverageSession;
-use karva_diagnostic::{Reporter, TestRunResult};
+use karva_diagnostic::{Diagnostic, Reporter};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
 use ruff_python_ast::PythonVersion;
@@ -38,7 +38,7 @@ pub fn run_tests(
     test_paths: Vec<Result<TestPath, TestPathError>>,
     coverage: Option<&CoverageConfig>,
     verbose: bool,
-) -> TestRunResult {
+) -> Vec<Diagnostic> {
     let context = Context::new(cwd, settings, python_version, reporter, verbose);
     let mut state = RunState::default();
 
@@ -63,7 +63,7 @@ pub fn run_tests(
                 DiscoveryIssue::SkippedModule {
                     module_path,
                     reason,
-                } => state.register_module_skip(&context, &module_path, reason),
+                } => context.register_module_skip(&module_path, reason),
             }
         }
 

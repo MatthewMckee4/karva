@@ -81,9 +81,8 @@ Unique identifier for a single `karva test` invocation, shared by
 every worker. Encodes `<ms>-<uuid>`: a millisecond Unix timestamp
 followed by a UUID v4. The timestamp prefix sorts chronologically
 across runs; the UUID makes the id unique even when multiple jobs
-start in the same millisecond. The same value names the run's
-cache directory under `.karva_cache/run-<ms>-<uuid>`, which makes
-correlating logs to cached artifacts straightforward.
+start in the same millisecond. When coverage is enabled, the same
+value names its directory under `.karva_cache/run-<ms>-<uuid>`.
 
 ### `KARVA_WORKSPACE_ROOT`
 

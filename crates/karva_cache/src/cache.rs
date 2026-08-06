@@ -1,186 +1,27 @@
 use std::collections::HashMap;
+use std::hash::BuildHasher;
 use std::io::ErrorKind;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
-use karva_diagnostic::{
-    DisplayDiagnosticConfig, FlakyTest, RenderedDiagnostic, TestCaseOutcome, TestCaseResult,
-    TestResultKind, TestResultStats, TestRunResult, TestRunResultParts, render_diagnostic,
-};
 use karva_python_semantic::TestCacheKey;
-use serde::{Deserialize, Serialize};
 
-use crate::artifact::{CacheFile, read_json, read_text, write_json, write_text};
+use crate::artifact::{CacheFile, read_json, write_json};
 use crate::{RUN_PREFIX, RunHash, WORKER_PREFIX, worker_folder};
 
-/// Snapshot of the test a worker is currently executing.
-///
-/// Workers update this file at the start of each test and clear it on
-/// completion; the orchestrator reads it on Ctrl+C to render per-test
-/// `SIGINT` lines.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CurrentTest {
-    /// Fully qualified test name (`module::function[params]`).
-    pub name: String,
-
-    /// Wall-clock start of the test, milliseconds since the Unix epoch.
-    pub start_unix_ms: u64,
-}
-
-/// Aggregated test results collected from all worker processes.
-#[derive(Default)]
-pub struct AggregatedResults {
-    /// Outcome counters merged across every worker.
-    pub stats: TestResultStats,
-
-    /// Collection and infrastructure diagnostics not owned by one test case.
-    pub run_diagnostics: Vec<RenderedDiagnostic>,
-
-    /// Base test names used to seed the next run's `--last-failed` selection.
-    pub failed_tests: Vec<TestCacheKey>,
-
-    /// Tests that passed only after one or more failed attempts.
-    pub flaky_tests: Vec<FlakyTest>,
-
-    /// Full result and retry history for every executed test case.
-    pub test_cases: Vec<TestCaseResult>,
-
-    /// Total duration keyed by qualified function or parameter case.
-    pub durations: HashMap<TestCacheKey, Duration>,
-}
-
-/// Serializable subset of one worker's results.
-///
-/// Durations live in a separate artifact so partitioning can read them without
-/// deserializing diagnostics and test histories.
-#[derive(Default, Serialize, Deserialize)]
-struct WorkerResults {
-    stats: TestResultStats,
-    run_diagnostics: Vec<RenderedDiagnostic>,
-    #[serde(default)]
-    failed_tests: Vec<TestCacheKey>,
-    test_cases: Vec<TestCaseResult>,
-}
-
-impl AggregatedResults {
-    /// Whether every test and run-level diagnostic completed successfully.
-    pub fn is_success(&self) -> bool {
-        self.stats.is_success()
-            && !self
-                .run_diagnostics
-                .iter()
-                .any(RenderedDiagnostic::is_error)
-    }
-
-    /// Whether collection or worker infrastructure produced an error diagnostic.
-    pub fn has_run_errors(&self) -> bool {
-        self.run_diagnostics
-            .iter()
-            .any(RenderedDiagnostic::is_error)
-    }
-
-    /// Whether any test exhausted retries without passing.
-    pub fn has_flaky_failures(&self) -> bool {
-        self.test_cases.iter().any(TestCaseResult::is_flaky_failure)
-    }
-
-    /// Records a test interrupted by controller shutdown as a failed result.
-    pub fn register_interrupted_test(&mut self, name: &str, duration: Duration) {
-        let function_name = base_test_name(name);
-        self.stats.add(TestResultKind::Failed);
-        self.failed_tests.push(function_name.clone());
-        self.test_cases.push(TestCaseResult::from_display_name(
-            name,
-            TestCaseOutcome::failed(RenderedDiagnostic::interrupted(name)),
-            duration,
-            None,
-        ));
-        self.durations.insert(function_name, duration);
-    }
-
-    fn merge_worker(&mut self, worker: WorkerResults) {
-        for diagnostic in worker.run_diagnostics {
-            if !self.run_diagnostics.contains(&diagnostic) {
-                self.run_diagnostics.push(diagnostic);
-            }
-        }
-        self.stats.merge(&worker.stats);
-        if worker.failed_tests.is_empty() {
-            self.failed_tests.extend(
-                worker
-                    .test_cases
-                    .iter()
-                    .filter(|case| case.outcome().is_non_success())
-                    .map(|case| base_test_name(case.full_name())),
-            );
-        } else {
-            self.failed_tests.extend(worker.failed_tests);
-        }
-        if worker.stats.flaky() > 0 {
-            for case in &worker.test_cases {
-                if let Some(retry) = case.retry()
-                    && matches!(case.outcome(), TestCaseOutcome::Passed)
-                {
-                    self.flaky_tests.push(FlakyTest::from_display_name(
-                        case.module_name(),
-                        case.name(),
-                        retry.attempts(),
-                        retry.max_attempts(),
-                        case.duration(),
-                    ));
-                }
-            }
-        }
-        self.test_cases.extend(worker.test_cases);
-    }
-}
-
-fn base_test_name(name: &str) -> TestCacheKey {
-    let Some((module, function)) = name.rsplit_once("::") else {
-        return TestCacheKey::function_name(name);
-    };
-    let function = function
-        .split_once('(')
-        .or_else(|| function.split_once('['))
-        .map_or(function, |(base, _)| base);
-    TestCacheKey::function_name(&format!("{module}::{function}"))
-}
-
-/// Reads and writes test results in the cache directory for a specific run.
-pub struct RunCache {
+/// Resolves run-scoped files that workers must persist, currently coverage only.
+pub struct RunArtifacts {
     /// Run-scoped directory containing every worker's artifacts.
     run_dir: Utf8PathBuf,
 }
 
-impl RunCache {
-    /// Constructs a cache handle for a specific run within the cache directory.
+impl RunArtifacts {
+    /// Constructs an artifact handle for a specific run within the cache directory.
     pub fn new(cache_dir: &Utf8Path, run_hash: &RunHash) -> Self {
         let run_dir = cache_dir.join(run_hash.to_string());
         Self { run_dir }
-    }
-
-    /// Writes a fail-fast signal file to indicate a worker encountered a test failure.
-    pub fn write_fail_fast_signal(&self) -> Result<()> {
-        fs::create_dir_all(&self.run_dir)?;
-        write_text(&self.run_dir, CacheFile::FailFastSignal, "")
-    }
-
-    /// Checks whether any worker has written a fail-fast signal file.
-    pub fn has_fail_fast_signal(&self) -> bool {
-        CacheFile::FailFastSignal.path_in(&self.run_dir).exists()
-    }
-
-    /// Reads and merges test results from all worker directories for this run.
-    pub fn aggregate_results(&self) -> Result<AggregatedResults> {
-        let mut results = AggregatedResults::default();
-
-        for worker_dir in list_worker_dirs(&self.run_dir)? {
-            read_worker_results(&worker_dir, &mut results)?;
-        }
-
-        Ok(results)
     }
 
     /// Path to the directory for a specific worker. Does not create it.
@@ -195,34 +36,6 @@ impl RunCache {
         CacheFile::Coverage.path_in(&self.worker_dir(worker_id))
     }
 
-    /// Path to the per-worker file describing the test currently executing.
-    pub fn current_test_file(&self, worker_id: usize) -> Utf8PathBuf {
-        CacheFile::CurrentTest.path_in(&self.worker_dir(worker_id))
-    }
-
-    /// Reads the snapshot of which test the worker is currently running.
-    /// Returns `None` if the worker is between tests, hasn't started yet, or
-    /// has cleared its progress file after finishing a test.
-    pub fn read_current_test(&self, worker_id: usize) -> Result<Option<CurrentTest>> {
-        let worker_dir = self.worker_dir(worker_id);
-        let Some(content) = read_text(&worker_dir, CacheFile::CurrentTest)? else {
-            return Ok(None);
-        };
-
-        if content.trim().is_empty() {
-            return Ok(None);
-        }
-
-        serde_json::from_str(&content)
-            .with_context(|| {
-                format!(
-                    "failed to parse cache artifact `{}`",
-                    CacheFile::CurrentTest.path_in(&worker_dir)
-                )
-            })
-            .map(Some)
-    }
-
     /// Returns paths to every per-worker coverage file that exists for this
     /// run, sorted by worker directory. Used to feed the coverage report.
     pub fn coverage_files(&self) -> Result<Vec<Utf8PathBuf>> {
@@ -235,71 +48,6 @@ impl RunCache {
         }
         Ok(files)
     }
-
-    /// Persists a test run result to disk.
-    pub fn write_result(
-        &self,
-        worker_id: usize,
-        result: TestRunResult,
-        cwd: &Utf8Path,
-        config: &DisplayDiagnosticConfig,
-    ) -> Result<()> {
-        let worker_dir = self.worker_dir(worker_id);
-        fs::create_dir_all(&worker_dir)?;
-
-        let TestRunResultParts {
-            run_diagnostics,
-            stats,
-            durations,
-            failed_tests,
-            test_cases,
-        } = result.into_parts();
-        let run_diagnostics = run_diagnostics
-            .iter()
-            .map(|diagnostic| render_diagnostic(diagnostic, cwd, *config))
-            .collect::<Vec<_>>();
-        let test_cases = test_cases
-            .into_iter()
-            .map(|case| {
-                case.try_map_diagnostic(|diagnostic| {
-                    Ok::<_, anyhow::Error>(render_diagnostic(diagnostic, cwd, *config))
-                })
-            })
-            .collect::<Result<Vec<TestCaseResult>>>()?;
-
-        let mut failed_tests = failed_tests.into_iter().collect::<Vec<_>>();
-        failed_tests.sort();
-        let worker_results = WorkerResults {
-            stats,
-            run_diagnostics,
-            failed_tests,
-            test_cases,
-        };
-
-        write_json(&worker_dir, CacheFile::Durations, &durations)?;
-        write_text(
-            &worker_dir,
-            CacheFile::Results,
-            serde_json::to_vec(&worker_results)?,
-        )?;
-        Ok(())
-    }
-}
-
-/// Reads results from a single worker directory into the accumulator.
-fn read_worker_results(worker_dir: &Utf8Path, results: &mut AggregatedResults) -> Result<()> {
-    let Some(worker_results) = read_json::<WorkerResults>(worker_dir, CacheFile::Results)? else {
-        return Ok(());
-    };
-    results.merge_worker(worker_results);
-
-    if let Some(durations) =
-        read_json::<HashMap<TestCacheKey, Duration>>(worker_dir, CacheFile::Durations)?
-    {
-        results.durations.extend(durations);
-    }
-
-    Ok(())
 }
 
 /// Writes the list of failed tests to the cache directory root.
@@ -394,6 +142,10 @@ fn collect_run_dirs(cache_dir: &Utf8Path) -> Result<Vec<String>> {
 /// Finds the most recent `run-{timestamp}` directory, then aggregates
 /// all durations from all worker directories within it.
 pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<TestCacheKey, Duration>> {
+    if let Some(durations) = read_json(cache_dir, CacheFile::Durations)? {
+        return Ok(durations);
+    }
+
     let run_dirs = collect_run_dirs(cache_dir)?;
     let Some(most_recent) = run_dirs.last() else {
         return Ok(HashMap::new());
@@ -409,6 +161,15 @@ pub fn read_recent_durations(cache_dir: &Utf8Path) -> Result<HashMap<TestCacheKe
         }
     }
     Ok(aggregated_durations)
+}
+
+/// Replaces the duration history used to balance the next test run.
+pub fn write_durations<S: BuildHasher>(
+    cache_dir: &Utf8Path,
+    durations: &HashMap<TestCacheKey, Duration, S>,
+) -> Result<()> {
+    fs::create_dir_all(cache_dir)?;
+    write_json(cache_dir, CacheFile::Durations, durations)
 }
 
 /// Result of a cache prune operation.
@@ -448,86 +209,20 @@ pub fn clean_cache(cache_dir: &Utf8Path) -> Result<bool> {
 mod tests {
     use std::fs;
 
+    use super::*;
     use camino::Utf8PathBuf;
     use insta::assert_debug_snapshot;
-    use karva_diagnostic::CapturedTestOutput;
-    use karva_diagnostic::Severity;
-
-    use super::*;
 
     fn create_cache_with_durations(
         dir: &std::path::Path,
         run_name: &str,
         worker_id: usize,
-        durations: &HashMap<String, Duration>,
+        durations: &HashMap<TestCacheKey, Duration>,
     ) {
         let worker_dir = dir.join(run_name).join(format!("worker-{worker_id}"));
         fs::create_dir_all(&worker_dir).unwrap();
         let json = serde_json::to_string(durations).unwrap();
         fs::write(worker_dir.join(CacheFile::Durations.filename()), json).unwrap();
-    }
-
-    fn create_cache_with_stats(
-        dir: &std::path::Path,
-        run_name: &str,
-        worker_id: usize,
-        stats_json: &str,
-    ) {
-        let worker_dir = dir.join(run_name).join(format!("worker-{worker_id}"));
-        fs::create_dir_all(&worker_dir).unwrap();
-        let stats: TestResultStats =
-            serde_json::from_str(stats_json).expect("deserialize test stats");
-        let mut test_cases = Vec::new();
-        for index in 0..stats.passed() {
-            test_cases.push(TestCaseResult::from_display_name(
-                &format!("mod::test_passed_{index}"),
-                TestCaseOutcome::Passed,
-                Duration::ZERO,
-                None,
-            ));
-        }
-        for index in 0..stats.failed() {
-            test_cases.push(failed_case(&format!("mod::test_failed_{index}")));
-        }
-        for index in 0..stats.skipped() {
-            test_cases.push(TestCaseResult::from_display_name(
-                &format!("mod::test_skipped_{index}"),
-                TestCaseOutcome::Skipped { reason: None },
-                Duration::ZERO,
-                None,
-            ));
-        }
-        write_worker_results(
-            &worker_dir,
-            &WorkerResults {
-                stats,
-                run_diagnostics: Vec::new(),
-                failed_tests: Vec::new(),
-                test_cases,
-            },
-        );
-    }
-
-    fn failed_case(name: &str) -> TestCaseResult {
-        TestCaseResult::from_display_name(
-            name,
-            TestCaseOutcome::failed(RenderedDiagnostic::new(
-                "test-failure",
-                Severity::Error,
-                "failed",
-                "error[test-failure]: failed\n",
-            )),
-            Duration::ZERO,
-            None,
-        )
-    }
-
-    fn write_worker_results(worker_dir: &std::path::Path, results: &WorkerResults) {
-        fs::write(
-            worker_dir.join(CacheFile::Results.filename()),
-            serde_json::to_string(results).expect("serialize worker results"),
-        )
-        .expect("write worker results");
     }
 
     #[test]
@@ -536,11 +231,17 @@ mod tests {
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
 
         let mut old_durations = HashMap::new();
-        old_durations.insert("test_old".to_string(), Duration::from_millis(100));
+        old_durations.insert(
+            TestCacheKey::function_name("test_old"),
+            Duration::from_millis(100),
+        );
         create_cache_with_durations(tmp.path(), "run-100", 0, &old_durations);
 
         let mut new_durations = HashMap::new();
-        new_durations.insert("test_new".to_string(), Duration::from_millis(200));
+        new_durations.insert(
+            TestCacheKey::function_name("test_new"),
+            Duration::from_millis(200),
+        );
         create_cache_with_durations(tmp.path(), "run-200", 0, &new_durations);
 
         let result = read_recent_durations(&cache_dir).unwrap();
@@ -558,69 +259,26 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_results_merges_stats_from_multiple_workers() {
+    fn root_durations_take_precedence_over_legacy_runs() {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-
-        let run_hash = RunHash::from_existing("run-500");
-        let run_name = run_hash.dir_name();
-
-        create_cache_with_stats(tmp.path(), &run_name, 0, r#"{"passed": 3, "failed": 1}"#);
-        create_cache_with_stats(tmp.path(), &run_name, 1, r#"{"passed": 2, "skipped": 1}"#);
-
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let results = cache.aggregate_results().unwrap();
-
-        assert_eq!(results.stats.passed(), 5);
-        assert_eq!(results.stats.failed(), 1);
-        assert_eq!(results.stats.skipped(), 1);
-    }
-
-    #[test]
-    fn aggregate_results_handles_missing_worker_directories() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-
-        let run_hash = RunHash::from_existing("run-600");
-        let run_dir = tmp.path().join(run_hash.dir_name());
-        fs::create_dir_all(&run_dir).unwrap();
-
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let results = cache.aggregate_results().unwrap();
-
-        assert_eq!(results.stats.total(), 0);
-        assert!(results.run_diagnostics.is_empty());
-    }
-
-    #[test]
-    fn aggregate_results_ignores_incomplete_worker() {
-        let tmp = tempfile::tempdir().expect("create temporary directory");
-        let cache_dir =
-            Utf8PathBuf::try_from(tmp.path().to_path_buf()).expect("temporary path is UTF-8");
-        let run_hash = RunHash::from_existing("run-610");
-        let worker_dir = tmp.path().join(run_hash.dir_name()).join("worker-0");
-        fs::create_dir_all(&worker_dir).expect("create worker directory");
-
-        let durations = HashMap::from([(
-            "mod::test_uncommitted".to_string(),
-            Duration::from_millis(10),
+        create_cache_with_durations(
+            tmp.path(),
+            "run-200",
+            0,
+            &HashMap::from([(
+                TestCacheKey::function_name("legacy"),
+                Duration::from_millis(10),
+            )]),
+        );
+        let current = HashMap::from([(
+            TestCacheKey::function_name("current"),
+            Duration::from_millis(20),
         )]);
-        fs::write(
-            worker_dir.join(CacheFile::Durations.filename()),
-            serde_json::to_string(&durations).expect("serialize durations"),
-        )
-        .expect("write durations");
 
-        let results = RunCache::new(&cache_dir, &run_hash)
-            .aggregate_results()
-            .expect("aggregate results");
+        write_durations(&cache_dir, &current).unwrap();
 
-        assert!(results.durations.is_empty());
-    }
-
-    #[test]
-    fn worker_results_reject_missing_fields() {
-        assert!(serde_json::from_str::<WorkerResults>("{}").is_err());
+        assert_eq!(read_recent_durations(&cache_dir).unwrap(), current);
     }
 
     #[test]
@@ -849,330 +507,5 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().join("nope")).unwrap();
         assert!(!clean_cache(&cache_dir).unwrap());
-    }
-
-    #[test]
-    fn aggregate_results_merges_failed_tests_and_durations_across_workers() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-700");
-
-        let run_dir = tmp.path().join(run_hash.dir_name());
-        let worker0 = run_dir.join("worker-0");
-        let worker1 = run_dir.join("worker-1");
-        fs::create_dir_all(&worker0).unwrap();
-        fs::create_dir_all(&worker1).unwrap();
-        let mut worker0_stats = TestResultStats::default();
-        worker0_stats.add(TestResultKind::Failed);
-        let mut worker1_stats = TestResultStats::default();
-        worker1_stats.add(TestResultKind::Failed);
-
-        write_worker_results(
-            &worker0,
-            &WorkerResults {
-                stats: worker0_stats,
-                test_cases: vec![failed_case("mod::test_a")],
-                ..WorkerResults::default()
-            },
-        );
-        write_worker_results(
-            &worker1,
-            &WorkerResults {
-                stats: worker1_stats,
-                test_cases: vec![failed_case("mod::test_b")],
-                ..WorkerResults::default()
-            },
-        );
-
-        let mut d0 = HashMap::new();
-        d0.insert("mod::test_a".to_string(), Duration::from_millis(10));
-        let mut d1 = HashMap::new();
-        d1.insert("mod::test_b".to_string(), Duration::from_millis(20));
-        fs::write(
-            worker0.join(CacheFile::Durations.filename()),
-            serde_json::to_string(&d0).unwrap(),
-        )
-        .unwrap();
-        fs::write(
-            worker1.join(CacheFile::Durations.filename()),
-            serde_json::to_string(&d1).unwrap(),
-        )
-        .unwrap();
-
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let results = cache.aggregate_results().unwrap();
-
-        let mut failed = results.failed_tests.clone();
-        failed.sort();
-        assert_debug_snapshot!(failed, @r#"
-        [
-            "mod::test_a",
-            "mod::test_b",
-        ]
-        "#);
-
-        let mut durations: Vec<(TestCacheKey, Duration)> = results.durations.into_iter().collect();
-        durations.sort();
-        assert_debug_snapshot!(durations, @r#"
-        [
-            (
-                "mod::test_a",
-                10ms,
-            ),
-            (
-                "mod::test_b",
-                20ms,
-            ),
-        ]
-        "#);
-    }
-
-    #[test]
-    fn aggregate_results_merges_test_output_across_workers() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-710");
-
-        let run_dir = tmp.path().join(run_hash.dir_name());
-        let worker0 = run_dir.join("worker-0");
-        let worker1 = run_dir.join("worker-1");
-        fs::create_dir_all(&worker0).unwrap();
-        fs::create_dir_all(&worker1).unwrap();
-        let mut worker0_stats = TestResultStats::default();
-        worker0_stats.add(TestResultKind::Passed);
-        let mut worker1_stats = TestResultStats::default();
-        worker1_stats.add(TestResultKind::Passed);
-
-        let case0: TestCaseResult = TestCaseResult::from_display_name(
-            "mod::test_a",
-            TestCaseOutcome::Passed,
-            Duration::ZERO,
-            Some(CapturedTestOutput::new(
-                "worker 0 stdout\n".to_string(),
-                String::new(),
-            )),
-        );
-        let case1: TestCaseResult = TestCaseResult::from_display_name(
-            "mod::test_b",
-            TestCaseOutcome::Passed,
-            Duration::ZERO,
-            Some(CapturedTestOutput::new(
-                String::new(),
-                "worker 1 stderr\n".to_string(),
-            )),
-        );
-
-        write_worker_results(
-            &worker0,
-            &WorkerResults {
-                stats: worker0_stats,
-                test_cases: vec![case0],
-                ..WorkerResults::default()
-            },
-        );
-        write_worker_results(
-            &worker1,
-            &WorkerResults {
-                stats: worker1_stats,
-                test_cases: vec![case1],
-                ..WorkerResults::default()
-            },
-        );
-
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let mut cases = cache
-            .aggregate_results()
-            .expect("aggregate results")
-            .test_cases;
-        cases.sort_by(|a, b| a.full_name().cmp(b.full_name()));
-
-        assert_debug_snapshot!(cases, @r#"
-        [
-            TestCaseResult {
-                module_name: "mod",
-                name: "test_a",
-                full_name: "mod::test_a",
-                outcome: Passed,
-                duration: 0ns,
-                retry: None,
-                captured_output: Some(
-                    CapturedTestOutput {
-                        stdout: "worker 0 stdout\n",
-                        stderr: "",
-                    },
-                ),
-                attempts: [],
-            },
-            TestCaseResult {
-                module_name: "mod",
-                name: "test_b",
-                full_name: "mod::test_b",
-                outcome: Passed,
-                duration: 0ns,
-                retry: None,
-                captured_output: Some(
-                    CapturedTestOutput {
-                        stdout: "",
-                        stderr: "worker 1 stderr\n",
-                    },
-                ),
-                attempts: [],
-            },
-        ]
-        "#);
-    }
-
-    #[test]
-    fn interrupted_tests_count_as_failures() {
-        let mut results = AggregatedResults::default();
-
-        results.register_interrupted_test("mod::test_slow", Duration::from_millis(42));
-
-        assert_eq!(results.stats.failed(), 1);
-        assert_debug_snapshot!(results.failed_tests, @r#"
-        [
-            "mod::test_slow",
-        ]
-        "#);
-        assert_debug_snapshot!(results.durations, @r#"
-        {
-            "mod::test_slow": 42ms,
-        }
-        "#);
-    }
-
-    #[test]
-    fn interrupted_parametrized_tests_store_base_function_name_for_reruns() {
-        let mut results = AggregatedResults::default();
-
-        results.register_interrupted_test("mod::test_slow(value=1)", Duration::from_millis(42));
-        results.register_interrupted_test("mod::test_legacy[value]", Duration::from_millis(24));
-
-        assert_debug_snapshot!(results.failed_tests, @r#"
-        [
-            "mod::test_slow",
-            "mod::test_legacy",
-        ]
-        "#);
-        let mut durations: Vec<_> = results.durations.iter().collect();
-        durations.sort_by_key(|(name, _)| *name);
-        assert_debug_snapshot!(durations, @r#"
-        [
-            (
-                "mod::test_legacy",
-                24ms,
-            ),
-            (
-                "mod::test_slow",
-                42ms,
-            ),
-        ]
-        "#);
-        assert_debug_snapshot!(results.test_cases, @r#"
-        [
-            TestCaseResult {
-                module_name: "mod",
-                name: "test_slow(value=1)",
-                full_name: "mod::test_slow(value=1)",
-                outcome: Failed {
-                    diagnostic: RenderedDiagnostic {
-                        code: "interrupted",
-                        severity: Error,
-                        message: "Test `mod::test_slow(value=1)` was interrupted",
-                        rendered: "error[interrupted]: Test `mod::test_slow(value=1)` was interrupted\n",
-                        colored_rendered: None,
-                    },
-                    related: [],
-                },
-                duration: 42ms,
-                retry: None,
-                captured_output: None,
-                attempts: [],
-            },
-            TestCaseResult {
-                module_name: "mod",
-                name: "test_legacy[value]",
-                full_name: "mod::test_legacy[value]",
-                outcome: Failed {
-                    diagnostic: RenderedDiagnostic {
-                        code: "interrupted",
-                        severity: Error,
-                        message: "Test `mod::test_legacy[value]` was interrupted",
-                        rendered: "error[interrupted]: Test `mod::test_legacy[value]` was interrupted\n",
-                        colored_rendered: None,
-                    },
-                    related: [],
-                },
-                duration: 24ms,
-                retry: None,
-                captured_output: None,
-                attempts: [],
-            },
-        ]
-        "#);
-    }
-
-    #[test]
-    fn read_current_test_treats_empty_progress_file_as_between_tests() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-750");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let progress_file = cache.current_test_file(0);
-        fs::create_dir_all(progress_file.parent().expect("progress file parent")).unwrap();
-        fs::write(progress_file, "").unwrap();
-
-        assert!(cache.read_current_test(0).unwrap().is_none());
-    }
-
-    #[test]
-    fn read_current_test_reports_path_on_read_error() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-760");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let progress_file = cache.current_test_file(0);
-        fs::create_dir_all(&progress_file).unwrap();
-
-        let error = cache
-            .read_current_test(0)
-            .expect_err("directory progress file should fail");
-
-        assert!(
-            error.to_string().contains(progress_file.as_str()),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn read_current_test_reports_path_on_parse_error() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-770");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-        let progress_file = cache.current_test_file(0);
-        fs::create_dir_all(progress_file.parent().expect("progress file parent")).unwrap();
-        fs::write(&progress_file, "not-json").unwrap();
-
-        let error = cache
-            .read_current_test(0)
-            .expect_err("malformed progress file should fail");
-
-        assert!(
-            error.to_string().contains(progress_file.as_str()),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn fail_fast_signal_round_trip() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
-        let run_hash = RunHash::from_existing("run-800");
-        let cache = RunCache::new(&cache_dir, &run_hash);
-
-        assert!(!cache.has_fail_fast_signal());
-        cache.write_fail_fast_signal().unwrap();
-        assert!(cache.has_fail_fast_signal());
     }
 }

@@ -1,9 +1,10 @@
 use std::time::Duration;
 
+use camino::Utf8Path;
 use karva_python_semantic::QualifiedTestName;
 use serde::{Deserialize, Serialize};
 
-use crate::Diagnostic;
+use crate::{Diagnostic, DisplayDiagnosticConfig, render_diagnostic};
 
 use super::diagnostic::RenderedDiagnostic;
 use super::kind::IndividualTestResultKind;
@@ -35,7 +36,7 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
 
 impl<D> TestCaseResult<D> {
     /// Builds a result for a test executed once.
-    pub(super) fn new(
+    pub fn new(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -62,7 +63,7 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Builds a result whose final outcome followed earlier failed attempts.
-    pub(super) fn retried(
+    pub fn retried(
         test_case_name: &QualifiedTestName,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -77,7 +78,7 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Builds a synthetic result when no semantic [`QualifiedTestName`] is available.
-    pub fn from_display_name(
+    pub(super) fn from_display_name(
         full_name: &str,
         outcome: TestCaseOutcome<D>,
         duration: Duration,
@@ -146,24 +147,32 @@ impl<D> TestCaseResult<D> {
     }
 
     /// Converts every diagnostic while preserving outcome and retry structure.
-    pub fn try_map_diagnostic<T, E>(
-        self,
-        mut map: impl FnMut(&D) -> Result<T, E>,
-    ) -> Result<TestCaseResult<T>, E> {
-        Ok(TestCaseResult {
+    fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseResult<T> {
+        TestCaseResult {
             module_name: self.module_name,
             name: self.name,
             full_name: self.full_name,
-            outcome: self.outcome.try_map_diagnostic(&mut map)?,
+            outcome: self.outcome.map_diagnostic(&mut map),
             duration: self.duration,
             retry: self.retry,
             captured_output: self.captured_output,
             attempts: self
                 .attempts
                 .into_iter()
-                .map(|attempt| attempt.try_map_diagnostic(&mut map))
-                .collect::<Result<Vec<_>, _>>()?,
-        })
+                .map(|attempt| attempt.map_diagnostic(&mut map))
+                .collect(),
+        }
+    }
+}
+
+impl TestCaseResult<Diagnostic> {
+    /// Converts source-backed diagnostics into transport-safe renderings.
+    pub fn render(
+        self,
+        cwd: &Utf8Path,
+        config: DisplayDiagnosticConfig,
+    ) -> TestCaseResult<RenderedDiagnostic> {
+        self.map_diagnostic(|diagnostic| render_diagnostic(diagnostic, cwd, config))
     }
 }
 
@@ -209,16 +218,13 @@ impl<D> TestCaseAttempt<D> {
         self.captured_output.as_ref()
     }
 
-    fn try_map_diagnostic<T, E>(
-        self,
-        mut map: impl FnMut(&D) -> Result<T, E>,
-    ) -> Result<TestCaseAttempt<T>, E> {
-        Ok(TestCaseAttempt {
+    fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseAttempt<T> {
+        TestCaseAttempt {
             attempt: self.attempt,
-            outcome: self.outcome.try_map_diagnostic(&mut map)?,
+            outcome: self.outcome.map_diagnostic(&mut map),
             duration: self.duration,
             captured_output: self.captured_output,
-        })
+        }
     }
 }
 
@@ -260,7 +266,7 @@ impl TestCaseRetry {
         self.max_attempts
     }
 
-    pub fn is_flaky_failure(&self) -> bool {
+    fn is_flaky_failure(&self) -> bool {
         self.flaky_failure
     }
 
@@ -391,36 +397,33 @@ impl<D> TestCaseOutcome<D> {
         }
     }
 
-    fn try_map_diagnostic<T, E>(
-        self,
-        mut map: impl FnMut(&D) -> Result<T, E>,
-    ) -> Result<TestCaseOutcome<T>, E> {
-        Ok(match self {
+    fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseOutcome<T> {
+        match self {
             Self::Passed => TestCaseOutcome::Passed,
             Self::Failed {
                 diagnostic,
                 related,
             } => TestCaseOutcome::Failed {
-                diagnostic: map(&diagnostic)?,
+                diagnostic: map(&diagnostic),
                 related: related
                     .into_iter()
                     .map(|diagnostic| map(&diagnostic))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect(),
             },
             Self::Error {
                 diagnostic,
                 related,
                 fixture_failures,
             } => TestCaseOutcome::Error {
-                diagnostic: map(&diagnostic)?,
+                diagnostic: map(&diagnostic),
                 related: related
                     .into_iter()
                     .map(|diagnostic| map(&diagnostic))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect(),
                 fixture_failures,
             },
             Self::Skipped { reason } => TestCaseOutcome::Skipped { reason },
-        })
+        }
     }
 }
 

@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_coverage::CoveragePhase;
-use karva_diagnostic::{CapturedTestOutput, TestCaseRetry, TestExecutionOutcome};
+use karva_diagnostic::{
+    CapturedTestOutput, TestCaseRetry, TestExecutionOutcome, TestExecutionResult,
+};
 use karva_metadata::filter::EvalContext;
 use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
 use karva_python_semantic::QualifiedTestName;
@@ -152,8 +154,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             );
 
             if attempt.retryable && attempt_number < settings.max_attempts {
-                self.package_runner.state.report_test_attempt(
-                    self.package_runner.context,
+                self.package_runner.context.report_test_attempt(
                     &settings.qualified_test_name,
                     attempt_number,
                     attempt.lifecycle.outcome.result_kind(),
@@ -321,7 +322,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Registers final outcome after all retries and returns pass/fail status.
     fn finish(
-        &mut self,
+        &self,
         settings: &VariantSettings,
         prior_attempts: Vec<TestLifecycleAttempt>,
         final_attempt: TestLifecycleAttempt,
@@ -340,8 +341,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .saturating_add(final_attempt.duration);
 
         if !prior_attempts.is_empty() {
-            self.package_runner.state.report_test_attempt(
-                self.package_runner.context,
+            self.package_runner.context.report_test_attempt(
                 &settings.qualified_test_name,
                 final_attempt.attempt,
                 final_attempt.outcome.result_kind(),
@@ -352,19 +352,12 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .slow_timeout
             .is_some_and(|threshold| total_duration > threshold)
         {
-            self.package_runner.state.register_slow_test(
-                self.package_runner.context,
-                &settings.qualified_test_name,
-                total_duration,
-            );
+            self.package_runner
+                .context
+                .register_slow_test(&settings.qualified_test_name, total_duration);
         }
-        self.package_runner
-            .context
-            .report_test_finished(&settings.qualified_test_name);
-
         if prior_attempts.is_empty() {
-            self.package_runner.state.register_test_case_result(
-                self.package_runner.context,
+            self.package_runner.context.register_test_case_result(
                 &settings.qualified_test_name,
                 final_attempt.outcome,
                 total_duration,
@@ -382,7 +375,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 .map(TestLifecycleAttempt::into_execution_attempt)
                 .collect::<Vec<_>>();
             execution_attempts.push(final_attempt.into_execution_attempt());
-            self.package_runner.state.register_retried_result(
+            let test_case = TestExecutionResult::retried(
                 &settings.qualified_test_name,
                 outcome,
                 total_duration,
@@ -390,12 +383,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                     .with_failure_policy(flaky_failure, junit_flaky_failure),
                 captured_output,
                 execution_attempts,
-            )
+            );
+            self.package_runner
+                .context
+                .register_retried_result(&settings.qualified_test_name, test_case)
         }
     }
 
     /// Returns a registered skip result when filters or skip policy exclude this variant.
-    fn should_skip(&mut self) -> Option<bool> {
+    fn should_skip(&self) -> Option<bool> {
         let filter = &self.package_runner.context.settings().test().filter;
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
         let qualified = if let Some(id) = &self.id {
@@ -413,8 +409,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 tags: &tag_names,
             };
             if !filter.matches(&context) {
-                return Some(self.package_runner.state.register_test_case_result(
-                    self.package_runner.context,
+                return Some(self.package_runner.context.register_test_case_result(
                     &qualified,
                     TestExecutionOutcome::Skipped { reason: None },
                     Duration::ZERO,
@@ -434,8 +429,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let (true, reason) = skipped else {
             return None;
         };
-        Some(self.package_runner.state.register_test_case_result(
-            self.package_runner.context,
+        Some(self.package_runner.context.register_test_case_result(
             &qualified,
             TestExecutionOutcome::Skipped { reason },
             Duration::ZERO,

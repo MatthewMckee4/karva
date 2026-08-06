@@ -1,21 +1,23 @@
+use std::net::SocketAddr;
 use std::{ffi::OsString, io};
 
 use anyhow::Context as _;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use fs_err as fs;
-use karva_cache::{RunCache, RunHash};
 use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
 use karva_diagnostic::{
-    DiagnosticFormat, DisplayDiagnosticConfig, DummyReporter, Reporter, TestCaseReporter,
+    DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
 };
-use karva_logging::{Printer, StatusLevel, set_colored_override, setup_tracing};
+use karva_ipc::{WorkerClient, WorkerEvent};
+use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
 use karva_project::path::{TestPath, TestPathError, absolute};
 use karva_python_semantic::current_python_version;
 use karva_static::EnvVars;
+
+use crate::reporter::WorkerReporter;
 
 /// Command-line arguments for the `karva_worker` process.
 ///
@@ -24,12 +26,11 @@ use karva_static::EnvVars;
 #[derive(Parser)]
 #[command(name = "karva_worker", about = "Karva test worker")]
 struct Args {
-    /// Directory where test results and duration cache are stored.
+    /// Controller endpoint used for runtime events and final results.
     #[arg(long)]
-    cache_dir: Utf8PathBuf,
+    controller_address: SocketAddr,
 
-    /// Unique identifier for this test run, used for cache coordination.
-    /// Encodes `<ms>-<uuid>`; the cache directory adds the `run-` prefix.
+    /// Unique identifier correlating events for this test run.
     #[arg(long)]
     run_id: String,
 
@@ -142,57 +143,42 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     settings.set_filter(filter);
     settings.set_run_ignored(run_ignored);
 
-    let run_hash = RunHash::parse_existing(&args.run_id).context("Invalid run id")?;
-
-    let cache = RunCache::new(&args.cache_dir, &run_hash);
-
-    let progress_file = cache.current_test_file(args.worker_id);
-    // Make sure the worker dir exists so the reporter can write the
-    // progress file before the worker has otherwise touched it.
-    if let Some(parent) = progress_file.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create worker progress directory `{parent}`"))?;
-    }
-    let reporter: Box<dyn Reporter> = if matches!(printer.status_level(), StatusLevel::None) {
-        Box::new(DummyReporter)
-    } else {
-        Box::new(
-            TestCaseReporter::new(printer)
-                .with_progress_file(&progress_file)
-                .context("Failed to open worker progress file")?,
-        )
+    let diagnostic_format = match settings.terminal().output_format {
+        OutputFormat::Full => DiagnosticFormat::Full,
+        OutputFormat::Concise => DiagnosticFormat::Concise,
     };
+    let diagnostic_config = DisplayDiagnosticConfig::new(
+        diagnostic_format,
+        colored::control::SHOULD_COLORIZE.should_colorize(),
+    );
+    let client = WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
+    let reporter = WorkerReporter::new(
+        TestCaseReporter::new(printer),
+        client.clone(),
+        cwd.clone(),
+        diagnostic_config,
+    );
 
     let result = karva_test_semantic::run_tests(
         &cwd,
         &settings,
         python_version,
-        reporter.as_ref(),
+        &reporter,
         test_paths,
         coverage.as_ref(),
         !verbosity.is_default(),
     );
-
-    let diagnostic_format = match settings.terminal().output_format {
-        OutputFormat::Full => DiagnosticFormat::Full,
-        OutputFormat::Concise => DiagnosticFormat::Concise,
-    };
-    let config = DisplayDiagnosticConfig::new(
-        diagnostic_format,
-        colored::control::SHOULD_COLORIZE.should_colorize(),
-    );
-
-    // Propagate the stop signal to sibling workers whenever this worker has
-    // reached (or exceeded) its configured max-fail budget. The budget is
-    // enforced locally per worker inside `PackageRunner`, so hitting any
-    // failure here while `max_fail` is set means we ran out of budget.
-    let failed_count =
-        u32::try_from(result.stats().failed() + result.stats().errors()).unwrap_or(u32::MAX);
-    cache.write_result(args.worker_id, result, &cwd, &config)?;
-
-    if settings.max_fail().is_exceeded_by(failed_count) {
-        cache.write_fail_fast_signal()?;
+    reporter.finish()?;
+    drop(reporter);
+    for diagnostic in &result {
+        client.send_event(WorkerEvent::RunDiagnostic(render_diagnostic(
+            diagnostic,
+            &cwd,
+            diagnostic_config,
+        )))?;
     }
+    drop(result);
+    client.complete()?;
 
     Ok(ExitStatus::Success)
 }

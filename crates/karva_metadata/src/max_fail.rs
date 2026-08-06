@@ -44,11 +44,6 @@ impl MaxFail {
         matches!(self.0, Some(limit) if failures >= limit.get())
     }
 
-    /// Returns `true` when this configuration imposes any limit at all.
-    pub fn has_limit(self) -> bool {
-        self.0.is_some()
-    }
-
     /// Returns `true` when no failure limit is configured.
     ///
     /// `MaxFail::unlimited()` wraps `None`, which serializers like TOML
@@ -114,6 +109,5 @@ mod tests {
     #[test]
     fn from_count_zero_is_unlimited() {
         assert_eq!(MaxFail::from_count(0), MaxFail::unlimited());
-        assert!(!MaxFail::from_count(0).has_limit());
     }
 }

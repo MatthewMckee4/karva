@@ -30,7 +30,7 @@ pub struct FlakyTest {
 
 impl FlakyTest {
     /// Splits a displayed test name into function and parameter components.
-    pub fn from_display_name(
+    pub(super) fn from_display_name(
         module_name: &str,
         name: &str,
         passed_on: u32,
@@ -54,6 +54,13 @@ impl FlakyTest {
     /// Returns terminal-display formatting for this flaky result.
     fn display(&self) -> DisplayFlakyTest<'_> {
         DisplayFlakyTest(self)
+    }
+
+    pub(super) fn display_ordering(&self, other: &Self) -> std::cmp::Ordering {
+        self.module_name
+            .cmp(&other.module_name)
+            .then_with(|| self.function_name.cmp(&other.function_name))
+            .then_with(|| self.params.cmp(&other.params))
     }
 }
 

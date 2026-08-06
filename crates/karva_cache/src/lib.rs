@@ -5,12 +5,10 @@ pub(crate) mod cache;
 pub(crate) mod hash;
 
 pub use cache::{
-    AggregatedResults, CurrentTest, PruneResult, RunCache, clean_cache, prune_cache,
-    read_last_failed, read_random_seed, read_recent_durations, write_last_failed,
-    write_random_seed,
+    PruneResult, RunArtifacts, clean_cache, prune_cache, read_last_failed, read_random_seed,
+    read_recent_durations, write_durations, write_last_failed, write_random_seed,
 };
 pub use hash::RunHash;
-pub use karva_diagnostic::{DisplayFlakyTests, FlakyTest};
 
 /// The directory name used for the cache, relative to the project root.
 pub const CACHE_DIR: &str = ".karva_cache";

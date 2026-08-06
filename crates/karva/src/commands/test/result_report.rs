@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8Path;
-use karva_cache::AggregatedResults;
 use karva_cli::ResultFormat;
+use karva_diagnostic::AggregatedResults;
 use karva_diagnostic::{
     CapturedTestOutput, FixtureFailure, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome,
     TestCaseResult, TestCaseRetry,
