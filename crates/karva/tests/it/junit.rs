@@ -111,13 +111,11 @@ def test_skip():
       |
     8 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
       --&gt; test_alpha.py:11:5
        |
     11 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     </failure>
           <system-out>fail stdout
@@ -210,13 +208,11 @@ def test_flaky():
       |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_retry.py:5:5
       |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     </failure>
           <rerunFailure message="Test `test_fail` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_fail` failed
@@ -224,13 +220,11 @@ def test_flaky():
       |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_retry.py:5:5
       |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     </rerunFailure>
         </testcase>
@@ -240,13 +234,11 @@ def test_flaky():
       |
     7 | def test_flaky():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_retry.py:9:5
       |
     9 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     </flakyFailure>
           <system-out>attempt 1
@@ -481,7 +473,6 @@ def test_resource(resource):
        |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
-       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     </failure>
@@ -635,13 +626,11 @@ def test_failure():
       |
     2 | def test_failure():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_failure.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     </failure>
         </testcase>
@@ -656,13 +645,11 @@ def test_failure():
       |
     5 | def broken_fixture():
       |     ^^^^^^^^^^^^^^
-      |
     info: Fixture failed here
      --&gt; test_fixture.py:6:5
       |
     6 |     raise RuntimeError(&quot;setup failed&quot;)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: setup failed
 
     </error>
