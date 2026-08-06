@@ -1,5 +1,5 @@
 use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
-use annotate_snippets::{AnnotationKind, Element, Level, Padding, Renderer, Snippet};
+use annotate_snippets::{AnnotationKind, Element, Level, Renderer, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use ruff_source_file::SourceFile;
 
@@ -174,17 +174,39 @@ fn render_message(
     if let Some(code) = code {
         title = title.id(code);
     }
-    let mut elements = snippets.map(Element::from).collect::<Vec<_>>();
-    if !elements.is_empty() {
-        elements.push(Element::from(Padding));
-    }
+    let elements = snippets.map(Element::from).collect::<Vec<_>>();
     let report = [title.elements(elements)];
     let renderer = if color {
         Renderer::styled()
     } else {
         Renderer::plain()
     };
-    format!("{}\n", renderer.render(&report))
+    let rendered = renderer.render(&report);
+    let rendered = rendered
+        .lines()
+        .filter(|line| !is_gutter_padding(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("{rendered}\n")
+}
+
+fn is_gutter_padding(line: &str) -> bool {
+    let mut chars = line.chars();
+    let mut visible = None;
+    while let Some(character) = chars.next() {
+        if character == '\u{1b}' {
+            for escape_character in chars.by_ref() {
+                if escape_character.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else if !character.is_whitespace() {
+            if visible.replace(character).is_some() {
+                return false;
+            }
+        }
+    }
+    visible == Some('|')
 }
 
 fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
@@ -206,5 +228,17 @@ fn severity_name(severity: Severity) -> &'static str {
         Severity::Warning => "warning",
         Severity::Error => "error",
         Severity::Fatal => "fatal",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_gutter_padding;
+
+    #[test]
+    fn detects_gutter_padding() {
+        assert!(is_gutter_padding("  |"));
+        assert!(is_gutter_padding("  \u{1b}[1;94m|\u{1b}[0m"));
+        assert!(!is_gutter_padding("4 | def test_example():"));
     }
 }

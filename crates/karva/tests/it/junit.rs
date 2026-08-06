@@ -79,16 +79,12 @@ def test_skip():
 
     error[test-failure]: Test `test_fail` failed
      --> test_alpha.py:8:5
-      |
     8 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
       --> test_alpha.py:11:5
-       |
     11 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     captured stdout:
     fail stdout
@@ -110,16 +106,12 @@ def test_skip():
         <testcase classname="test_alpha" name="test_fail" time="[TIME]">
           <failure message="Test `test_fail` failed" type="test-failure">error[test-failure]: Test `test_fail` failed
      --&gt; test_alpha.py:8:5
-      |
     8 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
       --&gt; test_alpha.py:11:5
-       |
     11 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     </failure>
           <system-out>fail stdout
@@ -184,16 +176,12 @@ def test_flaky():
 
     error[test-failure]: Test `test_fail` failed
      --> test_retry.py:4:5
-      |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test_retry.py:5:5
-      |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 failed, 0 skipped
@@ -211,46 +199,34 @@ def test_flaky():
         <testcase classname="test_retry" name="test_fail" time="[TIME]">
           <failure message="Test `test_fail` failed" type="test-failure">error[test-failure]: Test `test_fail` failed
      --&gt; test_retry.py:4:5
-      |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_retry.py:5:5
-      |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     </failure>
           <rerunFailure message="Test `test_fail` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_fail` failed
      --&gt; test_retry.py:4:5
-      |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_retry.py:5:5
-      |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     </rerunFailure>
         </testcase>
         <testcase classname="test_retry" name="test_flaky" time="[TIME]">
           <flakyFailure message="Test `test_flaky` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_flaky` failed
      --&gt; test_retry.py:7:5
-      |
     7 | def test_flaky():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_retry.py:9:5
-      |
     9 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     </flakyFailure>
           <system-out>attempt 1
@@ -309,16 +285,12 @@ def test_flaky():
           <failure message="Flaky test failed by policy" type="flaky">Flaky tests are configured to fail the run.</failure>
           <flakyFailure message="Test `test_flaky` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_flaky` failed
      --&gt; test_flaky.py:4:5
-      |
     4 | def test_flaky():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_flaky.py:5:5
-      |
     5 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     </flakyFailure>
         </testcase>
@@ -386,16 +358,12 @@ def test_lenient():
         <testcase classname="test_flaky" name="test_lenient" time="[TIME]">
           <flakyFailure message="Test `test_lenient` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_lenient` failed
      --&gt; test_flaky.py:9:5
-      |
     9 | def test_lenient():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
       --&gt; test_flaky.py:10:5
-       |
     10 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
 
     </flakyFailure>
         </testcase>
@@ -403,16 +371,12 @@ def test_lenient():
           <failure message="Flaky test failed by policy" type="flaky">Flaky tests are configured to fail the run.</failure>
           <flakyFailure message="Test `test_strict` failed" type="test-failure" time="[TIME]">error[test-failure]: Test `test_strict` failed
      --&gt; test_flaky.py:6:5
-      |
     6 | def test_strict():
       |     ^^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_flaky.py:7:5
-      |
     7 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     </flakyFailure>
         </testcase>
@@ -464,10 +428,8 @@ def test_resource(resource):
 
     error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget
       --> test_fail_slow.py:11:5
-       |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
-       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     ────────────
@@ -489,10 +451,8 @@ def test_resource(resource):
         <testcase classname="test_fail_slow" name="test_resource(resource=None)" time="[>=0.4s]">
           <failure message="Test `test_resource` exceeded its fail-slow budget" type="fail-slow-exceeded">error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget
       --&gt; test_fail_slow.py:11:5
-       |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
-       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     </failure>
@@ -605,31 +565,23 @@ def test_failure():
 
     error[test-failure]: Test `test_failure` failed
      --> test_failure.py:2:5
-      |
     2 | def test_failure():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_failure.py:3:5
-      |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     test_fixture::test_unreachable (uses auto-use fixture `broken_fixture`):
 
     error[fixture-failure]: Fixture `broken_fixture` failed
      --> test_fixture.py:5:5
-      |
     5 | def broken_fixture():
       |     ^^^^^^^^^^^^^^
-      |
     info: Fixture failed here
      --> test_fixture.py:6:5
-      |
     6 |     raise RuntimeError("setup failed")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: setup failed
 
     ────────────
@@ -647,16 +599,12 @@ def test_failure():
         <testcase classname="test_failure" name="test_failure" time="[TIME]">
           <failure message="Test `test_failure` failed" type="test-failure">error[test-failure]: Test `test_failure` failed
      --&gt; test_failure.py:2:5
-      |
     2 | def test_failure():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_failure.py:3:5
-      |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     </failure>
         </testcase>
@@ -668,16 +616,12 @@ def test_failure():
           </properties>
           <error message="Fixture `broken_fixture` failed" type="fixture-failure">error[fixture-failure]: Fixture `broken_fixture` failed
      --&gt; test_fixture.py:5:5
-      |
     5 | def broken_fixture():
       |     ^^^^^^^^^^^^^^
-      |
     info: Fixture failed here
      --&gt; test_fixture.py:6:5
-      |
     6 |     raise RuntimeError(&quot;setup failed&quot;)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: setup failed
 
     </error>

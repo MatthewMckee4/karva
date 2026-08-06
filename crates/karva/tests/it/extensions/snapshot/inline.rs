@@ -88,21 +88,18 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
-      |
     4 | def test_hello():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
-      |
     5 |     karva.assert_snapshot("goodbye", inline="hello")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Inline snapshot mismatch for 'test_hello'.
           ────────────┬───────────────────────────
               1       │ -hello
                     1 │ +goodbye
           ────────────┴───────────────────────────
+          Re-run with `--snapshot-update` to accept.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

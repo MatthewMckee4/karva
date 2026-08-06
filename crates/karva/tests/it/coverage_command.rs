@@ -705,16 +705,12 @@ def test_failure():
 
     error[test-failure]: Test `test_failure` failed
      --> test_failure.py:2:5
-      |
     2 | def test_failure():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_failure.py:3:5
-      |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

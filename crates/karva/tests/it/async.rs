@@ -82,16 +82,12 @@ async def test_async_fails():
 
     error[test-failure]: Test `test_async_fails` failed
      --> test.py:4:11
-      |
     4 | async def test_async_fails():
       |           ^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:6:5
-      |
     6 |     assert False, 'async test failed'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: async test failed
 
     ────────────

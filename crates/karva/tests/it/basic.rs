@@ -199,16 +199,12 @@ fn test_one_test_fail() {
 
     error[test-failure]: Test `test_fail` failed
      --> test_fail.py:2:5
-      |
     2 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test_fail.py:3:5
-      |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -280,70 +276,56 @@ def test_returned_decorated():
 
     error[test-returned-value]: Test `test_returned_async_value` returned `True`
       --> test_return.py:27:11
-       |
     27 | async def test_returned_async_value():
        |           ^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     test_return::test_returned_decorated:
 
     error[test-returned-value]: Test `test_returned_decorated` returned `'decorated'`
       --> test_return.py:35:5
-       |
     35 | def test_returned_decorated():
        |     ^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     test_return::test_returned_false:
 
     error[test-returned-value]: Test `test_returned_false` returned `False`
       --> test_return.py:21:5
-       |
     21 | def test_returned_false():
        |     ^^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     test_return::test_returned_object:
 
     error[test-returned-value]: Test `test_returned_object` returned `value-xxxxxxxxxxxxxxxxxxxxx...`
       --> test_return.py:24:5
-       |
     24 | def test_returned_object():
        |     ^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     test_return::test_returned_parametrized(value=1):
 
     error[test-returned-value]: Test `test_returned_parametrized` returned `1`
       --> test_return.py:31:5
-       |
     31 | def test_returned_parametrized(value):
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     test_return::test_returned_parametrized(value=2):
 
     error[test-returned-value]: Test `test_returned_parametrized` returned `2`
       --> test_return.py:31:5
-       |
     31 | def test_returned_parametrized(value):
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     test_return::test_returned_true:
 
     error[test-returned-value]: Test `test_returned_true` returned `True`
       --> test_return.py:18:5
-       |
     18 | def test_returned_true():
        |     ^^^^^^^^^^^^^^^^^^
-       |
     info: Test functions must return None. Did you mean to use `assert`?
 
     ────────────
@@ -377,10 +359,8 @@ def test_returned_value():
 
     error[test-returned-value]: Test `test_returned_value` returned `True`
      --> test_return.py:2:5
-      |
     2 | def test_returned_value():
       |     ^^^^^^^^^^^^^^^^^^^
-      |
     info: Test functions must return None. Did you mean to use `assert`?
 
     ────────────
@@ -416,16 +396,12 @@ fn test_failure_diagnostic_uses_discovered_source_after_file_is_deleted() {
 
     error[test-failure]: Test `test_failure_after_source_deleted` failed
      --> test_deleted_source.py:4:5
-      |
     4 | def test_failure_after_source_deleted():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_deleted_source.py:6:5
-      |
     6 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -520,31 +496,23 @@ fn test_two_test_fails() {
 
     error[test-failure]: Test `test_fail` failed
      --> tests/test_fail.py:2:5
-      |
     2 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> tests/test_fail.py:3:5
-      |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     tests.test_fail::test_fail2:
 
     error[test-failure]: Test `test_fail2` failed
      --> tests/test_fail.py:5:5
-      |
     5 | def test_fail2():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> tests/test_fail.py:6:5
-      |
     6 |     assert False, 'Test failed'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed
 
     ────────────
@@ -590,16 +558,12 @@ fn test_file_importing_another_file() {
 
     error[test-failure]: Test `test_with_helper` failed
      --> test_cross_file.py:4:5
-      |
     4 | def test_with_helper():
       |     ^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> helper.py:4:9
-      |
     4 |         assert False, 'Data validation failed'
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Data validation failed
 
     ────────────
@@ -689,16 +653,12 @@ fn test_failed_output_is_captured() {
 
     error[test-failure]: Test `test_fail_with_output` failed
      --> test_failed_output.py:7:5
-      |
     7 | def test_fail_with_output():
       |     ^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
       --> test_failed_output.py:10:5
-       |
     10 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     captured stdout:
     stdout from failure
@@ -732,10 +692,8 @@ fn test_multiple_fixtures_not_found() {
 
     error[missing-fixtures]: Test `test_multiple_fixtures_not_found` has missing fixtures
      --> test_multiple_fixtures_not_found.py:1:5
-      |
     1 | def test_multiple_fixtures_not_found(a, b, c): ...
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Missing fixtures: `a`, `b`, `c`
 
     ────────────
@@ -824,16 +782,12 @@ fn test_quiet_output_failing() {
 
     error[test-failure]: Test `test_quiet_output` failed
      --> test.py:2:5
-      |
     2 | def test_quiet_output():
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:3:5
-      |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -887,10 +841,8 @@ fn test_fixture_generator_two_yields_passing_test() {
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
-      |
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Fixture had more than one yield statement
 
     ────────────
@@ -930,25 +882,19 @@ fn test_fixture_generator_two_yields_failing_test() {
 
     error[test-failure]: Test `test_fixture_generator` failed
      --> test.py:9:5
-      |
     9 | def test_fixture_generator(fixture_generator):
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test ran with arguments:
     info: `fixture_generator`: `1`
     info: Test failed here
       --> test.py:10:5
-       |
     10 |     assert fixture_generator == 2
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
-      |
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Fixture had more than one yield statement
 
     ────────────
@@ -988,10 +934,8 @@ fn test_fixture_generator_fail_in_teardown() {
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
-      |
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Failed to reset fixture: fixture error
 
     ────────────
@@ -1035,18 +979,14 @@ fn test_fixture_generator_setup_failure_reports_arguments() {
 
     error[fixture-failure]: Fixture `broken_generator` failed
      --> test.py:9:5
-      |
     9 | def broken_generator(dependency):
       |     ^^^^^^^^^^^^^^^^
-      |
     info: Fixture ran with arguments:
     info: `dependency`: `prepared`
     info: Fixture failed here
       --> test.py:10:5
-       |
     10 |     raise RuntimeError("setup failed")
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: setup failed
 
     ────────────
@@ -1085,20 +1025,16 @@ fn test_invalid_fixture() {
 
     error[missing-fixtures]: Test `test_fixture_generator` has missing fixtures
      --> test.py:8:5
-      |
     8 | def test_fixture_generator(fixture_generator):
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Missing fixtures: `fixture_generator`
 
     diagnostics:
 
     error[invalid-fixture]: Discovered an invalid fixture `fixture_generator`
      --> test.py:5:5
-      |
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Invalid fixture scope `ssession`
 
     ────────────
@@ -1134,16 +1070,12 @@ fn test_failfast() {
 
     error[test-failure]: Test `test_first_fail` failed
      --> test_failfast.py:2:5
-      |
     2 | def test_first_fail():
       |     ^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_failfast.py:3:5
-      |
     3 |     assert False, 'First test fails'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: First test fails
 
     ────────────
@@ -1214,16 +1146,12 @@ def test_9():
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:4:5
-      |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test_a.py:5:5
-      |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1344,18 +1272,14 @@ def test_1(fixture_very_very_very_very_very_long_name):
 
     error[test-failure]: Test `test_1` failed
      --> test_file.py:8:5
-      |
     8 | def test_1(fixture_very_very_very_very_very_long_name):
       |     ^^^^^^
-      |
     info: Test ran with arguments:
     info: `fixture_very_very_very_very...`: `fixture_very_very_very_very...`
     info: Test failed here
      --> test_file.py:9:5
-      |
     9 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1497,16 +1421,12 @@ def test_2(y): pass
 
     error[fixture-failure]: Fixture `x` failed
      --> foo.py:5:5
-      |
     5 | def x():
       |     ^
-      |
     info: Fixture failed here
      --> foo.py:6:5
-      |
     6 |     raise ValueError('Invalid fixture')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Invalid fixture
 
     ────────────
@@ -1854,32 +1774,24 @@ def test_fourth_skipped():
 
     error[test-failure]: Test `test_first_fail` failed
      --> test_max_fail.py:2:5
-      |
     2 | def test_first_fail():
       |     ^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_max_fail.py:3:5
-      |
     3 |     assert False, 'boom 1'
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: boom 1
 
     test_max_fail::test_second_fail:
 
     error[test-failure]: Test `test_second_fail` failed
      --> test_max_fail.py:5:5
-      |
     5 | def test_second_fail():
       |     ^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_max_fail.py:6:5
-      |
     6 |     assert False, 'boom 2'
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: boom 2
 
     ────────────
@@ -1921,32 +1833,24 @@ def test_c():
 
     error[test-failure]: Test `test_a` failed
      --> test_no_fail_fast.py:2:5
-      |
     2 | def test_a():
       |     ^^^^^^
-      |
     info: Test failed here
      --> test_no_fail_fast.py:3:5
-      |
     3 |     assert False, 'a boom'
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: a boom
 
     test_no_fail_fast::test_b:
 
     error[test-failure]: Test `test_b` failed
      --> test_no_fail_fast.py:5:5
-      |
     5 | def test_b():
       |     ^^^^^^
-      |
     info: Test failed here
      --> test_no_fail_fast.py:6:5
-      |
     6 |     assert False, 'b boom'
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: b boom
 
     ────────────
@@ -1988,16 +1892,12 @@ def test_third():
 
     error[test-failure]: Test `test_second` failed
      --> test_max_fail_one.py:5:5
-      |
     5 | def test_second():
       |     ^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_max_fail_one.py:6:5
-      |
     6 |     assert False, 'stop here'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: stop here
 
     ────────────
@@ -2111,16 +2011,12 @@ def test_needs_retry():
 
     error[test-failure]: Test `test_needs_retry` failed
      --> test.py:4:5
-      |
     4 | def test_needs_retry():
       |     ^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
-      |
     5 |     assert os.environ["KARVA_ATTEMPT"] == "2"
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2222,28 +2118,20 @@ def fail():
 
     error[test-failure]: Test `test_failure` failed
      --> test.py:4:5
-      |
     4 | def test_failure():
       |     ^^^^^^^^^^^^
-      |
     info: Called `call_middle` here
      --> test.py:5:5
-      |
     5 |     call_middle()
       |     ^^^^^^^^^^^^^
-      |
     info: Called `fail` here
      --> middle.py:5:5
-      |
     5 |     fail()
       |     ^^^^^^
-      |
     info: Test failed here
      --> bottom.py:3:5
-      |
     3 |     raise RuntimeError("traceback context")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: traceback context
 
     ────────────
@@ -2451,16 +2339,12 @@ def test_2(): assert False
 
     error[test-failure]: Test `test_2` failed
      --> test.py:3:5
-      |
     3 | def test_2(): assert False
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:3:1
-      |
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -2492,16 +2376,12 @@ def test_fail(): assert False
 
     error[test-failure]: Test `test_fail` failed
      --> test.py:2:5
-      |
     2 | def test_fail(): assert False
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:2:1
-      |
     2 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2535,16 +2415,12 @@ def test_always_fails(): assert False
 
     error[test-failure]: Test `test_always_fails` failed
      --> test.py:2:5
-      |
     2 | def test_always_fails(): assert False
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:2:1
-      |
     2 | def test_always_fails(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2737,16 +2613,12 @@ def test_always_fails(): assert False
 
     error[test-failure]: Test `test_always_fails` failed
       --> test.py:11:5
-       |
     11 | def test_always_fails(): assert False
        |     ^^^^^^^^^^^^^^^^^
-       |
     info: Test failed here
       --> test.py:11:1
-       |
     11 | def test_always_fails(): assert False
        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed (1 flaky), 1 failed, 0 skipped
@@ -2838,16 +2710,12 @@ def test_always_fails(): assert False
 
     error[test-failure]: Test `test_always_fails` failed
      --> test.py:2:5
-      |
     2 | def test_always_fails(): assert False
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:2:1
-      |
     2 | def test_always_fails(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -3181,31 +3049,23 @@ def test_3(): pass
 
     error[test-failure]: Test `test_1` failed
      --> test.py:2:5
-      |
     2 | def test_1(): assert False
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:2:1
-      |
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     test::test_2:
 
     error[test-failure]: Test `test_2` failed
      --> test.py:3:5
-      |
     3 | def test_2(): assert False
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:3:1
-      |
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -3241,16 +3101,12 @@ def test_3(): pass
 
     error[test-failure]: Test `test_1` failed
      --> test.py:2:5
-      |
     2 | def test_1(): assert False
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:2:1
-      |
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -3287,31 +3143,23 @@ def test_3(): assert False
 
     error[test-failure]: Test `test_1` failed
      --> test.py:2:5
-      |
     2 | def test_1(): assert False
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:2:1
-      |
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     test::test_2:
 
     error[test-failure]: Test `test_2` failed
      --> test.py:3:5
-      |
     3 | def test_2(): assert False
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:3:1
-      |
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped

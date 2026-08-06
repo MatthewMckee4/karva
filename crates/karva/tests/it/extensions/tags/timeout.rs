@@ -57,10 +57,8 @@ def test_slow():
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:6:5
-      |
     6 | def test_slow():
       |     ^^^^^^^^^
-      |
     info: Test exceeded timeout of 0.1 seconds
 
     ────────────
@@ -97,10 +95,8 @@ async def test_slow_async():
 
     error[test-failure]: Test `test_slow_async` failed
      --> test.py:6:11
-      |
     6 | async def test_slow_async():
       |           ^^^^^^^^^^^^^^^
-      |
     info: Test exceeded timeout of 0.1 seconds
 
     ────────────
@@ -243,10 +239,8 @@ def test_1(sleep_for):
 
     error[test-failure]: Test `test_1` failed
      --> test.py:7:5
-      |
     7 | def test_1(sleep_for):
       |     ^^^^^^
-      |
     info: Test ran with arguments:
     info: `sleep_for`: `2.0`
     info: Test exceeded timeout of 0.3 seconds
@@ -313,10 +307,8 @@ def test_always_slow():
 
     error[test-failure]: Test `test_always_slow` failed
      --> test.py:6:5
-      |
     6 | def test_always_slow():
       |     ^^^^^^^^^^^^^^^^
-      |
     info: Test exceeded timeout of 0.1 seconds
 
     ────────────
@@ -353,10 +345,8 @@ def test_slow():
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:4:5
-      |
     4 | def test_slow():
       |     ^^^^^^^^^
-      |
     info: Test exceeded timeout of 0.1 seconds
 
     ────────────
@@ -488,10 +478,8 @@ def test_slow():
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:4:5
-      |
     4 | def test_slow():
       |     ^^^^^^^^^
-      |
     info: Test exceeded timeout of 0.1 seconds
 
     ────────────

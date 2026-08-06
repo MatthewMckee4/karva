@@ -249,10 +249,8 @@ def test_typo():
 
     error[unknown-tag]: Tag `integraiton` is not registered
      --> test.py:4:13
-      |
     4 | @karva.tags.integraiton
       |             ^^^^^^^^^^^ unregistered tag
-      |
     info: Did you mean `integration`?
 
     ────────────
@@ -302,26 +300,20 @@ def test_typos(value):
 
     error[unknown-tag]: Tag `fixture_typo` is not registered
      --> test.py:5:13
-      |
     5 | @karva.tags.fixture_typo
       |             ^^^^^^^^^^^^ unregistered tag
-      |
     info: Register `fixture_typo` in the project-wide `[tags]` table.
 
     error[unknown-tag]: Tag `pytest_typo` is not registered
       --> test.py:10:14
-       |
     10 | @pytest.mark.pytest_typo
        |              ^^^^^^^^^^^ unregistered tag
-       |
     info: Register `pytest_typo` in the project-wide `[tags]` table.
 
     error[unknown-tag]: Tag `parameter_typo` is not registered
       --> test.py:12:37
-       |
     12 |     karva.param(1, tags=(karva.tags.parameter_typo,)),
        |                                     ^^^^^^^^^^^^^^ unregistered tag
-       |
     info: Register `parameter_typo` in the project-wide `[tags]` table.
 
     ────────────
@@ -368,10 +360,8 @@ def test_typo():
 
     error[unknown-tag]: Tag `integraiton` is not registered
      --> test.py:4:13
-      |
     4 | @karva.tags.integraiton
       |             ^^^^^^^^^^^ unregistered tag
-      |
     info: Did you mean `integration`?
 
     ────────────
@@ -426,26 +416,20 @@ def test_aliases(value):
 
     error[unknown-tag]: Tag `daatbase` is not registered
      --> test.py:6:22
-      |
     6 | pytestmark = pt.mark.daatbase
       |                      ^^^^^^^^ unregistered tag
-      |
     info: Did you mean `database`?
 
     error[unknown-tag]: Tag `integraiton` is not registered
      --> test.py:8:7
-      |
     8 | @tags.integraiton
       |       ^^^^^^^^^^^ unregistered tag
-      |
     info: Did you mean `integration`?
 
     error[unknown-tag]: Tag `integraiton` is not registered
       --> test.py:13:29
-       |
     13 |     k.param(1, tags=(k.tags.integraiton,)),
        |                             ^^^^^^^^^^^ unregistered tag
-       |
     info: Did you mean `integration`?
 
     ────────────

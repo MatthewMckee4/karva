@@ -888,10 +888,8 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
 
     error[missing-fixtures]: Test `test_invoke` has missing fixtures
      --> test_invoke.py:1:5
-      |
     1 | def test_invoke(invoke): assert invoke == 'invoked'
       |     ^^^^^^^^^^^
-      |
     info: Missing fixtures: `invoke`
 
     diagnostics:
