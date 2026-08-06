@@ -16,7 +16,7 @@ pub use result::{
 };
 
 pub use diagnostic::{
-    Annotation, Diagnostic, Severity, Span, SubDiagnostic, Suggestion, sort_diagnostics_for_display,
+    Annotation, Diagnostic, Severity, Span, SubDiagnostic, sort_diagnostics_for_display,
 };
 pub use render::{DiagnosticFormat, DisplayDiagnosticConfig, render_diagnostic};
 #[cfg(feature = "traceback")]

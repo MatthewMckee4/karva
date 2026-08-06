@@ -74,12 +74,11 @@ def test_hello():
      --> test.py:5:5
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_hello'
-     --> snapshots/test__test_hello.snap:1:1
-    1 | - hello world
-    1 | + goodbye world
-    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    info: Pending file: snapshots/test__test_hello.snap.new
+    info: Snapshot mismatch for 'test_hello' in snapshots/test__test_hello.snap:
+              1       │ -hello world
+                    1 │ +goodbye world
+          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+          Pending file: snapshots/test__test_hello.snap.new
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -155,19 +154,18 @@ def test_user_data():
      --> test.py:9:5
     9 |     karva.assert_json_snapshot(result)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_user_data'
-     --> snapshots/test__test_user_data.snap:6:11
-    1 | {
-    2 |   "id": 1,
-    3 |   "name": "Alice",
-    4 |   "roles": [
-    5 |     "admin",
-    6 | ~     "user",
-    7 | +     "hr"
-    8 |   ]
-    9 | }
-    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    info: Pending file: snapshots/test__test_user_data.snap.new
+    info: Snapshot mismatch for 'test_user_data' in snapshots/test__test_user_data.snap:
+              2     2 │    "id": 1,
+              3     3 │    "name": "Alice",
+              4     4 │    "roles": [
+              5     5 │      "admin",
+              6       │ -    "user"
+                    6 │ +    "user",
+                    7 │ +    "hr"
+              7     8 │    ]
+              8     9 │  }
+          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+          Pending file: snapshots/test__test_user_data.snap.new
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -338,13 +336,13 @@ def test_second():
      --> test.py:8:5
     8 |     karva.assert_json_snapshot({"value": 99})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_second'
-     --> snapshots/test__test_second.snap:2:12
-    1 | {
-    2 | ~   "value": 99
-    3 | }
-    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    info: Pending file: snapshots/test__test_second.snap.new
+    info: Snapshot mismatch for 'test_second' in snapshots/test__test_second.snap:
+              1     1 │  {
+              2       │ -  "value": 2
+                    2 │ +  "value": 99
+              3     3 │  }
+          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+          Pending file: snapshots/test__test_second.snap.new
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
