@@ -127,12 +127,10 @@ impl Context<'_> {
         let cache_key = test_case_name.cache_key();
         let test_case =
             TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
-        self.reporter.report_test_case_result(
-            test_case_name,
-            test_case.outcome().result_kind(),
-            duration,
-        );
+        let result_kind = test_case.outcome().result_kind();
         self.reporter.report_test_completed(&cache_key, test_case);
+        self.reporter
+            .report_test_case_result(test_case_name, result_kind, duration);
 
         passed
     }

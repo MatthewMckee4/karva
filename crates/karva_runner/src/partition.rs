@@ -124,17 +124,6 @@ impl Partition {
         self.function_roots.iter().map(String::as_str)
     }
 
-    /// First scheduled identity without a committed result.
-    pub(super) fn first_unfinished(
-        &self,
-        completed: &HashSet<TestCacheKey>,
-    ) -> Option<TestCacheKey> {
-        self.test_keys
-            .iter()
-            .find(|cache_key| !completed.contains(*cache_key))
-            .cloned()
-    }
-
     /// Runtime-expanded cases already handled by an earlier worker generation.
     pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
         &self.resume_skip
@@ -226,9 +215,15 @@ pub fn partition_collected_tests(
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
     if !last_failed.is_empty() {
+        let failed_function_roots = last_failed
+            .iter()
+            .map(TestCacheKey::test_function_name)
+            .collect::<HashSet<_>>();
         test_infos.retain(|info| {
             last_failed.contains(info.qualified_name.as_str())
                 || last_failed.contains(info.function_root.as_str())
+                || (info.qualified_name == info.function_root
+                    && failed_function_roots.contains(info.function_root.as_str()))
         });
     }
 
@@ -786,6 +781,33 @@ mod tests {
         );
 
         assert_eq!(scheduled_test_count(&package), 1);
+        assert_eq!(
+            partitions
+                .iter()
+                .flat_map(Partition::tests)
+                .collect::<Vec<_>>(),
+            [&format!("{test_path}::test_value")]
+        );
+    }
+
+    #[test]
+    fn last_failed_case_selects_opaque_dynamic_parameter_function() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', range(6))\n\
+             def test_value(value): pass\n",
+        );
+        let last_failed =
+            HashSet::from([TestCacheKey::function_name("test_sample::test_value[2]")]);
+
+        let partitions = partition_collected_tests(
+            &package,
+            1,
+            &HashMap::new(),
+            &last_failed,
+            None,
+            TestOrdering::Stable,
+        );
+
         assert_eq!(
             partitions
                 .iter()

@@ -22,8 +22,6 @@ pub enum CacheFile {
     Durations,
     /// Per-worker JSON: line-coverage data for sources tracked during the run.
     Coverage,
-    /// Per-worker raw stderr captured by the controller.
-    WorkerStderr,
     /// Cache-root JSON: list of last-run failed test names.
     LastFailed,
     /// Cache-root JSON: most recently generated random seed.
@@ -36,7 +34,6 @@ impl CacheFile {
         match self {
             Self::Durations => "durations.json",
             Self::Coverage => "coverage.json",
-            Self::WorkerStderr => "stderr.log",
             Self::LastFailed => "last-failed.json",
             Self::RandomSeed => "random-seed.json",
         }

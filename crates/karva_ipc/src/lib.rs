@@ -143,7 +143,7 @@ impl WorkerClient {
         Ok((client, selection))
     }
 
-    /// Queues one state change, flushing failures immediately for global fail-fast.
+    /// Queues one state change, flushing completed tests before execution advances.
     pub fn send_event(&self, event: WorkerEvent) -> Result<()> {
         let mut current_test = self
             .connection
@@ -167,10 +167,7 @@ impl WorkerClient {
             current_test.latest = None;
             current_test.sent = None;
         }
-        let flush = matches!(
-            &event,
-            WorkerEvent::TestFinished { result, .. } if result.outcome().is_non_success()
-        );
+        let flush = matches!(&event, WorkerEvent::TestFinished { .. });
         self.write(&WireMessage::Event(Box::new(event)), flush)
     }
 
@@ -284,10 +281,9 @@ fn read_test_selection(stream: TcpStream) -> Result<WorkerSelection> {
     }
 }
 
-// Receipt: synchronous per-event flushing made the 16,807-case parametrized
-// benchmark 40.5% slower. Completed results remain buffered until the next
-// test-start durability barrier; other events flush on the controller's 10 ms
-// observation interval.
+// Receipt: synchronous flushing of every event made the 16,807-case parametrized
+// benchmark 40.5% slower. Lifecycle starts remain coalesced; terminal results
+// flush immediately so a later fixture teardown crash cannot erase a PASS.
 const EVENT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 
 fn spawn_flusher(
@@ -471,9 +467,17 @@ impl ControllerServer {
         self.disconnected_workers.contains(&worker_id)
     }
 
-    /// Whether the worker completed its controller handshake.
-    pub fn worker_connected(&self, worker_id: usize) -> bool {
-        self.workers.contains(&worker_id)
+    /// Whether the worker began or completed its controller handshake.
+    pub fn worker_started(&self, worker_id: usize) -> Result<bool> {
+        if self.workers.contains(&worker_id) {
+            return Ok(true);
+        }
+        let pending = self
+            .worker_selections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
+            .contains_key(&worker_id);
+        Ok(!pending)
     }
 
     /// Joins every accepted reader after worker processes have exited.
@@ -517,23 +521,30 @@ fn read_worker(
         .with_context(|| {
             format!("Karva worker {worker_id} connected without a registered selection")
         })?;
-    let mut writer = BufWriter::new(response_stream);
-    serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))
-        .context("failed to serialize Karva worker selection")?;
-    writer
-        .write_all(b"\n")
-        .context("failed to frame Karva worker test paths")?;
-    writer
-        .flush()
-        .context("failed to send Karva worker test paths")?;
     if sender.send(Incoming::Connected { worker_id }).is_err() {
+        return Ok(());
+    }
+    let mut writer = BufWriter::new(response_stream);
+    let selection_result =
+        serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))
+            .context("failed to serialize Karva worker selection")
+            .and_then(|()| {
+                writer
+                    .write_all(b"\n")
+                    .context("failed to frame Karva worker selection")?;
+                writer
+                    .flush()
+                    .context("failed to send Karva worker selection")
+            });
+    if selection_result.is_err() {
+        sender.send(Incoming::Disconnected { worker_id }).ok();
         return Ok(());
     }
 
     for message in messages {
         let message = match message {
             Ok(message) => message,
-            Err(error) if is_clean_disconnect(&error) => break,
+            Err(error) if error.is_eof() || is_clean_disconnect(&error) => break,
             Err(error) => return Err(error).context("failed to read Karva worker event"),
         };
         let event = match message {
@@ -563,6 +574,8 @@ fn is_clean_disconnect(error: &serde_json::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufRead as _, Read as _};
+
     use rstest::rstest;
 
     use super::*;
@@ -674,6 +687,81 @@ mod tests {
 
         assert_eq!(event.worker_id, 7);
         assert!(matches!(*event.event, WorkerEvent::WorkerFinished));
+    }
+
+    #[test]
+    fn transfers_resume_skip_cases() {
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        server
+            .register_worker_selection(
+                7,
+                WorkerSelection {
+                    test_paths: vec!["mod::test".to_string()],
+                    resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
+                },
+            )
+            .expect("register worker selection");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let (client, selection) =
+                WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            assert_eq!(
+                selection.resume_skip,
+                [TestCacheKey::function_name("mod::test[1]")]
+            );
+            client.complete().expect("complete worker");
+        });
+
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
+        server.finish().expect("finish readers");
+    }
+
+    #[test]
+    fn truncated_terminal_event_is_a_worker_disconnect() {
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        server
+            .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+            .expect("register worker selection");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let mut stream = TcpStream::connect(address).expect("connect worker");
+            serde_json::to_writer(
+                &mut stream,
+                &WireMessage::Hello {
+                    run_id: "run-id".to_string(),
+                    worker_id: 7,
+                },
+            )
+            .expect("write handshake");
+            stream.write_all(b"\n").expect("frame handshake");
+            stream.flush().expect("flush handshake");
+
+            let mut selection = String::new();
+            BufReader::new(stream.try_clone().expect("clone stream"))
+                .read_line(&mut selection)
+                .expect("read selection");
+            assert!(!selection.is_empty());
+
+            stream
+                .write_all(br#"{"Event":{"TestStarted""#)
+                .expect("write truncated event");
+            stream.flush().expect("flush truncated event");
+            stream
+                .shutdown(Shutdown::Write)
+                .expect("close worker write stream");
+            let mut drain = Vec::new();
+            stream
+                .read_to_end(&mut drain)
+                .expect("drain controller stream");
+        });
+
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
+        server.finish().expect("finish readers");
+        assert!(server.try_recv().expect("drain events").is_none());
+        assert!(server.worker_started(7).expect("read worker state"));
+        assert!(server.worker_disconnected(7));
     }
 
     #[rstest]
