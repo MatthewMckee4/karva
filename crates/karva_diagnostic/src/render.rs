@@ -140,8 +140,8 @@ fn render_message(
                     .map(|annotation| vec![*annotation])
                     .collect()
             };
-            groups.into_iter().flat_map(move |annotations| {
-                let snippet = Snippet::source(source_file.source_text())
+            groups.into_iter().map(move |annotations| {
+                Snippet::source(source_file.source_text())
                     .path(path)
                     .fold(true)
                     .annotations(annotations.into_iter().map(|annotation| {
@@ -158,8 +158,7 @@ fn render_message(
                         } else {
                             rendered_annotation
                         }
-                    }));
-                [Element::from(snippet), Element::from(Padding)]
+                    }))
             })
         });
     let level_name = match severity {
@@ -174,7 +173,11 @@ fn render_message(
     if let Some(code) = code {
         title = title.id(code);
     }
-    let report = [title.elements(snippets)];
+    let mut elements = snippets.map(Element::from).collect::<Vec<_>>();
+    if !elements.is_empty() {
+        elements.push(Element::from(Padding));
+    }
+    let report = [title.elements(elements)];
     let renderer = if color {
         Renderer::styled()
     } else {

@@ -120,7 +120,6 @@ def test_value(left, right):
     5 |     arg_values=[(1, 2), (3,)],
       |                         ^^^^ contains 1 value
       |
-      |
      ::: test.py:6:15
       |
     6 |     arg_names=("left", "right"),
@@ -166,7 +165,6 @@ def test_value(left, right):
       |
     5 |     argvalues=[(1, 2), (3,)],
       |                        ^^^^ contains 1 value
-      |
       |
      ::: test.py:6:15
       |
@@ -322,7 +320,6 @@ def test_value(left, right):
        |
     13 |           (3,),
        |           ^^^^ contains 1 value
-       |
        |
       ::: test.py:7:5
        |
@@ -497,7 +494,6 @@ def test_value(value):
     7 |         "value",
       |         ^^^^^^^ duplicate parameter
       |
-      |
      ::: test.py:6:9
       |
     6 |         "value",
@@ -641,7 +637,6 @@ def test_value(value):
         6 | @parametrize("value", [2])
           |              ^^^^^^^ duplicate parameter
           |
-          |
          ::: test.py:5:14
           |
         5 | @parametrize("value", [1])
@@ -691,7 +686,6 @@ def test_value(value):
         5 | @parametrize("missing", [1])
           |              ^^^^^^^^^ not accepted by test
           |
-          |
          ::: test.py:6:15
           |
         6 | def test_value(value):
@@ -737,7 +731,6 @@ def test_value(value):
       |
     6 | @cases(("value", "missing"), [(1, 2)])
       |                  ^^^^^^^^^ not accepted by test
-      |
       |
      ::: test.py:7:15
       |
@@ -875,7 +868,6 @@ def test_value(value):
         5 | @parametrize("", [1])
           |              ^^ empty parameter name
           |
-          |
          ::: test.py:6:15
           |
         6 | def test_value(value):
@@ -924,7 +916,6 @@ def test_value(value):
           |
         5 | @parametrize("not valid", [1])
           |              ^^^^^^^^^^^ invalid parameter name
-          |
           |
          ::: test.py:6:15
           |
@@ -988,7 +979,6 @@ def test_invalid(
     12 |   @karva.tags.parametrize("", [1])
        |                           ^^ empty parameter name
        |
-       |
       ::: test.py:13:15
        |
     13 |   def test_empty(
@@ -1006,7 +996,6 @@ def test_invalid(
     18 |   @karva.tags.parametrize("not valid", [1])
        |                           ^^^^^^^^^^^ invalid parameter name
        |
-       |
       ::: test.py:19:17
        |
     19 |   def test_invalid(
@@ -1023,7 +1012,6 @@ def test_invalid(
       |
     4 |   @karva.tags.parametrize("missing", [1])
       |                           ^^^^^^^^^ not accepted by test
-      |
       |
      ::: test.py:5:17
       |
