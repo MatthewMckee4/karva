@@ -541,7 +541,7 @@ def test_inline_wrong():
       3 │ +----- stdout -----
       4 │ +actual
       5 │ +----- stderr -----
-    Re-run with `--snapshot-update` to accept.
+    info: Re-run with `--snapshot-update` to accept.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

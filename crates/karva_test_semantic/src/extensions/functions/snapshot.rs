@@ -523,7 +523,7 @@ fn handle_inline_snapshot(
     if !is_empty {
         let diff = format_diff(&expected, actual);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Inline snapshot mismatch for '{test_name}'.\n{diff}Re-run with `--snapshot-update` to accept."
+            "Inline snapshot mismatch for '{test_name}'.\n{diff}info: Re-run with `--snapshot-update` to accept."
         )));
     }
 
