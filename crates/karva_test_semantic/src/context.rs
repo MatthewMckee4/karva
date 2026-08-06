@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
@@ -5,7 +7,7 @@ use karva_diagnostic::{
     TestExecutionResult, sort_diagnostics_for_display,
 };
 use karva_metadata::ProjectSettings;
-use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
+use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use ruff_python_ast::PythonVersion;
 
 /// Immutable configuration and reporting services shared by one test run.
@@ -21,6 +23,9 @@ pub struct Context<'a> {
 
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
+
+    /// Cases already committed by an earlier worker generation.
+    resume_skip: &'a BTreeSet<TestCacheKey>,
 
     /// Whether diagnostics should include the full Python call chain.
     verbose: bool,
@@ -38,6 +43,7 @@ impl<'a> Context<'a> {
         settings: &'a ProjectSettings,
         python_version: PythonVersion,
         reporter: &'a dyn Reporter,
+        resume_skip: &'a BTreeSet<TestCacheKey>,
         verbose: bool,
     ) -> Self {
         Self {
@@ -45,6 +51,7 @@ impl<'a> Context<'a> {
             settings,
             python_version,
             reporter,
+            resume_skip,
             verbose,
         }
     }
@@ -59,6 +66,11 @@ impl<'a> Context<'a> {
 
     pub(super) fn is_verbose(&self) -> bool {
         self.verbose
+    }
+
+    /// Whether crash recovery already committed this exact case.
+    pub(super) fn should_resume_skip(&self, cache_key: &TestCacheKey) -> bool {
+        self.resume_skip.contains(cache_key)
     }
 
     pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {

@@ -114,13 +114,21 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Executes setup, all required attempts, teardown, and final reporting.
     fn execute(mut self) -> bool {
+        let unresolved_test_name = self.unresolved_test_name();
+        if self
+            .package_runner
+            .context
+            .should_resume_skip(&unresolved_test_name.cache_key())
+        {
+            return true;
+        }
         if let Some(result) = self.should_skip() {
             return result;
         }
 
         self.package_runner
             .context
-            .report_test_started(&self.unresolved_test_name());
+            .report_test_started(&unresolved_test_name);
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
         self.begin_pending_coverage_setup();

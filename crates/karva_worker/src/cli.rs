@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::net::SocketAddr;
 use std::{ffi::OsString, io};
 
@@ -123,7 +124,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .unwrap_or_default();
 
     let coverage = worker_coverage_config(&args.sub_command)?;
-
     let registered_tags = args.sub_command.registered_tag.clone();
     let mut settings = args.sub_command.into_options().to_settings().with_tags(
         registered_tags
@@ -142,9 +142,11 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_format,
         colored::control::SHOULD_COLORIZE.should_colorize(),
     );
-    let (client, test_paths) =
+    let (client, selection) =
         WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
-    let test_paths: Vec<Result<TestPath, TestPathError>> = test_paths
+    let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
+    let test_paths: Vec<Result<TestPath, TestPathError>> = selection
+        .test_paths
         .into_iter()
         .map(|path| {
             let path = absolute(&path, &cwd);
@@ -164,6 +166,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         python_version,
         &reporter,
         test_paths,
+        &resume_skip,
         coverage.as_ref(),
         !verbosity.is_default(),
     );
