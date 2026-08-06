@@ -70,6 +70,7 @@ def test_1():
 
         error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
          --> test.py:5:5
+          |
         5 | def test_1():
           |     ^^^^^^
         info: Reason: Expected to fail but passes
@@ -109,6 +110,7 @@ def test_1():
 
         error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
          --> test.py:5:5
+          |
         5 | def test_1():
           |     ^^^^^^
         info: Reason: Expected to fail but passes
@@ -453,6 +455,7 @@ def test_expected_fail_passes():
 
         error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
           --> test.py:12:5
+           |
         12 | def test_expected_fail_passes():
            |     ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -500,6 +503,7 @@ def test_expected_fail_passes():
 
         error[test-pass-on-expect-failure]: Test `test_expected_fail_passes` passes when expected to fail
           --> test.py:12:5
+           |
         12 | def test_expected_fail_passes():
            |     ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -668,6 +672,7 @@ def test_should_fail():
 
     error[test-pass-on-expect-failure]: Test `test_should_fail` passes when expected to fail
      --> test.py:5:5
+      |
     5 | def test_should_fail():
       |     ^^^^^^^^^^^^^^^^
     info: Reason: This should fail but passes
@@ -828,6 +833,7 @@ def test_1():
 
     error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
      --> test.py:5:5
+      |
     5 | def test_1():
       |     ^^^^^^
     info: Reason: 123
@@ -895,6 +901,7 @@ def test_1():
 
     error[test-pass-on-expect-failure]: Test `test_1` passes when expected to fail
      --> test.py:7:5
+      |
     7 | def test_1():
       |     ^^^^^^
     info: Reason: condition: SHOULD_EXPECT_FAIL

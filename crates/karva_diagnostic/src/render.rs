@@ -188,17 +188,45 @@ fn render_message(
         Renderer::plain()
     };
     let rendered = renderer.render(&report);
-    let rendered = rendered
-        .lines()
-        .filter(|line| !is_gutter_padding(line))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let rendered = compact_gutter_padding(&rendered);
     format!("{rendered}\n")
 }
 
+fn compact_gutter_padding(rendered: &str) -> String {
+    let lines = rendered.lines().collect::<Vec<_>>();
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(index, line)| {
+            !is_gutter_padding(line)
+                || lines
+                    .get(index + 1)
+                    .is_some_and(|next| is_source_line(next))
+        })
+        .map(|(_, line)| *line)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_source_line(line: &str) -> bool {
+    let visible = visible_text(line);
+    let visible = visible.trim_start();
+    let digits = visible
+        .char_indices()
+        .take_while(|(_, character)| character.is_ascii_digit())
+        .map(|(index, character)| index + character.len_utf8())
+        .last()
+        .unwrap_or(0);
+    digits > 0 && visible[digits..].starts_with(" |")
+}
+
 fn is_gutter_padding(line: &str) -> bool {
+    visible_text(line).trim() == "|"
+}
+
+fn visible_text(line: &str) -> String {
+    let mut visible = String::with_capacity(line.len());
     let mut chars = line.chars();
-    let mut visible = None;
     while let Some(character) = chars.next() {
         if character == '\u{1b}' {
             for escape_character in chars.by_ref() {
@@ -206,13 +234,11 @@ fn is_gutter_padding(line: &str) -> bool {
                     break;
                 }
             }
-        } else if !character.is_whitespace() {
-            if visible.replace(character).is_some() {
-                return false;
-            }
+        } else {
+            visible.push(character);
         }
     }
-    visible == Some('|')
+    visible
 }
 
 fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
@@ -239,7 +265,17 @@ fn severity_name(severity: Severity) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::is_gutter_padding;
+    use super::{compact_gutter_padding, is_gutter_padding};
+
+    #[test]
+    fn keeps_leading_gutter_padding() {
+        assert_eq!(
+            compact_gutter_padding(
+                " --> test.py:4:5\n  |\n4 | def test():\n  | ^^^\n  |\ninfo: failed"
+            ),
+            " --> test.py:4:5\n  |\n4 | def test():\n  | ^^^\ninfo: failed"
+        );
+    }
 
     #[test]
     fn detects_gutter_padding() {

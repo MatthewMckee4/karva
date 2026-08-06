@@ -503,10 +503,12 @@ def test_c():
 
     error[test-failure]: Test `test_a` failed
      --> test.py:2:5
+      |
     2 | def test_a():
       |     ^^^^^^
     info: Test failed here
      --> test.py:3:5
+      |
     3 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -514,10 +516,12 @@ def test_c():
 
     error[test-failure]: Test `test_b` failed
      --> test.py:5:5
+      |
     5 | def test_b():
       |     ^^^^^^
     info: Test failed here
      --> test.py:6:5
+      |
     6 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -602,10 +606,12 @@ def test_second():
 
     error[test-failure]: Test `test_first` failed
      --> test.py:2:5
+      |
     2 | def test_first():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:3:5
+      |
     3 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -657,10 +663,12 @@ def test_third():
 
     error[test-failure]: Test `test_first` failed
      --> test.py:2:5
+      |
     2 | def test_first():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:3:5
+      |
     3 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -668,10 +676,12 @@ def test_third():
 
     error[test-failure]: Test `test_third` failed
      --> test.py:8:5
+      |
     8 | def test_third():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:9:5
+      |
     9 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -1224,10 +1234,12 @@ def test_second():
 
     error[test-failure]: Test `test_first` failed
      --> test.py:2:5
+      |
     2 | def test_first():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:3:5
+      |
     3 |     assert False
       |     ^^^^^^^^^^^^
 

@@ -28,10 +28,12 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
+      |
     4 | def test_hello():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:5:5
+      |
     5 |     karva.assert_snapshot('hello world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_hello'.
@@ -195,10 +197,12 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
+      |
     4 | def test_hello():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:5:5
+      |
     5 |     karva.assert_snapshot('hello world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_hello'.
@@ -411,10 +415,12 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
+      |
     4 | def test_hello():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:5:5
+      |
     5 |     karva.assert_snapshot('hello world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Failed to read snapshot: malformed snapshot file `<temp_dir>/snapshots/test__test_hello.snap`: missing opening frontmatter separator `---`
@@ -476,10 +482,12 @@ def test_hello():
 
     error[test-failure]: Test `test_hello` failed
      --> test.py:4:5
+      |
     4 | def test_hello():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:5:5
+      |
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_hello' in snapshots/test__test_hello.snap:
@@ -684,10 +692,12 @@ def test_two():
 
     error[test-failure]: Test `test_two` failed
      --> test.py:7:5
+      |
     7 | def test_two():
       |     ^^^^^^^^
     info: Test failed here
      --> test.py:8:5
+      |
     8 |     karva.assert_snapshot('changed')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_two' in snapshots/test__test_two.snap:
@@ -822,10 +832,12 @@ def test_multi():
 
     error[test-failure]: Test `test_multi` failed
      --> test.py:4:5
+      |
     4 | def test_multi():
       |     ^^^^^^^^^^
     info: Test failed here
      --> test.py:6:5
+      |
     6 |     karva.assert_snapshot('second')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Multiple unnamed snapshots in one test. Use 'name=' for each, or wrap in 'karva.snapshot_settings(allow_duplicates=True)'

@@ -27,10 +27,12 @@ fn last_failed_reruns_only_failures() {
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:3:5
+      |
     3 | def test_fail(): assert False
       |     ^^^^^^^^^
     info: Test failed here
      --> test_a.py:3:1
+      |
     3 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -66,10 +68,12 @@ fn last_failed_lf_alias() {
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:3:5
+      |
     3 | def test_fail(): assert False
       |     ^^^^^^^^^
     info: Test failed here
      --> test_a.py:3:1
+      |
     3 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -162,10 +166,12 @@ def test_fail_b(): assert False
 
     error[test-failure]: Test `test_fail_a` failed
      --> test_a.py:3:5
+      |
     3 | def test_fail_a(): assert False
       |     ^^^^^^^^^^^
     info: Test failed here
      --> test_a.py:3:1
+      |
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -173,10 +179,12 @@ def test_fail_b(): assert False
 
     error[test-failure]: Test `test_fail_b` failed
      --> test_b.py:3:5
+      |
     3 | def test_fail_b(): assert False
       |     ^^^^^^^^^^^
     info: Test failed here
      --> test_b.py:3:1
+      |
     3 | def test_fail_b(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -219,10 +227,12 @@ def test_fail_b(): assert False
 
     error[test-failure]: Test `test_fail_a` failed
      --> test_a.py:3:5
+      |
     3 | def test_fail_a(): assert False
       |     ^^^^^^^^^^^
     info: Test failed here
      --> test_a.py:3:1
+      |
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -264,10 +274,12 @@ def test_fail_b(): assert False
 
     error[test-failure]: Test `test_fail_a` failed
      --> test_a.py:3:5
+      |
     3 | def test_fail_a(): assert False
       |     ^^^^^^^^^^^
     info: Test failed here
      --> test_a.py:3:1
+      |
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -315,10 +327,12 @@ def test_new_fail(): assert False
 
     error[test-failure]: Test `test_fail` failed
      --> test_a.py:3:5
+      |
     3 | def test_fail(): assert False
       |     ^^^^^^^^^
     info: Test failed here
      --> test_a.py:3:1
+      |
     3 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

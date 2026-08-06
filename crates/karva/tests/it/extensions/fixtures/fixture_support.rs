@@ -270,10 +270,12 @@ def test_warning_message_mismatch():
 
     error[test-failure]: Test `test_missing_warning` failed
      --> test.py:7:5
+      |
     7 | def test_missing_warning():
       |     ^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
      --> test.py:8:5
+      |
     8 |     with karva.warns(UserWarning):
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
@@ -283,10 +285,12 @@ def test_warning_message_mismatch():
 
     error[test-failure]: Test `test_warning_message_mismatch` failed
       --> test.py:12:5
+       |
     12 | def test_warning_message_mismatch():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
       --> test.py:13:5
+       |
     13 |     with karva.warns(UserWarning, match="expected message"):
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Regex pattern 'expected message' did not match any emitted warning.

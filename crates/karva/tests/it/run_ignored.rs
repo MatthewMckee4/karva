@@ -34,10 +34,12 @@ fn runignored_runs_only_skipped_tests() {
 
     error[test-failure]: Test `test_skipped` failed
      --> test.py:5:5
+      |
     5 | def test_skipped():
       |     ^^^^^^^^^^^^
     info: Test failed here
      --> test.py:6:5
+      |
     6 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -45,10 +47,12 @@ fn runignored_runs_only_skipped_tests() {
 
     error[test-failure]: Test `test_skipped_with_reason` failed
      --> test.py:9:5
+      |
     9 | def test_skipped_with_reason():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
       --> test.py:10:5
+       |
     10 |     assert False
        |     ^^^^^^^^^^^^
 
@@ -77,10 +81,12 @@ fn runignored_all_runs_skipped_alongside_normal() {
 
     error[test-failure]: Test `test_skipped` failed
      --> test.py:5:5
+      |
     5 | def test_skipped():
       |     ^^^^^^^^^^^^
     info: Test failed here
      --> test.py:6:5
+      |
     6 |     assert False
       |     ^^^^^^^^^^^^
 
@@ -88,10 +94,12 @@ fn runignored_all_runs_skipped_alongside_normal() {
 
     error[test-failure]: Test `test_skipped_with_reason` failed
      --> test.py:9:5
+      |
     9 | def test_skipped_with_reason():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
       --> test.py:10:5
+       |
     10 |     assert False
        |     ^^^^^^^^^^^^
 

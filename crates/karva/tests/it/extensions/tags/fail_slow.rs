@@ -57,6 +57,7 @@ def test_slow():
 
     error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
      --> test.py:6:5
+      |
     6 | def test_slow():
       |     ^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -95,6 +96,7 @@ async def test_slow_async():
 
     error[fail-slow-exceeded]: Test `test_slow_async` exceeded its fail-slow budget
      --> test.py:6:11
+      |
     6 | async def test_slow_async():
       |           ^^^^^^^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -147,6 +149,7 @@ def test_after():
 
     error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
       --> test.py:14:5
+       |
     14 | def test_slow(resource):
        |     ^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -189,15 +192,18 @@ def test_slow_and_wrong():
 
     error[test-failure]: Test `test_slow_and_wrong` failed
      --> test.py:6:5
+      |
     6 | def test_slow_and_wrong():
       |     ^^^^^^^^^^^^^^^^^^^
     info: Test failed here
      --> test.py:8:5
+      |
     8 |     assert False
       |     ^^^^^^^^^^^^
 
     error[fail-slow-exceeded]: Test `test_slow_and_wrong` exceeded its fail-slow budget
      --> test.py:6:5
+      |
     6 | def test_slow_and_wrong():
       |     ^^^^^^^^^^^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -387,18 +393,21 @@ def test_example(broken):
 
     error[fixture-failure]: Fixture `broken` failed
       --> test.py:11:5
+       |
     11 | def broken(established):
        |     ^^^^^^
     info: Fixture ran with arguments:
     info: `established`: `None`
     info: Fixture failed here
       --> test.py:12:5
+       |
     12 |     raise RuntimeError("setup failed")
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: setup failed
 
     error[fail-slow-exceeded]: Test `test_example` exceeded its fail-slow budget
       --> test.py:15:5
+       |
     15 | def test_example(broken):
        |     ^^^^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
@@ -476,6 +485,7 @@ def test_1(sleep_for):
 
     error[fail-slow-exceeded]: Test `test_1` exceeded its fail-slow budget
      --> test.py:7:5
+      |
     7 | def test_1(sleep_for):
       |     ^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -514,6 +524,7 @@ def test_slow():
 
     error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
      --> test.py:4:5
+      |
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -610,6 +621,7 @@ def test_slow():
 
     error[fail-slow-exceeded]: Test `test_slow` exceeded its fail-slow budget
      --> test.py:4:5
+      |
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
@@ -650,6 +662,7 @@ def test_slow():
 
     error[test-failure]: Test `test_slow` failed
      --> test.py:4:5
+      |
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds

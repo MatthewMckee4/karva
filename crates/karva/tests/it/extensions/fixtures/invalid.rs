@@ -35,6 +35,7 @@ fn test_invalid_pytest_fixture_scope() {
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
      --> test.py:8:5
+      |
     8 | def test_all_scopes(
       |     ^^^^^^^^^^^^^^^
     info: Missing fixtures: `some_fixture`
@@ -43,6 +44,7 @@ fn test_invalid_pytest_fixture_scope() {
 
     error[invalid-fixture]: Discovered an invalid fixture `some_fixture`
      --> test.py:5:5
+      |
     5 | def some_fixture() -> int:
       |     ^^^^^^^^^^^^
     info: Invalid fixture scope `sessionss`
@@ -82,6 +84,7 @@ def test_all_scopes(some_fixture: int) -> None:
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
      --> test.py:7:5
+      |
     7 | def test_all_scopes(some_fixture: int) -> None:
       |     ^^^^^^^^^^^^^^^
     info: Missing fixtures: `some_fixture`
@@ -90,6 +93,7 @@ def test_all_scopes(some_fixture: int) -> None:
 
     error[invalid-fixture]: Discovered an invalid fixture `some_fixture`
      --> test.py:4:5
+      |
     4 | def some_fixture() -> int:
       |     ^^^^^^^^^^^^
     info: Invalid fixture scope `sessionss`
@@ -139,10 +143,12 @@ def test_ok():
 
     error[duplicate-fixture]: Fixture `shared` is defined more than once
       --> test.py:16:5
+       |
     16 | def second_fixture():
        |     ^^^^^^^^^^^^^^
     info: First definition of `shared` is here
       --> test.py:12:5
+       |
     12 | def first_fixture():
        |     ^^^^^^^^^^^^^
 
@@ -182,6 +188,7 @@ fn test_missing_fixture() {
 
     error[missing-fixtures]: Test `test_all_scopes` has missing fixtures
      --> test.py:2:5
+      |
     2 | def test_all_scopes(
       |     ^^^^^^^^^^^^^^^
     info: Missing fixtures: `missing_fixture`
@@ -222,10 +229,12 @@ fn test_fixture_fails_to_run() {
 
     error[fixture-failure]: Fixture `failing_fixture` failed
      --> test.py:5:5
+      |
     5 | def failing_fixture():
       |     ^^^^^^^^^^^^^^^
     info: Fixture failed here
      --> test.py:6:5
+      |
     6 |     raise Exception('Fixture failed')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Fixture failed
@@ -268,6 +277,7 @@ fn test_fixture_missing_fixtures() {
 
     error[missing-fixtures]: Fixture `failing_fixture` has missing fixtures
      --> test.py:6:5
+      |
     6 | def failing_fixture(missing_fixture):
       |     ^^^^^^^^^^^^^^^
     info: Missing fixtures: `missing_fixture`
@@ -306,10 +316,12 @@ fn missing_arguments_in_nested_function() {
 
     error[test-failure]: Test `test_failing_fixture` failed
      --> test.py:2:5
+      |
     2 | def test_failing_fixture():
       |     ^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
      --> test.py:6:5
+      |
     6 |     inner()
       |     ^^^^^^^
     info: test_failing_fixture.<locals>.inner() missing 1 required positional argument: 'missing_fixture'
@@ -352,10 +364,12 @@ fn test_failing_yield_fixture() {
 
     error[fixture-failure]: Fixture `fixture` failed
      --> test.py:5:5
+      |
     5 | def fixture():
       |     ^^^^^^^
     info: Fixture failed here
      --> test.py:7:9
+      |
     7 |         raise ValueError('foo')
       |         ^^^^^^^^^^^^^^^^^^^^^^^
     info: foo
@@ -397,6 +411,7 @@ fn test_fixture_generator_two_yields() {
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
+      |
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
     info: Fixture had more than one yield statement
@@ -438,6 +453,7 @@ fn test_fixture_generator_fail_in_teardown() {
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
+      |
     5 | def fixture_generator():
       |     ^^^^^^^^^^^^^^^^^
     info: Failed to reset fixture: fixture-error
@@ -486,18 +502,22 @@ fn test_fixture_dependency_chain_failure() {
 
     error[fixture-failure]: Fixture `config` failed
      --> test.py:5:5
+      |
     5 | def config():
       |     ^^^^^^
     info: Fixture `db` requires `connection`
       --> test.py:13:5
+       |
     13 | def db(connection):
        |     ^^
     info: Fixture `connection` requires `config`
      --> test.py:9:5
+      |
     9 | def connection(config):
       |     ^^^^^^^^^^
     info: Fixture failed here
      --> test.py:6:5
+      |
     6 |     raise Exception('config failed')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: config failed
@@ -537,6 +557,7 @@ def test_with_fixture(my_fixture):
 
     error[missing-fixtures]: Test `test_with_fixture` has missing fixtures
      --> test.py:7:5
+      |
     7 | def test_with_fixture(my_fixture):
       |     ^^^^^^^^^^^^^^^^^
     info: Missing fixtures: `my_fixture`
@@ -545,6 +566,7 @@ def test_with_fixture(my_fixture):
 
     error[invalid-fixture]: Discovered an invalid fixture `my_fixture`
      --> test.py:4:5
+      |
     4 | def my_fixture():
       |     ^^^^^^^^^^
     info: Scope must be either a string or a callable
@@ -591,11 +613,13 @@ def test_service(service):
 
     error[missing-fixtures]: Fixture `service` has missing fixtures
       --> test.py:10:5
+       |
     10 | def service(config):
        |     ^^^^^^^
     info: Missing fixtures: `config`
     info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
      --> test.py:6:5
+      |
     6 | def config():
       |     ^^^^^^
 
@@ -603,6 +627,7 @@ def test_service(service):
 
     error[invalid-fixture]: Discovered an invalid fixture `config`
      --> test.py:6:5
+      |
     6 | def config():
       |     ^^^^^^
     info: Invalid fixture scope `invalid`
@@ -658,11 +683,13 @@ def test_service(service):
 
     error[missing-fixtures]: Fixture `service` has missing fixtures
      --> test.py:6:5
+      |
     6 | def service(config):
       |     ^^^^^^^
     info: Missing fixtures: `config`
     info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
      --> conftest.py:5:5
+      |
     5 | def config():
       |     ^^^^^^
 
@@ -670,6 +697,7 @@ def test_service(service):
 
     error[invalid-fixture]: Discovered an invalid fixture `config`
      --> conftest.py:5:5
+      |
     5 | def config():
       |     ^^^^^^
     info: Invalid fixture scope `invalid`
@@ -731,11 +759,13 @@ def test_service(service):
 
     error[missing-fixtures]: Fixture `service` has missing fixtures
       --> test.py:10:5
+       |
     10 | def service(config):
        |     ^^^^^^^
     info: Missing fixtures: `config`
     info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
      --> test.py:6:5
+      |
     6 | def config():
       |     ^^^^^^
 
@@ -743,6 +773,7 @@ def test_service(service):
 
     error[invalid-fixture]: Discovered an invalid fixture `config`
      --> test.py:6:5
+      |
     6 | def config():
       |     ^^^^^^
     info: Invalid fixture scope `invalid`
@@ -798,6 +829,7 @@ def test_config(config):
 
     error[invalid-fixture]: Discovered an invalid fixture `config`
      --> conftest.py:5:5
+      |
     5 | def config():
       |     ^^^^^^
     info: Invalid fixture scope `invalid`
@@ -849,15 +881,18 @@ def test_service(service):
 
     error[missing-fixtures]: Fixture `service` has missing fixtures
       --> test.py:14:5
+       |
     14 | def service(config, unknown, credentials):
        |     ^^^^^^^
     info: Missing fixtures: `config`, `unknown`, `credentials`
     info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid-config`
      --> test.py:6:5
+      |
     6 | def config():
       |     ^^^^^^
     info: Fixture `credentials` was rejected during discovery: Invalid fixture scope `invalid-credentials`
       --> test.py:10:5
+       |
     10 | def credentials():
        |     ^^^^^^^^^^^
 
@@ -865,12 +900,14 @@ def test_service(service):
 
     error[invalid-fixture]: Discovered an invalid fixture `config`
      --> test.py:6:5
+      |
     6 | def config():
       |     ^^^^^^
     info: Invalid fixture scope `invalid-config`
 
     error[invalid-fixture]: Discovered an invalid fixture `credentials`
       --> test.py:10:5
+       |
     10 | def credentials():
        |     ^^^^^^^^^^^
     info: Invalid fixture scope `invalid-credentials`
@@ -930,11 +967,13 @@ def test_service(service):
 
     error[missing-fixtures]: Fixture `service` has missing fixtures
      --> test.py:6:5
+      |
     6 | def service(config):
       |     ^^^^^^^
     info: Missing fixtures: `config`
     info: Fixture `config` was rejected during discovery: Invalid fixture scope `invalid`
      --> fixture_helpers.py:5:5
+      |
     5 | def original_config():
       |     ^^^^^^^^^^^^^^^
 
@@ -942,6 +981,7 @@ def test_service(service):
 
     error[invalid-fixture]: Discovered an invalid fixture `original_config`
      --> fixture_helpers.py:5:5
+      |
     5 | def original_config():
       |     ^^^^^^^^^^^^^^^
     info: Invalid fixture scope `invalid`
@@ -992,10 +1032,12 @@ def test_database(database):
 
         error[fixture-scope-mismatch]: Fixture `database` with `session` scope cannot depend on fixture `connection` with `function` scope
           --> test.py:10:5
+           |
         10 | def database(connection):
            |     ^^^^^^^^
         info: Fixture `connection` has `function` scope
          --> test.py:6:5
+          |
         6 | def connection():
           |     ^^^^^^^^^^
 
@@ -1053,10 +1095,12 @@ def test_database():
 
     error[fixture-scope-mismatch]: Fixture `database` with `package` scope cannot depend on fixture `connection` with `function` scope
       --> nested/conftest.py:10:11
+       |
     10 | async def database(connection):
        |           ^^^^^^^^
     info: Fixture `connection` has `function` scope
      --> nested/conftest.py:6:5
+      |
     6 | def connection():
       |     ^^^^^^^^^^
 
@@ -1111,14 +1155,17 @@ def test_database(database):
 
     error[fixture-scope-mismatch]: Fixture `repository` with `session` scope cannot depend on fixture `connection` with `function` scope
       --> test.py:13:5
+       |
     13 | def repository(connection):
        |     ^^^^^^^^^^
     info: Fixture `database` depends on fixture `repository`
       --> test.py:17:5
+       |
     17 | def database(repository):
        |     ^^^^^^^^
     info: Fixture `connection` has `function` scope
      --> test.py:9:5
+      |
     9 | def connection():
       |     ^^^^^^^^^^
 
@@ -1173,14 +1220,17 @@ def test_scopes(package_fixture):
 
     error[fixture-scope-mismatch]: Fixture `session_fixture` with `session` scope cannot depend on fixture `module_fixture` with `module` scope
       --> test.py:14:5
+       |
     14 | def session_fixture(module_fixture):
        |     ^^^^^^^^^^^^^^^
     info: Fixture `package_fixture` depends on fixture `session_fixture`
       --> test.py:18:5
+       |
     18 | def package_fixture(session_fixture):
        |     ^^^^^^^^^^^^^^^
     info: Fixture `module_fixture` has `module` scope
       --> test.py:10:5
+       |
     10 | def module_fixture(function_fixture):
        |     ^^^^^^^^^^^^^^
 
