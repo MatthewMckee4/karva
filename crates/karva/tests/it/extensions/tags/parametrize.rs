@@ -60,24 +60,22 @@ def fixture():
         test::test_too_few:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
-         --> test.py:5:14
+         --> test.py:5:37
           |
         5 | @parametrize("left,right", [(1, 2), (3,)])
           |              ------------           ^^^^ contains 1 value
           |              |
           |              expects 2 values
-          |
 
         test::test_too_many:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3 values
-         --> test.py:9:14
+         --> test.py:9:37
           |
         9 | @parametrize("left,right", [(1, 2), (3, 4, 5)])
           |              ------------           ^^^^^^^^^ contains 3 values
           |              |
           |              expects 2 values
-          |
 
         ────────────
              Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
@@ -124,7 +122,6 @@ def test_value(left, right):
       |
     6 |     arg_names=("left", "right"),
       |               ----------------- expects 2 values
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -170,7 +167,6 @@ def test_value(left, right):
       |
     6 |     argnames=("left," "right"),
       |               --------------- expects 2 values
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -207,13 +203,12 @@ def test_value(left, right):
     test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
-     --> test.py:7:8
+     --> test.py:7:27
       |
     7 | @cases(("left", "right"), CASES)
       |        -----------------  ^^^^^ case 2 contains 1 value
       |        |
       |        expects 2 values
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -262,7 +257,6 @@ def test_kwargs(left, right):
        |
     11 | def test_args(left, right):
        |     ^^^^^^^^^
-       |
 
     test::test_kwargs:
 
@@ -271,7 +265,6 @@ def test_kwargs(left, right):
        |
     15 | def test_kwargs(left, right):
        |     ^^^^^^^^^^^
-       |
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
@@ -328,7 +321,6 @@ def test_value(left, right):
      9 | |         "right",
     10 | |     ],
        | |_____- expects 2 values
-       |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -363,13 +355,12 @@ def test_value(left, right):
     test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
-     --> test.py:5:25
+     --> test.py:5:40
       |
     5 | @karva.tags.parametrize("left,right", [(3,)])
       |                         ------------   ^^^^ contains 1 value
       |                         |
       |                         expects 2 values
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -403,13 +394,12 @@ def test_value(value):
     test::test_value:
 
     error[invalid-parametrize]: Expected 1 value for `value`, but case 1 contains 2 values
-     --> test.py:4:25
+     --> test.py:4:35
       |
     4 | @karva.tags.parametrize("value", [karva.param(1, 2)])
       |                         -------   ^^^^^^^^^^^^^^^^^ contains 2 values
       |                         |
       |                         expects 1 value
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -448,7 +438,6 @@ def test_value(value):
           |
         4 | @karva.tags.parametrize("value,value", [(1, 2)])
           |                         ^^^^^^^^^^^^^ duplicate parameter
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -498,7 +487,6 @@ def test_value(value):
       |
     6 |         "value",
       |         ------- first parametrized here
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -538,13 +526,12 @@ def test_value(value):
     test::test_value:
 
     error[invalid-parametrize]: Parameter `value` is parametrized more than once
-      --> test.py:10:26
+      --> test.py:10:35
        |
     10 | @karva.tags.parametrize(["value", "value"], [(1, 2)])
        |                          -------  ^^^^^^^ duplicate parameter
        |                          |
        |                          first parametrized here
-       |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -583,13 +570,12 @@ def test_value(value):
         test::test_value:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
-         --> test.py:5:15
+         --> test.py:5:24
           |
         5 | @parametrize(["value", "value"], [(1, 2)])
           |               -------  ^^^^^^^ duplicate parameter
           |               |
           |               first parametrized here
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -641,7 +627,6 @@ def test_value(value):
           |
         5 | @parametrize("value", [1])
           |              ------- first parametrized here
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -690,7 +675,6 @@ def test_value(value):
           |
         6 | def test_value(value):
           |               ------- available parameter
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -736,7 +720,6 @@ def test_value(value):
       |
     7 | def test_value(value):
       |               ------- available parameter
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -775,13 +758,12 @@ def test_value(value):
         test::test_value:
 
         error[invalid-parametrize]: Parametrization has no cases
-         --> test.py:5:14
+         --> test.py:5:23
           |
         5 | @parametrize("value", [])
           |              -------  ^^ no cases provided
           |              |
           |              parameters declared here
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -824,7 +806,6 @@ def test_value(value):
       |                   ^^            ---------- parameters declared here
       |                   |
       |                   no cases provided
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -872,7 +853,6 @@ def test_value(value):
           |
         6 | def test_value(value):
           |               ------- available parameter
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -921,7 +901,6 @@ def test_value(value):
           |
         6 | def test_value(value):
           |               ------- available parameter
-          |
 
         ────────────
              Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -986,7 +965,6 @@ def test_invalid(
     14 | |     value,
     15 | | ):
        | |_- available parameter
-       |
 
     test::test_invalid:
 
@@ -1003,7 +981,6 @@ def test_invalid(
     20 | |     value: int = 1,
     21 | | ):
        | |_- available parameter
-       |
 
     test::test_unknown:
 
@@ -1022,7 +999,6 @@ def test_invalid(
     8 | |     other,
     9 | | ):
       | |_- available parameters
-      |
 
     ────────────
          Summary [TIME] 3 tests run: 0 passed, 3 errors, 0 skipped
@@ -1131,7 +1107,6 @@ def test_example(value, plugin_fixture):
       |
     5 | def test_example(value, plugin_fixture):
       |     ^^^^^^^^^^^^
-      |
     info: Missing fixtures: `plugin_fixture`
 
     ────────────
@@ -1174,7 +1149,6 @@ def test_example(value, plugin_fixture):
       |
     9 | def test_example(value, plugin_fixture):
       |     ^^^^^^^^^^^^
-      |
     info: Missing fixtures: `plugin_fixture`
 
     ────────────
@@ -1255,7 +1229,6 @@ def test_order(third, second, first):
        |
     14 | def test_order(third, second, first):
        |     ^^^^^^^^^^
-       |
     info: Test ran with arguments:
     info: `third`: `3`
     info: `second`: `2`
@@ -1265,7 +1238,6 @@ def test_order(third, second, first):
        |
     16 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1962,7 +1934,6 @@ def test_value(value):
       |
     5 | def test_value(value):
       |     ^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped

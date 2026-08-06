@@ -235,21 +235,19 @@ def test_poem():
       |
     4 | def test_poem():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot('roses are red/nviolets are purple/nsugar is sweet')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Snapshot mismatch for 'test_poem'.
-          Snapshot file: snapshots/test__test_poem.snap
-          ────────────┬───────────────────────────
-              1     1 │  roses are red
-              2       │ -violets are blue
-                    2 │ +violets are purple
-                    3 │ +sugar is sweet
-          ────────────┴───────────────────────────
+                Snapshot file: snapshots/test__test_poem.snap
+                ────────────┬───────────────────────────
+                    1     1 │  roses are red
+                    2       │ -violets are blue
+                          2 │ +violets are purple
+                          3 │ +sugar is sweet
+                ────────────┴───────────────────────────
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

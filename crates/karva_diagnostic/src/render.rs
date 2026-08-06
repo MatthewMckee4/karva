@@ -1,5 +1,5 @@
 use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
-use annotate_snippets::{Level, Renderer, Snippet};
+use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use ruff_source_file::SourceFile;
 
@@ -142,17 +142,17 @@ fn render_message(
             };
             groups.into_iter().map(move |annotations| {
                 Snippet::source(source_file.source_text())
-                    .origin(path)
+                    .path(path)
                     .fold(true)
                     .annotations(annotations.into_iter().map(|annotation| {
                         let range = annotation.span().range();
-                        let level = if annotation.is_primary() {
-                            Level::Error
+                        let kind = if annotation.is_primary() {
+                            AnnotationKind::Primary
                         } else {
-                            Level::Warning
+                            AnnotationKind::Context
                         };
                         let rendered_annotation =
-                            level.span(usize::from(range.start())..usize::from(range.end()));
+                            kind.span(usize::from(range.start())..usize::from(range.end()));
                         if let Some(message) = annotation.message_text() {
                             rendered_annotation.label(message)
                         } else {
@@ -161,16 +161,17 @@ fn render_message(
                     }))
             })
         });
-    let mut diagnostic = level(severity).title(message).snippets(snippets);
+    let mut title = level(severity).primary_title(message);
     if let Some(code) = code {
-        diagnostic = diagnostic.id(code);
+        title = title.id(code);
     }
+    let report = [title.elements(snippets)];
     let renderer = if color {
         Renderer::styled()
     } else {
         Renderer::plain()
     };
-    format!("{}\n", renderer.render(diagnostic))
+    format!("{}\n", renderer.render(&report))
 }
 
 fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
@@ -178,11 +179,11 @@ fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
     path.strip_prefix(cwd).unwrap_or(path).to_path_buf()
 }
 
-fn level(severity: Severity) -> Level {
+fn level<'a>(severity: Severity) -> Level<'a> {
     match severity {
-        Severity::Info => Level::Info,
-        Severity::Warning => Level::Warning,
-        Severity::Error | Severity::Fatal => Level::Error,
+        Severity::Info => Level::INFO,
+        Severity::Warning => Level::WARNING,
+        Severity::Error | Severity::Fatal => Level::ERROR,
     }
 }
 

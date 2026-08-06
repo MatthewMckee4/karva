@@ -71,19 +71,16 @@ def test_blocked():
       |
     5 | def dependency():
       |     ^^^^^^^^^^
-      |
     info: Fixture `setup_fixture` requires `dependency`
      --> test.py:9:5
       |
     9 | def setup_fixture(dependency):
       |     ^^^^^^^^^^^^^
-      |
     info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError("setup failed")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: setup failed
 
     ────────────

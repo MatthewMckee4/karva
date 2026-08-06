@@ -82,13 +82,11 @@ def test_skip():
       |
     8 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
       --> test_alpha.py:11:5
        |
     11 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     captured stdout:
     fail stdout
@@ -187,13 +185,11 @@ def test_flaky():
       |
     4 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test_retry.py:5:5
       |
     5 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 failed, 0 skipped
@@ -312,13 +308,11 @@ def test_flaky():
       |
     4 | def test_flaky():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_flaky.py:5:5
       |
     5 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     </flakyFailure>
         </testcase>
@@ -389,13 +383,11 @@ def test_lenient():
       |
     9 | def test_lenient():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
       --&gt; test_flaky.py:10:5
        |
     10 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
 
     </flakyFailure>
         </testcase>
@@ -406,13 +398,11 @@ def test_lenient():
       |
     6 | def test_strict():
       |     ^^^^^^^^^^^
-      |
     info: Test failed here
      --&gt; test_flaky.py:7:5
       |
     7 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
 
     </flakyFailure>
         </testcase>
@@ -467,7 +457,6 @@ def test_resource(resource):
        |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
-       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     ────────────
@@ -608,13 +597,11 @@ def test_failure():
       |
     2 | def test_failure():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test_failure.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     test_fixture::test_unreachable (uses auto-use fixture `broken_fixture`):
 
@@ -623,13 +610,11 @@ def test_failure():
       |
     5 | def broken_fixture():
       |     ^^^^^^^^^^^^^^
-      |
     info: Fixture failed here
      --> test_fixture.py:6:5
       |
     6 |     raise RuntimeError("setup failed")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: setup failed
 
     ────────────

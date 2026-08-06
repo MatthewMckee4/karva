@@ -273,15 +273,13 @@ def test_warning_message_mismatch():
       |
     7 | def test_missing_warning():
       |     ^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:8:5
       |
     8 |     with karva.warns(UserWarning):
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
-           Emitted warnings: [].
+                 Emitted warnings: [].
 
     test::test_warning_message_mismatch:
 
@@ -290,15 +288,13 @@ def test_warning_message_mismatch():
        |
     12 | def test_warning_message_mismatch():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test failed here
       --> test.py:13:5
        |
     13 |     with karva.warns(UserWarning, match="expected message"):
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Regex pattern 'expected message' did not match any emitted warning.
-           Emitted warnings: [UserWarning('different message')].
+                 Emitted warnings: [UserWarning('different message')].
 
     captured stderr:
     <temp_dir>/test.py:14: UserWarning: different message

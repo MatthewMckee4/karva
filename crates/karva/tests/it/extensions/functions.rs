@@ -110,13 +110,11 @@ def test_rejects_invalid_scalar_value():
       |
     7 | def test_rejects_invalid_mapping_value():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:8:5
       |
     8 |     karva.approx({"count": "two"})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: karva.approx() expected a numeric value at key 'count', got str: 'two'
 
     test::test_rejects_invalid_scalar_value:
@@ -126,13 +124,11 @@ def test_rejects_invalid_scalar_value():
        |
     10 | def test_rejects_invalid_scalar_value():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test failed here
       --> test.py:11:5
        |
     11 |     karva.approx("two")
        |     ^^^^^^^^^^^^^^^^^^^
-       |
     info: karva.approx() expected a numeric value, got str: 'two'
 
     test::test_rejects_invalid_sequence_value:
@@ -142,13 +138,11 @@ def test_rejects_invalid_scalar_value():
       |
     4 | def test_rejects_invalid_sequence_value():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.approx([1, "two"])
       |     ^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: karva.approx() expected a numeric value at index 1, got str: 'two'
 
     ────────────
@@ -195,13 +189,11 @@ def test_with_fail_with_keyword_reason():
        |
     10 | def test_with_fail_with_keyword_reason():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test failed here
       --> test.py:11:5
        |
     11 |     karva.fail(reason='This is a custom failure message')
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: This is a custom failure message
 
     test::test_with_fail_with_no_reason:
@@ -211,13 +203,11 @@ def test_with_fail_with_keyword_reason():
       |
     7 | def test_with_fail_with_no_reason():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:8:5
       |
     8 |     karva.fail()
       |     ^^^^^^^^^^^^
-      |
 
     test::test_with_fail_with_reason:
 
@@ -226,13 +216,11 @@ def test_with_fail_with_keyword_reason():
       |
     4 | def test_with_fail_with_reason():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.fail('This is a custom failure message')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: This is a custom failure message
 
     ────────────
@@ -273,13 +261,11 @@ def test_conditional_fail():
       |
     4 | def test_conditional_fail():
       |     ^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:7:9
       |
     7 |         karva.fail('failing test')
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: failing test
 
     ────────────
@@ -317,13 +303,11 @@ def test_raise_fail_error():
       |
     4 | def test_raise_fail_error():
       |     ^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     raise karva.FailError('Manually raised FailError')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Manually raised FailError
 
     ────────────
@@ -610,13 +594,11 @@ def test_raises_no_exception():
       |
     4 | def test_raises_no_exception():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     with karva.raises(ValueError):
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: DID NOT RAISE <class 'ValueError'>
 
     ────────────
@@ -681,13 +663,11 @@ def test_raises_match_fails():
       |
     4 | def test_raises_match_fails():
       |     ^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     with karva.raises(ValueError, match='xyz'):
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Raised exception did not match pattern 'xyz'
 
     ────────────
@@ -726,13 +706,11 @@ def test_raises_wrong_type():
       |
     4 | def test_raises_wrong_type():
       |     ^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:6:9
       |
     6 |         raise TypeError('wrong type')
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: wrong type
 
     ────────────

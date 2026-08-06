@@ -252,7 +252,6 @@ def test_typo():
       |
     4 | @karva.tags.integraiton
       |             ^^^^^^^^^^^ unregistered tag
-      |
     info: Did you mean `integration`?
 
     ────────────
@@ -305,7 +304,6 @@ def test_typos(value):
       |
     5 | @karva.tags.fixture_typo
       |             ^^^^^^^^^^^^ unregistered tag
-      |
     info: Register `fixture_typo` in the project-wide `[tags]` table.
 
     error[unknown-tag]: Tag `pytest_typo` is not registered
@@ -313,7 +311,6 @@ def test_typos(value):
        |
     10 | @pytest.mark.pytest_typo
        |              ^^^^^^^^^^^ unregistered tag
-       |
     info: Register `pytest_typo` in the project-wide `[tags]` table.
 
     error[unknown-tag]: Tag `parameter_typo` is not registered
@@ -321,7 +318,6 @@ def test_typos(value):
        |
     12 |     karva.param(1, tags=(karva.tags.parameter_typo,)),
        |                                     ^^^^^^^^^^^^^^ unregistered tag
-       |
     info: Register `parameter_typo` in the project-wide `[tags]` table.
 
     ────────────
@@ -371,7 +367,6 @@ def test_typo():
       |
     4 | @karva.tags.integraiton
       |             ^^^^^^^^^^^ unregistered tag
-      |
     info: Did you mean `integration`?
 
     ────────────
@@ -429,7 +424,6 @@ def test_aliases(value):
       |
     6 | pytestmark = pt.mark.daatbase
       |                      ^^^^^^^^ unregistered tag
-      |
     info: Did you mean `database`?
 
     error[unknown-tag]: Tag `integraiton` is not registered
@@ -437,7 +431,6 @@ def test_aliases(value):
       |
     8 | @tags.integraiton
       |       ^^^^^^^^^^^ unregistered tag
-      |
     info: Did you mean `integration`?
 
     error[unknown-tag]: Tag `integraiton` is not registered
@@ -445,7 +438,6 @@ def test_aliases(value):
        |
     13 |     k.param(1, tags=(k.tags.integraiton,)),
        |                             ^^^^^^^^^^^ unregistered tag
-       |
     info: Did you mean `integration`?
 
     ────────────
