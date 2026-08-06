@@ -33,7 +33,7 @@ def test_worker_crash(value):
 "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @"
+    assert_cmd_snapshot!(context.command(), @r###"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -57,7 +57,7 @@ def test_worker_crash(value):
     ----- stderr -----
     stderr before crash
     ERROR Worker 0 failed with exit code 17 in [TIME]
-    ");
+    "###);
     assert_eq!(context.read_file("completed"), "02");
 }
 
@@ -82,7 +82,7 @@ def test_worker_crash(value):
 "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @"
+    assert_cmd_snapshot!(context.command(), @r###"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -102,8 +102,308 @@ def test_worker_crash(value):
 
     ----- stderr -----
     ERROR Worker 0 failed with exit code 19 in [TIME]
-    ");
+    "###);
     assert_eq!(context.read_file("completed"), "02");
+}
+
+#[test]
+fn worker_exit_recovers_after_multiple_dynamic_case_crashes() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+from pathlib import Path
+
+import karva
+
+
+@karva.tags.parametrize("value", range(5))
+def test_worker_crash(value):
+    if value in (1, 3):
+        os._exit(20 + value)
+
+    completed = Path("completed")
+    completed.write_text(completed.read_text() + str(value) if completed.exists() else str(value))
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_worker_crash(value=0)
+           CRASH [TIME] test::test_worker_crash(value=1)
+            PASS [TIME] test::test_worker_crash(value=2)
+           CRASH [TIME] test::test_worker_crash(value=3)
+            PASS [TIME] test::test_worker_crash(value=4)
+
+    failures:
+
+    test::test_worker_crash(value=1):
+
+    error[worker-crashed]: Worker terminated with exit code 21 while running `test::test_worker_crash(value=1)`
+
+    test::test_worker_crash(value=3):
+
+    error[worker-crashed]: Worker terminated with exit code 23 while running `test::test_worker_crash(value=3)`
+
+    ────────────
+         Summary [TIME] 5 tests run: 3 passed, 2 errors, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 21 in [TIME]
+    ERROR Worker 1 failed with exit code 23 in [TIME]
+    "###);
+    assert_eq!(context.read_file("completed"), "024");
+}
+
+#[test]
+fn worker_exit_obeys_max_fail_before_rescheduling() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+from pathlib import Path
+
+import karva
+
+
+@karva.tags.parametrize("value", range(2))
+def test_worker_crash(value):
+    if value == 0:
+        os._exit(25)
+    Path("rescheduled").write_text("1")
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command().arg("--max-fail=1"), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           CRASH [TIME] test::test_worker_crash(value=0)
+
+    failures:
+
+    test::test_worker_crash(value=0):
+
+    error[worker-crashed]: Worker terminated with exit code 25 while running `test::test_worker_crash(value=0)`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 25 in [TIME]
+    "###);
+    assert!(!context.root().join("rescheduled").exists());
+}
+
+#[test]
+fn worker_exit_before_test_start_is_not_attributed_or_retried() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+
+os._exit(26)
+
+
+def test_never_started():
+    pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[worker-crashed]: Worker 0 terminated with exit code 26
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 26 in [TIME]
+    "###);
+}
+
+#[test]
+fn completed_test_survives_module_teardown_crash() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+import karva
+
+
+@karva.fixture(scope="module")
+def crash_during_teardown():
+    yield
+    os._exit(27)
+
+
+def test_completed(crash_during_teardown):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_completed(crash_during_teardown=None)
+
+    diagnostics:
+
+    error[worker-crashed]: Worker 0 terminated with exit code 27
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 27 in [TIME]
+    "###);
+}
+
+#[test]
+fn no_cache_does_not_require_a_writable_cache_directory() {
+    let context = TestContext::with_files([
+        (".karva_cache", "not a directory"),
+        ("test.py", "def test_pass(): pass"),
+    ]);
+
+    assert_cmd_snapshot!(context.command().arg("--no-cache"), @r###"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_pass
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "###);
+}
+
+#[cfg(unix)]
+#[test]
+fn worker_exit_kills_descendants_holding_controller_streams() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+import signal
+
+
+def test_crash_with_child():
+    if os.fork() == 0:
+        signal.pause()
+    os._exit(28)
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           CRASH [TIME] test::test_crash_with_child
+
+    failures:
+
+    test::test_crash_with_child:
+
+    error[worker-crashed]: Worker terminated with exit code 28 while running `test::test_crash_with_child`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 28 in [TIME]
+    "###);
+}
+
+#[test]
+fn worker_stderr_without_newline_is_captured() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+
+def test_crash():
+    os.write(2, b"stderr without newline")
+    os._exit(29)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           CRASH [TIME] test::test_crash
+
+    failures:
+
+    test::test_crash:
+
+    error[worker-crashed]: Worker terminated with exit code 29 while running `test::test_crash`
+
+    Worker stderr:
+    stderr without newline
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    stderr without newline
+    ERROR Worker 0 failed with exit code 29 in [TIME]
+    "###);
+}
+
+#[test]
+fn worker_crash_skips_incomplete_coverage_report() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+
+
+def test_crash():
+    os._exit(30)
+",
+    );
+
+    assert_cmd_snapshot!(
+        context.command().args(["--cov", "--cov-report=term"]),
+        @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           CRASH [TIME] test::test_crash
+
+    failures:
+
+    test::test_crash:
+
+    error[worker-crashed]: Worker terminated with exit code 30 while running `test::test_crash`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 30 in [TIME]
+    WARN Coverage report skipped because a crashed worker could not save complete data
+    "###
+    );
 }
 
 #[cfg(unix)]
@@ -120,7 +420,7 @@ def test_abort():
 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r#"
+    assert_cmd_snapshot!(context.command(), @r###"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -150,7 +450,7 @@ def test_abort():
       File "<temp_dir>/test.py", line 6 in test_abort
       File "<venv>/bin/karva-worker", line 10 in <module>
     ERROR Worker 0 failed with SIGABRT (6) in [TIME]
-    "#);
+    "###);
 }
 
 #[test]
@@ -186,7 +486,7 @@ def test_crash(crash):
             "--status-level=none",
             "--result-output=results.json",
         ]),
-        @"
+        @r###"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -202,9 +502,9 @@ def test_crash(crash):
 
     ----- stderr -----
     ERROR Worker 0 failed with exit code 0 in [TIME]
-    "
+    "###
     );
-    assert_snapshot!(context.read_file("results.json"), @r#"
+    assert_snapshot!(context.read_file("results.json"), @r###"
     {
       "schema_version": 2,
       "status": "failed",
@@ -234,8 +534,8 @@ def test_crash(crash):
         }
       ]
     }
-    "#);
-    assert_snapshot!(normalize_junit_xml(&context.read_file("junit.xml")), @r#"
+    "###);
+    assert_snapshot!(normalize_junit_xml(&context.read_file("junit.xml")), @r###"
     <?xml version="1.0" encoding="UTF-8"?>
     <testsuites name="karva-tests" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
       <testsuite name="test" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
@@ -245,7 +545,7 @@ def test_crash(crash):
         </testcase>
       </testsuite>
     </testsuites>
-    "#);
+    "###);
 
     let context = TestContext::with_file(
         "test.py",
@@ -269,7 +569,7 @@ def test_crash(crash):
             "--result-output=results.jsonl",
             "--result-format=jsonl",
         ]),
-        @"
+        @r###"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -285,10 +585,10 @@ def test_crash(crash):
 
     ----- stderr -----
     ERROR Worker 0 failed with exit code 0 in [TIME]
-    "
+    "###
     );
-    assert_snapshot!(context.read_file("results.jsonl"), @r#"
+    assert_snapshot!(context.read_file("results.jsonl"), @r###"
     {"schema_version":2,"type":"test","module":"test","name":"test_crash","full_name":"test::test_crash","status":"error","duration_seconds":"[TIME]","diagnostic":{"code":"worker-crashed","severity":"error","message":"Worker terminated with exit code 0 while running `test::test_crash`","rendered":"error[worker-crashed]: Worker terminated with exit code 0 while running `test::test_crash`\n"}}
     {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":0,"errors":1,"skipped":0,"flaky":0,"slow":0}}
-    "#);
+    "###);
 }
