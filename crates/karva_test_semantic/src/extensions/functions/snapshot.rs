@@ -21,8 +21,79 @@ pyo3::create_exception!(
     pyo3::exceptions::PyAssertionError
 );
 
-const SNAPSHOT_UPDATE_HINT: &str =
+pub(crate) const SNAPSHOT_UPDATE_HINT: &str =
     "Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.";
+const SNAPSHOT_NAME_ATTRIBUTE: &str = "_karva_snapshot_name";
+const SNAPSHOT_PATH_ATTRIBUTE: &str = "_karva_snapshot_path";
+const SNAPSHOT_EXPECTED_ATTRIBUTE: &str = "_karva_snapshot_expected";
+const SNAPSHOT_ACTUAL_ATTRIBUTE: &str = "_karva_snapshot_actual";
+const SNAPSHOT_PENDING_PATH_ATTRIBUTE: &str = "_karva_snapshot_pending_path";
+
+pub(crate) struct SnapshotMismatchDetails {
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) expected: String,
+    pub(crate) actual: String,
+    pub(crate) pending_path: String,
+}
+
+pub(crate) fn snapshot_mismatch_details(
+    py: Python<'_>,
+    error: &PyErr,
+) -> Option<SnapshotMismatchDetails> {
+    if !error.is_instance_of::<SnapshotMismatchError>(py) {
+        return None;
+    }
+
+    let value = error.value(py);
+    Some(SnapshotMismatchDetails {
+        name: value
+            .getattr(SNAPSHOT_NAME_ATTRIBUTE)
+            .ok()?
+            .extract()
+            .ok()?,
+        path: value
+            .getattr(SNAPSHOT_PATH_ATTRIBUTE)
+            .ok()?
+            .extract()
+            .ok()?,
+        expected: value
+            .getattr(SNAPSHOT_EXPECTED_ATTRIBUTE)
+            .ok()?
+            .extract()
+            .ok()?,
+        actual: value
+            .getattr(SNAPSHOT_ACTUAL_ATTRIBUTE)
+            .ok()?
+            .extract()
+            .ok()?,
+        pending_path: value
+            .getattr(SNAPSHOT_PENDING_PATH_ATTRIBUTE)
+            .ok()?
+            .extract()
+            .ok()?,
+    })
+}
+
+fn snapshot_mismatch_error(
+    py: Python<'_>,
+    name: &str,
+    path: &str,
+    expected: &str,
+    actual: &str,
+    pending_path: &str,
+) -> PyResult<PyErr> {
+    let error = SnapshotMismatchError::new_err(format!(
+        "Snapshot mismatch for '{name}' in {path}:\n{SNAPSHOT_UPDATE_HINT}\nPending file: {pending_path}"
+    ));
+    let value = error.value(py);
+    value.setattr(SNAPSHOT_NAME_ATTRIBUTE, name)?;
+    value.setattr(SNAPSHOT_PATH_ATTRIBUTE, path)?;
+    value.setattr(SNAPSHOT_EXPECTED_ATTRIBUTE, expected.trim_end())?;
+    value.setattr(SNAPSHOT_ACTUAL_ATTRIBUTE, actual.trim_end())?;
+    value.setattr(SNAPSHOT_PENDING_PATH_ATTRIBUTE, pending_path)?;
+    Ok(error)
+}
 
 /// Per-test identity used to locate and name snapshot assertions.
 ///
@@ -458,13 +529,17 @@ fn assert_snapshot_impl(
             SnapshotMismatchError::new_err(format!("Failed to write pending snapshot: {e}"))
         })?;
 
-        let diff = format_diff(&existing.content, serialized);
         let display_path = display_relative(&snap_path);
         let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
         let display_pending_path = display_relative(&pending);
-        return Err(SnapshotMismatchError::new_err(format!(
-            "Snapshot mismatch for '{snapshot_name}' in {display_path}:\n{diff}{SNAPSHOT_UPDATE_HINT}\nPending file: {display_pending_path}"
-        )));
+        return Err(snapshot_mismatch_error(
+            py,
+            &snapshot_name,
+            &display_path,
+            &existing.content,
+            serialized,
+            &display_pending_path,
+        )?);
     }
 
     // No existing snapshot

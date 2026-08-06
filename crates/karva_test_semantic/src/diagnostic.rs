@@ -5,19 +5,22 @@
 use camino::Utf8Path;
 use karva_collector::CollectionError;
 use karva_diagnostic::{
-    Annotation, Diagnostic, Severity, Span, SubDiagnostic, Traceback, TracebackFrame,
+    Annotation, Diagnostic, Severity, Span, SubDiagnostic, Suggestion, Traceback, TracebackFrame,
 };
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
-use ruff_text_size::TextRange;
+use ruff_source_file::{SourceFile, SourceFileBuilder};
+use ruff_text_size::{TextRange, TextSize};
 
 mod metadata;
 
 use crate::declare_diagnostic_type;
 use crate::extensions::fixtures::RejectedFixture;
+use crate::extensions::functions::{
+    SNAPSHOT_UPDATE_HINT, SnapshotMismatchDetails, snapshot_mismatch_details,
+};
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
@@ -800,8 +803,29 @@ fn handle_failed_function_call(
         }
     }
 
-    let error_string = error.value(py).to_string();
+    if let Some(SnapshotMismatchDetails {
+        name,
+        path,
+        expected,
+        actual,
+        pending_path,
+    }) = snapshot_mismatch_details(py, error)
+    {
+        let range = TextRange::up_to(TextSize::of(expected.as_str()));
+        let source_file = SourceFileBuilder::new(path, expected).finish();
+        let mut mismatch =
+            SubDiagnostic::new(Severity::Info, format!("Snapshot mismatch for '{name}'"));
+        mismatch.suggest(Suggestion::new(
+            Span::from(source_file).with_range(range),
+            actual,
+        ));
+        diagnostic.sub(mismatch);
+        diagnostic.info(SNAPSHOT_UPDATE_HINT);
+        diagnostic.info(format!("Pending file: {pending_path}"));
+        return;
+    }
 
+    let error_string = error.value(py).to_string();
     if !error_string.is_empty() {
         diagnostic.info(indent_continuation_lines(&error_string));
     }

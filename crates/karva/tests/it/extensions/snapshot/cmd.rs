@@ -615,15 +615,12 @@ def test_change():
      --> test.py:7:5
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_change' in snapshots/test__test_change.snap:
-              1     1 │  success: true
-              2     2 │  exit_code: 0
-              3     3 │  ----- stdout -----
-              4       │ -first
-                    4 │ +second
-              5     5 │  ----- stderr -----
-          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-          Pending file: snapshots/test__test_change.snap.new
+    info: Snapshot mismatch for 'test_change'
+     --> snapshots/test__test_change.snap:4:1
+    4 - first
+    4 + second
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+    info: Pending file: snapshots/test__test_change.snap.new
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
