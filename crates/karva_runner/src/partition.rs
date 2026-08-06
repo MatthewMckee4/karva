@@ -83,6 +83,9 @@ pub struct Partition {
     /// Stable identities parallel to `tests`, used for crash recovery.
     test_keys: Vec<TestCacheKey>,
 
+    /// Runtime-expanded cases a replacement worker must not execute again.
+    resume_skip: Vec<TestCacheKey>,
+
     /// Function identities represented by the selectors.
     function_roots: HashSet<String>,
 
@@ -95,6 +98,7 @@ impl Partition {
         Self {
             tests: Vec::new(),
             test_keys: Vec::new(),
+            resume_skip: Vec::new(),
             function_roots: HashSet::new(),
             weight: 0,
         }
@@ -131,6 +135,11 @@ impl Partition {
             .cloned()
     }
 
+    /// Runtime-expanded cases already handled by an earlier worker generation.
+    pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
+        &self.resume_skip
+    }
+
     /// Returns work not committed before a worker crash, excluding the test
     /// that terminated the worker.
     pub(super) fn pending_after_crash(
@@ -139,13 +148,28 @@ impl Partition {
         crashed: &TestCacheKey,
     ) -> Self {
         let mut pending = Self::new();
+        pending.resume_skip.clone_from(&self.resume_skip);
         for (path, cache_key) in self.tests.iter().zip(&self.test_keys) {
             let contains_crashed_dynamic_case = !cache_key.is_parameter_case()
                 && cache_key.test_function_name() == crashed.test_function_name();
-            if !completed.contains(cache_key)
-                && cache_key != crashed
-                && !contains_crashed_dynamic_case
-            {
+            if contains_crashed_dynamic_case {
+                pending.tests.push(path.clone());
+                pending.test_keys.push(cache_key.clone());
+                pending
+                    .function_roots
+                    .insert(cache_key.test_function_name().to_string());
+                pending.resume_skip.extend(
+                    completed
+                        .iter()
+                        .filter(|completed| {
+                            completed.test_function_name() == cache_key.test_function_name()
+                        })
+                        .cloned(),
+                );
+                pending.resume_skip.push(crashed.clone());
+                continue;
+            }
+            if !completed.contains(cache_key) && cache_key != crashed {
                 pending.tests.push(path.clone());
                 pending.test_keys.push(cache_key.clone());
                 pending
@@ -153,6 +177,8 @@ impl Partition {
                     .insert(cache_key.test_function_name().to_string());
             }
         }
+        pending.resume_skip.sort();
+        pending.resume_skip.dedup();
         pending
     }
 }
@@ -557,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn crash_recovery_does_not_rerun_dynamic_parameter_functions() {
+    fn crash_recovery_resumes_dynamic_parameter_functions() {
         let mut partition = Partition::new();
         partition.add_test(test_info("test_module::test_case"), 1);
 
@@ -566,7 +592,11 @@ mod tests {
             &TestCacheKey::function_name("test_module::test_case[1]"),
         );
 
-        assert!(pending.tests().is_empty());
+        assert_eq!(pending.tests(), &["test_module::test_case"]);
+        assert_eq!(
+            pending.resume_skip(),
+            &[TestCacheKey::function_name("test_module::test_case[1]")]
+        );
     }
 
     #[test]

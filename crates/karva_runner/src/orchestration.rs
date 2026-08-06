@@ -18,7 +18,7 @@ use karva_cache::{
 use karva_cli::{PartitionSelection, SubTestCommand};
 use karva_collector::{CollectedPackage, CollectionSettings};
 use karva_diagnostic::AggregatedResults;
-use karva_ipc::{ControllerServer, WorkerEvent};
+use karva_ipc::{ControllerServer, WorkerEvent, WorkerSelection};
 use karva_logging::time::{format_duration, format_duration_bracketed};
 use karva_logging::{Printer, StatusLevel};
 use karva_metadata::MaxFail;
@@ -850,7 +850,13 @@ fn spawn_worker(
     forward_stdout: bool,
 ) -> Result<()> {
     let test_count = partition.tests().len();
-    controller.register_worker_paths(worker_id, partition.tests().to_vec())?;
+    controller.register_worker_selection(
+        worker_id,
+        WorkerSelection {
+            test_paths: partition.tests().to_vec(),
+            resume_skip: partition.resume_skip().to_vec(),
+        },
+    )?;
     let (stderr_path, stderr_file) = spawn.artifacts.create_worker_stderr_file(worker_id)?;
     let mut command = worker_command(spawn, worker_id);
     command.stderr(Stdio::piped());

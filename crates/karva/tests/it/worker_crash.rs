@@ -61,18 +61,63 @@ def test_worker_crash(value):
     assert_eq!(context.read_file("completed"), "02");
 }
 
+#[test]
+fn worker_exit_resumes_dynamic_parameter_cases() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+from pathlib import Path
+
+import karva
+
+
+@karva.tags.parametrize("value", range(3))
+def test_worker_crash(value):
+    if value == 1:
+        os._exit(19)
+
+    completed = Path("completed")
+    completed.write_text(completed.read_text() + str(value) if completed.exists() else str(value))
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_worker_crash(value=0)
+           CRASH [TIME] test::test_worker_crash(value=1)
+            PASS [TIME] test::test_worker_crash(value=2)
+
+    failures:
+
+    test::test_worker_crash(value=1):
+
+    error[worker-crashed]: Worker terminated with exit code 19 while running `test::test_worker_crash(value=1)`
+
+    ────────────
+         Summary [TIME] 3 tests run: 2 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 19 in [TIME]
+    ");
+    assert_eq!(context.read_file("completed"), "02");
+}
+
 #[cfg(unix)]
 #[test]
 fn worker_abort_is_attributed_to_the_active_test() {
     let context = TestContext::with_file(
         "test.py",
-        r#"
+        r"
 import os
 
 
 def test_abort():
     os.abort()
-"#,
+",
     );
 
     assert_cmd_snapshot!(context.command(), @r#"
@@ -120,7 +165,7 @@ path = "junit.xml"
         ),
         (
             "test.py",
-            r#"
+            r"
 import os
 import karva
 
@@ -132,7 +177,7 @@ def crash():
 
 def test_crash(crash):
     pass
-"#,
+",
         ),
     ]);
 
@@ -204,7 +249,7 @@ def test_crash(crash):
 
     let context = TestContext::with_file(
         "test.py",
-        r#"
+        r"
 import os
 import karva
 
@@ -216,7 +261,7 @@ def crash():
 
 def test_crash(crash):
     pass
-"#,
+",
     );
     assert_cmd_snapshot!(
         context.command().args([

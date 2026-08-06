@@ -1,5 +1,7 @@
 //! Python test semantics, fixture resolution, extensions, and in-process execution.
 
+use std::collections::BTreeSet;
+
 pub(crate) mod collection;
 mod context;
 pub(crate) mod diagnostic;
@@ -21,6 +23,7 @@ use karva_coverage::CoverageSession;
 use karva_diagnostic::{Diagnostic, Reporter};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
+use karva_python_semantic::TestCacheKey;
 use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::failed_to_start_coverage_diagnostic;
@@ -31,16 +34,28 @@ use crate::runner::PackageRunner;
 /// Runs discovery and execution inside one interpreter attachment.
 ///
 /// Coverage startup or persistence failures are logged but do not discard test results.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "worker execution keeps project, reporting, recovery, coverage, and verbosity inputs explicit"
+)]
 pub fn run_tests(
     cwd: &Utf8Path,
     settings: &ProjectSettings,
     python_version: PythonVersion,
     reporter: &dyn Reporter,
     test_paths: Vec<Result<TestPath, TestPathError>>,
+    resume_skip: &BTreeSet<TestCacheKey>,
     coverage: Option<&CoverageConfig>,
     verbose: bool,
 ) -> Vec<Diagnostic> {
-    let context = Context::new(cwd, settings, python_version, reporter, verbose);
+    let context = Context::new(
+        cwd,
+        settings,
+        python_version,
+        reporter,
+        resume_skip,
+        verbose,
+    );
     let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {
