@@ -486,8 +486,8 @@ def test_hello():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_hello'
      --> snapshots/test__test_hello.snap:1:1
-    1 - hello world
-    1 + goodbye world
+    1 | - hello world
+    1 | + goodbye world
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_hello.snap.new
 
@@ -696,8 +696,8 @@ def test_two():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_two'
      --> snapshots/test__test_two.snap:1:1
-    1 - second
-    1 + changed
+    1 | - second
+    1 | + changed
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_two.snap.new
 

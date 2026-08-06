@@ -620,7 +620,7 @@ def test_change():
     1 | success: true
     2 | exit_code: 0
     3 | ----- stdout -----
-    4 + second
+    4 | + second
     5 | ----- stderr -----
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_change.snap.new

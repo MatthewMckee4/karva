@@ -177,7 +177,8 @@ fn render_message(
     if let Some(code) = code {
         title = title.id(code);
     }
-    let suggestions = suggestions.iter().map(|suggestion| {
+    let has_suggestions = !suggestions.is_empty();
+    let suggestion_snippets = suggestions.iter().map(|suggestion| {
         let span = suggestion.span();
         let range = span.range();
         Snippet::source(span.source_file().source_text())
@@ -190,7 +191,7 @@ fn render_message(
     });
     let elements = snippets
         .map(Element::from)
-        .chain(suggestions.map(Element::from))
+        .chain(suggestion_snippets.map(Element::from))
         .collect::<Vec<_>>();
     let report = [title.elements(elements)];
     let renderer = if color {
@@ -202,9 +203,65 @@ fn render_message(
     let rendered = rendered
         .lines()
         .filter(|line| !is_gutter_padding(line))
+        .map(|line| {
+            if has_suggestions {
+                add_patch_gutter(line)
+            } else {
+                line.to_string()
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
     format!("{rendered}\n")
+}
+
+fn add_patch_gutter(line: &str) -> String {
+    let mut visible = Vec::new();
+    let mut chars = line.char_indices();
+    while let Some((index, character)) = chars.next() {
+        if character == '\u{1b}' {
+            for (_, escape_character) in chars.by_ref() {
+                if escape_character.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            visible.push((index, character));
+        }
+    }
+
+    let mut index = visible
+        .iter()
+        .position(|(_, character)| !character.is_whitespace())
+        .unwrap_or(visible.len());
+    let digit_start = index;
+    while visible
+        .get(index)
+        .is_some_and(|(_, character)| character.is_ascii_digit())
+    {
+        index += 1;
+    }
+    if index == digit_start {
+        return line.to_string();
+    }
+
+    let whitespace_start = index;
+    while visible
+        .get(index)
+        .is_some_and(|(_, character)| character.is_whitespace())
+    {
+        index += 1;
+    }
+    let Some((_, '-' | '+' | '~')) = visible.get(index) else {
+        return line.to_string();
+    };
+    if index == whitespace_start {
+        return line.to_string();
+    }
+
+    let (whitespace_index, whitespace) = visible[index - 1];
+    let insertion = whitespace_index + whitespace.len_utf8();
+    format!("{}| {}", &line[..insertion], &line[insertion..])
 }
 
 fn is_gutter_padding(line: &str) -> bool {
@@ -250,7 +307,20 @@ fn severity_name(severity: Severity) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::is_gutter_padding;
+    use super::{add_patch_gutter, is_gutter_padding};
+
+    #[test]
+    fn adds_patch_gutter() {
+        assert_eq!(add_patch_gutter("1 - old"), "1 | - old");
+        assert_eq!(add_patch_gutter("  12 + new"), "  12 | + new");
+        assert_eq!(add_patch_gutter("2 ~ changed"), "2 | ~ changed");
+        assert_eq!(add_patch_gutter("1 | context"), "1 | context");
+        assert_eq!(add_patch_gutter("info: unchanged"), "info: unchanged");
+        assert_eq!(
+            add_patch_gutter("\u{1b}[1;94m1\u{1b}[0m \u{1b}[32m+ new\u{1b}[0m"),
+            "\u{1b}[1;94m1\u{1b}[0m | \u{1b}[32m+ new\u{1b}[0m"
+        );
+    }
 
     #[test]
     fn detects_gutter_padding() {

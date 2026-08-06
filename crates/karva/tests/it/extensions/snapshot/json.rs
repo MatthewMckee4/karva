@@ -454,7 +454,7 @@ def test_json():
     info: Snapshot mismatch for 'test_json'
      --> snapshots/test__test_json.snap:2:11
     1 | {
-    2 ~   "key": "changed"
+    2 | ~   "key": "changed"
     3 | }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_json.snap.new
