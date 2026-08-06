@@ -35,7 +35,11 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered
     }
 
     let max_line = old.lines().count().max(new.lines().count());
-    let num_width = max_line.to_string().len().max(5);
+    let num_width = if bordered {
+        max_line.to_string().len().max(5)
+    } else {
+        max_line.to_string().len()
+    };
     let gutter_width = 2 * num_width + 2;
     let content_width = width.saturating_sub(gutter_width + 1);
     let separator_pad = gutter_width.saturating_sub(4);
@@ -172,8 +176,8 @@ mod tests {
     fn addition() {
         settings().bind(|| {
             insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @"
-            1     1 │  a
-                  2 │ +b
+            1 1 │  a
+              2 │ +b
             ");
         });
     }
@@ -182,8 +186,8 @@ mod tests {
     fn deletion() {
         settings().bind(|| {
             insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @"
-            1     1 │  a
-            2       │ -b
+            1 1 │  a
+            2   │ -b
             ");
         });
     }
@@ -202,19 +206,19 @@ mod tests {
         }
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @"
-             1       │ -line 1
-                   1 │ +CHANGED 1
-             2     2 │  line 2
-             3     3 │  line 3
-             4     4 │  line 4
-             5     5 │  line 5
-                 ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            16    16 │  line 16
-            17    17 │  line 17
-            18    18 │  line 18
-            19    19 │  line 19
-            20       │ -line 20
-                  20 │ +CHANGED 20
+             1    │ -line 1
+                1 │ +CHANGED 1
+             2  2 │  line 2
+             3  3 │  line 3
+             4  4 │  line 4
+             5  5 │  line 5
+              ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            16 16 │  line 16
+            17 17 │  line 17
+            18 18 │  line 18
+            19 19 │  line 19
+            20    │ -line 20
+               20 │ +CHANGED 20
             ");
         });
     }
@@ -288,13 +292,13 @@ mod tests {
         let new = "{\n  \"roles\": [\n    \"user\",\n    \"hr\"\n  ]\n}";
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(old, new), @r#"
-            1     1 │  {
-            2     2 │    "roles": [
-            3       │ -    "user"
-                  3 │ +    "user",
-                  4 │ +    "hr"
-            4     5 │    ]
-            5     6 │  }
+            1 1 │  {
+            2 2 │    "roles": [
+            3   │ -    "user"
+              3 │ +    "user",
+              4 │ +    "hr"
+            4 5 │    ]
+            5 6 │  }
             "#);
         });
     }
