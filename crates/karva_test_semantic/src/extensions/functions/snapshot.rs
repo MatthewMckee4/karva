@@ -21,6 +21,9 @@ pyo3::create_exception!(
     pyo3::exceptions::PyAssertionError
 );
 
+const SNAPSHOT_UPDATE_HINT: &str =
+    "Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.";
+
 /// Per-test identity used to locate and name snapshot assertions.
 ///
 /// Counter advances independently for each test and is reset for every retry.
@@ -457,8 +460,10 @@ fn assert_snapshot_impl(
 
         let diff = format_diff(&existing.content, serialized);
         let display_path = display_relative(&snap_path);
+        let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
+        let display_pending_path = display_relative(&pending);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Snapshot mismatch for '{snapshot_name}'.\nSnapshot file: {display_path}\n{diff}"
+            "Snapshot mismatch for '{snapshot_name}'.\nSnapshot file: {display_path}\n{diff}{SNAPSHOT_UPDATE_HINT}\nPending file: {display_pending_path}"
         )));
     }
 
@@ -475,7 +480,7 @@ fn assert_snapshot_impl(
         let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
         let display_path = display_relative(&pending);
         return Err(SnapshotMismatchError::new_err(format!(
-            "New snapshot for '{snapshot_name}'.\nRun `karva snapshot accept` to accept, or re-run with `--snapshot-update`.\nPending file: {display_path}"
+            "New snapshot for '{snapshot_name}'.\n{SNAPSHOT_UPDATE_HINT}\nPending file: {display_path}"
         )));
     }
 
@@ -522,7 +527,7 @@ fn handle_inline_snapshot(
     if !is_empty {
         let diff = format_diff(&expected, actual);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Inline snapshot mismatch for '{test_name}'.\n{diff}"
+            "Inline snapshot mismatch for '{test_name}'.\n{diff}Re-run with `--snapshot-update` to accept."
         )));
     }
 
@@ -553,7 +558,7 @@ fn handle_inline_snapshot(
     let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
     let display_path = display_relative(&pending);
     Err(SnapshotMismatchError::new_err(format!(
-        "New inline snapshot for '{test_name}'.\nRun `karva snapshot accept` to accept, or re-run with `--snapshot-update`.\nPending file: {display_path}"
+        "New inline snapshot for '{test_name}'.\n{SNAPSHOT_UPDATE_HINT}\nPending file: {display_path}"
     )))
 }
 

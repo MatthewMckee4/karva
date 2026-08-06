@@ -887,10 +887,8 @@ def test_no_such_fixture(not_a_real_fixture):
 
     error[missing-fixtures]: Test `test_no_such_fixture` has missing fixtures
      --> test.py:2:5
-      |
     2 | def test_no_such_fixture(not_a_real_fixture):
       |     ^^^^^^^^^^^^^^^^^^^^
-      |
     info: Missing fixtures: `not_a_real_fixture`
 
     ────────────

@@ -128,10 +128,8 @@ async def test_bad(bad_fixture):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `bad_fixture`
      --> test.py:4:11
-      |
     4 | async def bad_fixture():
       |           ^^^^^^^^^^^
-      |
     info: Fixture had more than one yield statement
 
     ────────────
@@ -170,10 +168,8 @@ async def test_error(error_fixture):
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `error_fixture`
      --> test.py:4:11
-      |
     4 | async def error_fixture():
       |           ^^^^^^^^^^^^^
-      |
     info: Failed to reset fixture: teardown failed
 
     ────────────
