@@ -3184,7 +3184,6 @@ def test_3(): pass
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
 
     ----- stderr -----
-    WARN failed to terminate worker process: Operation not permitted (os error 1) worker_id=0
     "
     );
 }
