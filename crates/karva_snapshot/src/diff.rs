@@ -21,7 +21,7 @@ fn ensure_trailing_newline(s: &str) -> Cow<'_, str> {
 ///
 /// Uses `grouped_ops` for context-aware output with separators between groups,
 /// and `iter_inline_changes` for word-level emphasis on changed portions.
-fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
+fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered: bool) {
     let old = ensure_trailing_newline(old);
     let new = ensure_trailing_newline(new);
 
@@ -39,7 +39,9 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
     let gutter_width = 2 * num_width + 2;
     let content_width = width.saturating_sub(gutter_width + 1);
     let separator_pad = gutter_width.saturating_sub(4);
-    let _ = writeln!(output, "{:─<gutter_width$}┬{:─<content_width$}", "", "");
+    if bordered {
+        let _ = writeln!(output, "{:─<gutter_width$}┬{:─<content_width$}", "", "");
+    }
 
     for (group_idx, group) in ops.iter().enumerate() {
         if group_idx > 0 {
@@ -77,15 +79,17 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
         }
     }
 
-    let _ = writeln!(output, "{:─<gutter_width$}┴{:─<content_width$}", "", "");
+    if bordered {
+        let _ = writeln!(output, "{:─<gutter_width$}┴{:─<content_width$}", "", "");
+    }
 }
 
 /// Format a diff for use in error messages.
 ///
-/// Uses a fixed total width of 40 characters to match standard border width.
+/// Uses a compact borderless layout with a fixed width of 40 characters.
 pub fn format_diff(old: &str, new: &str) -> String {
     let mut output = String::new();
-    render_diff(&mut output, old, new, 40);
+    render_diff(&mut output, old, new, 40, false);
     output
 }
 
@@ -95,7 +99,7 @@ pub fn format_diff(old: &str, new: &str) -> String {
 pub(crate) fn print_changeset(out: &mut impl io::Write, old: &str, new: &str) -> io::Result<()> {
     let width = terminal_size::terminal_size().map_or(80, |(w, _)| w.0 as usize);
     let mut output = String::new();
-    render_diff(&mut output, old, new, width);
+    render_diff(&mut output, old, new, width, true);
     write!(out, "{output}")
 }
 
@@ -167,11 +171,9 @@ mod tests {
     #[test]
     fn addition() {
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @r"
-            ────────────┬───────────────────────────
-                1     1 │  a
-                      2 │ +b
-            ────────────┴───────────────────────────
+            insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @"
+            1     1 │  a
+                  2 │ +b
             ");
         });
     }
@@ -179,11 +181,9 @@ mod tests {
     #[test]
     fn deletion() {
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @r"
-            ────────────┬───────────────────────────
-                1     1 │  a
-                2       │ -b
-            ────────────┴───────────────────────────
+            insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @"
+            1     1 │  a
+            2       │ -b
             ");
         });
     }
@@ -201,22 +201,20 @@ mod tests {
             }
         }
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @r"
-            ────────────┬───────────────────────────
-                1       │ -line 1
-                      1 │ +CHANGED 1
-                2     2 │  line 2
-                3     3 │  line 3
-                4     4 │  line 4
-                5     5 │  line 5
-                    ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-               16    16 │  line 16
-               17    17 │  line 17
-               18    18 │  line 18
-               19    19 │  line 19
-               20       │ -line 20
-                     20 │ +CHANGED 20
-            ────────────┴───────────────────────────
+            insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @"
+             1       │ -line 1
+                   1 │ +CHANGED 1
+             2     2 │  line 2
+             3     3 │  line 3
+             4     4 │  line 4
+             5     5 │  line 5
+                 ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            16    16 │  line 16
+            17    17 │  line 17
+            18    18 │  line 18
+            19    19 │  line 19
+            20       │ -line 20
+                  20 │ +CHANGED 20
             ");
         });
     }
@@ -234,8 +232,7 @@ mod tests {
             }
         }
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff(&old, &new), @r"
-            ──────────────┬─────────────────────────
+            insta::assert_snapshot!(format_diff(&old, &new), @"
                  1        │ -line 1
                         1 │ +CHANGED 1
                  2      2 │  line 2
@@ -271,7 +268,6 @@ mod tests {
              99999  99999 │  line 99999
             100000        │ -line 100000
                    100000 │ +CHANGED 100000
-            ──────────────┴─────────────────────────
             ");
         });
     }
@@ -292,15 +288,13 @@ mod tests {
         let new = "{\n  \"roles\": [\n    \"user\",\n    \"hr\"\n  ]\n}";
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(old, new), @r#"
-            ────────────┬───────────────────────────
-                1     1 │  {
-                2     2 │    "roles": [
-                3       │ -    "user"
-                      3 │ +    "user",
-                      4 │ +    "hr"
-                4     5 │    ]
-                5     6 │  }
-            ────────────┴───────────────────────────
+            1     1 │  {
+            2     2 │    "roles": [
+            3       │ -    "user"
+                  3 │ +    "user",
+                  4 │ +    "hr"
+            4     5 │    ]
+            5     6 │  }
             "#);
         });
     }

@@ -238,14 +238,11 @@ def test_poem():
      --> test.py:5:5
     5 |     karva.assert_snapshot('roses are red/nviolets are purple/nsugar is sweet')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_poem'.
-          Snapshot file: snapshots/test__test_poem.snap
-          ────────────┬───────────────────────────
+    info: Snapshot mismatch for 'test_poem' in snapshots/test__test_poem.snap:
               1     1 │  roses are red
               2       │ -violets are blue
                     2 │ +violets are purple
                     3 │ +sugar is sweet
-          ────────────┴───────────────────────────
           Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
           Pending file: snapshots/test__test_poem.snap.new
 
