@@ -161,6 +161,14 @@ fn render_message(
                     }))
             })
         });
+    let level_name = match severity {
+        Severity::Info => "info",
+        Severity::Warning => "warning",
+        Severity::Error | Severity::Fatal => "error",
+    };
+    let title_prefix_width = level_name.len() + 2 + code.map_or(0, |code| code.len() + 2);
+    let continuation_prefix = format!("\n{}", " ".repeat(title_prefix_width));
+    let message = message.replace(&continuation_prefix, "\n");
     let mut title = level(severity).primary_title(message);
     if let Some(code) = code {
         title = title.id(code);
