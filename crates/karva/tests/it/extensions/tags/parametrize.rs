@@ -60,7 +60,7 @@ def fixture():
         test::test_too_few:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
-         --> test.py:5:14
+         --> test.py:5:37
           |
         5 | @parametrize("left,right", [(1, 2), (3,)])
           |              ------------           ^^^^ contains 1 value
@@ -71,7 +71,7 @@ def fixture():
         test::test_too_many:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3 values
-         --> test.py:9:14
+         --> test.py:9:37
           |
         9 | @parametrize("left,right", [(1, 2), (3, 4, 5)])
           |              ------------           ^^^^^^^^^ contains 3 values
@@ -207,7 +207,7 @@ def test_value(left, right):
     test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
-     --> test.py:7:8
+     --> test.py:7:27
       |
     7 | @cases(("left", "right"), CASES)
       |        -----------------  ^^^^^ case 2 contains 1 value
@@ -363,7 +363,7 @@ def test_value(left, right):
     test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
-     --> test.py:5:25
+     --> test.py:5:40
       |
     5 | @karva.tags.parametrize("left,right", [(3,)])
       |                         ------------   ^^^^ contains 1 value
@@ -403,7 +403,7 @@ def test_value(value):
     test::test_value:
 
     error[invalid-parametrize]: Expected 1 value for `value`, but case 1 contains 2 values
-     --> test.py:4:25
+     --> test.py:4:35
       |
     4 | @karva.tags.parametrize("value", [karva.param(1, 2)])
       |                         -------   ^^^^^^^^^^^^^^^^^ contains 2 values
@@ -538,7 +538,7 @@ def test_value(value):
     test::test_value:
 
     error[invalid-parametrize]: Parameter `value` is parametrized more than once
-      --> test.py:10:26
+      --> test.py:10:35
        |
     10 | @karva.tags.parametrize(["value", "value"], [(1, 2)])
        |                          -------  ^^^^^^^ duplicate parameter
@@ -583,7 +583,7 @@ def test_value(value):
         test::test_value:
 
         error[invalid-parametrize]: Parameter `value` is parametrized more than once
-         --> test.py:5:15
+         --> test.py:5:24
           |
         5 | @parametrize(["value", "value"], [(1, 2)])
           |               -------  ^^^^^^^ duplicate parameter
@@ -775,7 +775,7 @@ def test_value(value):
         test::test_value:
 
         error[invalid-parametrize]: Parametrization has no cases
-         --> test.py:5:14
+         --> test.py:5:23
           |
         5 | @parametrize("value", [])
           |              -------  ^^ no cases provided

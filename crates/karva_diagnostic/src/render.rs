@@ -1,5 +1,5 @@
 use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
-use annotate_snippets::{Level, Renderer, Snippet};
+use annotate_snippets::{AnnotationKind, Element, Level, Padding, Renderer, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use ruff_source_file::SourceFile;
 
@@ -142,17 +142,17 @@ fn render_message(
             };
             groups.into_iter().map(move |annotations| {
                 Snippet::source(source_file.source_text())
-                    .origin(path)
+                    .path(path)
                     .fold(true)
                     .annotations(annotations.into_iter().map(|annotation| {
                         let range = annotation.span().range();
-                        let level = if annotation.is_primary() {
-                            Level::Error
+                        let kind = if annotation.is_primary() {
+                            AnnotationKind::Primary
                         } else {
-                            Level::Warning
+                            AnnotationKind::Context
                         };
                         let rendered_annotation =
-                            level.span(usize::from(range.start())..usize::from(range.end()));
+                            kind.span(usize::from(range.start())..usize::from(range.end()));
                         if let Some(message) = annotation.message_text() {
                             rendered_annotation.label(message)
                         } else {
@@ -161,16 +161,29 @@ fn render_message(
                     }))
             })
         });
-    let mut diagnostic = level(severity).title(message).snippets(snippets);
+    let level_name = match severity {
+        Severity::Info => "info",
+        Severity::Warning => "warning",
+        Severity::Error | Severity::Fatal => "error",
+    };
+    let title_prefix_width = level_name.len() + 2 + code.map_or(0, |code| code.len() + 2);
+    let continuation_prefix = format!("\n{}", " ".repeat(title_prefix_width));
+    let message = message.replace(&continuation_prefix, "\n");
+    let mut title = level(severity).primary_title(message);
     if let Some(code) = code {
-        diagnostic = diagnostic.id(code);
+        title = title.id(code);
     }
+    let mut elements = snippets.map(Element::from).collect::<Vec<_>>();
+    if !elements.is_empty() {
+        elements.push(Element::from(Padding));
+    }
+    let report = [title.elements(elements)];
     let renderer = if color {
         Renderer::styled()
     } else {
         Renderer::plain()
     };
-    format!("{}\n", renderer.render(diagnostic))
+    format!("{}\n", renderer.render(&report))
 }
 
 fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
@@ -178,11 +191,11 @@ fn display_path(source_file: &SourceFile, cwd: &Utf8Path) -> Utf8PathBuf {
     path.strip_prefix(cwd).unwrap_or(path).to_path_buf()
 }
 
-fn level(severity: Severity) -> Level {
+fn level<'a>(severity: Severity) -> Level<'a> {
     match severity {
-        Severity::Info => Level::Info,
-        Severity::Warning => Level::Warning,
-        Severity::Error | Severity::Fatal => Level::Error,
+        Severity::Info => Level::INFO,
+        Severity::Warning => Level::WARNING,
+        Severity::Error | Severity::Fatal => Level::ERROR,
     }
 }
 
