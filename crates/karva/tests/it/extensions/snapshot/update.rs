@@ -157,8 +157,15 @@ def test_user_data():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_user_data'
      --> snapshots/test__test_user_data.snap:6:11
+    1 | {
+    2 |   "id": 1,
+    3 |   "name": "Alice",
+    4 |   "roles": [
+    5 |     "admin",
     6 ~     "user",
     7 +     "hr"
+    8 |   ]
+    9 | }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_user_data.snap.new
 
@@ -333,8 +340,9 @@ def test_second():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_second'
      --> snapshots/test__test_second.snap:2:12
-    2 -   "value": 2
-    2 +   "value": 99
+    1 | {
+    2 ~   "value": 99
+    3 | }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_second.snap.new
 

@@ -182,6 +182,7 @@ fn render_message(
         let range = span.range();
         Snippet::source(span.source_file().source_text())
             .path(display_path(span.source_file(), cwd).into_string())
+            .fold(false)
             .patch(Patch::new(
                 usize::from(range.start())..usize::from(range.end()),
                 suggestion.replacement(),

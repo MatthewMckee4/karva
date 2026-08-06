@@ -617,8 +617,11 @@ def test_change():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_change'
      --> snapshots/test__test_change.snap:4:1
-    4 - first
+    1 | success: true
+    2 | exit_code: 0
+    3 | ----- stdout -----
     4 + second
+    5 | ----- stderr -----
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_change.snap.new
 
