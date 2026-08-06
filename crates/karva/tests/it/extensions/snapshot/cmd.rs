@@ -107,8 +107,8 @@ def test_echo():
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_echo'.
-          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-          Pending file: snapshots/test__test_echo.snap.new
+    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+    Pending file: snapshots/test__test_echo.snap.new
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -536,13 +536,13 @@ def test_inline_wrong():
     7 |     karva.assert_cmd_snapshot(cmd, inline="wrong value")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Inline snapshot mismatch for 'test_inline_wrong'.
-          1   │ -wrong value
-            1 │ +success: true
-            2 │ +exit_code: 0
-            3 │ +----- stdout -----
-            4 │ +actual
-            5 │ +----- stderr -----
-          Re-run with `--snapshot-update` to accept.
+    1   │ -wrong value
+      1 │ +success: true
+      2 │ +exit_code: 0
+      3 │ +----- stdout -----
+      4 │ +actual
+      5 │ +----- stderr -----
+    Re-run with `--snapshot-update` to accept.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -616,14 +616,14 @@ def test_change():
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_change' in snapshots/test__test_change.snap:
-          1 1 │  success: true
-          2 2 │  exit_code: 0
-          3 3 │  ----- stdout -----
-          4   │ -first
-            4 │ +second
-          5 5 │  ----- stderr -----
-          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-          Pending file: snapshots/test__test_change.snap.new
+    1 1 │  success: true
+    2 2 │  exit_code: 0
+    3 3 │  ----- stdout -----
+    4   │ -first
+      4 │ +second
+    5 5 │  ----- stderr -----
+    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+    Pending file: snapshots/test__test_change.snap.new
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

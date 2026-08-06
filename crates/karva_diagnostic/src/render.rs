@@ -67,6 +67,12 @@ fn render(
             cwd,
             color,
         ));
+        if let Some(body) = diagnostic.body_text() {
+            rendered.push_str(body);
+            if !body.ends_with('\n') {
+                rendered.push('\n');
+            }
+        }
     }
     rendered.push('\n');
     rendered

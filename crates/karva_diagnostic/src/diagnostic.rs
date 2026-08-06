@@ -102,6 +102,7 @@ pub struct SubDiagnostic {
     severity: Severity,
     message: String,
     annotations: Vec<Annotation>,
+    body: Option<String>,
 }
 
 impl SubDiagnostic {
@@ -110,11 +111,17 @@ impl SubDiagnostic {
             severity,
             message: message.into(),
             annotations: Vec::new(),
+            body: None,
         }
     }
 
     pub fn annotate(&mut self, annotation: Annotation) {
         self.annotations.push(annotation);
+    }
+
+    /// Add preformatted content displayed below the diagnostic title.
+    pub fn body(&mut self, body: impl Into<String>) {
+        self.body = Some(body.into());
     }
 
     pub(super) fn severity(&self) -> Severity {
@@ -127,6 +134,10 @@ impl SubDiagnostic {
 
     pub(super) fn annotations(&self) -> &[Annotation] {
         &self.annotations
+    }
+
+    pub(super) fn body_text(&self) -> Option<&str> {
+        self.body.as_deref()
     }
 }
 
