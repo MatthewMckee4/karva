@@ -228,11 +228,13 @@ def test_something_else():
       |
     5 | def failing_fixture():
       |     ^^^^^^^^^^^^^^^
+      |
     info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError("Setup failed!")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Setup failed!
 
     ────────────
@@ -277,6 +279,7 @@ def test_something():
       |
     5 | def failing_teardown_fixture():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Failed to reset fixture: Teardown failed!
 
     ────────────
@@ -323,11 +326,13 @@ def test_unreachable():
        |
     10 | def failing_setup_fixture():
        |     ^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Fixture failed here
       --> test.py:11:5
        |
     11 |     raise RuntimeError("Setup failed!")
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Setup failed!
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `failing_teardown_fixture`
@@ -335,6 +340,7 @@ def test_unreachable():
       |
     5 | def failing_teardown_fixture():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Failed to reset fixture: Teardown failed!
 
     ────────────
@@ -380,16 +386,19 @@ def test_something():
       |
     5 | def failing_dep():
       |     ^^^^^^^^^^^
+      |
     info: Fixture `auto_fixture` requires `failing_dep`
      --> test.py:9:5
       |
     9 | def auto_fixture(failing_dep):
       |     ^^^^^^^^^^^^
+      |
     info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise ValueError("Dependency failed!")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Dependency failed!
 
     ────────────
@@ -436,11 +445,13 @@ def test_second():
       |
     5 | def failing_scoped_fixture():
       |     ^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError("Scoped fixture failed!")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Scoped fixture failed!
 
     ────────────

@@ -393,11 +393,13 @@ def test_not_json():
       |
     4 | def test_not_json():
       |     ^^^^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_json_snapshot(object())
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: assert_json_snapshot() value is not JSON serializable
 
     ────────────
@@ -450,11 +452,13 @@ def test_json():
       |
     4 | def test_json():
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_json_snapshot({"key": "changed"})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Snapshot mismatch for 'test_json'.
           Snapshot file: snapshots/test__test_json.snap
           ────────────┬───────────────────────────

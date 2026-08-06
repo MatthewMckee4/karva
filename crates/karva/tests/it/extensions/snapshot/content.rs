@@ -235,11 +235,13 @@ def test_poem():
       |
     4 | def test_poem():
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot('roses are red/nviolets are purple/nsugar is sweet')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Snapshot mismatch for 'test_poem'.
           Snapshot file: snapshots/test__test_poem.snap
           ────────────┬───────────────────────────

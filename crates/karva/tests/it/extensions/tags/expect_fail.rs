@@ -73,6 +73,7 @@ def test_1():
           |
         5 | def test_1():
           |     ^^^^^^
+          |
         info: Reason: Expected to fail but passes
 
         ────────────
@@ -113,6 +114,7 @@ def test_1():
           |
         5 | def test_1():
           |     ^^^^^^
+          |
         info: Reason: Expected to fail but passes
 
         ────────────
@@ -458,6 +460,7 @@ def test_expected_fail_passes():
            |
         12 | def test_expected_fail_passes():
            |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+           |
 
         ────────────
              Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
@@ -506,6 +509,7 @@ def test_expected_fail_passes():
            |
         12 | def test_expected_fail_passes():
            |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+           |
 
         ────────────
              Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
@@ -675,6 +679,7 @@ def test_should_fail():
       |
     5 | def test_should_fail():
       |     ^^^^^^^^^^^^^^^^
+      |
     info: Reason: This should fail but passes
 
     ────────────
@@ -836,6 +841,7 @@ def test_1():
       |
     5 | def test_1():
       |     ^^^^^^
+      |
     info: Reason: 123
 
     ────────────
@@ -904,6 +910,7 @@ def test_1():
       |
     7 | def test_1():
       |     ^^^^^^
+      |
     info: Reason: condition: SHOULD_EXPECT_FAIL
 
     ────────────

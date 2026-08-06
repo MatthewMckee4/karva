@@ -58,6 +58,7 @@ fn writes_json_result_report() {
        |
     14 | def test_error(missing_fixture):
        |     ^^^^^^^^^^
+       |
     info: Missing fixtures: `missing_fixture`
 
     test_report::test_fail:
@@ -67,11 +68,13 @@ fn writes_json_result_report() {
        |
     10 | def test_fail():
        |     ^^^^^^^^^
+       |
     info: Test failed here
       --> test_report.py:12:5
        |
     12 |     assert False
        |     ^^^^^^^^^^^^
+       |
 
     captured stderr:
     fail stderr
@@ -260,11 +263,13 @@ fn writes_jsonl_result_records() {
       |
     5 | def test_fail():
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test_events.py:6:5
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -322,16 +327,19 @@ def test_blocked(nested, value):
       |
     5 | def root():
       |     ^^^^
+      |
     info: Fixture `nested` requires `root`
      --> test_fixture.py:9:5
       |
     9 | def nested(root):
       |     ^^^^^^
+      |
     info: Fixture failed here
      --> test_fixture.py:6:5
       |
     6 |     raise RuntimeError("setup failed")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: setup failed
 
     ────────────
@@ -480,7 +488,7 @@ def test_flaky():
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_flaky` failed",
-                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n\n"
               }
             },
             {
@@ -528,7 +536,7 @@ def test_flaky():
     "
     );
     assert_snapshot!(context.read_file("results.jsonl"), @r#"
-    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
+    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
     {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"flaky":1,"slow":0}}
     "#);
 }
@@ -571,6 +579,7 @@ def test_resource(resource):
        |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
+       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     ────────────
@@ -711,6 +720,7 @@ fn writes_related_test_diagnostics() {
       |
     9 | def test_failure(broken_teardown):
       |     ^^^^^^^^^^^^
+      |
     info: Test ran with arguments:
     info: `broken_teardown`: `None`
     info: Test failed here
@@ -718,12 +728,14 @@ fn writes_related_test_diagnostics() {
        |
     10 |     assert False
        |     ^^^^^^^^^^^^
+       |
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`
      --> test_related.py:5:5
       |
     5 | def broken_teardown():
       |     ^^^^^^^^^^^^^^^
+      |
     info: Failed to reset fixture: teardown failed
 
     ────────────

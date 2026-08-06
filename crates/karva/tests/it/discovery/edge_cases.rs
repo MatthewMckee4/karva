@@ -235,6 +235,7 @@ def test_consumes_generator_internally():
        |
     18 | def test_plain_generator():
        |     ^^^^^^^^^^^^^^^^^^^^
+       |
     info: Use `@karva.tags.parametrize` to define multiple test cases.
 
     error[invalid-test]: Generator test `test_async_generator` is not supported
@@ -242,6 +243,7 @@ def test_consumes_generator_internally():
        |
     22 | async def test_async_generator():
        |           ^^^^^^^^^^^^^^^^^^^^
+       |
     info: Use `@karva.tags.parametrize` to define multiple test cases.
 
     error[invalid-test]: Generator test `test_decorated_generator` is not supported
@@ -249,6 +251,7 @@ def test_consumes_generator_internally():
        |
     27 | def test_decorated_generator():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Use `@karva.tags.parametrize` to define multiple test cases.
 
     error[invalid-test]: Generator test `test_parametrized_generator` is not supported
@@ -256,6 +259,7 @@ def test_consumes_generator_internally():
        |
     32 | def test_parametrized_generator(value):
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Use `@karva.tags.parametrize` to define multiple test cases.
 
     error[invalid-test]: Generator test `test_skipped_generator` is not supported
@@ -263,6 +267,7 @@ def test_consumes_generator_internally():
        |
     37 | def test_skipped_generator():
        |     ^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Use `@karva.tags.parametrize` to define multiple test cases.
 
     error[invalid-test]: Generator test `test_expected_failure_generator` is not supported
@@ -270,6 +275,7 @@ def test_consumes_generator_internally():
        |
     42 | def test_expected_failure_generator():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
     info: Use `@karva.tags.parametrize` to define multiple test cases.
 
     ────────────
@@ -325,11 +331,13 @@ def test_ok():
        |
     10 | async def test_duplicate():
        |           ^^^^^^^^^^^^^^
+       |
     info: First definition of `test_duplicate` is here
      --> test_duplicates.py:7:5
       |
     7 | def test_duplicate():
       |     ^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped

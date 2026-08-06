@@ -891,6 +891,7 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
       |
     1 | def test_invoke(invoke): assert invoke == 'invoked'
       |     ^^^^^^^^^^^
+      |
     info: Missing fixtures: `invoke`
 
     diagnostics:

@@ -1,5 +1,5 @@
 use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
-use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
+use annotate_snippets::{AnnotationKind, Element, Level, Padding, Renderer, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use ruff_source_file::SourceFile;
 
@@ -140,8 +140,8 @@ fn render_message(
                     .map(|annotation| vec![*annotation])
                     .collect()
             };
-            groups.into_iter().map(move |annotations| {
-                Snippet::source(source_file.source_text())
+            groups.into_iter().flat_map(move |annotations| {
+                let snippet = Snippet::source(source_file.source_text())
                     .path(path)
                     .fold(true)
                     .annotations(annotations.into_iter().map(|annotation| {
@@ -158,7 +158,8 @@ fn render_message(
                         } else {
                             rendered_annotation
                         }
-                    }))
+                    }));
+                [Element::from(snippet), Element::from(Padding)]
             })
         });
     let level_name = match severity {

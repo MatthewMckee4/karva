@@ -890,6 +890,7 @@ def test_no_such_fixture(not_a_real_fixture):
       |
     2 | def test_no_such_fixture(not_a_real_fixture):
       |     ^^^^^^^^^^^^^^^^^^^^
+      |
     info: Missing fixtures: `not_a_real_fixture`
 
     ────────────

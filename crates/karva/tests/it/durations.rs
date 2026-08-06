@@ -158,11 +158,13 @@ fn durations_with_failing_tests() {
       |
     6 | def test_fail():
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test_durations.py:8:5
       |
     8 |     assert False
       |     ^^^^^^^^^^^^
+      |
 
     2 slowest tests:
       test_durations::test_fail ([TIME])

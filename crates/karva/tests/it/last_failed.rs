@@ -30,11 +30,13 @@ fn last_failed_reruns_only_failures() {
       |
     3 | def test_fail(): assert False
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test_a.py:3:1
       |
     3 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -71,11 +73,13 @@ fn last_failed_lf_alias() {
       |
     3 | def test_fail(): assert False
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test_a.py:3:1
       |
     3 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -169,11 +173,13 @@ def test_fail_b(): assert False
       |
     3 | def test_fail_a(): assert False
       |     ^^^^^^^^^^^
+      |
     info: Test failed here
      --> test_a.py:3:1
       |
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     test_b::test_fail_b:
 
@@ -182,11 +188,13 @@ def test_fail_b(): assert False
       |
     3 | def test_fail_b(): assert False
       |     ^^^^^^^^^^^
+      |
     info: Test failed here
      --> test_b.py:3:1
       |
     3 | def test_fail_b(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
@@ -230,11 +238,13 @@ def test_fail_b(): assert False
       |
     3 | def test_fail_a(): assert False
       |     ^^^^^^^^^^^
+      |
     info: Test failed here
      --> test_a.py:3:1
       |
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 1 failed, 1 skipped
@@ -277,11 +287,13 @@ def test_fail_b(): assert False
       |
     3 | def test_fail_a(): assert False
       |     ^^^^^^^^^^^
+      |
     info: Test failed here
      --> test_a.py:3:1
       |
     3 | def test_fail_a(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -330,11 +342,13 @@ def test_new_fail(): assert False
       |
     3 | def test_fail(): assert False
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test_a.py:3:1
       |
     3 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

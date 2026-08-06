@@ -35,6 +35,7 @@ def test_cycle(value):
       |
     6 | def value(value):
       |     ^^^^^
+      |
     info: value -> value
 
     ────────────
@@ -85,11 +86,13 @@ def test_cycle(database):
       |
     6 | async def database(client):
       |           ^^^^^^^^
+      |
     info: Fixture `client` requires `database`
       --> test.py:11:5
        |
     11 | def client(database):
        |     ^^^^^^
+       |
     info: database -> client -> database
 
     ────────────
@@ -150,11 +153,13 @@ def test_cycle(database):
       |
     6 | def database(client):
       |     ^^^^^^^^
+      |
     info: Fixture `client` requires `database`
      --> test.py:6:5
       |
     6 | def client(database):
       |     ^^^^^^
+      |
     info: database -> client -> database
 
     ────────────
@@ -212,16 +217,19 @@ def test_cycle(requested):
        |
     10 | def first(second):
        |     ^^^^^
+       |
     info: Fixture `second` requires `third`
       --> test.py:14:5
        |
     14 | def second(third):
        |     ^^^^^^
+       |
     info: Fixture `third` requires `first`
       --> test.py:18:5
        |
     18 | def third(first):
        |     ^^^^^
+       |
     info: first -> second -> third -> first
 
     ────────────
@@ -270,11 +278,13 @@ def test_cycle():
       |
     6 | def first(second):
       |     ^^^^^
+      |
     info: Fixture `second` requires `first`
       --> test.py:10:5
        |
     10 | def second(first):
        |     ^^^^^^
+       |
     info: first -> second -> first
 
     ────────────
@@ -328,11 +338,13 @@ def test_cycle_two():
       |
     6 | def first(second):
       |     ^^^^^
+      |
     info: Fixture `second` requires `first`
       --> test.py:10:5
        |
     10 | def second(first):
        |     ^^^^^^
+       |
     info: first -> second -> first
 
     ────────────
@@ -402,11 +414,13 @@ def test_nested_cycle():
       |
     6 | def first(second):
       |     ^^^^^
+      |
     info: Fixture `second` requires `first`
       --> conftest.py:10:5
        |
     10 | def second(first):
        |     ^^^^^^
+       |
     info: first -> second -> first
 
     ────────────
@@ -464,11 +478,13 @@ def test_cycle():
       |
     6 | def first(second):
       |     ^^^^^
+      |
     info: Fixture `second` requires `first`
       --> conftest.py:10:5
        |
     10 | def second(first):
        |     ^^^^^^
+       |
     info: first -> second -> first
 
     ────────────
@@ -518,11 +534,13 @@ def test_cycle():
       |
     6 | def first(second):
       |     ^^^^^
+      |
     info: Fixture `second` requires `first`
       --> test.py:10:5
        |
     10 | def second(first):
        |     ^^^^^^
+       |
     info: first -> second -> first
 
     ────────────

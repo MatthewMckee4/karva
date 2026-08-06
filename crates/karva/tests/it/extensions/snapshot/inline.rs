@@ -91,11 +91,13 @@ def test_hello():
       |
     4 | def test_hello():
       |     ^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot("goodbye", inline="hello")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Inline snapshot mismatch for 'test_hello'.
           ────────────┬───────────────────────────
               1       │ -hello

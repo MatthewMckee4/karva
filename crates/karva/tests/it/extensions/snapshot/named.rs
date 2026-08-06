@@ -108,11 +108,13 @@ def test_hello():
       |
     4 | def test_hello():
       |     ^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot('goodbye world', name='greeting')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Snapshot mismatch for 'test_hello--greeting'.
           Snapshot file: snapshots/test__test_hello--greeting.snap
           ────────────┬───────────────────────────
@@ -239,11 +241,13 @@ def test_both():
       |
     4 | def test_both():
       |     ^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot('value', name='foo', inline='bar')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: assert_snapshot() cannot use both 'inline' and 'name' arguments
 
     ────────────

@@ -71,11 +71,13 @@ def test_hello():
       |
     4 | def test_hello():
       |     ^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Snapshot mismatch for 'test_hello'.
           Snapshot file: snapshots/test__test_hello.snap
           ────────────┬───────────────────────────
@@ -154,11 +156,13 @@ def test_user_data():
       |
     7 | def test_user_data():
       |     ^^^^^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:9:5
       |
     9 |     karva.assert_json_snapshot(result)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Snapshot mismatch for 'test_user_data'.
           Snapshot file: snapshots/test__test_user_data.snap
           ────────────┬───────────────────────────
@@ -339,11 +343,13 @@ def test_second():
       |
     7 | def test_second():
       |     ^^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:8:5
       |
     8 |     karva.assert_json_snapshot({"value": 99})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Snapshot mismatch for 'test_second'.
           Snapshot file: snapshots/test__test_second.snap
           ────────────┬───────────────────────────

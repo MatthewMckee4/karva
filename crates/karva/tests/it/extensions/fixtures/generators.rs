@@ -131,6 +131,7 @@ async def test_bad(bad_fixture):
       |
     4 | async def bad_fixture():
       |           ^^^^^^^^^^^
+      |
     info: Fixture had more than one yield statement
 
     ────────────
@@ -172,6 +173,7 @@ async def test_error(error_fixture):
       |
     4 | async def error_fixture():
       |           ^^^^^^^^^^^^^
+      |
     info: Failed to reset fixture: teardown failed
 
     ────────────

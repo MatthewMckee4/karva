@@ -209,11 +209,13 @@ def test_bad_regex():
       |
     4 | def test_bad_regex():
       |     ^^^^^^^^^^^^^^
+      |
     info: Test failed here
      --> test.py:8:9
       |
     8 |         karva.assert_snapshot("hello")
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: Invalid regex pattern in snapshot filter `(unclosed`: regex parse error:
               (unclosed
               ^
