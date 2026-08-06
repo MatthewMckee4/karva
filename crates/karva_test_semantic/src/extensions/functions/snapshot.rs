@@ -463,7 +463,7 @@ fn assert_snapshot_impl(
         let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
         let display_pending_path = display_relative(&pending);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Snapshot mismatch for '{snapshot_name}'.\nSnapshot file: {display_path}\n{diff}{SNAPSHOT_UPDATE_HINT}\nPending file: {display_pending_path}"
+            "Snapshot mismatch for '{snapshot_name}' in {display_path}:\n{diff}{SNAPSHOT_UPDATE_HINT}\nPending file: {display_pending_path}"
         )));
     }
 

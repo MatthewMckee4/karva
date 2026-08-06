@@ -484,12 +484,9 @@ def test_hello():
      --> test.py:5:5
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_hello'.
-          Snapshot file: snapshots/test__test_hello.snap
-          ────────────┬───────────────────────────
+    info: Snapshot mismatch for 'test_hello' in snapshots/test__test_hello.snap:
               1       │ -hello world
                     1 │ +goodbye world
-          ────────────┴───────────────────────────
           Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
           Pending file: snapshots/test__test_hello.snap.new
 
@@ -696,12 +693,9 @@ def test_two():
      --> test.py:8:5
     8 |     karva.assert_snapshot('changed')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_two'.
-          Snapshot file: snapshots/test__test_two.snap
-          ────────────┬───────────────────────────
+    info: Snapshot mismatch for 'test_two' in snapshots/test__test_two.snap:
               1       │ -second
                     1 │ +changed
-          ────────────┴───────────────────────────
           Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
           Pending file: snapshots/test__test_two.snap.new
 
