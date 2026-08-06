@@ -10,8 +10,6 @@ use karva_metadata::{EnvironmentVariable, ProjectSettings};
 use karva_project::Project;
 use karva_static::{EnvVars, PythonEnvVars, WorkerEnvVars};
 
-use crate::partition::Partition;
-
 /// Inputs shared by every worker spawned in a single run.
 pub struct WorkerSpawn<'a> {
     /// Project whose tests the worker executes.
@@ -42,8 +40,8 @@ pub struct WorkerSpawn<'a> {
     pub coverage_enabled: bool,
 }
 
-/// Builds one worker command with its test selectors and resolved controller settings.
-pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partition) -> Command {
+/// Builds one worker command with its resolved controller settings.
+pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     let mut cmd = Command::new(spawn.worker_binary);
     cmd.arg("--controller-address")
         .arg(spawn.controller_address.to_string())
@@ -92,10 +90,6 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize, partition: &Partiti
                 cmd.env_remove(name.as_str());
             }
         }
-    }
-
-    for path in partition.tests() {
-        cmd.arg(path);
     }
 
     cmd.args(inner_cli_args(spawn.project.settings(), spawn.args));

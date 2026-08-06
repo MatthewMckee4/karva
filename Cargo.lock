@@ -1000,6 +1000,7 @@ dependencies = [
  "crossbeam-channel",
  "karva_diagnostic",
  "karva_python_semantic",
+ "rstest",
  "serde",
  "serde_json",
 ]

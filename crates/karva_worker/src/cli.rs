@@ -112,16 +112,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let python_version = current_python_version();
 
-    let test_paths: Vec<Result<TestPath, TestPathError>> = args
-        .sub_command
-        .paths
-        .iter()
-        .map(|path| {
-            let path = absolute(path, &cwd);
-            TestPath::new(path.as_str())
-        })
-        .collect();
-
     let filter = FiltersetSet::new(&args.sub_command.filter_expressions)
         .context("invalid `--filter` expression")?;
 
@@ -151,7 +141,15 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_format,
         colored::control::SHOULD_COLORIZE.should_colorize(),
     );
-    let client = WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
+    let (client, test_paths) =
+        WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
+    let test_paths: Vec<Result<TestPath, TestPathError>> = test_paths
+        .into_iter()
+        .map(|path| {
+            let path = absolute(&path, &cwd);
+            TestPath::new(path.as_str())
+        })
+        .collect();
     let reporter = WorkerReporter::new(
         TestCaseReporter::new(printer),
         client.clone(),

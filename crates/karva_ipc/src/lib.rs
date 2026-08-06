@@ -1,10 +1,11 @@
 //! Private, typed communication between Karva's controller and workers.
 //!
 //! Workers connect over loopback TCP so transient coordination never touches
-//! the project filesystem. JSON values form a self-delimiting stream; keeping
-//! the wire format serde-based avoids platform-specific pipe implementations.
+//! the project filesystem. The controller sends each worker's test selection,
+//! then workers stream lifecycle and result events back. Keeping the wire
+//! format serde-based avoids platform-specific pipe implementations.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, BufWriter, ErrorKind, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,6 +44,7 @@ pub enum WorkerEvent {
 #[derive(Serialize, Deserialize)]
 enum WireMessage {
     Hello { run_id: String, worker_id: usize },
+    TestPaths(Vec<String>),
     Event(Box<WorkerEvent>),
 }
 
@@ -82,13 +84,20 @@ struct CurrentTestState {
 }
 
 impl WorkerClient {
-    /// Connects to the controller and identifies this worker before events.
-    pub fn connect(address: SocketAddr, run_id: &str, worker_id: usize) -> Result<Self> {
+    /// Connects to the controller and receives this worker's owned test selection.
+    pub fn connect(
+        address: SocketAddr,
+        run_id: &str,
+        worker_id: usize,
+    ) -> Result<(Self, Vec<String>)> {
         let stream = TcpStream::connect(address)
             .with_context(|| format!("failed to connect to Karva controller at {address}"))?;
         stream
             .set_nodelay(true)
             .context("failed to configure Karva controller connection")?;
+        let reader = stream
+            .try_clone()
+            .context("failed to read Karva controller connection")?;
         let writer = Arc::new(Mutex::new(BufWriter::new(stream)));
         let current_test = Arc::new(Mutex::new(CurrentTestState::default()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -110,7 +119,8 @@ impl WorkerClient {
             },
             true,
         )?;
-        Ok(client)
+        let test_paths = read_test_paths(reader)?;
+        Ok((client, test_paths))
     }
 
     /// Queues one state change, flushing failures immediately for global fail-fast.
@@ -228,6 +238,20 @@ impl WorkerClient {
     }
 }
 
+fn read_test_paths(stream: TcpStream) -> Result<Vec<String>> {
+    let mut messages =
+        serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
+    let Some(message) = messages.next() else {
+        bail!("Karva controller connection closed before sending test paths");
+    };
+    match message.context("failed to read Karva worker test paths")? {
+        WireMessage::TestPaths(test_paths) => Ok(test_paths),
+        WireMessage::Hello { .. } | WireMessage::Event(_) => {
+            bail!("Karva controller sent an invalid worker startup message")
+        }
+    }
+}
+
 // Receipt: synchronous per-event flushing made the 16,807-case parametrized
 // benchmark 40.5% slower. The controller observes workers every 10 ms, so a
 // shorter flush interval cannot improve its response time.
@@ -308,6 +332,7 @@ pub struct ControllerServer {
     receiver: Receiver<Incoming>,
     readers: Vec<JoinHandle<()>>,
     workers: HashSet<usize>,
+    worker_paths: Arc<Mutex<HashMap<usize, Vec<String>>>>,
 }
 
 impl ControllerServer {
@@ -326,7 +351,28 @@ impl ControllerServer {
             receiver,
             readers: Vec::new(),
             workers: HashSet::new(),
+            worker_paths: Arc::new(Mutex::new(HashMap::new())),
         })
+    }
+
+    /// Registers one worker's owned test selection before spawning it.
+    ///
+    /// Ownership moves into the connection reader so large selections are not
+    /// cloned or collected into an encoded buffer on the controller.
+    pub fn register_worker_paths(
+        &mut self,
+        worker_id: usize,
+        test_paths: Vec<String>,
+    ) -> Result<()> {
+        let previous = self
+            .worker_paths
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker path lock poisoned"))?
+            .insert(worker_id, test_paths);
+        if previous.is_some() {
+            bail!("Karva worker {worker_id} test paths registered more than once");
+        }
+        Ok(())
     }
 
     /// Returns address passed to newly spawned workers.
@@ -346,8 +392,9 @@ impl ControllerServer {
                         .context("failed to configure Karva worker connection")?;
                     let run_id = self.run_id.clone();
                     let sender = self.sender.clone();
+                    let worker_paths = Arc::clone(&self.worker_paths);
                     self.readers.push(thread::spawn(move || {
-                        if let Err(error) = read_worker(stream, &run_id, &sender) {
+                        if let Err(error) = read_worker(stream, &run_id, &worker_paths, &sender) {
                             sender.send(Incoming::Error(format!("{error:#}"))).ok();
                         }
                     }));
@@ -388,7 +435,15 @@ impl ControllerServer {
     }
 }
 
-fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incoming>) -> Result<()> {
+fn read_worker(
+    stream: TcpStream,
+    expected_run_id: &str,
+    worker_paths: &Mutex<HashMap<usize, Vec<String>>>,
+    sender: &Sender<Incoming>,
+) -> Result<()> {
+    let response_stream = stream
+        .try_clone()
+        .context("failed to write Karva worker connection")?;
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(first) = messages.next() else {
@@ -402,6 +457,20 @@ fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incomin
     if run_id != expected_run_id {
         bail!("Karva worker connected with run id `{run_id}`, expected `{expected_run_id}`");
     }
+    let test_paths = worker_paths
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Karva worker path lock poisoned"))?
+        .remove(&worker_id)
+        .with_context(|| format!("Karva worker {worker_id} connected without registered paths"))?;
+    let mut writer = BufWriter::new(response_stream);
+    serde_json::to_writer(&mut writer, &WireMessage::TestPaths(test_paths))
+        .context("failed to serialize Karva worker test paths")?;
+    writer
+        .write_all(b"\n")
+        .context("failed to frame Karva worker test paths")?;
+    writer
+        .flush()
+        .context("failed to send Karva worker test paths")?;
     if sender.send(Incoming::Connected { worker_id }).is_err() {
         return Ok(());
     }
@@ -415,6 +484,7 @@ fn read_worker(stream: TcpStream, expected_run_id: &str, sender: &Sender<Incomin
         let event = match message {
             WireMessage::Event(event) => event,
             WireMessage::Hello { .. } => bail!("Karva worker sent more than one handshake"),
+            WireMessage::TestPaths(_) => bail!("Karva worker sent test paths to its controller"),
         };
         if sender
             .send(Incoming::Event(ControllerEvent { worker_id, event }))
@@ -435,21 +505,38 @@ fn is_clean_disconnect(error: &serde_json::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
+
+    fn accept_connections(server: &mut ControllerServer, count: usize) {
+        while server.readers.len() < count {
+            server.accept_pending().expect("accept worker");
+            thread::yield_now();
+        }
+    }
 
     #[test]
     fn streams_attributed_worker_events() {
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
-        let client = WorkerClient::connect(server.address().expect("address"), "run-id", 7)
-            .expect("connect worker");
-        client
-            .send_event(WorkerEvent::TestStarted {
-                name: "mod::test".to_string(),
-            })
-            .expect("send event");
-        client.complete().expect("complete worker");
+        server
+            .register_worker_paths(7, vec!["mod::test".to_string()])
+            .expect("register worker paths");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let (client, test_paths) =
+                WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            assert_eq!(test_paths, ["mod::test"]);
+            client
+                .send_event(WorkerEvent::TestStarted {
+                    name: "mod::test".to_string(),
+                })
+                .expect("send event");
+            client.complete().expect("complete worker");
+        });
 
-        server.accept_pending().expect("accept worker");
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
         server.finish().expect("finish readers");
         let event = server
             .try_recv()
@@ -466,11 +553,16 @@ mod tests {
     #[test]
     fn rejects_wrong_run_id() {
         let mut server = ControllerServer::bind("expected").expect("bind controller");
-        let client = WorkerClient::connect(server.address().expect("address"), "wrong", 0)
-            .expect("connect worker");
-        drop(client);
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let error = WorkerClient::connect(address, "wrong", 0)
+                .err()
+                .expect("wrong run id should close connection");
+            assert!(error.to_string().contains("before sending test paths"));
+        });
 
-        server.accept_pending().expect("accept worker");
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
         server.finish().expect("finish readers");
         let Err(error) = server.try_recv() else {
             panic!("wrong run id should be rejected");
@@ -493,11 +585,19 @@ mod tests {
     #[test]
     fn completion_closes_connection_after_terminal_event() {
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
-        let client = WorkerClient::connect(server.address().expect("address"), "run-id", 7)
-            .expect("connect worker");
-        client.complete().expect("complete worker");
+        server
+            .register_worker_paths(7, Vec::new())
+            .expect("register worker paths");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let (client, test_paths) =
+                WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            assert!(test_paths.is_empty());
+            client.complete().expect("complete worker");
+        });
 
-        server.accept_pending().expect("accept worker");
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
         server.finish().expect("finish readers");
         let event = server
             .try_recv()
@@ -506,5 +606,39 @@ mod tests {
 
         assert_eq!(event.worker_id, 7);
         assert!(matches!(*event.event, WorkerEvent::WorkerFinished));
+    }
+
+    #[rstest]
+    fn transfers_large_worker_selection(#[values(50_000, 1_000_000)] path_count: usize) {
+        // Receipt: 50,000 is the reported workload; 1,000,000 is the requested stress case.
+        let mut test_paths = Vec::with_capacity(path_count);
+        for index in 0..path_count {
+            test_paths.push(format!("tests/test_{index}.py::test_case"));
+        }
+
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        server
+            .register_worker_paths(0, test_paths)
+            .expect("register worker paths");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let (client, test_paths) =
+                WorkerClient::connect(address, "run-id", 0).expect("connect worker");
+            assert_eq!(test_paths.len(), path_count);
+            assert_eq!(
+                test_paths.first().map(String::as_str),
+                Some("tests/test_0.py::test_case")
+            );
+            let last_path = format!("tests/test_{}.py::test_case", path_count - 1);
+            assert_eq!(
+                test_paths.last().map(String::as_str),
+                Some(last_path.as_str())
+            );
+            client.complete().expect("complete worker");
+        });
+
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
+        server.finish().expect("finish readers");
     }
 }

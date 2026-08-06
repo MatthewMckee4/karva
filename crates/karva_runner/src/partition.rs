@@ -110,6 +110,10 @@ impl Partition {
         &self.tests
     }
 
+    pub(super) fn into_tests(self) -> Vec<String> {
+        self.tests
+    }
+
     pub(super) fn function_roots(&self) -> impl Iterator<Item = &str> {
         self.function_roots.iter().map(String::as_str)
     }
