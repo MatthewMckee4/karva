@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Karva">
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="#20292f"/>
+  <path d="M140 0V1440H381V772L956 1440H1252L633 734L1294 0H988L381 672V0Z" fill="#ebf4dd" transform="translate(15 49) scale(.023611 -.023611)"/>
+</svg>
