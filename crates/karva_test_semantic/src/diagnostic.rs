@@ -19,6 +19,7 @@ mod metadata;
 use crate::declare_diagnostic_type;
 use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::fixtures::RejectedFixture;
+use crate::extensions::functions::SnapshotMismatchError;
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
@@ -844,7 +845,15 @@ fn handle_failed_function_call(
     let error_string = error.value(py).to_string();
 
     if !error_string.is_empty() {
-        diagnostic.info(indent_continuation_lines(&error_string));
+        if error.is_instance_of::<SnapshotMismatchError>(py)
+            && let Some((message, body)) = error_string.split_once('\n')
+        {
+            let mut mismatch = SubDiagnostic::new(Severity::Info, message);
+            mismatch.body(body);
+            diagnostic.sub(mismatch);
+        } else {
+            diagnostic.info(indent_continuation_lines(&error_string));
+        }
     }
 }
 
