@@ -1,5 +1,5 @@
-use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity};
-use annotate_snippets::{AnnotationKind, Element, Level, Renderer, Snippet};
+use crate::{Annotation, Diagnostic, RenderedDiagnostic, Severity, Suggestion};
+use annotate_snippets::{AnnotationKind, Element, Level, Patch, Renderer, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use ruff_source_file::SourceFile;
 
@@ -55,6 +55,7 @@ fn render(
         Some(diagnostic.code()),
         diagnostic.primary_message(),
         diagnostic.annotations(),
+        &[],
         cwd,
         color,
     );
@@ -64,6 +65,7 @@ fn render(
             None,
             diagnostic.message(),
             diagnostic.annotations(),
+            diagnostic.suggestions(),
             cwd,
             color,
         ));
@@ -100,6 +102,7 @@ fn render_message(
     code: Option<&str>,
     message: &str,
     annotations: &[Annotation],
+    suggestions: &[Suggestion],
     cwd: &Utf8Path,
     color: bool,
 ) -> String {
@@ -174,7 +177,20 @@ fn render_message(
     if let Some(code) = code {
         title = title.id(code);
     }
-    let elements = snippets.map(Element::from).collect::<Vec<_>>();
+    let suggestions = suggestions.iter().map(|suggestion| {
+        let span = suggestion.span();
+        let range = span.range();
+        Snippet::source(span.source_file().source_text())
+            .path(display_path(span.source_file(), cwd).into_string())
+            .patch(Patch::new(
+                usize::from(range.start())..usize::from(range.end()),
+                suggestion.replacement(),
+            ))
+    });
+    let elements = snippets
+        .map(Element::from)
+        .chain(suggestions.map(Element::from))
+        .collect::<Vec<_>>();
     let report = [title.elements(elements)];
     let renderer = if color {
         Renderer::styled()
