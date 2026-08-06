@@ -35,8 +35,7 @@ def test_hello():
     5 |     karva.assert_snapshot('hello world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_hello'.
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_hello.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -203,8 +202,7 @@ def test_hello():
     5 |     karva.assert_snapshot('hello world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: New snapshot for 'test_hello'.
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_hello.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -487,8 +485,7 @@ def test_hello():
     info: Snapshot mismatch for 'test_hello' in snapshots/test__test_hello.snap:
     1   │ -hello world
       1 │ +goodbye world
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_hello.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -696,8 +693,7 @@ def test_two():
     info: Snapshot mismatch for 'test_two' in snapshots/test__test_two.snap:
     1   │ -second
       1 │ +changed
-    Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-    Pending file: snapshots/test__test_two.snap.new
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped

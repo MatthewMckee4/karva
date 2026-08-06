@@ -22,7 +22,7 @@ pyo3::create_exception!(
 );
 
 const SNAPSHOT_UPDATE_HINT: &str =
-    "Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.";
+    "info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.";
 
 /// Per-test identity used to locate and name snapshot assertions.
 ///
@@ -460,10 +460,8 @@ fn assert_snapshot_impl(
 
         let diff = format_diff(&existing.content, serialized);
         let display_path = display_relative(&snap_path);
-        let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
-        let display_pending_path = display_relative(&pending);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Snapshot mismatch for '{snapshot_name}' in {display_path}:\n{diff}{SNAPSHOT_UPDATE_HINT}\nPending file: {display_pending_path}"
+            "Snapshot mismatch for '{snapshot_name}' in {display_path}:\n{diff}{SNAPSHOT_UPDATE_HINT}"
         )));
     }
 
@@ -477,10 +475,8 @@ fn assert_snapshot_impl(
             SnapshotMismatchError::new_err(format!("Failed to write pending snapshot: {e}"))
         })?;
 
-        let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
-        let display_path = display_relative(&pending);
         return Err(SnapshotMismatchError::new_err(format!(
-            "New snapshot for '{snapshot_name}'.\n{SNAPSHOT_UPDATE_HINT}\nPending file: {display_path}"
+            "New snapshot for '{snapshot_name}'.\n{SNAPSHOT_UPDATE_HINT}"
         )));
     }
 
@@ -555,10 +551,8 @@ fn handle_inline_snapshot(
         SnapshotMismatchError::new_err(format!("Failed to write pending inline snapshot: {e}"))
     })?;
 
-    let pending = Utf8PathBuf::from(format!("{snap_path}.new"));
-    let display_path = display_relative(&pending);
     Err(SnapshotMismatchError::new_err(format!(
-        "New inline snapshot for '{test_name}'.\n{SNAPSHOT_UPDATE_HINT}\nPending file: {display_path}"
+        "New inline snapshot for '{test_name}'.\n{SNAPSHOT_UPDATE_HINT}"
     )))
 }
 
