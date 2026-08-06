@@ -41,9 +41,10 @@ under `crates/`.
 
 Karva runs tests through a main `karva` process and `karva-worker`
 subprocesses. The binaries do not link against each other. They communicate
-through CLI arguments and loopback IPC. Only coverage data uses run-scoped
-files, and only the worker embeds Python. Workers execute tests and emit typed
-events; a controller-side dispatcher linearizes those events into run state.
+through bounded CLI arguments and loopback IPC. Test selections and runtime
+events use IPC; only coverage data uses run-scoped files, and only the worker
+embeds Python. A controller-side dispatcher linearizes worker events into run
+state.
 
 ## Code Review Rules
 

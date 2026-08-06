@@ -1,6 +1,6 @@
 # Cache
 
-Karva keeps only reusable history on disk: per-test durations for parallel scheduling and the test names used by `--last-failed`. Live worker state and complete results travel over loopback IPC and remain in memory.
+Karva keeps only reusable history on disk: per-test durations for parallel scheduling and the test names used by `--last-failed`. Worker test selections, live state, and complete results travel over loopback IPC and remain in memory.
 
 The cache lives in `.karva_cache` under the project root. Coverage runs also write per-worker coverage artifacts there.
 

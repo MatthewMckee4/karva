@@ -32,6 +32,10 @@ use crate::worker_args::{WorkerSpawn, worker_command};
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
 /// columns align. Mirrors the constant in `karva_diagnostic::reporter`.
 const LABEL_COLUMN_WIDTH: usize = 12;
+// Receipt: worker writes and controller reads each advance every 10 ms. With
+// no window the cancellation integration test consistently missed the first
+// TestStarted; five intervals passed 20 consecutive repetitions.
+const CANCELLATION_EVENT_SETTLE: Duration = Duration::from_millis(50);
 
 /// How `wait_for_completion` exited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -460,6 +464,8 @@ impl WorkerManager {
         }
 
         self.dispatcher.dispatch_pending(server)?;
+        std::thread::sleep(CANCELLATION_EVENT_SETTLE);
+        self.dispatcher.dispatch_pending(server)?;
         let mut worker_ids = Vec::with_capacity(self.workers.len());
         for worker in &self.workers {
             worker_ids.push(worker.id);
@@ -592,24 +598,27 @@ pub enum TestResultRetention {
 
 /// Spawn worker processes for each partition
 ///
-/// Creates a worker process for each non-empty partition, passing the appropriate
-/// subset of tests and command-line arguments to each worker.
+/// Creates a worker process for each non-empty partition, registering its
+/// owned test selection with the IPC controller before spawn.
 fn spawn_workers(
     spawn: &WorkerSpawn,
-    partitions: &[Partition],
+    partitions: Vec<Partition>,
+    controller: &mut ControllerServer,
     forward_stdout: bool,
     test_capacity: usize,
     result_retention: TestResultRetention,
 ) -> Result<WorkerManager> {
     let mut worker_manager = WorkerManager::with_test_capacity(test_capacity, result_retention);
 
-    for (worker_id, partition) in partitions.iter().enumerate() {
+    for (worker_id, partition) in partitions.into_iter().enumerate() {
         if partition.tests().is_empty() {
             tracing::debug!("Skipping worker {} with no tests", worker_id);
             continue;
         }
 
-        let mut command = worker_command(spawn, worker_id, partition);
+        let test_count = partition.tests().len();
+        controller.register_worker_paths(worker_id, partition.into_tests())?;
+        let mut command = worker_command(spawn, worker_id);
         command.stderr(Stdio::inherit());
         process_control::configure_worker_command(&mut command);
         if forward_stdout {
@@ -627,11 +636,7 @@ fn spawn_workers(
             None
         };
 
-        tracing::info!(
-            "Worker {} spawned with {} tests",
-            worker_id,
-            partition.tests().len()
-        );
+        tracing::info!("Worker {} spawned with {} tests", worker_id, test_count);
 
         worker_manager.spawn(worker_id, child, output);
     }
@@ -810,7 +815,8 @@ pub fn run_parallel_tests(
     let forward_stdout = printer.stream_for_test_result().is_enabled();
     let mut worker_manager = spawn_workers(
         &spawn,
-        &partitions,
+        partitions,
+        &mut controller,
         forward_stdout,
         scheduled_cases,
         config.result_retention,
