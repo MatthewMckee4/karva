@@ -241,8 +241,8 @@ def test_poem():
     info: Snapshot mismatch for 'test_poem'
      --> snapshots/test__test_poem.snap:2:13
     1 | roses are red
-    2 ~ violets are purple
-    3 + sugar is sweet
+    2 | ~ violets are purple
+    3 | + sugar is sweet
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_poem.snap.new
 

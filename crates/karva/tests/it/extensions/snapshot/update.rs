@@ -76,8 +76,8 @@ def test_hello():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_hello'
      --> snapshots/test__test_hello.snap:1:1
-    1 - hello world
-    1 + goodbye world
+    1 | - hello world
+    1 | + goodbye world
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_hello.snap.new
 
@@ -162,8 +162,8 @@ def test_user_data():
     3 |   "name": "Alice",
     4 |   "roles": [
     5 |     "admin",
-    6 ~     "user",
-    7 +     "hr"
+    6 | ~     "user",
+    7 | +     "hr"
     8 |   ]
     9 | }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
@@ -341,7 +341,7 @@ def test_second():
     info: Snapshot mismatch for 'test_second'
      --> snapshots/test__test_second.snap:2:12
     1 | {
-    2 ~   "value": 99
+    2 | ~   "value": 99
     3 | }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
     info: Pending file: snapshots/test__test_second.snap.new
