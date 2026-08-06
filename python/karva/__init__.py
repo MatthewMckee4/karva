@@ -24,7 +24,7 @@ from karva._karva import (
     tags,
 )
 
-__version__ = "0.0.1-alpha.10"
+__version__ = "0.0.1-alpha.11"
 
 __all__: list[str] = [
     "Command",

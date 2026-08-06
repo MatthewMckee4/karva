@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.0.1-alpha.11
+
+### Bug Fixes
+
+- Preserve colons in snapshot source paths ([#1144](https://github.com/MatthewMckee4/karva/pull/1144))
+- Replace accepted snapshots atomically ([#1143](https://github.com/MatthewMckee4/karva/pull/1143))
+- Recognize spaced Python function declarations ([#1139](https://github.com/MatthewMckee4/karva/pull/1139))
+
+### Configuration
+
+- Add profile-scoped test environment variables ([#1211](https://github.com/MatthewMckee4/karva/pull/1211))
+
+### Coverage
+
+- Remove coverage.py data output ([#1149](https://github.com/MatthewMckee4/karva/pull/1149))
+- Define native coverage artifact ([#1170](https://github.com/MatthewMckee4/karva/pull/1170))
+- Build native coverage analysis ([#1171](https://github.com/MatthewMckee4/karva/pull/1171))
+- Validate coverage exports against downstream tools ([#1192](https://github.com/MatthewMckee4/karva/pull/1192))
+- Add phase-aware coverage contexts ([#1189](https://github.com/MatthewMckee4/karva/pull/1189))
+- Resolve importable coverage sources ([#1186](https://github.com/MatthewMckee4/karva/pull/1186))
+- Complete coverage exclusions and partial branches ([#1187](https://github.com/MatthewMckee4/karva/pull/1187))
+- Honor configured coverage exclusions ([#1185](https://github.com/MatthewMckee4/karva/pull/1185))
+- Support multiple coverage reports ([#1184](https://github.com/MatthewMckee4/karva/pull/1184))
+- Add native coverage erase command ([#1183](https://github.com/MatthewMckee4/karva/pull/1183))
+- Add native coverage combine command ([#1182](https://github.com/MatthewMckee4/karva/pull/1182))
+- Add native LCOV coverage export ([#1181](https://github.com/MatthewMckee4/karva/pull/1181))
+- Add native JSON coverage export ([#1179](https://github.com/MatthewMckee4/karva/pull/1179))
+- Add native Cobertura XML command ([#1178](https://github.com/MatthewMckee4/karva/pull/1178))
+- Add annotated HTML coverage reports ([#1177](https://github.com/MatthewMckee4/karva/pull/1177))
+- Complete terminal coverage reports ([#1176](https://github.com/MatthewMckee4/karva/pull/1176))
+- Normalize native coverage paths ([#1175](https://github.com/MatthewMckee4/karva/pull/1175))
+- Persist native coverage data ([#1173](https://github.com/MatthewMckee4/karva/pull/1173))
+- Add native coverage command group ([#1172](https://github.com/MatthewMckee4/karva/pull/1172))
+- Share cached coverage code metadata ([#1136](https://github.com/MatthewMckee4/karva/pull/1136))
+
+### Diagnostics
+
+- Represent runtime fixture failure causality ([#1111](https://github.com/MatthewMckee4/karva/pull/1111))
+
+### Documentation
+
+- Improve generated configuration documentation ([#1247](https://github.com/MatthewMckee4/karva/pull/1247))
+
+### Snapshot Testing
+
+- Batch inline snapshot source updates ([#1142](https://github.com/MatthewMckee4/karva/pull/1142))
+- Write inline snapshot updates atomically ([#1141](https://github.com/MatthewMckee4/karva/pull/1141))
+- Write snapshot files atomically ([#1138](https://github.com/MatthewMckee4/karva/pull/1138))
+
+### Tags & Marks
+
+- Complete explicit parameter ID support ([#1244](https://github.com/MatthewMckee4/karva/pull/1244))
+- Register and validate custom tags ([#1245](https://github.com/MatthewMckee4/karva/pull/1245))
+
+### Test Running
+
+- Reuse the last generated random seed ([#1215](https://github.com/MatthewMckee4/karva/pull/1215))
+- Add seeded randomized test ordering ([#1194](https://github.com/MatthewMckee4/karva/pull/1194))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.10
 
 ### Bug Fixes
