@@ -21,3 +21,4 @@ mod show_config;
 mod shuffle;
 mod version;
 mod watch;
+mod worker_crash;

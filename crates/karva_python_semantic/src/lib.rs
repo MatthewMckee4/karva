@@ -7,7 +7,8 @@ mod name;
 
 pub use function_kind::FunctionKind;
 pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
-use pyo3::Python;
+use pyo3::types::PyAnyMethods;
+use pyo3::{PyResult, Python};
 use ruff_python_ast::{Expr, PythonVersion, StmtFunctionDef};
 
 /// Check whether a file path has a `.py` extension.
@@ -69,6 +70,12 @@ pub fn current_python_version() -> PythonVersion {
         let version_info = py.version_info();
         (version_info.major, version_info.minor)
     }))
+}
+
+/// Enables Python traceback output for fatal signals in the current process.
+pub fn enable_faulthandler() -> PyResult<()> {
+    Python::initialize();
+    Python::attach(|py| py.import("faulthandler")?.call_method0("enable").map(drop))
 }
 
 #[cfg(test)]

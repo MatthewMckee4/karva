@@ -89,7 +89,12 @@ impl Reporter for WorkerReporter {
     fn report_test_started(&self, test_name: &QualifiedTestName) {
         self.send(WorkerEvent::TestStarted {
             name: test_name.to_string(),
+            cache_key: test_name.cache_key(),
         });
+    }
+
+    fn report_test_identified(&self, test_name: &QualifiedTestName) {
+        self.report_test_started(test_name);
     }
 
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {

@@ -76,6 +76,11 @@ impl TestCacheKey {
             .split_once('[')
             .map_or(&self.0, |(function, _)| function)
     }
+
+    /// Whether this key identifies one statically indexed parameter case.
+    pub fn is_parameter_case(&self) -> bool {
+        self.0.contains('[')
+    }
 }
 
 impl std::borrow::Borrow<str> for TestCacheKey {

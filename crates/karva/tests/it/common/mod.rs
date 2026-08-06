@@ -80,6 +80,11 @@ impl TestContext {
         settings.add_filter(r"karva \d+\.\d+\.\d+[a-zA-Z0-9._-]*", "karva [VERSION]");
         settings.add_filter(r"karva\.exe", "karva");
         settings.add_filter(r"Random seed: \d+", "Random seed: [SEED]");
+        settings.add_filter(r"Current thread 0x[0-9a-f]+", "Current thread [THREAD]");
+        settings.add_filter(
+            r#"File "[^"]+/shared-venv-[^/]+/bin/karva-worker""#,
+            r#"File "<venv>/bin/karva-worker""#,
+        );
         settings.add_filter(
             r"(?:File exists \(os error 17\)|Cannot create a file when that file already exists\. \(os error 183\))",
             "[FILE EXISTS]",

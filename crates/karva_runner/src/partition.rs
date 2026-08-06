@@ -75,10 +75,13 @@ impl ModuleGroup {
 }
 
 /// Worker assignment produced by module-aware load balancing.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Partition {
     /// Worker CLI selectors in execution order.
     tests: Vec<String>,
+
+    /// Stable identities parallel to `tests`, used for crash recovery.
+    test_keys: Vec<TestCacheKey>,
 
     /// Function identities represented by the selectors.
     function_roots: HashSet<String>,
@@ -91,6 +94,7 @@ impl Partition {
     fn new() -> Self {
         Self {
             tests: Vec::new(),
+            test_keys: Vec::new(),
             function_roots: HashSet::new(),
             weight: 0,
         }
@@ -98,6 +102,8 @@ impl Partition {
 
     fn add_test(&mut self, test: TestInfo, test_weight: u128) {
         self.function_roots.insert(test.function_root);
+        self.test_keys
+            .push(TestCacheKey::function_name(&test.qualified_name));
         self.tests.push(test.path);
         self.weight += test_weight;
     }
@@ -110,12 +116,44 @@ impl Partition {
         &self.tests
     }
 
-    pub(super) fn into_tests(self) -> Vec<String> {
-        self.tests
-    }
-
     pub(super) fn function_roots(&self) -> impl Iterator<Item = &str> {
         self.function_roots.iter().map(String::as_str)
+    }
+
+    /// First scheduled identity without a committed result.
+    pub(super) fn first_unfinished(
+        &self,
+        completed: &HashSet<TestCacheKey>,
+    ) -> Option<TestCacheKey> {
+        self.test_keys
+            .iter()
+            .find(|cache_key| !completed.contains(*cache_key))
+            .cloned()
+    }
+
+    /// Returns work not committed before a worker crash, excluding the test
+    /// that terminated the worker.
+    pub(super) fn pending_after_crash(
+        &self,
+        completed: &HashSet<TestCacheKey>,
+        crashed: &TestCacheKey,
+    ) -> Self {
+        let mut pending = Self::new();
+        for (path, cache_key) in self.tests.iter().zip(&self.test_keys) {
+            let contains_crashed_dynamic_case = !cache_key.is_parameter_case()
+                && cache_key.test_function_name() == crashed.test_function_name();
+            if !completed.contains(cache_key)
+                && cache_key != crashed
+                && !contains_crashed_dynamic_case
+            {
+                pending.tests.push(path.clone());
+                pending.test_keys.push(cache_key.clone());
+                pending
+                    .function_roots
+                    .insert(cache_key.test_function_name().to_string());
+            }
+        }
+        pending
     }
 }
 
@@ -477,6 +515,39 @@ mod tests {
                 "test_module::test_c"
             ]
         );
+    }
+
+    #[test]
+    fn crash_recovery_keeps_only_unstarted_static_parameter_cases() {
+        let mut partition = Partition::new();
+        for name in [
+            "test_module::test_case[0]",
+            "test_module::test_case[1]",
+            "test_module::test_case[2]",
+        ] {
+            partition.add_test(test_info(name), 1);
+        }
+        let completed = HashSet::from([TestCacheKey::function_name("test_module::test_case[0]")]);
+
+        let pending = partition.pending_after_crash(
+            &completed,
+            &TestCacheKey::function_name("test_module::test_case[1]"),
+        );
+
+        assert_eq!(pending.tests(), &["test_module::test_case[2]"]);
+    }
+
+    #[test]
+    fn crash_recovery_does_not_rerun_dynamic_parameter_functions() {
+        let mut partition = Partition::new();
+        partition.add_test(test_info("test_module::test_case"), 1);
+
+        let pending = partition.pending_after_crash(
+            &HashSet::new(),
+            &TestCacheKey::function_name("test_module::test_case[1]"),
+        );
+
+        assert!(pending.tests().is_empty());
     }
 
     #[test]
