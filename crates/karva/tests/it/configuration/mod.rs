@@ -506,13 +506,11 @@ def test_c():
       |
     2 | def test_a():
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     test::test_b:
 
@@ -521,13 +519,11 @@ def test_c():
       |
     5 | def test_b():
       |     ^^^^^^
-      |
     info: Test failed here
      --> test.py:6:5
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
@@ -613,13 +609,11 @@ def test_second():
       |
     2 | def test_first():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -672,13 +666,11 @@ def test_third():
       |
     2 | def test_first():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     test::test_third:
 
@@ -687,13 +679,11 @@ def test_third():
       |
     8 | def test_third():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:9:5
       |
     9 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -1247,13 +1237,11 @@ def test_second():
       |
     2 | def test_first():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

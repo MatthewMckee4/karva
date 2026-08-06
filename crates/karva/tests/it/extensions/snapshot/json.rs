@@ -393,13 +393,11 @@ def test_not_json():
       |
     4 | def test_not_json():
       |     ^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_json_snapshot(object())
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: assert_json_snapshot() value is not JSON serializable
 
     ────────────
@@ -452,21 +450,17 @@ def test_json():
       |
     4 | def test_json():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_json_snapshot({"key": "changed"})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
-    info: Snapshot mismatch for 'test_json'.
-          Snapshot file: snapshots/test__test_json.snap
-          ────────────┬───────────────────────────
-              1     1 │  {
-              2       │ -  "key": "original"
-                    2 │ +  "key": "changed"
-              3     3 │  }
-          ────────────┴───────────────────────────
+    info: Snapshot mismatch for 'test_json' in snapshots/test__test_json.snap:
+    1 1 │  {
+    2   │ -  "key": "original"
+      2 │ +  "key": "changed"
+    3 3 │  }
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
