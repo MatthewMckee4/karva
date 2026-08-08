@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
@@ -5,7 +7,7 @@ use karva_diagnostic::{
     TestExecutionResult, sort_diagnostics_for_display,
 };
 use karva_metadata::ProjectSettings;
-use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
+use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use ruff_python_ast::PythonVersion;
 
 /// Immutable configuration and reporting services shared by one test run.
@@ -21,6 +23,9 @@ pub struct Context<'a> {
 
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
+
+    /// Cases already committed by an earlier worker generation.
+    resume_skip: &'a BTreeSet<TestCacheKey>,
 
     /// Whether diagnostics should include the full Python call chain.
     verbose: bool,
@@ -38,6 +43,7 @@ impl<'a> Context<'a> {
         settings: &'a ProjectSettings,
         python_version: PythonVersion,
         reporter: &'a dyn Reporter,
+        resume_skip: &'a BTreeSet<TestCacheKey>,
         verbose: bool,
     ) -> Self {
         Self {
@@ -45,6 +51,7 @@ impl<'a> Context<'a> {
             settings,
             python_version,
             reporter,
+            resume_skip,
             verbose,
         }
     }
@@ -61,6 +68,11 @@ impl<'a> Context<'a> {
         self.verbose
     }
 
+    /// Whether crash recovery already committed this exact case.
+    pub(super) fn should_resume_skip(&self, cache_key: &TestCacheKey) -> bool {
+        self.resume_skip.contains(cache_key)
+    }
+
     pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {
         CollectionSettings {
             python_version: self.python_version,
@@ -75,6 +87,11 @@ impl<'a> Context<'a> {
     /// the in-flight test.
     pub fn report_test_started(&self, test_case_name: &QualifiedTestName) {
         self.reporter.report_test_started(test_case_name);
+    }
+
+    /// Refines the active test name after fixture-derived parameters resolve.
+    pub fn report_test_identified(&self, test_case_name: &QualifiedTestName) {
+        self.reporter.report_test_identified(test_case_name);
     }
 
     /// Returns the parser target matching the embedded interpreter.
@@ -110,12 +127,10 @@ impl Context<'_> {
         let cache_key = test_case_name.cache_key();
         let test_case =
             TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
-        self.reporter.report_test_case_result(
-            test_case_name,
-            test_case.outcome().result_kind(),
-            duration,
-        );
+        let result_kind = test_case.outcome().result_kind();
         self.reporter.report_test_completed(&cache_key, test_case);
+        self.reporter
+            .report_test_case_result(test_case_name, result_kind, duration);
 
         passed
     }

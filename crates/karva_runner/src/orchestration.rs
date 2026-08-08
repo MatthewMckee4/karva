@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdout, Stdio};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, Seek, Write};
+use std::process::{Child, ChildStderr, ChildStdout, ExitStatus, Stdio};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -17,12 +18,13 @@ use karva_cache::{
 use karva_cli::{PartitionSelection, SubTestCommand};
 use karva_collector::{CollectedPackage, CollectionSettings};
 use karva_diagnostic::AggregatedResults;
-use karva_ipc::{ControllerServer, WorkerEvent};
-use karva_logging::Printer;
+use karva_ipc::{ControllerServer, WorkerEvent, WorkerSelection};
 use karva_logging::time::{format_duration, format_duration_bracketed};
+use karva_logging::{Printer, StatusLevel};
 use karva_metadata::MaxFail;
 use karva_project::Project;
 use karva_python_semantic::TestCacheKey;
+use tempfile::NamedTempFile;
 
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
@@ -38,7 +40,7 @@ const LABEL_COLUMN_WIDTH: usize = 12;
 const CANCELLATION_EVENT_SETTLE: Duration = Duration::from_millis(50);
 
 /// How `wait_for_completion` exited.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 enum WaitOutcome {
     /// Every worker exited on its own.
     AllCompleted,
@@ -51,6 +53,9 @@ enum WaitOutcome {
 
     /// The run timeout elapsed before the workers finished.
     TimedOut,
+
+    /// One or more workers exited unexpectedly.
+    WorkersCrashed(Vec<CrashedWorker>),
 }
 
 #[derive(Debug)]
@@ -59,15 +64,28 @@ struct Worker {
     id: usize,
     child: Child,
     output: Option<WorkerOutputForwarder>,
+    stderr: Option<WorkerStderrForwarder>,
+    stderr_capture: NamedTempFile,
+    partition: Partition,
     start_time: Instant,
 }
 
 impl Worker {
-    fn new(id: usize, child: Child, output: Option<WorkerOutputForwarder>) -> Self {
+    fn new(
+        id: usize,
+        child: Child,
+        output: Option<WorkerOutputForwarder>,
+        stderr: WorkerStderrForwarder,
+        stderr_capture: NamedTempFile,
+        partition: Partition,
+    ) -> Self {
         Self {
             id,
             child,
             output,
+            stderr: Some(stderr),
+            stderr_capture,
+            partition,
             start_time: Instant::now(),
         }
     }
@@ -79,6 +97,27 @@ impl Worker {
     fn join_output(&mut self) {
         if let Some(output) = self.output.take() {
             output.join(self.id);
+        }
+    }
+
+    fn join_stderr(&mut self, read: bool) -> String {
+        if let Some(stderr) = self.stderr.take() {
+            stderr.join(self.id);
+        }
+        if !read {
+            return String::new();
+        }
+        let file = self.stderr_capture.as_file_mut();
+        match file.rewind().and_then(|()| {
+            let mut output = Vec::new();
+            file.read_to_end(&mut output)?;
+            Ok(output)
+        }) {
+            Ok(output) => String::from_utf8_lossy(&output).into_owned(),
+            Err(error) => {
+                tracing::warn!(worker_id = self.id, "failed to read worker stderr: {error}");
+                String::new()
+            }
         }
     }
 }
@@ -98,6 +137,7 @@ struct WorkerManager {
 struct EventDispatcher {
     expected_workers: HashSet<usize>,
     completed_workers: HashSet<usize>,
+    completed_tests: HashSet<TestCacheKey>,
     in_flight: HashMap<usize, RunningTest>,
     results: AggregatedResults,
     result_retention: TestResultRetention,
@@ -114,6 +154,7 @@ impl WorkerManager {
             dispatcher: EventDispatcher {
                 expected_workers: HashSet::new(),
                 completed_workers: HashSet::new(),
+                completed_tests: HashSet::new(),
                 in_flight: HashMap::new(),
                 results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
                 result_retention,
@@ -126,6 +167,7 @@ impl WorkerManager {
 #[derive(Debug)]
 struct RunningTest {
     name: String,
+    cache_key: TestCacheKey,
     started: Instant,
 }
 
@@ -135,6 +177,34 @@ struct WorkerOutputForwarder {
     handle: JoinHandle<std::io::Result<()>>,
 }
 
+#[derive(Debug)]
+struct WorkerStderrForwarder {
+    handle: JoinHandle<std::io::Result<()>>,
+}
+
+impl WorkerStderrForwarder {
+    fn spawn(stderr: ChildStderr, captured: File) -> Self {
+        let handle = thread::spawn(move || forward_worker_stderr(stderr, captured));
+        Self { handle }
+    }
+
+    fn join(self, worker_id: usize) {
+        if !self.handle.is_finished() {
+            tracing::warn!(worker_id, "worker stderr remained open after process exit");
+            return;
+        }
+        match self.handle.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(worker_id, "failed to forward worker stderr: {error}");
+            }
+            Err(error) => {
+                tracing::warn!(worker_id, ?error, "worker stderr forwarder panicked");
+            }
+        }
+    }
+}
+
 impl WorkerOutputForwarder {
     fn spawn(stdout: ChildStdout) -> Self {
         let handle = thread::spawn(move || forward_worker_stdout(stdout));
@@ -142,6 +212,10 @@ impl WorkerOutputForwarder {
     }
 
     fn join(self, worker_id: usize) {
+        if !self.handle.is_finished() {
+            tracing::warn!(worker_id, "worker stdout remained open after process exit");
+            return;
+        }
         match self.handle.join() {
             Ok(Ok(())) => {}
             Ok(Err(err)) if err.kind() == std::io::ErrorKind::BrokenPipe => {}
@@ -165,6 +239,64 @@ fn forward_worker_stdout(stdout: ChildStdout) -> std::io::Result<()> {
         let mut stdout = std::io::stdout().lock();
         stdout.write_all(&line)?;
     }
+}
+
+fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Result<()> {
+    let mut reader = BufReader::new(stderr);
+    let mut capture_error = None;
+    let mut forward_error = None;
+    let mut last_byte = None;
+    let mut forwarded = std::io::stderr().lock();
+    loop {
+        let bytes = reader.fill_buf()?;
+        if bytes.is_empty() {
+            break;
+        }
+        let consumed = bytes.len();
+        last_byte = bytes.last().copied();
+        if capture_error.is_none()
+            && let Err(error) = captured.write_all(bytes)
+        {
+            capture_error = Some(error);
+        }
+        if forward_error.is_none()
+            && let Err(error) = forwarded.write_all(bytes)
+        {
+            forward_error = Some(error);
+        }
+        reader.consume(consumed);
+    }
+    if last_byte.is_some_and(|byte| byte != b'\n')
+        && forward_error.is_none()
+        && let Err(error) = forwarded.write_all(b"\n")
+    {
+        forward_error = Some(error);
+    }
+    if capture_error.is_none()
+        && let Err(error) = captured.flush()
+    {
+        capture_error = Some(error);
+    }
+    if let Some(error) = capture_error {
+        Err(error)
+    } else if let Some(error) = forward_error {
+        if error.kind() == std::io::ErrorKind::BrokenPipe {
+            Ok(())
+        } else {
+            Err(error)
+        }
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct CrashedWorker {
+    id: usize,
+    partition: Partition,
+    status: ExitStatus,
+    stderr: String,
+    active: Option<RunningTest>,
 }
 
 /// Snapshot of one worker's current test taken before process termination.
@@ -194,27 +326,32 @@ impl EventDispatcher {
                 anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
             }
             match *message.event {
-                WorkerEvent::TestStarted { name } => {
-                    if self
-                        .in_flight
-                        .insert(
+                WorkerEvent::TestStarted { name, cache_key } => {
+                    if let Some(running) = self.in_flight.get_mut(&worker_id) {
+                        if running.cache_key.test_function_name() != cache_key.test_function_name()
+                        {
+                            anyhow::bail!(
+                                "Karva worker {worker_id} started `{name}` before finishing `{}`",
+                                running.name
+                            );
+                        }
+                        running.name = name;
+                        running.cache_key = cache_key;
+                    } else {
+                        self.in_flight.insert(
                             worker_id,
                             RunningTest {
                                 name,
+                                cache_key,
                                 started: Instant::now(),
                             },
-                        )
-                        .is_some()
-                    {
-                        anyhow::bail!(
-                            "Karva worker {worker_id} started a test before finishing its previous test"
                         );
                     }
                 }
                 WorkerEvent::TestSlow => self.results.register_slow_test(),
                 WorkerEvent::TestFinished { cache_key, result } => {
                     if let Some(running) = self.in_flight.remove(&worker_id)
-                        && running.name != result.full_name()
+                        && running.cache_key != cache_key
                     {
                         anyhow::bail!(
                             "Karva worker {worker_id} started `{}` but finished `{}`",
@@ -222,6 +359,7 @@ impl EventDispatcher {
                             result.full_name()
                         );
                     }
+                    self.completed_tests.insert(cache_key.clone());
                     self.results.register_rendered_test_case(
                         cache_key,
                         *result,
@@ -252,40 +390,100 @@ impl EventDispatcher {
         self.dispatch_pending(server)?;
         Ok(())
     }
+
+    fn abandon_worker(&mut self, worker_id: usize) {
+        self.expected_workers.remove(&worker_id);
+        self.completed_workers.remove(&worker_id);
+    }
 }
 
 impl WorkerManager {
-    fn spawn(&mut self, worker_id: usize, child: Child, output: Option<WorkerOutputForwarder>) {
+    fn spawn(
+        &mut self,
+        worker_id: usize,
+        child: Child,
+        output: Option<WorkerOutputForwarder>,
+        stderr: WorkerStderrForwarder,
+        stderr_capture: NamedTempFile,
+        partition: Partition,
+    ) {
         self.dispatcher.register_worker(worker_id);
-        self.workers.push(Worker::new(worker_id, child, output));
+        self.workers.push(Worker::new(
+            worker_id,
+            child,
+            output,
+            stderr,
+            stderr_capture,
+            partition,
+        ));
     }
 
-    fn reap_finished(&mut self, log_completion: bool) {
+    fn reap_finished(&mut self, server: &ControllerServer) -> Result<Vec<CrashedWorker>> {
+        let mut running = Vec::new();
+        let mut crashed = Vec::new();
+        for mut worker in self.workers.drain(..) {
+            match worker.child.try_wait() {
+                Ok(Some(status)) => {
+                    if let Err(error) = process_control::force_kill(worker.child.id()) {
+                        tracing::warn!(
+                            worker_id = worker.id,
+                            "failed to clean up worker process group: {error}"
+                        );
+                    }
+                    if server.worker_started(worker.id)? && !server.worker_disconnected(worker.id) {
+                        running.push(worker);
+                        continue;
+                    }
+                    worker.join_output();
+                    let completed =
+                        status.success() && self.dispatcher.completed_workers.contains(&worker.id);
+                    if completed {
+                        worker.join_stderr(false);
+                        tracing::info!(
+                            "Worker {} completed successfully in {}",
+                            worker.id,
+                            format_duration(worker.duration()),
+                        );
+                    } else {
+                        let duration = worker.duration();
+                        let stderr = worker.join_stderr(true);
+                        tracing::error!(
+                            "Worker {} failed with {} in {}",
+                            worker.id,
+                            termination_description(status),
+                            format_duration(duration),
+                        );
+                        let active = self.dispatcher.in_flight.remove(&worker.id);
+                        crashed.push(CrashedWorker {
+                            id: worker.id,
+                            partition: worker.partition,
+                            status,
+                            stderr,
+                            active,
+                        });
+                    }
+                }
+                Ok(None) => running.push(worker),
+                Err(error) => {
+                    tracing::error!("Error waiting on worker {}: {}", worker.id, error);
+                }
+            }
+        }
+        self.workers = running;
+        Ok(crashed)
+    }
+
+    fn reap_during_shutdown(&mut self) {
         self.workers
             .retain_mut(|worker| match worker.child.try_wait() {
-                Ok(Some(status)) => {
+                Ok(Some(_)) => {
                     worker.join_output();
-                    if log_completion {
-                        if status.success() {
-                            tracing::info!(
-                                "Worker {} completed successfully in {}",
-                                worker.id,
-                                format_duration(worker.duration()),
-                            );
-                        } else {
-                            tracing::error!(
-                                "Worker {} failed with exit code {} in {}",
-                                worker.id,
-                                status.code().unwrap_or(-1),
-                                format_duration(worker.duration()),
-                            );
-                        }
-                    }
+                    worker.join_stderr(false);
                     false
                 }
                 Ok(None) => true,
-                Err(e) => {
-                    tracing::error!("Error waiting on worker {}: {}", worker.id, e);
+                Err(error) => {
+                    tracing::error!("Error waiting on worker {}: {}", worker.id, error);
                     false
                 }
             });
@@ -319,7 +517,10 @@ impl WorkerManager {
 
         loop {
             self.dispatcher.dispatch_pending(server)?;
-            self.reap_finished(true);
+            let crashed = self.reap_finished(server)?;
+            if !crashed.is_empty() {
+                return Ok(WaitOutcome::WorkersCrashed(crashed));
+            }
 
             if self.workers.is_empty() {
                 self.dispatcher.finish(server)?;
@@ -403,7 +604,7 @@ impl WorkerManager {
 
         let deadline = Instant::now() + grace_period;
         loop {
-            self.reap_finished(false);
+            self.reap_during_shutdown();
             if self.workers.is_empty()
                 && !processes
                     .iter()
@@ -441,6 +642,7 @@ impl WorkerManager {
                 );
             }
             worker.join_output();
+            worker.join_stderr(false);
         }
         self.workers.clear();
     }
@@ -534,6 +736,26 @@ impl WorkerManager {
     }
 }
 
+impl Drop for WorkerManager {
+    fn drop(&mut self) {
+        for worker in &mut self.workers {
+            if let Err(error) = process_control::force_kill(worker.child.id()) {
+                tracing::warn!(
+                    worker_id = worker.id,
+                    "failed to clean up worker process group: {error}"
+                );
+            }
+            #[cfg(not(unix))]
+            if let Err(error) = process_control::force_kill_child(&mut worker.child) {
+                tracing::warn!(worker_id = worker.id, "failed to kill worker: {error}");
+            }
+            if let Err(error) = worker.child.wait() {
+                tracing::warn!(worker_id = worker.id, "failed to reap worker: {error}");
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct WorkerProcess {
     worker_id: usize,
@@ -551,6 +773,43 @@ fn format_in_flight_test(name: &str) -> String {
     } else {
         name.blue().bold().to_string()
     }
+}
+
+fn print_crashed_test(printer: Printer, name: &str, duration: Duration) {
+    if printer.status_level() == StatusLevel::None {
+        return;
+    }
+    let label = "CRASH".red().bold();
+    let padding = " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub("CRASH".len()));
+    let duration = format_duration_bracketed(duration);
+    let name = format_in_flight_test(name);
+    let mut stdout = printer.stream_for_test_result().lock();
+    if let Err(error) = writeln!(stdout, "{padding}{label} {duration} {name}") {
+        tracing::warn!("failed to write crashed test line: {error}");
+    }
+}
+
+fn termination_description(status: ExitStatus) -> String {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+
+        if let Some(signal) = status.signal() {
+            let name = match signal {
+                libc::SIGABRT => "SIGABRT",
+                libc::SIGBUS => "SIGBUS",
+                libc::SIGILL => "SIGILL",
+                libc::SIGSEGV => "SIGSEGV",
+                libc::SIGTRAP => "SIGTRAP",
+                _ => "signal",
+            };
+            return format!("{name} ({signal})");
+        }
+    }
+    status.code().map_or_else(
+        || "an unknown status".to_string(),
+        |code| format!("exit code {code}"),
+    )
 }
 
 /// Controller settings that affect worker count, selection, and lifecycle.
@@ -616,32 +875,65 @@ fn spawn_workers(
             continue;
         }
 
-        let test_count = partition.tests().len();
-        controller.register_worker_paths(worker_id, partition.into_tests())?;
-        let mut command = worker_command(spawn, worker_id);
-        command.stderr(Stdio::inherit());
-        process_control::configure_worker_command(&mut command);
-        if forward_stdout {
-            command.stdout(Stdio::piped());
-        } else {
-            command.stdout(Stdio::inherit());
-        }
-
-        let mut child = command
-            .spawn()
-            .context("Failed to spawn karva-worker process")?;
-        let output = if forward_stdout {
-            child.stdout.take().map(WorkerOutputForwarder::spawn)
-        } else {
-            None
-        };
-
-        tracing::info!("Worker {} spawned with {} tests", worker_id, test_count);
-
-        worker_manager.spawn(worker_id, child, output);
+        spawn_worker(
+            &mut worker_manager,
+            spawn,
+            controller,
+            worker_id,
+            partition,
+            forward_stdout,
+        )?;
     }
 
     Ok(worker_manager)
+}
+
+fn spawn_worker(
+    worker_manager: &mut WorkerManager,
+    spawn: &WorkerSpawn,
+    controller: &mut ControllerServer,
+    worker_id: usize,
+    partition: Partition,
+    forward_stdout: bool,
+) -> Result<()> {
+    let test_count = partition.tests().len();
+    controller.register_worker_selection(
+        worker_id,
+        WorkerSelection {
+            test_paths: partition.tests().to_vec(),
+            resume_skip: partition.resume_skip().to_vec(),
+        },
+    )?;
+    let stderr_capture = NamedTempFile::new().context("Failed to create worker stderr spool")?;
+    let stderr_file = stderr_capture
+        .reopen()
+        .context("Failed to reopen worker stderr spool")?;
+    let mut command = worker_command(spawn, worker_id);
+    command.stderr(Stdio::piped());
+    process_control::configure_worker_command(&mut command);
+    if forward_stdout {
+        command.stdout(Stdio::piped());
+    } else {
+        command.stdout(Stdio::inherit());
+    }
+
+    let mut child = command
+        .spawn()
+        .context("Failed to spawn karva-worker process")?;
+    let output = if forward_stdout {
+        child.stdout.take().map(WorkerOutputForwarder::spawn)
+    } else {
+        None
+    };
+    let stderr = child
+        .stderr
+        .take()
+        .map(|stderr| WorkerStderrForwarder::spawn(stderr, stderr_file))
+        .context("Failed to capture karva-worker stderr")?;
+
+    tracing::info!("Worker {} spawned with {} tests", worker_id, test_count);
+    worker_manager.spawn(worker_id, child, output, stderr, stderr_capture, partition);
+    Ok(())
 }
 
 /// Collect tests from the project without executing them.
@@ -813,6 +1105,8 @@ pub fn run_parallel_tests(
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
     let forward_stdout = printer.stream_for_test_result().is_enabled();
+    let mut next_worker_id = partitions.len();
+    let mut worker_crashed = false;
     let mut worker_manager = spawn_workers(
         &spawn,
         partitions,
@@ -822,21 +1116,83 @@ pub fn run_parallel_tests(
         config.result_retention,
     )?;
 
-    let outcome = worker_manager.wait_for_completion(
-        shutdown_rx,
-        &mut controller,
-        project.settings().max_fail(),
-        run_deadline,
-    )?;
+    let max_fail = project.settings().max_fail();
+    let outcome = loop {
+        match worker_manager.wait_for_completion(
+            shutdown_rx,
+            &mut controller,
+            max_fail,
+            run_deadline,
+        )? {
+            WaitOutcome::WorkersCrashed(crashed_workers) => {
+                worker_crashed = true;
+                let mut replacements = Vec::new();
+                for crashed_worker in crashed_workers {
+                    worker_manager.dispatcher.abandon_worker(crashed_worker.id);
+                    let termination = termination_description(crashed_worker.status);
+                    let Some(active) = crashed_worker.active else {
+                        worker_manager.dispatcher.results.register_worker_exit(
+                            crashed_worker.id,
+                            &termination,
+                            &crashed_worker.stderr,
+                        );
+                        continue;
+                    };
+                    let active = {
+                        let duration = active.started.elapsed();
+                        (active.name, active.cache_key, duration)
+                    };
+                    let (name, cache_key, duration) = active;
+                    print_crashed_test(printer, &name, duration);
+                    let pending = crashed_worker.partition.pending_after_crash(
+                        &worker_manager.dispatcher.completed_tests,
+                        &cache_key,
+                    );
+                    worker_manager.dispatcher.results.register_crashed_test(
+                        &name,
+                        cache_key,
+                        duration,
+                        &termination,
+                        &crashed_worker.stderr,
+                    );
+                    if !pending.tests().is_empty() {
+                        replacements.push(pending);
+                    }
+                }
+                let failures = worker_manager.dispatcher.results.stats().failed()
+                    + worker_manager.dispatcher.results.stats().errors();
+                let failures = u32::try_from(failures).unwrap_or(u32::MAX);
+                if max_fail.is_exceeded_by(failures) {
+                    tracing::info!("Failure budget exhausted — stopping remaining workers");
+                    break WaitOutcome::FailFast;
+                }
+                for pending in replacements {
+                    spawn_worker(
+                        &mut worker_manager,
+                        &spawn,
+                        &mut controller,
+                        next_worker_id,
+                        pending,
+                        forward_stdout,
+                    )?;
+                    next_worker_id += 1;
+                }
+                if worker_manager.workers.is_empty() {
+                    break WaitOutcome::AllCompleted;
+                }
+            }
+            outcome => break outcome,
+        }
+    };
     let termination_grace_period = project.settings().test().termination_grace_period();
-    let interrupted_tests = if outcome == WaitOutcome::Cancelled {
+    let interrupted_tests = if matches!(outcome, WaitOutcome::Cancelled) {
         worker_manager.cancel_and_kill(printer, &mut controller, termination_grace_period)?
     } else {
         worker_manager.terminate_remaining(termination_grace_period);
         Vec::new()
     };
 
-    let timed_out = outcome == WaitOutcome::TimedOut;
+    let timed_out = matches!(outcome, WaitOutcome::TimedOut);
 
     worker_manager.dispatcher.finish(&mut controller)?;
     let mut results = std::mem::take(&mut worker_manager.dispatcher.results);
@@ -852,7 +1208,12 @@ pub fn run_parallel_tests(
         }
     }
 
-    let coverage_files = if project.settings().coverage().sources.is_empty() {
+    let coverage_files = if project.settings().coverage().sources.is_empty() || worker_crashed {
+        if worker_crashed && !project.settings().coverage().sources.is_empty() {
+            tracing::warn!(
+                "Coverage report skipped because a crashed worker could not save complete data"
+            );
+        }
         Vec::new()
     } else {
         artifacts.coverage_files()?

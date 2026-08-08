@@ -75,10 +75,16 @@ impl ModuleGroup {
 }
 
 /// Worker assignment produced by module-aware load balancing.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Partition {
     /// Worker CLI selectors in execution order.
     tests: Vec<String>,
+
+    /// Stable identities parallel to `tests`, used for crash recovery.
+    test_keys: Vec<TestCacheKey>,
+
+    /// Runtime-expanded cases a replacement worker must not execute again.
+    resume_skip: Vec<TestCacheKey>,
 
     /// Function identities represented by the selectors.
     function_roots: HashSet<String>,
@@ -91,6 +97,8 @@ impl Partition {
     fn new() -> Self {
         Self {
             tests: Vec::new(),
+            test_keys: Vec::new(),
+            resume_skip: Vec::new(),
             function_roots: HashSet::new(),
             weight: 0,
         }
@@ -98,6 +106,8 @@ impl Partition {
 
     fn add_test(&mut self, test: TestInfo, test_weight: u128) {
         self.function_roots.insert(test.function_root);
+        self.test_keys
+            .push(TestCacheKey::function_name(&test.qualified_name));
         self.tests.push(test.path);
         self.weight += test_weight;
     }
@@ -110,12 +120,55 @@ impl Partition {
         &self.tests
     }
 
-    pub(super) fn into_tests(self) -> Vec<String> {
-        self.tests
-    }
-
     pub(super) fn function_roots(&self) -> impl Iterator<Item = &str> {
         self.function_roots.iter().map(String::as_str)
+    }
+
+    /// Runtime-expanded cases already handled by an earlier worker generation.
+    pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
+        &self.resume_skip
+    }
+
+    /// Returns work not committed before a worker crash, excluding the test
+    /// that terminated the worker.
+    pub(super) fn pending_after_crash(
+        &self,
+        completed: &HashSet<TestCacheKey>,
+        crashed: &TestCacheKey,
+    ) -> Self {
+        let mut pending = Self::new();
+        pending.resume_skip.clone_from(&self.resume_skip);
+        for (path, cache_key) in self.tests.iter().zip(&self.test_keys) {
+            let contains_crashed_dynamic_case = !cache_key.is_parameter_case()
+                && cache_key.test_function_name() == crashed.test_function_name();
+            if contains_crashed_dynamic_case {
+                pending.tests.push(path.clone());
+                pending.test_keys.push(cache_key.clone());
+                pending
+                    .function_roots
+                    .insert(cache_key.test_function_name().to_string());
+                pending.resume_skip.extend(
+                    completed
+                        .iter()
+                        .filter(|completed| {
+                            completed.test_function_name() == cache_key.test_function_name()
+                        })
+                        .cloned(),
+                );
+                pending.resume_skip.push(crashed.clone());
+                continue;
+            }
+            if !completed.contains(cache_key) && cache_key != crashed {
+                pending.tests.push(path.clone());
+                pending.test_keys.push(cache_key.clone());
+                pending
+                    .function_roots
+                    .insert(cache_key.test_function_name().to_string());
+            }
+        }
+        pending.resume_skip.sort();
+        pending.resume_skip.dedup();
+        pending
     }
 }
 
@@ -162,9 +215,15 @@ pub fn partition_collected_tests(
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
     if !last_failed.is_empty() {
+        let failed_function_roots = last_failed
+            .iter()
+            .map(TestCacheKey::test_function_name)
+            .collect::<HashSet<_>>();
         test_infos.retain(|info| {
             last_failed.contains(info.qualified_name.as_str())
                 || last_failed.contains(info.function_root.as_str())
+                || (info.qualified_name == info.function_root
+                    && failed_function_roots.contains(info.function_root.as_str()))
         });
     }
 
@@ -480,6 +539,43 @@ mod tests {
     }
 
     #[test]
+    fn crash_recovery_keeps_only_unstarted_static_parameter_cases() {
+        let mut partition = Partition::new();
+        for name in [
+            "test_module::test_case[0]",
+            "test_module::test_case[1]",
+            "test_module::test_case[2]",
+        ] {
+            partition.add_test(test_info(name), 1);
+        }
+        let completed = HashSet::from([TestCacheKey::function_name("test_module::test_case[0]")]);
+
+        let pending = partition.pending_after_crash(
+            &completed,
+            &TestCacheKey::function_name("test_module::test_case[1]"),
+        );
+
+        assert_eq!(pending.tests(), &["test_module::test_case[2]"]);
+    }
+
+    #[test]
+    fn crash_recovery_resumes_dynamic_parameter_functions() {
+        let mut partition = Partition::new();
+        partition.add_test(test_info("test_module::test_case"), 1);
+
+        let pending = partition.pending_after_crash(
+            &HashSet::new(),
+            &TestCacheKey::function_name("test_module::test_case[1]"),
+        );
+
+        assert_eq!(pending.tests(), &["test_module::test_case"]);
+        assert_eq!(
+            pending.resume_skip(),
+            &[TestCacheKey::function_name("test_module::test_case[1]")]
+        );
+    }
+
+    #[test]
     fn duration_backed_partitioning_starts_from_qualified_name_order() {
         let duration = Some(Duration::from_millis(1));
         let mut tests = vec![
@@ -685,6 +781,33 @@ mod tests {
         );
 
         assert_eq!(scheduled_test_count(&package), 1);
+        assert_eq!(
+            partitions
+                .iter()
+                .flat_map(Partition::tests)
+                .collect::<Vec<_>>(),
+            [&format!("{test_path}::test_value")]
+        );
+    }
+
+    #[test]
+    fn last_failed_case_selects_opaque_dynamic_parameter_function() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', range(6))\n\
+             def test_value(value): pass\n",
+        );
+        let last_failed =
+            HashSet::from([TestCacheKey::function_name("test_sample::test_value[2]")]);
+
+        let partitions = partition_collected_tests(
+            &package,
+            1,
+            &HashMap::new(),
+            &last_failed,
+            None,
+            TestOrdering::Stable,
+        );
+
         assert_eq!(
             partitions
                 .iter()

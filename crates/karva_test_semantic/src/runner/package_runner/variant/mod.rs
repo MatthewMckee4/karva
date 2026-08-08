@@ -114,25 +114,35 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
     /// Executes setup, all required attempts, teardown, and final reporting.
     fn execute(mut self) -> bool {
+        let unresolved_test_name = self.unresolved_test_name();
+        if self
+            .package_runner
+            .context
+            .should_resume_skip(&unresolved_test_name.cache_key())
+        {
+            return true;
+        }
         if let Some(result) = self.should_skip() {
             return result;
         }
 
+        self.package_runner
+            .context
+            .report_test_started(&unresolved_test_name);
         let retry_params = self.params.clone();
         let first_params = std::mem::take(&mut self.params);
         self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
         let settings = self.settings(&first_attempt.fixtures.function_arguments);
+        self.package_runner
+            .context
+            .report_test_identified(&settings.qualified_test_name);
         self.resolve_pending_coverage_setup(&settings.qualified_name);
         let function = self.test.py_function.clone_ref(self.py);
         let test_name_env_result =
             set_test_name_env(self.py, &settings.qualified_test_name.to_string());
 
         tracing::debug!("Running test `{}`", settings.qualified_test_name);
-        self.package_runner
-            .context
-            .report_test_started(&settings.qualified_test_name);
-
         let mut attempt_number = 1;
         let mut prepared_attempt = Some(first_attempt);
         let mut prior_attempts = Vec::new();
@@ -394,12 +404,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     fn should_skip(&self) -> Option<bool> {
         let filter = &self.package_runner.context.settings().test().filter;
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
-        let qualified = if let Some(id) = &self.id {
-            QualifiedTestName::with_parameters(self.test.name().clone(), id.clone())
-        } else {
-            QualifiedTestName::new(self.test.name().clone())
-        }
-        .with_case_index(self.case_index);
+        let qualified = self.unresolved_test_name();
 
         if !filter.is_empty() {
             let display_name = qualified.to_string();
@@ -435,6 +440,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             Duration::ZERO,
             None,
         ))
+    }
+
+    fn unresolved_test_name(&self) -> QualifiedTestName {
+        if let Some(id) = &self.id {
+            QualifiedTestName::with_parameters(self.test.name().clone(), id.clone())
+        } else {
+            QualifiedTestName::new(self.test.name().clone())
+        }
+        .with_case_index(self.case_index)
     }
 
     /// Starts best-effort Python output capture when terminal output is hidden.

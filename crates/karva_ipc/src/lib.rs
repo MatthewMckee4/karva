@@ -23,7 +23,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
     /// Test began executing on this worker.
-    TestStarted { name: String },
+    TestStarted {
+        name: String,
+        cache_key: TestCacheKey,
+    },
 
     /// Test exceeded the configured slow-test threshold.
     TestSlow,
@@ -44,12 +47,23 @@ pub enum WorkerEvent {
 #[derive(Serialize, Deserialize)]
 enum WireMessage {
     Hello { run_id: String, worker_id: usize },
-    TestPaths(Vec<String>),
+    TestSelection(WorkerSelection),
     Event(Box<WorkerEvent>),
+}
+
+/// Work owned by one worker generation.
+#[derive(Serialize, Deserialize)]
+pub struct WorkerSelection {
+    /// Exact test selectors in execution order.
+    pub test_paths: Vec<String>,
+
+    /// Runtime-expanded cases already completed by an earlier generation.
+    pub resume_skip: Vec<TestCacheKey>,
 }
 
 enum Incoming {
     Connected { worker_id: usize },
+    Disconnected { worker_id: usize },
     Event(ControllerEvent),
     Error(String),
 }
@@ -79,8 +93,14 @@ struct WorkerConnection {
 
 #[derive(Default)]
 struct CurrentTestState {
-    latest: Option<String>,
-    sent: Option<String>,
+    latest: Option<CurrentTest>,
+    sent: Option<CurrentTest>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct CurrentTest {
+    name: String,
+    cache_key: TestCacheKey,
 }
 
 impl WorkerClient {
@@ -89,7 +109,7 @@ impl WorkerClient {
         address: SocketAddr,
         run_id: &str,
         worker_id: usize,
-    ) -> Result<(Self, Vec<String>)> {
+    ) -> Result<(Self, WorkerSelection)> {
         let stream = TcpStream::connect(address)
             .with_context(|| format!("failed to connect to Karva controller at {address}"))?;
         stream
@@ -119,29 +139,35 @@ impl WorkerClient {
             },
             true,
         )?;
-        let test_paths = read_test_paths(reader)?;
-        Ok((client, test_paths))
+        let selection = read_test_selection(reader)?;
+        Ok((client, selection))
     }
 
-    /// Queues one state change, flushing failures immediately for global fail-fast.
+    /// Queues one state change, flushing completed tests before execution advances.
     pub fn send_event(&self, event: WorkerEvent) -> Result<()> {
         let mut current_test = self
             .connection
             .current_test
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
-        if let WorkerEvent::TestStarted { name } = &event {
-            current_test.latest = Some(name.clone());
-            return Ok(());
+        if let WorkerEvent::TestStarted { name, cache_key } = &event {
+            let next = CurrentTest {
+                name: name.clone(),
+                cache_key: cache_key.clone(),
+            };
+            if current_test.sent.as_ref() == Some(&next) {
+                return Ok(());
+            }
+            current_test.latest = Some(next);
+            drop(current_test);
+            self.flush_current_test()?;
+            return self.flush();
         }
         if matches!(event, WorkerEvent::TestFinished { .. }) {
             current_test.latest = None;
             current_test.sent = None;
         }
-        let flush = matches!(
-            &event,
-            WorkerEvent::TestFinished { result, .. } if result.outcome().is_non_success()
-        );
+        let flush = matches!(&event, WorkerEvent::TestFinished { .. });
         self.write(&WireMessage::Event(Box::new(event)), flush)
     }
 
@@ -212,9 +238,12 @@ impl WorkerClient {
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
         if current_test.latest != current_test.sent {
-            if let Some(name) = current_test.latest.as_ref() {
+            if let Some(test) = current_test.latest.as_ref() {
                 self.write(
-                    &WireMessage::Event(Box::new(WorkerEvent::TestStarted { name: name.clone() })),
+                    &WireMessage::Event(Box::new(WorkerEvent::TestStarted {
+                        name: test.name.clone(),
+                        cache_key: test.cache_key.clone(),
+                    })),
                     false,
                 )?;
             }
@@ -238,23 +267,23 @@ impl WorkerClient {
     }
 }
 
-fn read_test_paths(stream: TcpStream) -> Result<Vec<String>> {
+fn read_test_selection(stream: TcpStream) -> Result<WorkerSelection> {
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(message) = messages.next() else {
         bail!("Karva controller connection closed before sending test paths");
     };
     match message.context("failed to read Karva worker test paths")? {
-        WireMessage::TestPaths(test_paths) => Ok(test_paths),
+        WireMessage::TestSelection(selection) => Ok(selection),
         WireMessage::Hello { .. } | WireMessage::Event(_) => {
             bail!("Karva controller sent an invalid worker startup message")
         }
     }
 }
 
-// Receipt: synchronous per-event flushing made the 16,807-case parametrized
-// benchmark 40.5% slower. The controller observes workers every 10 ms, so a
-// shorter flush interval cannot improve its response time.
+// Receipt: synchronous flushing of every event made the 16,807-case parametrized
+// benchmark 40.5% slower. Lifecycle starts remain coalesced; terminal results
+// flush immediately so a later fixture teardown crash cannot erase a PASS.
 const EVENT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 
 fn spawn_flusher(
@@ -298,10 +327,13 @@ fn flush_worker_events(
         .lock()
         .map_err(|_| "Karva controller connection lock poisoned".to_string())?;
     if current_test.latest != current_test.sent {
-        if let Some(name) = current_test.latest.as_ref() {
+        if let Some(test) = current_test.latest.as_ref() {
             serde_json::to_writer(
                 &mut *writer,
-                &WireMessage::Event(Box::new(WorkerEvent::TestStarted { name: name.clone() })),
+                &WireMessage::Event(Box::new(WorkerEvent::TestStarted {
+                    name: test.name.clone(),
+                    cache_key: test.cache_key.clone(),
+                })),
             )
             .map_err(|error| error.to_string())?;
             writer.write_all(b"\n").map_err(|error| error.to_string())?;
@@ -332,7 +364,8 @@ pub struct ControllerServer {
     receiver: Receiver<Incoming>,
     readers: Vec<JoinHandle<()>>,
     workers: HashSet<usize>,
-    worker_paths: Arc<Mutex<HashMap<usize, Vec<String>>>>,
+    disconnected_workers: HashSet<usize>,
+    worker_selections: Arc<Mutex<HashMap<usize, WorkerSelection>>>,
 }
 
 impl ControllerServer {
@@ -351,7 +384,8 @@ impl ControllerServer {
             receiver,
             readers: Vec::new(),
             workers: HashSet::new(),
-            worker_paths: Arc::new(Mutex::new(HashMap::new())),
+            disconnected_workers: HashSet::new(),
+            worker_selections: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -359,18 +393,18 @@ impl ControllerServer {
     ///
     /// Ownership moves into the connection reader so large selections are not
     /// cloned or collected into an encoded buffer on the controller.
-    pub fn register_worker_paths(
+    pub fn register_worker_selection(
         &mut self,
         worker_id: usize,
-        test_paths: Vec<String>,
+        selection: WorkerSelection,
     ) -> Result<()> {
         let previous = self
-            .worker_paths
+            .worker_selections
             .lock()
-            .map_err(|_| anyhow::anyhow!("Karva worker path lock poisoned"))?
-            .insert(worker_id, test_paths);
+            .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
+            .insert(worker_id, selection);
         if previous.is_some() {
-            bail!("Karva worker {worker_id} test paths registered more than once");
+            bail!("Karva worker {worker_id} selection registered more than once");
         }
         Ok(())
     }
@@ -392,9 +426,11 @@ impl ControllerServer {
                         .context("failed to configure Karva worker connection")?;
                     let run_id = self.run_id.clone();
                     let sender = self.sender.clone();
-                    let worker_paths = Arc::clone(&self.worker_paths);
+                    let worker_selections = Arc::clone(&self.worker_selections);
                     self.readers.push(thread::spawn(move || {
-                        if let Err(error) = read_worker(stream, &run_id, &worker_paths, &sender) {
+                        if let Err(error) =
+                            read_worker(stream, &run_id, &worker_selections, &sender)
+                        {
                             sender.send(Incoming::Error(format!("{error:#}"))).ok();
                         }
                     }));
@@ -416,11 +452,32 @@ impl ControllerServer {
                         bail!("Karva worker {worker_id} connected more than once");
                     }
                 }
+                Ok(Incoming::Disconnected { worker_id }) => {
+                    self.disconnected_workers.insert(worker_id);
+                }
                 Ok(Incoming::Event(event)) => return Ok(Some(event)),
                 Ok(Incoming::Error(error)) => bail!(error),
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => return Ok(None),
             }
         }
+    }
+
+    /// Whether the worker's event stream reached EOF after every queued event.
+    pub fn worker_disconnected(&self, worker_id: usize) -> bool {
+        self.disconnected_workers.contains(&worker_id)
+    }
+
+    /// Whether the worker began or completed its controller handshake.
+    pub fn worker_started(&self, worker_id: usize) -> Result<bool> {
+        if self.workers.contains(&worker_id) {
+            return Ok(true);
+        }
+        let pending = self
+            .worker_selections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
+            .contains_key(&worker_id);
+        Ok(!pending)
     }
 
     /// Joins every accepted reader after worker processes have exited.
@@ -438,7 +495,7 @@ impl ControllerServer {
 fn read_worker(
     stream: TcpStream,
     expected_run_id: &str,
-    worker_paths: &Mutex<HashMap<usize, Vec<String>>>,
+    worker_selections: &Mutex<HashMap<usize, WorkerSelection>>,
     sender: &Sender<Incoming>,
 ) -> Result<()> {
     let response_stream = stream
@@ -457,34 +514,45 @@ fn read_worker(
     if run_id != expected_run_id {
         bail!("Karva worker connected with run id `{run_id}`, expected `{expected_run_id}`");
     }
-    let test_paths = worker_paths
+    let selection = worker_selections
         .lock()
-        .map_err(|_| anyhow::anyhow!("Karva worker path lock poisoned"))?
+        .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
         .remove(&worker_id)
-        .with_context(|| format!("Karva worker {worker_id} connected without registered paths"))?;
-    let mut writer = BufWriter::new(response_stream);
-    serde_json::to_writer(&mut writer, &WireMessage::TestPaths(test_paths))
-        .context("failed to serialize Karva worker test paths")?;
-    writer
-        .write_all(b"\n")
-        .context("failed to frame Karva worker test paths")?;
-    writer
-        .flush()
-        .context("failed to send Karva worker test paths")?;
+        .with_context(|| {
+            format!("Karva worker {worker_id} connected without a registered selection")
+        })?;
     if sender.send(Incoming::Connected { worker_id }).is_err() {
+        return Ok(());
+    }
+    let mut writer = BufWriter::new(response_stream);
+    let selection_result =
+        serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))
+            .context("failed to serialize Karva worker selection")
+            .and_then(|()| {
+                writer
+                    .write_all(b"\n")
+                    .context("failed to frame Karva worker selection")?;
+                writer
+                    .flush()
+                    .context("failed to send Karva worker selection")
+            });
+    if selection_result.is_err() {
+        sender.send(Incoming::Disconnected { worker_id }).ok();
         return Ok(());
     }
 
     for message in messages {
         let message = match message {
             Ok(message) => message,
-            Err(error) if is_clean_disconnect(&error) => return Ok(()),
+            Err(error) if error.is_eof() || is_clean_disconnect(&error) => break,
             Err(error) => return Err(error).context("failed to read Karva worker event"),
         };
         let event = match message {
             WireMessage::Event(event) => event,
             WireMessage::Hello { .. } => bail!("Karva worker sent more than one handshake"),
-            WireMessage::TestPaths(_) => bail!("Karva worker sent test paths to its controller"),
+            WireMessage::TestSelection(_) => {
+                bail!("Karva worker sent a test selection to its controller")
+            }
         };
         if sender
             .send(Incoming::Event(ControllerEvent { worker_id, event }))
@@ -493,6 +561,7 @@ fn read_worker(
             return Ok(());
         }
     }
+    sender.send(Incoming::Disconnected { worker_id }).ok();
     Ok(())
 }
 
@@ -505,9 +574,18 @@ fn is_clean_disconnect(error: &serde_json::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufRead as _, Read as _};
+
     use rstest::rstest;
 
     use super::*;
+
+    fn selection(test_paths: Vec<String>) -> WorkerSelection {
+        WorkerSelection {
+            test_paths,
+            resume_skip: Vec::new(),
+        }
+    }
 
     fn accept_connections(server: &mut ControllerServer, count: usize) {
         while server.readers.len() < count {
@@ -520,16 +598,17 @@ mod tests {
     fn streams_attributed_worker_events() {
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
         server
-            .register_worker_paths(7, vec!["mod::test".to_string()])
-            .expect("register worker paths");
+            .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+            .expect("register worker selection");
         let address = server.address().expect("address");
         let worker = thread::spawn(move || {
-            let (client, test_paths) =
+            let (client, selection) =
                 WorkerClient::connect(address, "run-id", 7).expect("connect worker");
-            assert_eq!(test_paths, ["mod::test"]);
+            assert_eq!(selection.test_paths, ["mod::test"]);
             client
                 .send_event(WorkerEvent::TestStarted {
                     name: "mod::test".to_string(),
+                    cache_key: TestCacheKey::function_name("mod::test"),
                 })
                 .expect("send event");
             client.complete().expect("complete worker");
@@ -546,7 +625,9 @@ mod tests {
         assert_eq!(event.worker_id, 7);
         assert!(matches!(
             *event.event,
-            WorkerEvent::TestStarted { name } if name == "mod::test"
+            WorkerEvent::TestStarted { name, cache_key }
+                if name == "mod::test"
+                    && cache_key == TestCacheKey::function_name("mod::test")
         ));
     }
 
@@ -586,13 +667,13 @@ mod tests {
     fn completion_closes_connection_after_terminal_event() {
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
         server
-            .register_worker_paths(7, Vec::new())
-            .expect("register worker paths");
+            .register_worker_selection(7, selection(Vec::new()))
+            .expect("register worker selection");
         let address = server.address().expect("address");
         let worker = thread::spawn(move || {
-            let (client, test_paths) =
+            let (client, selection) =
                 WorkerClient::connect(address, "run-id", 7).expect("connect worker");
-            assert!(test_paths.is_empty());
+            assert!(selection.test_paths.is_empty());
             client.complete().expect("complete worker");
         });
 
@@ -608,6 +689,81 @@ mod tests {
         assert!(matches!(*event.event, WorkerEvent::WorkerFinished));
     }
 
+    #[test]
+    fn transfers_resume_skip_cases() {
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        server
+            .register_worker_selection(
+                7,
+                WorkerSelection {
+                    test_paths: vec!["mod::test".to_string()],
+                    resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
+                },
+            )
+            .expect("register worker selection");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let (client, selection) =
+                WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            assert_eq!(
+                selection.resume_skip,
+                [TestCacheKey::function_name("mod::test[1]")]
+            );
+            client.complete().expect("complete worker");
+        });
+
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
+        server.finish().expect("finish readers");
+    }
+
+    #[test]
+    fn truncated_terminal_event_is_a_worker_disconnect() {
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        server
+            .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+            .expect("register worker selection");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            let mut stream = TcpStream::connect(address).expect("connect worker");
+            serde_json::to_writer(
+                &mut stream,
+                &WireMessage::Hello {
+                    run_id: "run-id".to_string(),
+                    worker_id: 7,
+                },
+            )
+            .expect("write handshake");
+            stream.write_all(b"\n").expect("frame handshake");
+            stream.flush().expect("flush handshake");
+
+            let mut selection = String::new();
+            BufReader::new(stream.try_clone().expect("clone stream"))
+                .read_line(&mut selection)
+                .expect("read selection");
+            assert!(!selection.is_empty());
+
+            stream
+                .write_all(br#"{"Event":{"TestStarted""#)
+                .expect("write truncated event");
+            stream.flush().expect("flush truncated event");
+            stream
+                .shutdown(Shutdown::Write)
+                .expect("close worker write stream");
+            let mut drain = Vec::new();
+            stream
+                .read_to_end(&mut drain)
+                .expect("drain controller stream");
+        });
+
+        accept_connections(&mut server, 1);
+        worker.join().expect("join worker");
+        server.finish().expect("finish readers");
+        assert!(server.try_recv().expect("drain events").is_none());
+        assert!(server.worker_started(7).expect("read worker state"));
+        assert!(server.worker_disconnected(7));
+    }
+
     #[rstest]
     fn transfers_large_worker_selection(#[values(50_000, 1_000_000)] path_count: usize) {
         // Receipt: 50,000 is the reported workload; 1,000,000 is the requested stress case.
@@ -618,12 +774,13 @@ mod tests {
 
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
         server
-            .register_worker_paths(0, test_paths)
-            .expect("register worker paths");
+            .register_worker_selection(0, selection(test_paths))
+            .expect("register worker selection");
         let address = server.address().expect("address");
         let worker = thread::spawn(move || {
-            let (client, test_paths) =
+            let (client, selection) =
                 WorkerClient::connect(address, "run-id", 0).expect("connect worker");
+            let test_paths = selection.test_paths;
             assert_eq!(test_paths.len(), path_count);
             assert_eq!(
                 test_paths.first().map(String::as_str),

@@ -50,6 +50,11 @@ pub trait Reporter: Send + Sync {
         let _ = test_name;
     }
 
+    /// Refines an in-flight identity after fixture-derived parameters resolve.
+    fn report_test_identified(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
+
     /// Takes ownership of the final result after each test completes.
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
         let _ = (cache_key, result);
