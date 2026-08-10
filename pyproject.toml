@@ -39,7 +39,7 @@ dev = [
     "ruff>=0.16.1",
     "ty>=0.0.65",
 ]
-docs = ["zensical==0.0.51"]
+docs = ["zensical==0.0.52"]
 release = ["tbump"]
 
 [project.urls]
