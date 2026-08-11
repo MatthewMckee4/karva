@@ -81,3 +81,45 @@ async def test_async_code_can_use_async_fixture(service):
 
 Async generator fixture teardown is awaited after its consumer finishes, just
 like teardown after `yield` in a sync fixture.
+
+### Background tasks
+
+Work started with `asyncio.create_task` runs alongside the test. If it raises
+and nothing awaits it, the exception never reaches the test coroutine, so
+Python reports it to the event loop instead of propagating it. Karva watches
+for those reports and fails the test:
+
+```python title="tests/test_service.py"
+import asyncio
+
+
+async def refresh_cache():
+    raise RuntimeError("refresh failed")
+
+
+async def test_background_refresh():
+    asyncio.create_task(refresh_cache())
+    await asyncio.sleep(0)
+```
+
+```text
+error[test-failure]: Test `test_background_refresh` failed
+info: Unhandled exception in background task: Task-2: RuntimeError: refresh failed
+```
+
+Every unretrieved failure is reported, not only the first. The same watch
+covers async fixture setup and teardown, so a task started by a fixture is
+attributed to that fixture.
+
+A failure the test deals with itself is not reported. Awaiting the task,
+reading `task.exception()`, or collecting it through
+`asyncio.gather(..., return_exceptions=True)` all count as handling it. Tasks
+still pending when the test returns are cancelled cleanly during shutdown and
+do not fail the test:
+
+```python
+async def test_handled_background_failure():
+    task = asyncio.create_task(refresh_cache())
+    with karva.raises(RuntimeError):
+        await task
+```

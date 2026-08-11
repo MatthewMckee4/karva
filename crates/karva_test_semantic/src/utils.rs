@@ -4,6 +4,7 @@ use camino::Utf8Path;
 use karva_static::WorkerEnvVars;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyString, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
@@ -13,19 +14,129 @@ use crate::extensions::functions::snapshot::{
 };
 use crate::runner::FixtureArguments;
 
-const MAKE_SYNC_CODE: &std::ffi::CStr = c"
+/// Drives a coroutine with `asyncio.run()` while watching the event loop for
+/// exceptions that never reached the awaiting code.
+///
+/// A background task that fails without being awaited cannot propagate through
+/// the test coroutine, so the loop reports it to its exception handler instead.
+/// Installing a handler from inside the running loop turns those reports into a
+/// raised exception, which lets an ordinary failure path attribute them to the
+/// test or fixture that was running.
+///
+/// The handler is deliberately not restored: the report for an unretrieved task
+/// arrives while `asyncio.run` is shutting the loop down, after the wrapper
+/// coroutine has already returned. Restoring inside the wrapper would send those
+/// late reports to the default handler and lose them. Nothing is leaked by
+/// leaving it in place, because `asyncio.run` builds a fresh loop per call and
+/// closes it afterwards, which also isolates parameter cases, retries, and
+/// workers from one another.
+///
+/// Exceptions the test handled itself (awaited, or read through
+/// `task.exception()`) never reach the handler, and neither does the clean
+/// cancellation `asyncio.run` performs on still-pending tasks during shutdown.
+const RUN_COROUTINE_CODE: &std::ffi::CStr = c"
+import asyncio
+
+
+class UnhandledBackgroundException(RuntimeError):
+    '''Work started by a test failed without anything awaiting it.'''
+
+
+def _describe(context):
+    exception = context.get('exception')
+    if exception is None:
+        return context.get('message') or 'unknown asyncio error'
+
+    description = f'{type(exception).__name__}: {exception}'
+    source = context.get('future') or context.get('task') or context.get('handle')
+    get_name = getattr(source, 'get_name', None)
+    if get_name is None:
+        return description
+    try:
+        return f'{get_name()}: {description}'
+    except Exception:
+        return description
+
+
+def _build_error(contexts):
+    descriptions = [_describe(context) for context in contexts]
+    if len(descriptions) == 1:
+        message = f'Unhandled exception in background task: {descriptions[0]}'
+    else:
+        joined = '\\n'.join(f'  [{i}] {d}' for i, d in enumerate(descriptions, 1))
+        message = (
+            f'{len(descriptions)} unhandled exceptions in background tasks:\\n{joined}'
+        )
+    error = UnhandledBackgroundException(message)
+    # Chain the first real exception so the traceback points at the failing
+    # background code rather than at this helper.
+    for context in contexts:
+        exception = context.get('exception')
+        if exception is not None:
+            error.__cause__ = exception
+            break
+    return error
+
+
+def _run(coroutine):
+    contexts = []
+
+    async def _wrapper():
+        asyncio.get_running_loop().set_exception_handler(
+            lambda loop, context: contexts.append(context)
+        )
+        return await coroutine
+
+    result = asyncio.run(_wrapper())
+    if contexts:
+        raise _build_error(contexts)
+    return result
+
+
 def _make_sync(async_fn):
-    import asyncio, functools
+    import functools
+
     @functools.wraps(async_fn)
     def wrapper(*args, **kwargs):
-        return asyncio.run(async_fn(*args, **kwargs))
+        return _run(async_fn(*args, **kwargs))
+
     return wrapper
 ";
 
-/// Runs a Python coroutine to completion using `asyncio.run()`.
+/// Compiled [`RUN_COROUTINE_CODE`] namespace, built once per interpreter.
+///
+/// `run_coroutine` runs for every async test and every async fixture setup and
+/// teardown, so recompiling the source per call would be wasted work on a hot
+/// path.
+static ASYNC_RUNTIME: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+fn async_runtime(py: Python<'_>) -> PyResult<&Bound<'_, PyDict>> {
+    ASYNC_RUNTIME
+        .get_or_try_init(py, || {
+            // The namespace doubles as globals so the helpers resolve the
+            // module-level `asyncio` import through their `__globals__`.
+            let namespace = PyDict::new(py);
+            py.run(RUN_COROUTINE_CODE, Some(&namespace), None)?;
+            PyResult::Ok(namespace.unbind())
+        })
+        .map(|namespace| namespace.bind(py))
+}
+
+fn async_runtime_attr<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    async_runtime(py)?.get_item(name)?.ok_or_else(|| {
+        PyRuntimeError::new_err(format!("failed to load `{name}` from inline Python"))
+    })
+}
+
+/// Runs a Python coroutine to completion, failing if work it started in the
+/// background raised without anything awaiting it.
+///
+/// See [`RUN_COROUTINE_CODE`] for why the loop's exception handler is the
+/// mechanism used to notice those failures.
 pub fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py<PyAny>> {
-    let asyncio = py.import("asyncio")?;
-    Ok(asyncio.call_method1("run", (coroutine,))?.unbind())
+    Ok(async_runtime_attr(py, "_run")?
+        .call1((coroutine,))?
+        .unbind())
 }
 
 /// Runs a Python test with a timeout, raising `TimeoutError` if it does not
@@ -105,9 +216,7 @@ fn run_async_with_timeout(
     rebrand_timeout_error(
         py,
         &timeout_class,
-        asyncio
-            .call_method1("run", (wait_for,))
-            .map(pyo3::Bound::unbind),
+        run_coroutine(py, wait_for.unbind()),
         seconds,
     )
 }
@@ -187,15 +296,10 @@ pub fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) -> PyResu
         return Ok(false);
     }
 
-    // Replace inner_test with a sync wrapper that uses asyncio.run().
+    // Replace inner_test with a sync wrapper that drives the coroutine.
     // Uses inline Python because PyCFunction closures lack the signature metadata and
     // calling conventions that Hypothesis requires to introspect and invoke inner_test.
-    let locals = pyo3::types::PyDict::new(py);
-    py.run(MAKE_SYNC_CODE, None, Some(&locals))?;
-    let make_sync = locals.get_item("_make_sync")?.ok_or_else(|| {
-        PyRuntimeError::new_err("failed to load async test wrapper from inline Python")
-    })?;
-    let sync_wrapper = make_sync.call1((inner_test,))?;
+    let sync_wrapper = async_runtime_attr(py, "_make_sync")?.call1((inner_test,))?;
     hypothesis_attr.setattr(py, "inner_test", sync_wrapper)?;
 
     Ok(true)
