@@ -68,6 +68,9 @@ struct Worker {
     stderr_capture: NamedTempFile,
     partition: Partition,
     start_time: Instant,
+    exit_status: Option<ExitStatus>,
+    exit_observed: Option<Instant>,
+    forced_disconnect: bool,
 }
 
 impl Worker {
@@ -87,6 +90,9 @@ impl Worker {
             stderr_capture,
             partition,
             start_time: Instant::now(),
+            exit_status: None,
+            exit_observed: None,
+            forced_disconnect: false,
         }
     }
 
@@ -96,13 +102,13 @@ impl Worker {
 
     fn join_output(&mut self) {
         if let Some(output) = self.output.take() {
-            output.join(self.id);
+            output.join(self.id, !self.forced_disconnect);
         }
     }
 
     fn join_stderr(&mut self, read: bool) -> String {
         if let Some(stderr) = self.stderr.take() {
-            stderr.join(self.id);
+            stderr.join(self.id, !self.forced_disconnect);
         }
         if !read {
             return String::new();
@@ -188,9 +194,8 @@ impl WorkerStderrForwarder {
         Self { handle }
     }
 
-    fn join(self, worker_id: usize) {
-        if !self.handle.is_finished() {
-            tracing::warn!(worker_id, "worker stderr remained open after process exit");
+    fn join(self, worker_id: usize, wait: bool) {
+        if !wait && !self.handle.is_finished() {
             return;
         }
         match self.handle.join() {
@@ -211,9 +216,8 @@ impl WorkerOutputForwarder {
         Self { handle }
     }
 
-    fn join(self, worker_id: usize) {
-        if !self.handle.is_finished() {
-            tracing::warn!(worker_id, "worker stdout remained open after process exit");
+    fn join(self, worker_id: usize, wait: bool) {
+        if !wait && !self.handle.is_finished() {
             return;
         }
         match self.handle.join() {
@@ -422,15 +426,41 @@ impl WorkerManager {
         let mut running = Vec::new();
         let mut crashed = Vec::new();
         for mut worker in self.workers.drain(..) {
-            match worker.child.try_wait() {
-                Ok(Some(status)) => {
-                    if let Err(error) = process_control::force_kill(worker.child.id()) {
+            let status = if let Some(status) = worker.exit_status {
+                Ok(Some(status))
+            } else {
+                #[cfg(unix)]
+                if process_control::has_exited(&worker.child)? {
+                    if !server.worker_disconnected(worker.id)
+                        && let Err(error) = process_control::force_kill(worker.child.id())
+                        && error.kind() != std::io::ErrorKind::PermissionDenied
+                    {
                         tracing::warn!(
                             worker_id = worker.id,
                             "failed to clean up worker process group: {error}"
                         );
                     }
+                    worker.child.wait().map(Some)
+                } else {
+                    Ok(None)
+                }
+                #[cfg(not(unix))]
+                worker.child.try_wait()
+            };
+            match status {
+                Ok(Some(status)) => {
+                    if worker.exit_status.is_none() {
+                        worker.exit_status = Some(status);
+                        worker.exit_observed = Some(Instant::now());
+                    }
                     if server.worker_started(worker.id)? && !server.worker_disconnected(worker.id) {
+                        if worker
+                            .exit_observed
+                            .is_some_and(|observed| observed.elapsed() >= CANCELLATION_EVENT_SETTLE)
+                        {
+                            server.disconnect_worker(worker.id)?;
+                            worker.forced_disconnect = true;
+                        }
                         running.push(worker);
                         continue;
                     }
@@ -739,7 +769,9 @@ impl WorkerManager {
 impl Drop for WorkerManager {
     fn drop(&mut self) {
         for worker in &mut self.workers {
-            if let Err(error) = process_control::force_kill(worker.child.id()) {
+            if worker.exit_status.is_none()
+                && let Err(error) = process_control::force_kill(worker.child.id())
+            {
                 tracing::warn!(
                     worker_id = worker.id,
                     "failed to clean up worker process group: {error}"
@@ -1137,6 +1169,12 @@ pub fn run_parallel_tests(
                             &termination,
                             &crashed_worker.stderr,
                         );
+                        let pending = crashed_worker
+                            .partition
+                            .pending_after_crash(&worker_manager.dispatcher.completed_tests, None);
+                        if !pending.tests().is_empty() {
+                            replacements.push(pending);
+                        }
                         continue;
                     };
                     let active = {
@@ -1147,7 +1185,7 @@ pub fn run_parallel_tests(
                     print_crashed_test(printer, &name, duration);
                     let pending = crashed_worker.partition.pending_after_crash(
                         &worker_manager.dispatcher.completed_tests,
-                        &cache_key,
+                        Some(&cache_key),
                     );
                     worker_manager.dispatcher.results.register_crashed_test(
                         &name,
@@ -1280,6 +1318,40 @@ mod process_control {
 
     pub(super) fn force_kill(process_id: u32) -> io::Result<()> {
         signal_process_group(process_id, libc::SIGKILL)
+    }
+
+    /// Observes worker exit without reaping its process-group leader.
+    pub(super) fn has_exited(child: &Child) -> io::Result<bool> {
+        let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
+        let process_id = libc::id_t::try_from(child.id()).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("process id {} cannot be represented as id_t", child.id()),
+            )
+        })?;
+        #[expect(
+            unsafe_code,
+            reason = "observing Unix child exit without reaping requires libc::waitid"
+        )]
+        let result = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                process_id,
+                info.as_mut_ptr(),
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        #[expect(unsafe_code, reason = "successful libc::waitid initializes siginfo_t")]
+        let info = unsafe { info.assume_init() };
+        #[expect(
+            unsafe_code,
+            reason = "reading the process id from libc::siginfo_t requires its accessor"
+        )]
+        let process_id = unsafe { info.si_pid() };
+        Ok(process_id != 0)
     }
 
     pub(super) fn is_running(process_id: u32) -> bool {

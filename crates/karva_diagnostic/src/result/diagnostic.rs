@@ -51,7 +51,7 @@ impl RenderedDiagnostic {
     }
 
     /// Creates a synthetic diagnostic for an unexpectedly terminated worker.
-    pub fn worker_crashed(test_name: &str, termination: &str, stderr: &str) -> Self {
+    pub(super) fn worker_crashed(test_name: &str, termination: &str, stderr: &str) -> Self {
         let message = format!("Worker terminated with {termination} while running `{test_name}`");
         let mut rendered = format!("error[worker-crashed]: {message}\n");
         if !stderr.trim().is_empty() {
@@ -63,7 +63,7 @@ impl RenderedDiagnostic {
     }
 
     /// Creates a run-level diagnostic when no active test can be identified.
-    pub fn worker_exited(worker_id: usize, termination: &str, stderr: &str) -> Self {
+    pub(super) fn worker_exited(worker_id: usize, termination: &str, stderr: &str) -> Self {
         let message = format!("Worker {worker_id} terminated with {termination}");
         let mut rendered = format!("error[worker-crashed]: {message}\n");
         if !stderr.trim().is_empty() {

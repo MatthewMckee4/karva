@@ -91,6 +91,9 @@ pub struct Partition {
 
     /// Cumulative historical microseconds, using one per unknown test.
     weight: u128,
+
+    /// Completed cases seen before retrying a crash with no attributable test.
+    completed_before_unattributed_retry: Option<usize>,
 }
 
 impl Partition {
@@ -101,6 +104,7 @@ impl Partition {
             resume_skip: Vec::new(),
             function_roots: HashSet::new(),
             weight: 0,
+            completed_before_unattributed_retry: None,
         }
     }
 
@@ -134,13 +138,26 @@ impl Partition {
     pub(super) fn pending_after_crash(
         &self,
         completed: &HashSet<TestCacheKey>,
-        crashed: &TestCacheKey,
+        crashed: Option<&TestCacheKey>,
     ) -> Self {
         let mut pending = Self::new();
         pending.resume_skip.clone_from(&self.resume_skip);
+        pending.completed_before_unattributed_retry = self.completed_before_unattributed_retry;
+        if crashed.is_none() {
+            let completed_in_partition = completed
+                .iter()
+                .filter(|completed| self.function_roots.contains(completed.test_function_name()))
+                .count();
+            if self.completed_before_unattributed_retry == Some(completed_in_partition) {
+                return pending;
+            }
+            pending.completed_before_unattributed_retry = Some(completed_in_partition);
+        }
         for (path, cache_key) in self.tests.iter().zip(&self.test_keys) {
-            let contains_crashed_dynamic_case = !cache_key.is_parameter_case()
-                && cache_key.test_function_name() == crashed.test_function_name();
+            let contains_crashed_dynamic_case = crashed.is_some_and(|crashed| {
+                !cache_key.is_parameter_case()
+                    && cache_key.test_function_name() == crashed.test_function_name()
+            });
             if contains_crashed_dynamic_case {
                 pending.tests.push(path.clone());
                 pending.test_keys.push(cache_key.clone());
@@ -155,10 +172,18 @@ impl Partition {
                         })
                         .cloned(),
                 );
-                pending.resume_skip.push(crashed.clone());
+                if let Some(crashed) = crashed {
+                    pending.resume_skip.push(crashed.clone());
+                }
                 continue;
             }
-            if !completed.contains(cache_key) && cache_key != crashed {
+            let completed_function = completed
+                .iter()
+                .any(|completed| completed.test_function_name() == cache_key.test_function_name());
+            if !completed.contains(cache_key)
+                && (!completed_function || cache_key.is_parameter_case())
+                && crashed != Some(cache_key)
+            {
                 pending.tests.push(path.clone());
                 pending.test_keys.push(cache_key.clone());
                 pending
@@ -571,7 +596,7 @@ mod tests {
 
         let pending = partition.pending_after_crash(
             &completed,
-            &TestCacheKey::function_name("test_module::test_case[1]"),
+            Some(&TestCacheKey::function_name("test_module::test_case[1]")),
         );
 
         assert_eq!(pending.tests(), &["test_module::test_case[2]"]);
@@ -584,7 +609,7 @@ mod tests {
 
         let pending = partition.pending_after_crash(
             &HashSet::new(),
-            &TestCacheKey::function_name("test_module::test_case[1]"),
+            Some(&TestCacheKey::function_name("test_module::test_case[1]")),
         );
 
         assert_eq!(pending.tests(), &["test_module::test_case"]);
@@ -592,6 +617,51 @@ mod tests {
             pending.resume_skip(),
             &[TestCacheKey::function_name("test_module::test_case[1]")]
         );
+    }
+
+    #[test]
+    fn crash_recovery_does_not_repeat_completed_dynamic_functions() {
+        let mut partition = Partition::new();
+        partition.add_test(test_info("test_module::test_dynamic"), 1);
+        partition.add_test(test_info("test_module::test_crash"), 1);
+        let completed = HashSet::from([
+            TestCacheKey::function_name("test_module::test_dynamic[0]"),
+            TestCacheKey::function_name("test_module::test_dynamic[1]"),
+        ]);
+
+        let pending = partition.pending_after_crash(
+            &completed,
+            Some(&TestCacheKey::function_name("test_module::test_crash")),
+        );
+
+        assert_eq!(pending.tests(), &["test_module::test_crash"]);
+        assert_eq!(
+            pending.resume_skip(),
+            &[TestCacheKey::function_name("test_module::test_crash")]
+        );
+    }
+
+    #[test]
+    fn crash_recovery_reschedules_unstarted_tests_without_an_active_test() {
+        let mut partition = Partition::new();
+        partition.add_test(test_info("test_module::test_completed"), 1);
+        partition.add_test(test_info("test_module::test_pending"), 1);
+        let completed = HashSet::from([TestCacheKey::function_name("test_module::test_completed")]);
+
+        let pending = partition.pending_after_crash(&completed, None);
+
+        assert_eq!(pending.tests(), &["test_module::test_pending"]);
+    }
+
+    #[test]
+    fn crash_recovery_stops_retrying_without_progress() {
+        let mut partition = Partition::new();
+        partition.add_test(test_info("test_module::test_pending"), 1);
+
+        let first_retry = partition.pending_after_crash(&HashSet::new(), None);
+        let second_retry = first_retry.pending_after_crash(&HashSet::new(), None);
+
+        assert!(second_retry.tests().is_empty());
     }
 
     #[test]

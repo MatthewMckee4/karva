@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, BufWriter, ErrorKind, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -164,6 +164,13 @@ impl WorkerClient {
             return self.flush();
         }
         if matches!(event, WorkerEvent::TestFinished { .. }) {
+            drop(current_test);
+            self.flush_current_test()?;
+            let mut current_test = self
+                .connection
+                .current_test
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Karva worker current-test lock poisoned"))?;
             current_test.latest = None;
             current_test.sent = None;
         }
@@ -362,10 +369,16 @@ pub struct ControllerServer {
     run_id: String,
     sender: Sender<Incoming>,
     receiver: Receiver<Incoming>,
-    readers: Vec<JoinHandle<()>>,
+    readers: Vec<ControllerReader>,
     workers: HashSet<usize>,
     disconnected_workers: HashSet<usize>,
     worker_selections: Arc<Mutex<HashMap<usize, WorkerSelection>>>,
+}
+
+struct ControllerReader {
+    handle: JoinHandle<()>,
+    stream: TcpStream,
+    worker_id: Arc<AtomicUsize>,
 }
 
 impl ControllerServer {
@@ -427,13 +440,32 @@ impl ControllerServer {
                     let run_id = self.run_id.clone();
                     let sender = self.sender.clone();
                     let worker_selections = Arc::clone(&self.worker_selections);
-                    self.readers.push(thread::spawn(move || {
-                        if let Err(error) =
-                            read_worker(stream, &run_id, &worker_selections, &sender)
-                        {
+                    let control_stream = stream
+                        .try_clone()
+                        .context("failed to control Karva worker connection")?;
+                    let shutdown_stream = stream
+                        .try_clone()
+                        .context("failed to close Karva worker connection")?;
+                    let worker_id = Arc::new(AtomicUsize::new(usize::MAX));
+                    let reader_worker_id = Arc::clone(&worker_id);
+                    let handle = thread::spawn(move || {
+                        if let Err(error) = read_worker(
+                            stream,
+                            &run_id,
+                            &worker_selections,
+                            &sender,
+                            &reader_worker_id,
+                        ) {
                             sender.send(Incoming::Error(format!("{error:#}"))).ok();
                         }
-                    }));
+                        shutdown_stream.shutdown(Shutdown::Write).ok();
+                        shutdown_stream.shutdown(Shutdown::Read).ok();
+                    });
+                    self.readers.push(ControllerReader {
+                        handle,
+                        stream: control_stream,
+                        worker_id,
+                    });
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(()),
                 Err(error) => {
@@ -480,11 +512,44 @@ impl ControllerServer {
         Ok(!pending)
     }
 
+    /// Closes one authenticated worker stream retained by an escaped descendant.
+    pub fn disconnect_worker(&self, worker_id: usize) -> Result<()> {
+        let Some(reader) = self
+            .readers
+            .iter()
+            .find(|reader| reader.worker_id.load(Ordering::Acquire) == worker_id)
+        else {
+            return Ok(());
+        };
+        reader
+            .stream
+            .shutdown(Shutdown::Write)
+            .or_else(|error| {
+                if error.kind() == ErrorKind::NotConnected {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            })
+            .context("failed to close Karva worker connection")?;
+        reader
+            .stream
+            .shutdown(Shutdown::Read)
+            .or_else(|error| {
+                if error.kind() == ErrorKind::NotConnected {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            })
+            .context("failed to close Karva worker connection")
+    }
+
     /// Joins every accepted reader after worker processes have exited.
     pub fn finish(&mut self) -> Result<()> {
         self.accept_pending()?;
         for reader in self.readers.drain(..) {
-            if reader.join().is_err() {
+            if reader.handle.join().is_err() {
                 bail!("Karva worker connection reader panicked");
             }
         }
@@ -497,6 +562,7 @@ fn read_worker(
     expected_run_id: &str,
     worker_selections: &Mutex<HashMap<usize, WorkerSelection>>,
     sender: &Sender<Incoming>,
+    reader_worker_id: &AtomicUsize,
 ) -> Result<()> {
     let response_stream = stream
         .try_clone()
@@ -514,6 +580,7 @@ fn read_worker(
     if run_id != expected_run_id {
         bail!("Karva worker connected with run id `{run_id}`, expected `{expected_run_id}`");
     }
+    reader_worker_id.store(worker_id, Ordering::Release);
     let selection = worker_selections
         .lock()
         .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
@@ -629,6 +696,31 @@ mod tests {
                 if name == "mod::test"
                     && cache_key == TestCacheKey::function_name("mod::test")
         ));
+    }
+
+    #[test]
+    fn controller_can_close_stream_retained_after_worker_exit() {
+        let mut server = ControllerServer::bind("run-id").expect("bind controller");
+        server
+            .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+            .expect("register worker selection");
+        let address = server.address().expect("address");
+        let worker = thread::spawn(move || {
+            WorkerClient::connect(address, "run-id", 7)
+                .expect("connect worker")
+                .0
+        });
+
+        accept_connections(&mut server, 1);
+        let retained_connection = worker.join().expect("join worker");
+        while !server.worker_started(7).expect("read worker state") {
+            server.try_recv().expect("receive handshake");
+            thread::yield_now();
+        }
+
+        server.disconnect_worker(7).expect("disconnect worker");
+        server.finish().expect("finish readers");
+        drop(retained_connection);
     }
 
     #[test]

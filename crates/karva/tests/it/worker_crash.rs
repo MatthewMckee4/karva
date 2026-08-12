@@ -107,6 +107,52 @@ def test_worker_crash(value):
 }
 
 #[test]
+fn worker_exit_does_not_repeat_completed_dynamic_parameter_functions() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+from pathlib import Path
+
+import karva
+
+
+@karva.tags.parametrize("value", range(2))
+def test_a(value):
+    completed = Path("completed")
+    completed.write_text(completed.read_text() + str(value) if completed.exists() else str(value))
+
+
+def test_z():
+    os._exit(18)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_a(value=0)
+            PASS [TIME] test::test_a(value=1)
+           CRASH [TIME] test::test_z
+
+    failures:
+
+    test::test_z:
+
+    error[worker-crashed]: Worker terminated with exit code 18 while running `test::test_z`
+
+    ────────────
+         Summary [TIME] 3 tests run: 2 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 18 in [TIME]
+    "###);
+    assert_eq!(context.read_file("completed"), "01");
+}
+
+#[test]
 fn worker_exit_recovers_after_multiple_dynamic_case_crashes() {
     let context = TestContext::with_file(
         "test.py",
@@ -200,7 +246,7 @@ def test_worker_crash(value):
 }
 
 #[test]
-fn worker_exit_before_test_start_is_not_attributed_or_retried() {
+fn worker_exit_before_test_start_retries_unstarted_partition_once() {
     let context = TestContext::with_file(
         "test.py",
         r"
@@ -214,7 +260,7 @@ def test_never_started():
 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r###"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -223,12 +269,15 @@ def test_never_started():
 
     error[worker-crashed]: Worker 0 terminated with exit code 26
 
+    error[worker-crashed]: Worker 1 terminated with exit code 26
+
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
 
     ----- stderr -----
     ERROR Worker 0 failed with exit code 26 in [TIME]
-    "###);
+    ERROR Worker 1 failed with exit code 26 in [TIME]
+    ");
 }
 
 #[test]
