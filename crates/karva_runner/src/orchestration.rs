@@ -70,6 +70,7 @@ struct Worker {
     start_time: Instant,
     exit_status: Option<ExitStatus>,
     exit_observed: Option<Instant>,
+    exit_event_count: usize,
     forced_disconnect: bool,
 }
 
@@ -92,6 +93,7 @@ impl Worker {
             start_time: Instant::now(),
             exit_status: None,
             exit_observed: None,
+            exit_event_count: 0,
             forced_disconnect: false,
         }
     }
@@ -452,8 +454,14 @@ impl WorkerManager {
                     if worker.exit_status.is_none() {
                         worker.exit_status = Some(status);
                         worker.exit_observed = Some(Instant::now());
+                        worker.exit_event_count = server.worker_event_count(worker.id);
                     }
                     if server.worker_started(worker.id)? && !server.worker_disconnected(worker.id) {
+                        let event_count = server.worker_event_count(worker.id);
+                        if event_count != worker.exit_event_count {
+                            worker.exit_event_count = event_count;
+                            worker.exit_observed = Some(Instant::now());
+                        }
                         if worker
                             .exit_observed
                             .is_some_and(|observed| observed.elapsed() >= CANCELLATION_EVENT_SETTLE)

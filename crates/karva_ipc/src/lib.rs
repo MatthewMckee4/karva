@@ -383,6 +383,7 @@ struct ControllerReader {
     handle: JoinHandle<()>,
     stream: TcpStream,
     worker_id: Arc<AtomicUsize>,
+    event_count: Arc<AtomicUsize>,
 }
 
 impl ControllerServer {
@@ -452,6 +453,8 @@ impl ControllerServer {
                         .context("failed to close Karva worker connection")?;
                     let worker_id = Arc::new(AtomicUsize::new(usize::MAX));
                     let reader_worker_id = Arc::clone(&worker_id);
+                    let event_count = Arc::new(AtomicUsize::new(0));
+                    let reader_event_count = Arc::clone(&event_count);
                     let handle = thread::spawn(move || {
                         if let Err(error) = read_worker(
                             stream,
@@ -459,6 +462,7 @@ impl ControllerServer {
                             &worker_selections,
                             &sender,
                             &reader_worker_id,
+                            &reader_event_count,
                         ) {
                             sender.send(Incoming::Error(format!("{error:#}"))).ok();
                         }
@@ -469,6 +473,7 @@ impl ControllerServer {
                         handle,
                         stream: control_stream,
                         worker_id,
+                        event_count,
                     });
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(()),
@@ -514,6 +519,14 @@ impl ControllerServer {
             .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
             .contains_key(&worker_id);
         Ok(!pending)
+    }
+
+    /// Number of complete event frames read from one authenticated worker.
+    pub fn worker_event_count(&self, worker_id: usize) -> usize {
+        self.readers
+            .iter()
+            .find(|reader| reader.worker_id.load(Ordering::Acquire) == worker_id)
+            .map_or(0, |reader| reader.event_count.load(Ordering::Acquire))
     }
 
     /// Closes one authenticated worker stream retained by an escaped descendant.
@@ -567,6 +580,7 @@ fn read_worker(
     worker_selections: &Mutex<HashMap<usize, WorkerSelection>>,
     sender: &Sender<Incoming>,
     reader_worker_id: &AtomicUsize,
+    reader_event_count: &AtomicUsize,
 ) -> Result<()> {
     let response_stream = stream
         .try_clone()
@@ -631,6 +645,7 @@ fn read_worker(
         {
             return Ok(());
         }
+        reader_event_count.fetch_add(1, Ordering::Release);
     }
     sender.send(Incoming::Disconnected { worker_id }).ok();
     Ok(())
