@@ -38,6 +38,10 @@ const LABEL_COLUMN_WIDTH: usize = 12;
 // no window the cancellation integration test consistently missed the first
 // TestStarted; five intervals passed 20 consecutive repetitions.
 const CANCELLATION_EVENT_SETTLE: Duration = Duration::from_millis(50);
+// Receipt: the Python 3.14 abort diagnostic observed in CI was 5,848 bytes.
+// This preserves more than 179 such diagnostics without letting noisy tests
+// grow the controller's per-worker spool without bound.
+const MAX_WORKER_STDERR_CAPTURE_BYTES: usize = 1024 * 1024;
 
 /// How `wait_for_completion` exited.
 #[derive(Debug)]
@@ -252,6 +256,8 @@ fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Re
     let mut capture_error = None;
     let mut forward_error = None;
     let mut last_byte = None;
+    let mut received_bytes = 0_usize;
+    let mut captured_bytes = 0_usize;
     let mut forwarded = std::io::stderr().lock();
     loop {
         let bytes = reader.fill_buf()?;
@@ -259,11 +265,16 @@ fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Re
             break;
         }
         let consumed = bytes.len();
+        received_bytes = received_bytes.saturating_add(consumed);
         last_byte = bytes.last().copied();
-        if capture_error.is_none()
-            && let Err(error) = captured.write_all(bytes)
-        {
-            capture_error = Some(error);
+        if capture_error.is_none() && captured_bytes < MAX_WORKER_STDERR_CAPTURE_BYTES {
+            let remaining = MAX_WORKER_STDERR_CAPTURE_BYTES - captured_bytes;
+            let capture = &bytes[..bytes.len().min(remaining)];
+            if let Err(error) = captured.write_all(capture) {
+                capture_error = Some(error);
+            } else {
+                captured_bytes += capture.len();
+            }
         }
         if forward_error.is_none()
             && let Err(error) = forwarded.write_all(bytes)
@@ -277,6 +288,14 @@ fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Re
         && let Err(error) = forwarded.write_all(b"\n")
     {
         forward_error = Some(error);
+    }
+    if received_bytes > MAX_WORKER_STDERR_CAPTURE_BYTES && capture_error.is_none() {
+        let marker = format!(
+            "\n[Karva worker stderr capture exceeded its {MAX_WORKER_STDERR_CAPTURE_BYTES}-byte limit; received {received_bytes} bytes]\n"
+        );
+        if let Err(error) = captured.write_all(marker.as_bytes()) {
+            capture_error = Some(error);
+        }
     }
     if capture_error.is_none()
         && let Err(error) = captured.flush()
