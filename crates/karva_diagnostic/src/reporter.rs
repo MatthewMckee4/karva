@@ -59,6 +59,9 @@ pub trait Reporter: Send + Sync {
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
         let _ = (cache_key, result);
     }
+
+    /// Commits buffered test results before broader-scope teardown can terminate execution.
+    fn flush_test_results(&self) {}
 }
 
 fn show_for_status_level(level: StatusLevel, kind: &IndividualTestResultKind) -> bool {

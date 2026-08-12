@@ -95,6 +95,11 @@ impl<'a> Context<'a> {
         self.reporter.report_test_identified(test_case_name);
     }
 
+    /// Commits completed results before broader-scope fixture cleanup begins.
+    pub(super) fn flush_test_results(&self) {
+        self.reporter.flush_test_results();
+    }
+
     /// Returns the parser target matching the embedded interpreter.
     pub fn python_version(&self) -> PythonVersion {
         self.python_version

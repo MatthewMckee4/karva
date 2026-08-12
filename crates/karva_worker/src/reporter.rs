@@ -48,7 +48,11 @@ impl WorkerReporter {
     }
 
     fn send(&self, event: WorkerEvent) {
-        if let Err(error) = self.client.send_event(event) {
+        self.record_send_result(self.client.send_event(event));
+    }
+
+    fn record_send_result(&self, result: Result<()>) {
+        if let Err(error) = result {
             tracing::warn!("failed to stream worker event: {error:#}");
             if let Ok(mut send_error) = self.send_error.lock()
                 && send_error.is_none()
@@ -102,5 +106,9 @@ impl Reporter for WorkerReporter {
             cache_key: cache_key.clone(),
             result: Box::new(result.render(&self.cwd, self.diagnostic_config)),
         });
+    }
+
+    fn flush_test_results(&self) {
+        self.record_send_result(self.client.flush());
     }
 }

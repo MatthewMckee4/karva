@@ -174,7 +174,10 @@ impl WorkerClient {
             current_test.latest = None;
             current_test.sent = None;
         }
-        let flush = matches!(&event, WorkerEvent::TestFinished { .. });
+        let flush = matches!(
+            &event,
+            WorkerEvent::TestFinished { result, .. } if result.outcome().is_non_success()
+        );
         self.write(&WireMessage::Event(Box::new(event)), flush)
     }
 
@@ -229,7 +232,8 @@ impl WorkerClient {
         Ok(())
     }
 
-    fn flush(&self) -> Result<()> {
+    /// Commits every event written so far to the controller connection.
+    pub fn flush(&self) -> Result<()> {
         self.connection
             .writer
             .lock()
