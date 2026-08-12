@@ -160,12 +160,11 @@ impl WorkerClient {
             }
             current_test.latest = Some(next);
             drop(current_test);
-            self.flush_current_test()?;
-            return self.flush();
+            return self.flush_current_test(true);
         }
         if matches!(event, WorkerEvent::TestFinished { .. }) {
             drop(current_test);
-            self.flush_current_test()?;
+            self.flush_current_test(false)?;
             let mut current_test = self
                 .connection
                 .current_test
@@ -183,7 +182,7 @@ impl WorkerClient {
 
     /// Marks the worker complete and gracefully closes the connection.
     pub fn complete(self) -> Result<()> {
-        self.flush_current_test()?;
+        self.flush_current_test(false)?;
         self.write(
             &WireMessage::Event(Box::new(WorkerEvent::WorkerFinished)),
             false,
@@ -242,7 +241,7 @@ impl WorkerClient {
             .context("failed to send Karva worker event")
     }
 
-    fn flush_current_test(&self) -> Result<()> {
+    fn flush_current_test(&self, flush: bool) -> Result<()> {
         let mut current_test = self
             .connection
             .current_test
@@ -255,7 +254,7 @@ impl WorkerClient {
                         name: test.name.clone(),
                         cache_key: test.cache_key.clone(),
                     })),
-                    false,
+                    flush,
                 )?;
             }
             let latest = current_test.latest.clone();
@@ -292,9 +291,10 @@ fn read_test_selection(stream: TcpStream) -> Result<WorkerSelection> {
     }
 }
 
-// Receipt: synchronous flushing of every event made the 16,807-case parametrized
-// benchmark 40.5% slower. Lifecycle starts remain coalesced; terminal results
-// flush immediately so a later fixture teardown crash cannot erase a PASS.
+// Receipt: exact crash checkpoints made the 16,807-case parametrized benchmark
+// 24.4% slower. Starts flush before fixture setup and the test body; successful
+// results buffer until the next checkpoint or broader-scope teardown, while
+// failures flush immediately for fail-fast.
 const EVENT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 
 fn spawn_flusher(

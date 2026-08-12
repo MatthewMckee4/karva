@@ -149,7 +149,7 @@ struct WorkerManager {
 struct EventDispatcher {
     expected_workers: HashSet<usize>,
     completed_workers: HashSet<usize>,
-    completed_tests: HashSet<TestCacheKey>,
+    completed_tests: Vec<TestCacheKey>,
     in_flight: HashMap<usize, RunningTest>,
     results: AggregatedResults,
     result_retention: TestResultRetention,
@@ -166,7 +166,7 @@ impl WorkerManager {
             dispatcher: EventDispatcher {
                 expected_workers: HashSet::new(),
                 completed_workers: HashSet::new(),
-                completed_tests: HashSet::new(),
+                completed_tests: Vec::new(),
                 in_flight: HashMap::new(),
                 results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
                 result_retention,
@@ -383,7 +383,7 @@ impl EventDispatcher {
                             result.full_name()
                         );
                     }
-                    self.completed_tests.insert(cache_key.clone());
+                    self.completed_tests.push(cache_key.clone());
                     self.results.register_rendered_test_case(
                         cache_key,
                         *result,
@@ -1186,6 +1186,12 @@ pub fn run_parallel_tests(
             WaitOutcome::WorkersCrashed(crashed_workers) => {
                 worker_crashed = true;
                 let mut replacements = Vec::new();
+                let completed_tests = worker_manager
+                    .dispatcher
+                    .completed_tests
+                    .iter()
+                    .cloned()
+                    .collect::<HashSet<_>>();
                 for crashed_worker in crashed_workers {
                     worker_manager.dispatcher.abandon_worker(crashed_worker.id);
                     let termination = termination_description(crashed_worker.status);
@@ -1197,7 +1203,7 @@ pub fn run_parallel_tests(
                         );
                         let pending = crashed_worker
                             .partition
-                            .pending_after_crash(&worker_manager.dispatcher.completed_tests, None);
+                            .pending_after_crash(&completed_tests, None);
                         if !pending.tests().is_empty() {
                             replacements.push(pending);
                         }
@@ -1209,10 +1215,9 @@ pub fn run_parallel_tests(
                     };
                     let (name, cache_key, duration) = active;
                     print_crashed_test(printer, &name, duration);
-                    let pending = crashed_worker.partition.pending_after_crash(
-                        &worker_manager.dispatcher.completed_tests,
-                        Some(&cache_key),
-                    );
+                    let pending = crashed_worker
+                        .partition
+                        .pending_after_crash(&completed_tests, Some(&cache_key));
                     worker_manager.dispatcher.results.register_crashed_test(
                         &name,
                         cache_key,
