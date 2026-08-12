@@ -258,7 +258,6 @@ fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Re
     let mut last_byte = None;
     let mut received_bytes = 0_usize;
     let mut captured_bytes = 0_usize;
-    let mut forwarded = std::io::stderr().lock();
     loop {
         let bytes = reader.fill_buf()?;
         if bytes.is_empty() {
@@ -277,7 +276,7 @@ fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Re
             }
         }
         if forward_error.is_none()
-            && let Err(error) = forwarded.write_all(bytes)
+            && let Err(error) = std::io::stderr().lock().write_all(bytes)
         {
             forward_error = Some(error);
         }
@@ -285,7 +284,7 @@ fn forward_worker_stderr(stderr: ChildStderr, mut captured: File) -> std::io::Re
     }
     if last_byte.is_some_and(|byte| byte != b'\n')
         && forward_error.is_none()
-        && let Err(error) = forwarded.write_all(b"\n")
+        && let Err(error) = std::io::stderr().lock().write_all(b"\n")
     {
         forward_error = Some(error);
     }
