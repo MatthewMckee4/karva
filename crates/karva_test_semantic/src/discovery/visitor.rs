@@ -21,10 +21,9 @@ use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::validation::unknown_runtime_tags;
 
-/// Visitor for discovering test functions and fixture definitions in a given module.
+/// Visitor for discovering executable tests and fixture definitions in a given module.
 ///
-/// Processes function definitions found during AST traversal and converts them
-/// into test functions or fixtures by importing the corresponding Python module.
+/// Resolves collected source definitions and doctest metadata against the imported Python module.
 struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     /// Reference to the test execution context.
     context: &'ctx Context<'a>,
@@ -153,7 +152,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         };
 
         if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
-            match DiscoveredTestFunction::new(
+            match DiscoveredTestFunction::new_function(
                 self.py,
                 self.module,
                 py_module,
@@ -164,7 +163,8 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 Ok(test_function) => {
                     if self.context.settings().test().strict_tags {
                         let unknown = unknown_runtime_tags(
-                            test_function.statement(),
+                            test_function.function_statement(),
+                            test_function.diagnostic_range(),
                             &self.module_body,
                             &test_function.tags,
                             self.context.settings().tags(),
@@ -250,14 +250,13 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     continue;
                 }
             };
-            let statement = Rc::new(doctest.function_def);
-            match DiscoveredTestFunction::new(
+            match DiscoveredTestFunction::new_doctest(
                 self.py,
                 self.module,
                 &py_module,
-                statement,
+                doctest.name,
+                doctest.range,
                 function.unbind(),
-                None,
             ) {
                 Ok(mut test_function) => {
                     test_function.tags.remove_parametrize();
@@ -266,7 +265,8 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     }
                     if self.context.settings().test().strict_tags {
                         let unknown = unknown_runtime_tags(
-                            test_function.statement(),
+                            test_function.function_statement(),
+                            test_function.diagnostic_range(),
                             &self.module_body,
                             &test_function.tags,
                             self.context.settings().tags(),

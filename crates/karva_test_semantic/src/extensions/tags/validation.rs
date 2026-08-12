@@ -32,7 +32,8 @@ pub fn unknown_tags(
 
 /// Validates tags discovered from Python objects, covering aliases and module marks.
 pub fn unknown_runtime_tags(
-    function: &StmtFunctionDef,
+    function: Option<&StmtFunctionDef>,
+    fallback_range: TextRange,
     module_body: &[Stmt],
     tags: &Tags,
     registered: &BTreeMap<String, String>,
@@ -41,20 +42,21 @@ pub fn unknown_runtime_tags(
         .into_iter()
         .map(|name| UnknownTag {
             name: name.to_string(),
-            range: tag_range(function, module_body, name).unwrap_or(function.name.range),
+            range: function
+                .and_then(|function| tag_range(function, name))
+                .or_else(|| module_tag_range(module_body, name))
+                .unwrap_or(fallback_range),
             suggestion: unique_suggestion(name, registered.keys()),
         })
         .collect()
 }
 
-fn tag_range(function: &StmtFunctionDef, module_body: &[Stmt], name: &str) -> Option<TextRange> {
+fn tag_range(function: &StmtFunctionDef, name: &str) -> Option<TextRange> {
     let mut visitor = TagRangeVisitor { name, range: None };
     for decorator in &function.decorator_list {
         visitor.visit_expr(&decorator.expression);
     }
-    visitor
-        .range
-        .or_else(|| module_tag_range(module_body, name))
+    visitor.range
 }
 
 fn module_tag_range(module_body: &[Stmt], name: &str) -> Option<TextRange> {

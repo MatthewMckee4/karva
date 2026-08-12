@@ -10,13 +10,14 @@ use karva_diagnostic::{
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
-use ruff_python_ast::StmtFunctionDef;
+use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::{OneIndexed, SourceFile};
 use ruff_text_size::{TextRange, TextSize};
 
 mod metadata;
 
 use crate::declare_diagnostic_type;
+use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::fixtures::RejectedFixture;
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
 use crate::runner::{
@@ -30,6 +31,31 @@ struct FailedFunctionCallOptions {
     function_kind: FunctionKind,
     verbose: bool,
     primary_range: Option<TextRange>,
+}
+
+#[derive(Clone, Copy)]
+struct FailedFunctionDefinition<'a> {
+    source_file: &'a SourceFile,
+    range: TextRange,
+    parameters: Option<&'a Parameters>,
+}
+
+impl<'a> FailedFunctionDefinition<'a> {
+    fn function(source_file: &'a SourceFile, statement: &'a StmtFunctionDef) -> Self {
+        Self {
+            source_file,
+            range: statement.name.range,
+            parameters: Some(statement.parameters.as_ref()),
+        }
+    }
+
+    fn test(definition: &'a TestDefinition) -> Self {
+        Self {
+            source_file: definition.source_file(),
+            range: definition.diagnostic_range(),
+            parameters: definition.parameters(),
+        }
+    }
 }
 
 declare_diagnostic_type! {
@@ -271,6 +297,12 @@ fn annotate_function_name(
     diagnostic.annotate(Annotation::primary(span));
 }
 
+fn annotate_test(diagnostic: &mut Diagnostic, definition: &TestDefinition) {
+    let span =
+        Span::from(definition.source_file().clone()).with_range(definition.diagnostic_range());
+    diagnostic.annotate(Annotation::primary(span));
+}
+
 fn annotate_first_definition(
     diagnostic: &mut Diagnostic,
     source_file: SourceFile,
@@ -417,8 +449,7 @@ pub fn fixture_failure_diagnostic(
     handle_failed_function_call(
         &mut diagnostic,
         py,
-        definition.source_file(),
-        definition.statement(),
+        FailedFunctionDefinition::function(definition.source_file(), definition.statement()),
         &arguments,
         FailedFunctionCallOptions {
             function_kind: FunctionKind::Fixture,
@@ -448,7 +479,8 @@ pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnosti
             missing_fixtures,
         } => missing_fixtures_diagnostic(
             definition.source_file().clone(),
-            definition.statement(),
+            definition.name().function_name(),
+            definition.diagnostic_range(),
             &missing_fixtures,
             FunctionKind::Test,
         ),
@@ -546,7 +578,8 @@ fn fixture_missing_fixtures_diagnostic(
 ) -> Diagnostic {
     let mut diagnostic = missing_fixtures_diagnostic(
         fixture.definition.source_file().clone(),
-        fixture.definition.statement(),
+        fixture.name.as_str(),
+        fixture.definition.statement().name.range,
         missing_fixtures,
         FunctionKind::Fixture,
     );
@@ -571,17 +604,19 @@ fn fixture_missing_fixtures_diagnostic(
 
 pub fn missing_fixtures_diagnostic(
     source_file: SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    name: &str,
+    range: TextRange,
     missing_fixtures: &[String],
     function_kind: FunctionKind,
 ) -> Diagnostic {
     let mut diagnostic = MISSING_FIXTURES.diagnostic(format!(
-        "{} `{}` has missing fixtures",
+        "{} `{name}` has missing fixtures",
         function_kind.capitalised(),
-        stmt_function_def.name
     ));
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    diagnostic.annotate(Annotation::primary(
+        Span::from(source_file).with_range(range),
+    ));
 
     let missing_fixtures_string = missing_fixtures
         .iter()
@@ -592,25 +627,23 @@ pub fn missing_fixtures_diagnostic(
     diagnostic.info(format!("Missing fixtures: {missing_fixtures_string}"));
 
     diagnostic.set_concise_message(format!(
-        "{} `{}` has missing fixtures: {missing_fixtures_string}",
+        "{} `{name}` has missing fixtures: {missing_fixtures_string}",
         function_kind.capitalised(),
-        stmt_function_def.name,
     ));
 
     diagnostic
 }
 
 pub fn test_pass_on_expect_failure_diagnostic(
-    source_file: SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    definition: &TestDefinition,
     reason: Option<String>,
 ) -> Diagnostic {
     let mut diagnostic = TEST_PASS_ON_EXPECT_FAILURE.diagnostic(format!(
         "Test `{}` passes when expected to fail",
-        stmt_function_def.name
+        definition.name().function_name()
     ));
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    annotate_test(&mut diagnostic, definition);
 
     if let Some(reason) = reason {
         diagnostic.info(format!("Reason: {reason}"));
@@ -620,25 +653,25 @@ pub fn test_pass_on_expect_failure_diagnostic(
 
 pub fn test_failure_diagnostic(
     py: Python,
-    source_file: &SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    definition: &TestDefinition,
     arguments: &FixtureArguments,
     error: &PyErr,
     verbose: bool,
 ) -> Diagnostic {
-    let mut diagnostic =
-        TEST_FAILURE.diagnostic(format!("Test `{}` failed", stmt_function_def.name));
+    let mut diagnostic = TEST_FAILURE.diagnostic(format!(
+        "Test `{}` failed",
+        definition.name().function_name()
+    ));
 
     handle_failed_function_call(
         &mut diagnostic,
         py,
-        source_file,
-        stmt_function_def,
+        FailedFunctionDefinition::test(definition),
         arguments,
         FailedFunctionCallOptions {
             function_kind: FunctionKind::Test,
             verbose,
-            primary_range: doctest_failure_range(py, error, source_file),
+            primary_range: doctest_failure_range(py, error, definition.source_file()),
         },
         error,
     );
@@ -684,16 +717,15 @@ pub fn invalid_parametrize_diagnostic(
 }
 
 pub fn test_returned_value_diagnostic(
-    source_file: SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    definition: &TestDefinition,
     returned_value: &str,
 ) -> Diagnostic {
     let mut diagnostic = TEST_RETURNED_VALUE.diagnostic(format!(
         "Test `{}` returned `{returned_value}`",
-        stmt_function_def.name
+        definition.name().function_name()
     ));
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    annotate_test(&mut diagnostic, definition);
     diagnostic.info("Test functions must return None. Did you mean to use `assert`?");
     diagnostic
 }
@@ -704,18 +736,17 @@ pub fn test_returned_value_diagnostic(
 /// `actual` and `slowest_phase` describe the measured setup, call, and
 /// teardown phases for one attempt.
 pub fn fail_slow_exceeded_diagnostic(
-    source_file: SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    definition: &TestDefinition,
     budget: std::time::Duration,
     actual: std::time::Duration,
     slowest_phase: &str,
 ) -> Diagnostic {
     let mut diagnostic = FAIL_SLOW_EXCEEDED.diagnostic(format!(
         "Test `{}` exceeded its fail-slow budget",
-        stmt_function_def.name
+        definition.name().function_name()
     ));
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    annotate_test(&mut diagnostic, definition);
 
     diagnostic.info(format!(
         "Configured budget: {}, actual duration: {} (slowest phase: {slowest_phase})",
@@ -729,8 +760,7 @@ pub fn fail_slow_exceeded_diagnostic(
 fn handle_failed_function_call(
     diagnostic: &mut Diagnostic,
     py: Python,
-    source_file: &SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    definition: FailedFunctionDefinition<'_>,
     arguments: &FixtureArguments,
     options: FailedFunctionCallOptions,
     error: &PyErr,
@@ -740,13 +770,14 @@ fn handle_failed_function_call(
         verbose,
         primary_range,
     } = options;
-    if let Some(range) = primary_range {
-        diagnostic.annotate(Annotation::primary(
-            Span::from(source_file.clone()).with_range(range),
-        ));
-    } else {
-        annotate_function_name(diagnostic, source_file.clone(), stmt_function_def);
-    }
+    let FailedFunctionDefinition {
+        source_file,
+        range,
+        parameters,
+    } = definition;
+    diagnostic.annotate(Annotation::primary(
+        Span::from(source_file.clone()).with_range(primary_range.unwrap_or(range)),
+    ));
 
     if !arguments.is_empty() {
         diagnostic.info(format!(
@@ -755,7 +786,7 @@ fn handle_failed_function_call(
         ));
     }
 
-    for (name, value) in arguments.iter_in_signature_order(&stmt_function_def.parameters) {
+    for (name, value) in arguments.iter_in_signature_order(parameters) {
         let value_str = value.bind(py).to_string();
         let truncated_value = truncate_string(&value_str);
         let truncated_name = truncate_string(name);

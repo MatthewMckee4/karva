@@ -3,15 +3,13 @@
 use std::time::Duration;
 
 use karva_diagnostic::{Diagnostic, TestExecutionOutcome};
-use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
-use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
 
 use crate::diagnostic::{
     fail_slow_exceeded_diagnostic, missing_fixtures_diagnostic, test_failure_diagnostic,
     test_pass_on_expect_failure_diagnostic, test_returned_value_diagnostic,
 };
+use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::fixtures::missing_arguments_from_error;
 use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
@@ -28,12 +26,8 @@ pub(super) enum TestCallOutcome {
 
 /// Immutable inputs needed to turn one Python call result into a Karva outcome.
 pub(super) struct OutcomeContext<'a> {
-    /// Qualified function name used for missing-argument detection.
-    pub(super) name: &'a QualifiedFunctionName,
-    /// Source containing the test definition.
-    pub(super) source_file: &'a SourceFile,
-    /// Test definition used to locate diagnostics.
-    pub(super) stmt_function_def: &'a StmtFunctionDef,
+    /// Test identity and source location used for diagnostics.
+    pub(super) definition: &'a TestDefinition,
     /// Fixture and parameter values supplied to the test.
     pub(super) function_arguments: &'a FixtureArguments,
     /// Active expected-failure policy, when configured.
@@ -105,20 +99,12 @@ pub(super) fn classify_test_result(
             return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
         }
         Ok(TestCallOutcome::ReturnedValue(value)) => {
-            let diagnostic = test_returned_value_diagnostic(
-                context.source_file.clone(),
-                context.stmt_function_def,
-                &value,
-            );
+            let diagnostic = test_returned_value_diagnostic(context.definition, &value);
             return ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), true);
         }
         Ok(TestCallOutcome::ReturnedNone) if expect_fail => {
             let reason = context.expect_fail_tag.and_then(ExpectFailTag::reason);
-            let diagnostic = test_pass_on_expect_failure_diagnostic(
-                context.source_file.clone(),
-                context.stmt_function_def,
-                reason,
-            );
+            let diagnostic = test_pass_on_expect_failure_diagnostic(context.definition, reason);
             return ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), false);
         }
         Ok(TestCallOutcome::ReturnedNone) => {
@@ -140,13 +126,14 @@ pub(super) fn classify_test_result(
         return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
     }
 
-    let missing_arguments =
-        missing_arguments_from_error(context.name.function_name(), &error.to_string());
+    let missing_arguments = missing_arguments_from_error(
+        context.definition.name().function_name(),
+        &error.to_string(),
+    );
     if missing_arguments.is_empty() {
         let diagnostic = test_failure_diagnostic(
             py,
-            context.source_file,
-            context.stmt_function_def,
+            context.definition,
             context.function_arguments,
             &error,
             context.verbose,
@@ -154,8 +141,9 @@ pub(super) fn classify_test_result(
         ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), true)
     } else {
         let diagnostic = missing_fixtures_diagnostic(
-            context.source_file.clone(),
-            context.stmt_function_def,
+            context.definition.source_file().clone(),
+            context.definition.name().function_name(),
+            context.definition.diagnostic_range(),
             &missing_arguments,
             karva_python_semantic::FunctionKind::Test,
         );
@@ -216,8 +204,7 @@ pub(super) fn apply_fail_slow_budget(
     lifecycle_duration: Duration,
     phases: PhaseDurations,
     budget: Option<Duration>,
-    source_file: &SourceFile,
-    stmt_function_def: &StmtFunctionDef,
+    definition: &TestDefinition,
 ) -> TestExecutionOutcome {
     let Some(budget) = budget else {
         return outcome;
@@ -226,13 +213,8 @@ pub(super) fn apply_fail_slow_budget(
         return outcome;
     }
 
-    let diagnostic = fail_slow_exceeded_diagnostic(
-        source_file.clone(),
-        stmt_function_def,
-        budget,
-        lifecycle_duration,
-        phases.slowest(),
-    );
+    let diagnostic =
+        fail_slow_exceeded_diagnostic(definition, budget, lifecycle_duration, phases.slowest());
 
     match outcome {
         TestExecutionOutcome::Passed => TestExecutionOutcome::failed(diagnostic),

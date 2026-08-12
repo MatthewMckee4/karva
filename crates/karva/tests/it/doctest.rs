@@ -353,6 +353,41 @@ pytestmark = pytest.mark.parametrize("unused", [1, 2])
 }
 
 #[test]
+fn doctests_honor_module_usefixtures() {
+    let context = TestContext::with_file(
+        "test_fixtures.py",
+        r#"
+"""
+>>> Path("fixture-ran").exists()
+True
+"""
+
+from pathlib import Path
+
+import pytest
+
+@pytest.fixture
+def prepared():
+    Path("fixture-ran").touch()
+
+pytestmark = pytest.mark.usefixtures("prepared")
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--doctest-modules"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_fixtures::doctest:@module
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn doctests_require_a_runtime_visible_docstring() {
     let context = TestContext::with_file(
         "test_decorated.py",

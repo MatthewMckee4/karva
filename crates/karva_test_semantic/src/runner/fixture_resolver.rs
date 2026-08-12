@@ -6,7 +6,7 @@ use std::rc::Rc;
 use camino::Utf8Path;
 use pyo3::prelude::*;
 
-use crate::discovery::models::definition::FunctionDefinition;
+use crate::discovery::models::definition::{FunctionDefinition, TestDefinition};
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
     DiscoveredFixture, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
@@ -72,8 +72,8 @@ pub enum FixtureResolutionError {
     },
     /// Test requires names that cannot be resolved.
     MissingTestFixtures {
-        /// Immutable test identity, syntax, and source.
-        definition: Rc<FunctionDefinition>,
+        /// Immutable test identity and source.
+        definition: Rc<TestDefinition>,
         /// Unresolved fixture names.
         missing_fixtures: Vec<String>,
     },
@@ -255,7 +255,7 @@ impl<'a> FixturePlanCompiler<'a> {
         test: &DiscoveredTestFunction,
         parametrize_param_names: &HashSet<&str>,
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
-        let fixture_names = test.statement().required_fixtures(py);
+        let fixture_names = test.required_fixtures();
         let regular_fixture_names: Vec<String> = fixture_names
             .iter()
             .filter(|name| !parametrize_param_names.contains(name.as_str()))

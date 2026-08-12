@@ -411,7 +411,7 @@ fn collect_test_paths_recursive(
         for doctest in &module.doctests {
             let module_name = module.path.module_name();
             let module_path = module.path.path();
-            let function_name = doctest.function_def.name.as_str();
+            let function_name = doctest.name.as_str();
             let qualified_name = format!("{module_name}::{function_name}");
             test_infos.push(TestInfo {
                 module_name: module_name.to_string(),

@@ -2,9 +2,7 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
-use ruff_python_ast::{
-    AtomicNodeIndex, Expr, Identifier, Parameters, PythonVersion, Stmt, StmtFunctionDef,
-};
+use ruff_python_ast::{Expr, PythonVersion, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 use thiserror::Error;
@@ -51,10 +49,10 @@ pub struct CollectionSettings<'a> {
     pub collect_doctests: bool,
 }
 
-/// Collects test functions and fixtures from a Python file.
+/// Collects tests and fixtures from a Python file.
 ///
-/// If `function_names` is empty, all test functions matching the configured prefix are collected.
-/// If `function_names` is non-empty, only test functions with names in the list are collected.
+/// If `function_names` is empty, all matching tests are collected. Otherwise, only tests whose
+/// function name or doctest selector appears in the list are collected.
 /// Fixtures are always collected regardless of the filter.
 pub fn collect_file(
     path: &Utf8PathBuf,
@@ -99,10 +97,7 @@ pub fn collect_file(
         for doctest in
             collect_doctests(&collected_module.module_body, &collected_module.source_text)
         {
-            if function_names.is_empty()
-                || function_names
-                    .iter()
-                    .any(|name| name == doctest.function_def.name.as_str())
+            if function_names.is_empty() || function_names.iter().any(|name| name == &doctest.name)
             {
                 collected_module.add_doctest(doctest);
             }
@@ -209,17 +204,8 @@ fn collect_body_doctest(
     };
     doctests.push(CollectedDoctest {
         target,
-        function_def: StmtFunctionDef {
-            node_index: AtomicNodeIndex::NONE,
-            range,
-            is_async: false,
-            decorator_list: Vec::new(),
-            name: Identifier::new(name, range),
-            type_params: None,
-            parameters: Box::<Parameters>::default(),
-            returns: None,
-            body: Vec::new(),
-        },
+        name,
+        range,
     });
 }
 
@@ -396,7 +382,7 @@ def ordinary():
         let names: Vec<_> = module
             .doctests
             .iter()
-            .map(|doctest| doctest.function_def.name.as_str())
+            .map(|doctest| doctest.name.as_str())
             .collect();
         assert_eq!(
             names,
@@ -429,7 +415,7 @@ def ordinary():
     }
 
     #[test]
-    fn collect_file_filters_doctests_by_synthetic_selector() {
+    fn collect_file_filters_doctests_by_selector() {
         let (_temp_dir, root, path) = python_file(
             "sample.py",
             r#"
@@ -524,7 +510,7 @@ class Thing:
         let names: Vec<_> = module
             .doctests
             .iter()
-            .map(|doctest| doctest.function_def.name.as_str())
+            .map(|doctest| doctest.name.as_str())
             .collect();
         assert_eq!(names, ["doctest:documented", "doctest:Thing"]);
     }

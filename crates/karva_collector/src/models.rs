@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
 use ruff_python_ast::{Stmt, StmtFunctionDef};
+use ruff_text_size::TextRange;
 
 /// The Python object whose docstring defines a doctest case.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,11 +21,14 @@ pub struct CollectedDoctest {
     /// Python object that owns the docstring.
     pub target: DoctestTarget,
 
-    /// Synthetic zero-argument function definition used by shared test semantics.
-    pub function_def: StmtFunctionDef,
+    /// Stable test selector.
+    pub name: String,
+
+    /// First executable prompt, or the docstring when no prompt range is available.
+    pub range: TextRange,
 }
 
-/// A collected module containing raw AST function definitions.
+/// A collected module containing raw AST definitions and doctest metadata.
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
 pub struct CollectedModule {
