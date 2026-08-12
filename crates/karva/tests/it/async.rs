@@ -272,7 +272,13 @@ async def test_background_work():
     7 | async def test_background_work():
       |           ^^^^^^^^^^^^^^^^^^^^
       |
-    info: Unhandled exception in background task: Task-[N]: RuntimeError: lost failure
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     raise RuntimeError('lost failure')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: None: RuntimeError: lost failure
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -389,9 +395,15 @@ async def test_two_failures():
     7 | async def test_two_failures():
       |           ^^^^^^^^^^^^^^^^^
       |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     raise RuntimeError(message)
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
     info: 2 unhandled exceptions in background tasks:
-            [1] Task-[N]: RuntimeError: first
-            [2] Task-[N]: RuntimeError: second
+            [1] None: RuntimeError: first
+            [2] None: RuntimeError: second
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -437,7 +449,13 @@ async def test_with_timeout():
     9 | async def test_with_timeout():
       |           ^^^^^^^^^^^^^^^^^
       |
-    info: Unhandled exception in background task: Task-[N]: RuntimeError: under timeout
+    info: Test failed here
+     --> test.py:6:5
+      |
+    6 |     raise RuntimeError('under timeout')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: None: RuntimeError: under timeout
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -487,7 +505,13 @@ async def test_uses_leaky_fixture(leaky):
     9 | async def leaky():
       |           ^^^^^
       |
-    info: Unhandled exception in background task: Task-[N]: RuntimeError: fixture background
+    info: Fixture failed here
+     --> test.py:6:5
+      |
+    6 |     raise RuntimeError('fixture background')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: None: RuntimeError: fixture background
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -572,10 +596,250 @@ async def test_isolated(value):
       |
     info: Test ran with arguments:
     info: `value`: `1`
-    info: Unhandled exception in background task: Task-[N]: RuntimeError: only for 1
+    info: Test failed here
+     --> test.py:6:5
+      |
+    6 |     raise RuntimeError('only for 1')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: None: RuntimeError: only for 1
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+/// Completed tasks and futures must fail their owning test even when user code
+/// keeps them alive past event-loop shutdown.
+#[test]
+fn test_retained_background_failures_fail_test() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import asyncio
+
+retained = []
+
+async def boom():
+    raise RuntimeError('retained task')
+
+async def test_retained_task():
+    retained.append(asyncio.create_task(boom()))
+    await asyncio.sleep(0)
+
+async def test_retained_future():
+    future = asyncio.get_running_loop().create_future()
+    try:
+        raise RuntimeError('retained future')
+    except RuntimeError as error:
+        future.set_exception(error)
+    retained.append(future)
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_retained_task
+            FAIL [TIME] test::test_retained_future
+
+    failures:
+
+    test::test_retained_future:
+
+    error[test-failure]: Test `test_retained_future` failed
+      --> test.py:13:11
+       |
+    13 | async def test_retained_future():
+       |           ^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test failed here
+      --> test.py:16:9
+       |
+    16 |         raise RuntimeError('retained future')
+       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Unhandled exception in background task: Future exception was never retrieved; future=<Future finished exception=RuntimeError('retained future')>: RuntimeError: retained future
+
+    test::test_retained_task:
+
+    error[test-failure]: Test `test_retained_task` failed
+     --> test.py:9:11
+      |
+    9 | async def test_retained_task():
+      |           ^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:7:5
+      |
+    7 |     raise RuntimeError('retained task')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: Task-[N]: RuntimeError: retained task
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+/// Callback failures must name the callback and retain its original traceback.
+#[test]
+fn test_callback_failure_includes_handler_context() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import asyncio
+
+def fail_callback():
+    raise RuntimeError('callback failure')
+
+async def test_callback_failure():
+    asyncio.get_running_loop().call_soon(fail_callback)
+    await asyncio.sleep(0)
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_callback_failure
+
+    failures:
+
+    test::test_callback_failure:
+
+    error[test-failure]: Test `test_callback_failure` failed
+     --> test.py:7:11
+      |
+    7 | async def test_callback_failure():
+      |           ^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     raise RuntimeError('callback failure')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: Exception in callback fail_callback() at <temp_dir>/test.py:4; handle=<Handle fail_callback() at <temp_dir>/test.py:4>: RuntimeError: callback failure
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+/// A handler installed by the event-loop policy must still receive failures
+/// while Karva captures them for the test diagnostic.
+#[test]
+fn test_existing_loop_exception_handler_is_called() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import asyncio
+from pathlib import Path
+
+retained = []
+
+async def fail_in_background():
+    raise RuntimeError('forwarded failure')
+
+class Policy(asyncio.DefaultEventLoopPolicy):
+    def new_event_loop(self):
+        loop = super().new_event_loop()
+        loop.set_exception_handler(
+            lambda loop, context: Path('handler-called').touch()
+        )
+        return loop
+
+asyncio.set_event_loop_policy(Policy())
+
+async def test_existing_handler():
+    retained.append(asyncio.create_task(fail_in_background()))
+    await asyncio.sleep(0)
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_existing_handler
+
+    failures:
+
+    test::test_existing_handler:
+
+    error[test-failure]: Test `test_existing_handler` failed
+      --> test.py:20:11
+       |
+    20 | async def test_existing_handler():
+       |           ^^^^^^^^^^^^^^^^^^^^^
+       |
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     raise RuntimeError('forwarded failure')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+    info: Unhandled exception in background task: Task-[N]: RuntimeError: forwarded failure
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(context.root().join("handler-called").exists());
+}
+
+/// Karva's tracking factory must delegate to a factory installed by the
+/// event-loop policy.
+#[test]
+fn test_existing_loop_task_factory_is_called() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import asyncio
+
+created = []
+
+class Policy(asyncio.DefaultEventLoopPolicy):
+    def new_event_loop(self):
+        loop = super().new_event_loop()
+
+        def task_factory(loop, coroutine, **kwargs):
+            created.append(coroutine)
+            return asyncio.Task(coroutine, loop=loop, **kwargs)
+
+        loop.set_task_factory(task_factory)
+        return loop
+
+asyncio.set_event_loop_policy(Policy())
+
+async def test_existing_task_factory():
+    task = asyncio.create_task(asyncio.sleep(0))
+    await task
+    assert created
+        ",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_existing_task_factory
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
     ");

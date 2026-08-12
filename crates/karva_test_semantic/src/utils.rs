@@ -18,24 +18,17 @@ use crate::runner::FixtureArguments;
 /// exceptions that never reached the awaiting code.
 ///
 /// A background task that fails without being awaited cannot propagate through
-/// the test coroutine, so the loop reports it to its exception handler instead.
-/// Installing a handler from inside the running loop turns those reports into a
-/// raised exception, which lets an ordinary failure path attribute them to the
-/// test or fixture that was running.
-///
-/// The handler is deliberately not restored: the report for an unretrieved task
-/// arrives while `asyncio.run` is shutting the loop down, after the wrapper
-/// coroutine has already returned. Restoring inside the wrapper would send those
-/// late reports to the default handler and lose them. Nothing is leaked by
-/// leaving it in place, because `asyncio.run` builds a fresh loop per call and
-/// closes it afterwards, which also isolates parameter cases, retries, and
-/// workers from one another.
+/// the test coroutine. Tasks and futures created through the loop are weakly
+/// tracked until `asyncio.run` finishes so failures are found even when test
+/// code keeps another reference alive. The loop exception handler covers
+/// callbacks and other work that tasks do not represent.
 ///
 /// Exceptions the test handled itself (awaited, or read through
-/// `task.exception()`) never reach the handler, and neither does the clean
-/// cancellation `asyncio.run` performs on still-pending tasks during shutdown.
+/// `task.exception()`) are not reported, and neither is the clean cancellation
+/// `asyncio.run` performs on still-pending tasks during shutdown.
 const RUN_COROUTINE_CODE: &std::ffi::CStr = c"
 import asyncio
+import weakref
 
 
 class UnhandledBackgroundException(RuntimeError):
@@ -44,18 +37,41 @@ class UnhandledBackgroundException(RuntimeError):
 
 def _describe(context):
     exception = context.get('exception')
-    if exception is None:
-        return context.get('message') or 'unknown asyncio error'
-
-    description = f'{type(exception).__name__}: {exception}'
-    source = context.get('future') or context.get('task') or context.get('handle')
+    source_key = next(
+        (key for key in ('future', 'task', 'handle') if context.get(key) is not None),
+        None,
+    )
+    source = context.get(source_key) if source_key is not None else None
+    task_name = context.get('task_name')
     get_name = getattr(source, 'get_name', None)
-    if get_name is None:
-        return description
-    try:
-        return f'{get_name()}: {description}'
-    except Exception:
-        return description
+    if task_name is not None:
+        prefix = task_name
+    elif get_name is not None:
+        try:
+            prefix = get_name() or type(source).__name__
+        except Exception:
+            prefix = repr(source)
+    else:
+        details = []
+        if context.get('message'):
+            details.append(context['message'])
+        if source is not None:
+            details.append(f'{source_key}={source!r}')
+        details.extend(
+            f'{key}={value!r}'
+            for key, value in context.items()
+            if key not in {
+                'message', 'exception', 'future', 'task', 'handle', 'task_name'
+            }
+        )
+        prefix = '; '.join(details)
+
+    description = (
+        f'{type(exception).__name__}: {exception}'
+        if exception is not None
+        else 'unknown asyncio error'
+    )
+    return f'{prefix}: {description}' if prefix else description
 
 
 def _build_error(contexts):
@@ -67,27 +83,80 @@ def _build_error(contexts):
         message = (
             f'{len(descriptions)} unhandled exceptions in background tasks:\\n{joined}'
         )
-    error = UnhandledBackgroundException(message)
-    # Chain the first real exception so the traceback points at the failing
-    # background code rather than at this helper.
+    traceback = None
     for context in contexts:
         exception = context.get('exception')
-        if exception is not None:
-            error.__cause__ = exception
+        if exception is not None and exception.__traceback__ is not None:
+            traceback = exception.__traceback__
             break
-    return error
+    return UnhandledBackgroundException(message).with_traceback(traceback)
 
 
 def _run(coroutine):
     contexts = []
+    tracked = []
+    loop_state = []
 
     async def _wrapper():
-        asyncio.get_running_loop().set_exception_handler(
-            lambda loop, context: contexts.append(context)
-        )
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        previous_task_factory = loop.get_task_factory()
+        previous_create_future = loop.create_future
+        loop_state.append((loop, previous_handler))
+
+        def capture(loop, context):
+            contexts.append(context)
+            if previous_handler is not None:
+                previous_handler(loop, context)
+
+        def task_factory(loop, coroutine, **kwargs):
+            if previous_task_factory is None:
+                task = asyncio.tasks.Task(coroutine, loop=loop, **kwargs)
+            else:
+                task = previous_task_factory(loop, coroutine, **kwargs)
+            get_name = getattr(task, 'get_name', None)
+            task_name = get_name() if get_name is not None else None
+            tracked.append((weakref.ref(task), 'task', task_name))
+            return task
+
+        def create_future():
+            future = previous_create_future()
+            tracked.append((weakref.ref(future), 'future', None))
+            return future
+
+        loop.set_exception_handler(capture)
+        loop.set_task_factory(task_factory)
+        loop.create_future = create_future
         return await coroutine
 
     result = asyncio.run(_wrapper())
+    loop, previous_handler = loop_state[0]
+    for future_reference, source_key, task_name in tracked:
+        future = future_reference()
+        if future is None:
+            continue
+        # asyncio exposes no public state distinguishing an unretrieved
+        # exception from one consumed through await or exception().
+        if (
+            future.done()
+            and not future.cancelled()
+            and getattr(future, '_log_traceback', False)
+        ):
+            exception = future.exception()
+            if exception is not None:
+                context = {
+                    'message': (
+                        'Task exception was never retrieved'
+                        if source_key == 'task'
+                        else 'Future exception was never retrieved'
+                    ),
+                    'exception': exception,
+                    source_key: future,
+                    'task_name': task_name,
+                }
+                contexts.append(context)
+                if previous_handler is not None:
+                    previous_handler(loop, context)
     if contexts:
         raise _build_error(contexts)
     return result
