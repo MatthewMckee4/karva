@@ -278,7 +278,7 @@ async def test_background_work():
     5 |     raise RuntimeError('lost failure')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Unhandled exception in background task: None: RuntimeError: lost failure
+    info: Unhandled exception in background task: Task-[N]: RuntimeError: lost failure
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -402,8 +402,8 @@ async def test_two_failures():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
     info: 2 unhandled exceptions in background tasks:
-            [1] None: RuntimeError: first
-            [2] None: RuntimeError: second
+            [1] Task-[N]: RuntimeError: first
+            [2] Task-[N]: RuntimeError: second
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -455,7 +455,7 @@ async def test_with_timeout():
     6 |     raise RuntimeError('under timeout')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Unhandled exception in background task: None: RuntimeError: under timeout
+    info: Unhandled exception in background task: Task-[N]: RuntimeError: under timeout
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -511,7 +511,7 @@ async def test_uses_leaky_fixture(leaky):
     6 |     raise RuntimeError('fixture background')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Unhandled exception in background task: None: RuntimeError: fixture background
+    info: Unhandled exception in background task: Task-[N]: RuntimeError: fixture background
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -602,7 +602,7 @@ async def test_isolated(value):
     6 |     raise RuntimeError('only for 1')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
       |
-    info: Unhandled exception in background task: None: RuntimeError: only for 1
+    info: Unhandled exception in background task: Task-[N]: RuntimeError: only for 1
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped

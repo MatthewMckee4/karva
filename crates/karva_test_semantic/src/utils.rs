@@ -95,6 +95,7 @@ def _build_error(contexts):
 def _run(coroutine):
     contexts = []
     tracked = []
+    task_names = weakref.WeakKeyDictionary()
     loop_state = []
 
     async def _wrapper():
@@ -105,7 +106,20 @@ def _run(coroutine):
         loop_state.append((loop, previous_handler))
 
         def capture(loop, context):
-            contexts.append(context)
+            source = next(
+                (
+                    context.get(key)
+                    for key in ('future', 'task')
+                    if context.get(key) is not None
+                ),
+                None,
+            )
+            task_name = task_names.get(source) if source is not None else None
+            contexts.append(
+                {**context, 'task_name': task_name}
+                if task_name is not None
+                else context
+            )
             if previous_handler is not None:
                 previous_handler(loop, context)
 
@@ -116,6 +130,8 @@ def _run(coroutine):
                 task = previous_task_factory(loop, coroutine, **kwargs)
             get_name = getattr(task, 'get_name', None)
             task_name = get_name() if get_name is not None else None
+            if task_name is not None:
+                task_names[task] = task_name
             tracked.append((weakref.ref(task), 'task', task_name))
             return task
 
