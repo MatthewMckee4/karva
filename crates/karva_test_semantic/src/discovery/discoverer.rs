@@ -161,6 +161,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             source_text,
             module_body,
             test_function_defs,
+            doctests,
             fixture_function_defs,
         } = collected_module;
 
@@ -208,6 +209,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             &mut module,
             module_body,
             test_function_defs,
+            doctests,
             fixture_function_defs,
         ));
 

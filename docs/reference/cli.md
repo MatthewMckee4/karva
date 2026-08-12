@@ -69,7 +69,12 @@ karva test [OPTIONS] [PATH]...
 <p>May be passed multiple times.</p>
 </dd><dt id="karva-test--cov-report"><a href="#karva-test--cov-report"><code>--cov-report</code></a> <i>type</i></dt><dd><p>Coverage report type.</p>
 <p><code>term</code> (default) prints a compact terminal table. <code>term-missing</code> extends it with a <code>Missing</code> column listing the uncovered line numbers per file. <code>xml&#91;:PATH&#93;</code>, <code>json&#91;:PATH&#93;</code>, <code>html&#91;:DIR&#93;</code>, and <code>lcov&#91;:PATH&#93;</code> write reports to disk. May be passed multiple times to render several reports from one analysis. Pass an empty value (<code>--cov-report=</code>) to persist native data only.</p>
-</dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
+</dd><dt id="karva-test--doctest-modules"><a href="#karva-test--doctest-modules"><code>--doctest-modules</code></a> <i>doctest-modules</i></dt><dd><p>Collect examples from module, class, function, and method docstrings</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--durations"><a href="#karva-test--durations"><code>--durations</code></a> <i>n</i></dt><dd><p>Show the N slowest tests after the run completes</p>
 </dd><dt id="karva-test--fail-fast"><a href="#karva-test--fail-fast"><code>--fail-fast</code></a> <i>fail-fast</i></dt><dd><p>Stop scheduling new tests after the first failure.</p>
 <p>Equivalent to <code>--max-fail=1</code>. Use <code>--no-fail-fast</code> to keep running after failures.</p>
 <p>Possible values:</p>

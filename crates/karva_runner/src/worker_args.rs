@@ -151,6 +151,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push("--try-import-fixtures".to_string());
     }
 
+    if settings.test().doctest_modules {
+        cli_args.push("--doctest-modules".to_string());
+    }
+
     if settings.test().strict_tags {
         cli_args.push("--strict-tags=true".to_string());
         for name in settings.tags().keys() {

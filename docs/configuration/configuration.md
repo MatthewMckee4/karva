@@ -868,6 +868,34 @@ Defaults to `pass`.
 
 Controls test selection, retries, timeouts, and failure policies.
 
+#### `doctest-modules`
+
+Collect examples from module, class, function, and method docstrings.
+
+Defaults to `false`.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    doctest-modules = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    doctest-modules = true
+    ```
+
+---
+
 #### `fail-fast`
 
 Whether to stop at the first test failure.

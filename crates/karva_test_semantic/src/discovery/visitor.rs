@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use camino::Utf8Path;
 use fs_err as fs;
+use karva_collector::{CollectedDoctest, DoctestTarget};
 use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -195,6 +196,100 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         }
     }
 
+    fn process_doctests(&mut self, doctests: Vec<CollectedDoctest>) {
+        if doctests.is_empty() {
+            return;
+        }
+
+        self.try_import_module();
+        let Some(py_module) = self.py_module.clone() else {
+            return;
+        };
+        let functions = match crate::doctest::find_doctest_functions(self.py, &py_module) {
+            Ok(functions) => functions,
+            Err(error) => {
+                self.issues
+                    .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                        module_name: self.module.name().to_string(),
+                        reason: error.value(self.py).to_string(),
+                    }));
+                return;
+            }
+        };
+
+        for doctest in doctests {
+            let object_name = match &doctest.target {
+                DoctestTarget::Module => self.module.name().to_string(),
+                DoctestTarget::Object(object_name) => {
+                    format!("{}.{}", self.module.name(), object_name)
+                }
+            };
+            let function = match functions.get_item(&object_name) {
+                Ok(Some(function)) => function,
+                Ok(None) => match crate::doctest::missing_doctest_function(self.py, &object_name) {
+                    Ok(function) => function,
+                    Err(error) => {
+                        self.issues
+                            .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                                module_name: self.module.name().to_string(),
+                                reason: error.value(self.py).to_string(),
+                            }));
+                        continue;
+                    }
+                },
+                Err(error) => {
+                    self.issues
+                        .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                            module_name: self.module.name().to_string(),
+                            reason: error.value(self.py).to_string(),
+                        }));
+                    continue;
+                }
+            };
+            let statement = Rc::new(doctest.function_def);
+            match DiscoveredTestFunction::new(
+                self.py,
+                self.module,
+                &py_module,
+                statement,
+                function.unbind(),
+                None,
+            ) {
+                Ok(test_function) => {
+                    if self.context.settings().test().strict_tags {
+                        let unknown = unknown_runtime_tags(
+                            test_function.statement(),
+                            &self.module_body,
+                            &test_function.tags,
+                            self.context.settings().tags(),
+                        );
+                        if !unknown.is_empty() {
+                            for unknown in unknown {
+                                self.issues.push(DiscoveryIssue::Error(
+                                    DiscoveryError::UnknownTag {
+                                        source_file: self.module.source_file(),
+                                        name: unknown.name,
+                                        range: unknown.range,
+                                        suggestion: unknown.suggestion,
+                                    },
+                                ));
+                            }
+                            continue;
+                        }
+                    }
+                    self.module.add_test_function(test_function);
+                }
+                Err(error) => {
+                    self.issues
+                        .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                            module_name: self.module.name().to_string(),
+                            reason: error.value(self.py).to_string(),
+                        }));
+                }
+            }
+        }
+    }
+
     fn find_extra_fixtures(&mut self) {
         self.try_import_module();
 
@@ -338,6 +433,7 @@ pub fn discover(
     module: &mut DiscoveredModule,
     module_body: Box<[Stmt]>,
     test_function_defs: Vec<(StmtFunctionDef, Option<Vec<usize>>)>,
+    doctests: Vec<CollectedDoctest>,
     fixture_function_defs: Vec<StmtFunctionDef>,
 ) -> Vec<DiscoveryIssue> {
     let is_conftest = module
@@ -380,6 +476,8 @@ pub fn discover(
 
         visitor.process_test_function(test_function_def, case_filter);
     }
+
+    visitor.process_doctests(doctests);
 
     let mut fixtures = Vec::with_capacity(fixture_function_defs.len());
     for fixture_function_def in fixture_function_defs {

@@ -454,6 +454,19 @@ pub struct TestOptions {
     )]
     pub try_import_fixtures: Option<bool>,
 
+    /// Collect examples from module, class, function, and method docstrings.
+    ///
+    /// Defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = "true | false",
+        example = r#"
+            doctest-modules = true
+        "#
+    )]
+    pub doctest_modules: Option<bool>,
+
     /// When set, we will retry failed tests up to this number of times.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
@@ -635,6 +648,7 @@ impl TestOptions {
             strict_tags: self.strict_tags.unwrap_or_default(),
             max_fail,
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
+            doctest_modules: self.doctest_modules.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),
             shuffle: self.shuffle.unwrap_or_default(),
             random_seed: self.random_seed,
@@ -1142,6 +1156,27 @@ mod tests {
             ),
         )
         ");
+    }
+
+    #[test]
+    fn to_settings_doctest_modules_defaults_to_disabled() {
+        assert!(!TestOptions::default().to_settings().doctest_modules);
+    }
+
+    #[test]
+    fn parse_profile_doctest_modules() {
+        let config = Config::from_toml_str("[profile.default.test]\ndoctest-modules = true\n")
+            .expect("parse");
+
+        assert_eq!(
+            config
+                .resolve_profile(None)
+                .expect("resolve")
+                .test
+                .expect("test options")
+                .doctest_modules,
+            Some(true)
+        );
     }
 
     #[test]

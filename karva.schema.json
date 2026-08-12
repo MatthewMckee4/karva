@@ -742,6 +742,13 @@
       "description": "Controls test selection, retries, timeouts, and failure policies.",
       "type": "object",
       "properties": {
+        "doctest-modules": {
+          "description": "Collect examples from module, class, function, and method docstrings.\n\nDefaults to `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "fail-fast": {
           "description": "Whether to stop at the first test failure.\n\nThis is a legacy alias for [`max_fail`](#max-fail): `true`\ncorresponds to `max-fail = 1` and `false` leaves the limit unset.\nWhen both are set, `max-fail` takes precedence.\n\nDefaults to `false`.",
           "type": [

@@ -1,0 +1,114 @@
+//! Runtime binding and execution for statically collected Python doctests.
+
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyDict, PyModule};
+
+const DOCTEST_RUNTIME_CODE: &std::ffi::CStr = c"
+import doctest
+import os
+import textwrap
+import traceback
+
+
+def _block(label, value):
+    value = value.rstrip('\\n') or '<nothing>'
+    indented = textwrap.indent(value, '  ')
+    return f'{label}:\\n{indented}'
+
+
+def _location(test, example):
+    if test.filename is not None and test.lineno is not None:
+        filename = os.path.relpath(test.filename)
+        return f'{filename}:{test.lineno + example.lineno + 1}'
+    return test.name
+
+
+def _function(test):
+    def run():
+        fresh = doctest.DocTest(
+            test.examples,
+            test.globs,
+            test.name,
+            test.filename,
+            test.lineno,
+            test.docstring,
+        )
+        try:
+            doctest.DebugRunner().run(fresh)
+        except doctest.DocTestFailure as error:
+            message = '\\n'.join(
+                (
+                    f'Doctest failed at {_location(error.test, error.example)}',
+                    _block('Example', error.example.source),
+                    _block('Expected', error.example.want),
+                    _block('Got', error.got),
+                )
+            )
+            raise AssertionError(message) from None
+        except doctest.UnexpectedException as error:
+            exception = ''.join(
+                traceback.format_exception_only(*error.exc_info[:2])
+            )
+            message = '\\n'.join(
+                (
+                    f'Doctest raised at {_location(error.test, error.example)}',
+                    _block('Example', error.example.source),
+                    _block('Exception', exception),
+                )
+            )
+            raise AssertionError(message) from None
+
+    return run
+
+
+def _missing(name):
+    def run():
+        import karva
+
+        karva.skip(f'Doctest `{name}` is not available after module import')
+
+    return run
+
+
+def _find(module):
+    return {
+        test.name: _function(test)
+        for test in doctest.DocTestFinder().find(module)
+        if test.examples
+    }
+";
+
+static DOCTEST_RUNTIME: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+fn runtime(py: Python<'_>) -> PyResult<&Bound<'_, PyDict>> {
+    DOCTEST_RUNTIME
+        .get_or_try_init(py, || {
+            let namespace = PyDict::new(py);
+            py.run(DOCTEST_RUNTIME_CODE, Some(&namespace), None)?;
+            PyResult::Ok(namespace.unbind())
+        })
+        .map(|namespace| namespace.bind(py))
+}
+
+/// Returns zero-argument callables keyed by their stdlib doctest object name.
+pub fn find_doctest_functions<'py>(
+    py: Python<'py>,
+    module: &Bound<'py, PyModule>,
+) -> PyResult<Bound<'py, PyDict>> {
+    runtime(py)?
+        .get_item("_find")?
+        .ok_or_else(|| PyRuntimeError::new_err("failed to load inline doctest finder"))?
+        .call1((module,))?
+        .cast_into::<PyDict>()
+        .map_err(Into::into)
+}
+
+/// Returns a skipped placeholder for a source doctest unavailable after import.
+pub fn missing_doctest_function<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    runtime(py)?
+        .get_item("_missing")?
+        .ok_or_else(|| PyRuntimeError::new_err("failed to load inline missing-doctest handler"))?
+        .call1((name,))
+}
