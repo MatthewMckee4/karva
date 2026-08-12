@@ -4,6 +4,7 @@ use camino::Utf8Path;
 use karva_static::WorkerEnvVars;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyString, PyTuple};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
@@ -13,19 +14,214 @@ use crate::extensions::functions::snapshot::{
 };
 use crate::runner::FixtureArguments;
 
-const MAKE_SYNC_CODE: &std::ffi::CStr = c"
+/// Drives a coroutine with `asyncio.run()` while watching the event loop for
+/// exceptions that never reached the awaiting code.
+///
+/// A background task that fails without being awaited cannot propagate through
+/// the test coroutine. Tasks and futures created through the loop are weakly
+/// tracked until `asyncio.run` finishes so failures are found even when test
+/// code keeps another reference alive. The loop exception handler covers
+/// callbacks and other work that tasks do not represent.
+///
+/// Exceptions the test handled itself (awaited, or read through
+/// `task.exception()`) are not reported, and neither is the clean cancellation
+/// `asyncio.run` performs on still-pending tasks during shutdown.
+const RUN_COROUTINE_CODE: &std::ffi::CStr = c"
+import asyncio
+import weakref
+
+
+class UnhandledBackgroundException(RuntimeError):
+    '''Work started by a test failed without anything awaiting it.'''
+
+
+def _describe(context):
+    exception = context.get('exception')
+    source_key = next(
+        (key for key in ('future', 'task', 'handle') if context.get(key) is not None),
+        None,
+    )
+    source = context.get(source_key) if source_key is not None else None
+    task_name = context.get('task_name')
+    get_name = getattr(source, 'get_name', None)
+    if task_name is not None:
+        prefix = task_name
+    elif get_name is not None:
+        try:
+            prefix = get_name() or type(source).__name__
+        except Exception:
+            prefix = repr(source)
+    else:
+        details = []
+        if context.get('message'):
+            details.append(context['message'])
+        if source is not None:
+            details.append(f'{source_key}={source!r}')
+        details.extend(
+            f'{key}={value!r}'
+            for key, value in context.items()
+            if key not in {
+                'message', 'exception', 'future', 'task', 'handle', 'task_name'
+            }
+        )
+        prefix = '; '.join(details)
+
+    description = (
+        f'{type(exception).__name__}: {exception}'
+        if exception is not None
+        else 'unknown asyncio error'
+    )
+    return f'{prefix}: {description}' if prefix else description
+
+
+def _build_error(contexts):
+    descriptions = [_describe(context) for context in contexts]
+    if len(descriptions) == 1:
+        message = f'Unhandled exception in background task: {descriptions[0]}'
+    else:
+        joined = '\\n'.join(f'  [{i}] {d}' for i, d in enumerate(descriptions, 1))
+        message = (
+            f'{len(descriptions)} unhandled exceptions in background tasks:\\n{joined}'
+        )
+    traceback = None
+    for context in contexts:
+        exception = context.get('exception')
+        if exception is not None and exception.__traceback__ is not None:
+            traceback = exception.__traceback__
+            break
+    return UnhandledBackgroundException(message).with_traceback(traceback)
+
+
+def _run(coroutine):
+    contexts = []
+    tracked = []
+    task_names = weakref.WeakKeyDictionary()
+    loop_state = []
+
+    async def _wrapper():
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        previous_task_factory = loop.get_task_factory()
+        previous_create_future = loop.create_future
+        loop_state.append((loop, previous_handler))
+
+        def capture(loop, context):
+            source = next(
+                (
+                    context.get(key)
+                    for key in ('future', 'task')
+                    if context.get(key) is not None
+                ),
+                None,
+            )
+            task_name = task_names.get(source) if source is not None else None
+            contexts.append(
+                {**context, 'task_name': task_name}
+                if task_name is not None
+                else context
+            )
+            if previous_handler is not None:
+                previous_handler(loop, context)
+
+        def task_factory(loop, coroutine, **kwargs):
+            if previous_task_factory is None:
+                task = asyncio.tasks.Task(coroutine, loop=loop, **kwargs)
+            else:
+                task = previous_task_factory(loop, coroutine, **kwargs)
+            get_name = getattr(task, 'get_name', None)
+            task_name = get_name() if get_name is not None else None
+            if task_name is not None:
+                task_names[task] = task_name
+            tracked.append((weakref.ref(task), 'task', task_name))
+            return task
+
+        def create_future():
+            future = previous_create_future()
+            tracked.append((weakref.ref(future), 'future', None))
+            return future
+
+        loop.set_exception_handler(capture)
+        loop.set_task_factory(task_factory)
+        loop.create_future = create_future
+        return await coroutine
+
+    result = asyncio.run(_wrapper())
+    loop, previous_handler = loop_state[0]
+    for future_reference, source_key, task_name in tracked:
+        future = future_reference()
+        if future is None:
+            continue
+        # asyncio exposes no public state distinguishing an unretrieved
+        # exception from one consumed through await or exception().
+        if (
+            future.done()
+            and not future.cancelled()
+            and getattr(future, '_log_traceback', False)
+        ):
+            exception = future.exception()
+            if exception is not None:
+                context = {
+                    'message': (
+                        'Task exception was never retrieved'
+                        if source_key == 'task'
+                        else 'Future exception was never retrieved'
+                    ),
+                    'exception': exception,
+                    source_key: future,
+                    'task_name': task_name,
+                }
+                contexts.append(context)
+                if previous_handler is not None:
+                    previous_handler(loop, context)
+    if contexts:
+        raise _build_error(contexts)
+    return result
+
+
 def _make_sync(async_fn):
-    import asyncio, functools
+    import functools
+
     @functools.wraps(async_fn)
     def wrapper(*args, **kwargs):
-        return asyncio.run(async_fn(*args, **kwargs))
+        return _run(async_fn(*args, **kwargs))
+
     return wrapper
 ";
 
-/// Runs a Python coroutine to completion using `asyncio.run()`.
+/// Compiled [`RUN_COROUTINE_CODE`] namespace, built once per interpreter.
+///
+/// `run_coroutine` runs for every async test and every async fixture setup and
+/// teardown, so recompiling the source per call would be wasted work on a hot
+/// path.
+static ASYNC_RUNTIME: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+fn async_runtime(py: Python<'_>) -> PyResult<&Bound<'_, PyDict>> {
+    ASYNC_RUNTIME
+        .get_or_try_init(py, || {
+            // The namespace doubles as globals so the helpers resolve the
+            // module-level `asyncio` import through their `__globals__`.
+            let namespace = PyDict::new(py);
+            py.run(RUN_COROUTINE_CODE, Some(&namespace), None)?;
+            PyResult::Ok(namespace.unbind())
+        })
+        .map(|namespace| namespace.bind(py))
+}
+
+fn async_runtime_attr<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    async_runtime(py)?.get_item(name)?.ok_or_else(|| {
+        PyRuntimeError::new_err(format!("failed to load `{name}` from inline Python"))
+    })
+}
+
+/// Runs a Python coroutine to completion, failing if work it started in the
+/// background raised without anything awaiting it.
+///
+/// See [`RUN_COROUTINE_CODE`] for why the loop's exception handler is the
+/// mechanism used to notice those failures.
 pub fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py<PyAny>> {
-    let asyncio = py.import("asyncio")?;
-    Ok(asyncio.call_method1("run", (coroutine,))?.unbind())
+    Ok(async_runtime_attr(py, "_run")?
+        .call1((coroutine,))?
+        .unbind())
 }
 
 /// Runs a Python test with a timeout, raising `TimeoutError` if it does not
@@ -105,9 +301,7 @@ fn run_async_with_timeout(
     rebrand_timeout_error(
         py,
         &timeout_class,
-        asyncio
-            .call_method1("run", (wait_for,))
-            .map(pyo3::Bound::unbind),
+        run_coroutine(py, wait_for.unbind()),
         seconds,
     )
 }
@@ -187,15 +381,10 @@ pub fn patch_async_test_function(py: Python<'_>, function: &Py<PyAny>) -> PyResu
         return Ok(false);
     }
 
-    // Replace inner_test with a sync wrapper that uses asyncio.run().
+    // Replace inner_test with a sync wrapper that drives the coroutine.
     // Uses inline Python because PyCFunction closures lack the signature metadata and
     // calling conventions that Hypothesis requires to introspect and invoke inner_test.
-    let locals = pyo3::types::PyDict::new(py);
-    py.run(MAKE_SYNC_CODE, None, Some(&locals))?;
-    let make_sync = locals.get_item("_make_sync")?.ok_or_else(|| {
-        PyRuntimeError::new_err("failed to load async test wrapper from inline Python")
-    })?;
-    let sync_wrapper = make_sync.call1((inner_test,))?;
+    let sync_wrapper = async_runtime_attr(py, "_make_sync")?.call1((inner_test,))?;
     hypothesis_attr.setattr(py, "inner_test", sync_wrapper)?;
 
     Ok(true)
