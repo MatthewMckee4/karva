@@ -12,6 +12,12 @@ import textwrap
 import traceback
 
 
+class _Failure(AssertionError):
+    def __init__(self, message, line):
+        super().__init__(message)
+        self.line = line
+
+
 def _block(label, value):
     value = value.rstrip('\\n') or '<nothing>'
     indented = textwrap.indent(value, '  ')
@@ -38,6 +44,7 @@ def _function(test):
         try:
             doctest.DebugRunner().run(fresh)
         except doctest.DocTestFailure as error:
+            line = error.test.lineno + error.example.lineno + 1
             message = '\\n'.join(
                 (
                     f'Doctest failed at {_location(error.test, error.example)}',
@@ -46,8 +53,9 @@ def _function(test):
                     _block('Got', error.got),
                 )
             )
-            raise AssertionError(message) from None
+            raise _Failure(message, line) from None
         except doctest.UnexpectedException as error:
+            line = error.test.lineno + error.example.lineno + 1
             exception = ''.join(
                 traceback.format_exception_only(*error.exc_info[:2])
             )
@@ -58,16 +66,16 @@ def _function(test):
                     _block('Exception', exception),
                 )
             )
-            raise AssertionError(message) from None
+            raise _Failure(message, line) from None
 
     return run
 
 
-def _missing(name):
+def _missing(reason):
     def run():
         import karva
 
-        karva.skip(f'Doctest `{name}` is not available after module import')
+        karva.skip(reason)
 
     return run
 
@@ -106,9 +114,18 @@ pub fn find_doctest_functions<'py>(
 }
 
 /// Returns a skipped placeholder for a source doctest unavailable after import.
-pub fn missing_doctest_function<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+pub fn missing_doctest_function<'py>(py: Python<'py>, reason: &str) -> PyResult<Bound<'py, PyAny>> {
     runtime(py)?
         .get_item("_missing")?
         .ok_or_else(|| PyRuntimeError::new_err("failed to load inline missing-doctest handler"))?
-        .call1((name,))
+        .call1((reason,))
+}
+
+/// Returns the source line carried by a doctest execution failure.
+pub fn failure_line(py: Python<'_>, error: &PyErr) -> Option<usize> {
+    let failure = runtime(py).ok()?.get_item("_Failure").ok()??;
+    if !error.matches(py, &failure).ok()? {
+        return None;
+    }
+    error.value(py).getattr("line").ok()?.extract().ok()
 }

@@ -11,8 +11,8 @@ use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
 use ruff_python_ast::StmtFunctionDef;
-use ruff_source_file::SourceFile;
-use ruff_text_size::TextRange;
+use ruff_source_file::{OneIndexed, SourceFile};
+use ruff_text_size::{TextRange, TextSize};
 
 mod metadata;
 
@@ -29,6 +29,7 @@ use crate::utils::truncate_string;
 struct FailedFunctionCallOptions {
     function_kind: FunctionKind,
     verbose: bool,
+    primary_range: Option<TextRange>,
 }
 
 declare_diagnostic_type! {
@@ -422,6 +423,7 @@ pub fn fixture_failure_diagnostic(
         FailedFunctionCallOptions {
             function_kind: FunctionKind::Fixture,
             verbose,
+            primary_range: None,
         },
         &error,
     );
@@ -636,6 +638,7 @@ pub fn test_failure_diagnostic(
         FailedFunctionCallOptions {
             function_kind: FunctionKind::Test,
             verbose,
+            primary_range: doctest_failure_range(py, error, source_file),
         },
         error,
     );
@@ -735,8 +738,15 @@ fn handle_failed_function_call(
     let FailedFunctionCallOptions {
         function_kind,
         verbose,
+        primary_range,
     } = options;
-    annotate_function_name(diagnostic, source_file.clone(), stmt_function_def);
+    if let Some(range) = primary_range {
+        diagnostic.annotate(Annotation::primary(
+            Span::from(source_file.clone()).with_range(range),
+        ));
+    } else {
+        annotate_function_name(diagnostic, source_file.clone(), stmt_function_def);
+    }
 
     if !arguments.is_empty() {
         diagnostic.info(format!(
@@ -805,6 +815,19 @@ fn handle_failed_function_call(
     if !error_string.is_empty() {
         diagnostic.info(indent_continuation_lines(&error_string));
     }
+}
+
+fn doctest_failure_range(py: Python, error: &PyErr, source_file: &SourceFile) -> Option<TextRange> {
+    let line = crate::doctest::failure_line(py, error)?;
+    let line = OneIndexed::new(line)?;
+    let source = source_file.to_source_code();
+    if line.get() > source.line_count() {
+        return None;
+    }
+    let line_range = source.line_range(line);
+    let prompt = source.slice(line_range).find(">>>")?;
+    let prompt = TextSize::try_from(prompt).ok()?;
+    Some(TextRange::at(line_range.start() + prompt, TextSize::new(3)))
 }
 
 fn is_installed_package_frame(frame: &TracebackFrame) -> bool {

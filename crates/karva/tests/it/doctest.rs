@@ -241,6 +241,54 @@ class Calculator:
 }
 
 #[test]
+fn doctest_failure_points_to_the_failing_example() {
+    let context = TestContext::with_file(
+        "test_location.py",
+        r#"
+def documented():
+    """Two examples.
+
+    >>> 1 + 1
+    2
+    >>> 2 + 2
+    5
+    """
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--doctest-modules"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_location::doctest:documented
+
+    failures:
+
+    test_location::doctest:documented:
+
+    error[test-failure]: Test `doctest:documented` failed
+     --> test_location.py:7:5
+      |
+    7 |     >>> 2 + 2
+      |     ^^^
+      |
+    info: Doctest failed at test_location.py:7
+          Example:
+            2 + 2
+          Expected:
+            5
+          Got:
+            4
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn doctests_validate_strict_module_tags() {
     let context = TestContext::with_files([
         (
@@ -322,6 +370,14 @@ fn doctests_require_a_runtime_visible_docstring() {
     let context = TestContext::with_file(
         "test_decorated.py",
         r#"
+from pathlib import Path
+
+import pytest
+
+@pytest.fixture(autouse=True)
+def automatic():
+    Path("fixture-ran").touch()
+
 def hide_docstring(function):
     return object()
 
@@ -331,9 +387,6 @@ def documented():
     >>> 1 + 1
     2
     """
-
-def test_regular():
-    pass
 "#,
     );
 
@@ -341,13 +394,14 @@ def test_regular():
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 2 tests across 1 worker
-            PASS [TIME] test_decorated::test_regular
+        Starting 1 test across 1 worker
     ────────────
-         Summary [TIME] 2 tests run: 1 passed, 1 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
 
     ----- stderr -----
     ");
+
+    assert!(!context.root().join("fixture-ran").exists());
 }
 
 #[test]

@@ -224,19 +224,23 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                     format!("{}.{}", self.module.name(), object_name)
                 }
             };
-            let function = match functions.get_item(&object_name) {
-                Ok(Some(function)) => function,
-                Ok(None) => match crate::doctest::missing_doctest_function(self.py, &object_name) {
-                    Ok(function) => function,
-                    Err(error) => {
-                        self.issues
-                            .push(DiscoveryIssue::Error(DiscoveryError::Import {
-                                module_name: self.module.name().to_string(),
-                                reason: error.value(self.py).to_string(),
-                            }));
-                        continue;
+            let (function, missing_reason) = match functions.get_item(&object_name) {
+                Ok(Some(function)) => (function, None),
+                Ok(None) => {
+                    let reason =
+                        format!("Doctest `{object_name}` is not available after module import");
+                    match crate::doctest::missing_doctest_function(self.py, &reason) {
+                        Ok(function) => (function, Some(reason)),
+                        Err(error) => {
+                            self.issues
+                                .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                                    module_name: self.module.name().to_string(),
+                                    reason: error.value(self.py).to_string(),
+                                }));
+                            continue;
+                        }
                     }
-                },
+                }
                 Err(error) => {
                     self.issues
                         .push(DiscoveryIssue::Error(DiscoveryError::Import {
@@ -257,6 +261,9 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             ) {
                 Ok(mut test_function) => {
                     test_function.tags.remove_parametrize();
+                    if let Some(reason) = missing_reason {
+                        test_function.tags.add_skip(reason);
+                    }
                     if self.context.settings().test().strict_tags {
                         let unknown = unknown_runtime_tags(
                             test_function.statement(),

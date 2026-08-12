@@ -426,6 +426,12 @@ impl Tags {
         self.inner.retain(|tag| !matches!(tag, Tag::Parametrize(_)));
     }
 
+    /// Adds an unconditional skip determined during semantic discovery.
+    pub(crate) fn add_skip(&mut self, reason: String) {
+        self.inner
+            .push(Tag::Skip(SkipTag::new(Vec::new(), Some(reason))));
+    }
+
     /// Returns unregistered custom names, including parameter-specific tags.
     fn unknown_custom_names<'a>(&'a self, registered: &BTreeMap<String, String>) -> Vec<&'a str> {
         let mut unknown = Vec::new();
