@@ -56,7 +56,7 @@
 
 ### Test Running
 
-- Support opt-in module docstring doctests ([#1273](https://github.com/MatthewMckee4/karva/issues/1273))
+- Support opt-in Python docstring doctests ([#1275](https://github.com/MatthewMckee4/karva/pull/1275))
 - Reuse the last generated random seed ([#1215](https://github.com/MatthewMckee4/karva/pull/1215))
 - Add seeded randomized test ordering ([#1194](https://github.com/MatthewMckee4/karva/pull/1194))
 

@@ -421,6 +421,11 @@ impl Tags {
         self.inner.extend(other.inner.iter().cloned());
     }
 
+    /// Removes parametrization from test kinds that pytest does not parametrize.
+    pub(crate) fn remove_parametrize(&mut self) {
+        self.inner.retain(|tag| !matches!(tag, Tag::Parametrize(_)));
+    }
+
     /// Returns unregistered custom names, including parameter-specific tags.
     fn unknown_custom_names<'a>(&'a self, registered: &BTreeMap<String, String>) -> Vec<&'a str> {
         let mut unknown = Vec::new();

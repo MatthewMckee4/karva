@@ -255,7 +255,8 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 function.unbind(),
                 None,
             ) {
-                Ok(test_function) => {
+                Ok(mut test_function) => {
+                    test_function.tags.remove_parametrize();
                     if self.context.settings().test().strict_tags {
                         let unknown = unknown_runtime_tags(
                             test_function.statement(),

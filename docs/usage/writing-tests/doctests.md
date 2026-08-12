@@ -42,10 +42,10 @@ def add(left, right):
 
 This MVP collects source-defined module docstrings, functions and classes
 declared directly at module scope, and members declared directly on those
-classes. The documented object must remain visible under its source name after
-the module is imported; otherwise, Karva reports that case as skipped. Dynamic
-docstrings, definitions inside control flow, and `__test__` entries are not
-collected.
+classes, including nested classes. The documented object must remain visible
+under its source name after the module is imported; otherwise, Karva reports
+that case as skipped. Dynamic docstrings, definitions inside control flow, and
+`__test__` entries are not collected.
 
 Karva does not collect `.txt` doctest files or provide pytest's other doctest
 collection and option flags. Use standard-library directives inside examples

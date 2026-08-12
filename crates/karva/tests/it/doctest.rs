@@ -98,10 +98,10 @@ fn doctest_modules_can_be_enabled_in_configuration() {
     let context = TestContext::with_files([
         (
             "karva.toml",
-            r#"
+            r"
 [profile.default.test]
 doctest-modules = true
-"#,
+",
         ),
         ("test_examples.py", DOCTEST_FIXTURE),
     ]);
@@ -245,11 +245,11 @@ fn doctests_validate_strict_module_tags() {
     let context = TestContext::with_files([
         (
             "karva.toml",
-            r#"
+            r"
 [profile.default.test]
 doctest-modules = true
 strict-tags = true
-"#,
+",
         ),
         (
             "test_tagged.py",
@@ -283,6 +283,35 @@ pytestmark = pytest.mark.typo
 
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn doctests_ignore_module_parametrization() {
+    let context = TestContext::with_file(
+        "test_parametrized.py",
+        r#"
+"""
+>>> 1 + 1
+2
+"""
+
+import pytest
+
+pytestmark = pytest.mark.parametrize("unused", [1, 2])
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--doctest-modules"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_parametrized::doctest:@module
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
     ");
