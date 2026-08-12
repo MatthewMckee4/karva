@@ -698,6 +698,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn controller_can_close_stream_retained_after_worker_exit() {
         let mut server = ControllerServer::bind("run-id").expect("bind controller");
