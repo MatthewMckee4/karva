@@ -1,4 +1,6 @@
+use insta::assert_snapshot;
 use insta_cmd::assert_cmd_snapshot;
+use regex::Regex;
 use serde_json::Value;
 
 use crate::common::TestContext;
@@ -64,12 +66,9 @@ fn doctest_modules_is_opt_in() {
     11 |     >>> 2 + 2
        |     ^^^
        |
-    info: Doctest failed at test_examples.py:11
-          Example:
-            2 + 2
-          Expected:
+    info: Expected output:
             5
-          Got:
+          Actual output:
             4
 
     test_examples::doctest:raises_unexpectedly:
@@ -80,10 +79,7 @@ fn doctest_modules_is_opt_in() {
     18 |     >>> 1 / 0
        |     ^^^
        |
-    info: Doctest raised at test_examples.py:18
-          Example:
-            1 / 0
-          Exception:
+    info: Unexpected exception:
             ZeroDivisionError: division by zero
 
     ────────────
@@ -126,12 +122,9 @@ doctest-modules = true
     11 |     >>> 2 + 2
        |     ^^^
        |
-    info: Doctest failed at test_examples.py:11
-          Example:
-            2 + 2
-          Expected:
+    info: Expected output:
             5
-          Got:
+          Actual output:
             4
 
     test_examples::doctest:raises_unexpectedly:
@@ -142,10 +135,7 @@ doctest-modules = true
     18 |     >>> 1 / 0
        |     ^^^
        |
-    info: Doctest raised at test_examples.py:18
-          Example:
-            1 / 0
-          Exception:
+    info: Unexpected exception:
             ZeroDivisionError: division by zero
 
     ────────────
@@ -273,12 +263,9 @@ def documented():
     7 |     >>> 2 + 2
       |     ^^^
       |
-    info: Doctest failed at test_location.py:7
-          Example:
-            2 + 2
-          Expected:
+    info: Expected output:
             5
-          Got:
+          Actual output:
             4
 
     ────────────
@@ -464,12 +451,9 @@ def broken():
     21 |     >>> 3 * 3
        |     ^^^
        |
-    info: Doctest failed at test_reports.py:21
-          Example:
-            3 * 3
-          Expected:
+    info: Expected output:
             10
-          Got:
+          Actual output:
             9
 
     ────────────
@@ -481,34 +465,61 @@ def broken():
 
     let report: Value = serde_json::from_str(&context.read_file("reports/results.json"))
         .expect("JSON report should parse");
-    let doctest = report["tests"]
-        .as_array()
-        .expect("JSON tests should be an array")
-        .iter()
-        .find(|test| test["name"] == "doctest:@module")
-        .expect("JSON report should include module doctest");
-    assert_eq!(doctest["module"], "test_reports");
-    assert_eq!(doctest["full_name"], "test_reports::doctest:@module");
-    assert!(
-        report["tests"]
-            .as_array()
-            .expect("JSON tests should be an array")
-            .iter()
-            .any(|test| test["full_name"] == "test_reports::doctest:module"),
-        "JSON report should distinguish an object named module"
+    assert_snapshot!(
+        serde_json::to_string_pretty(&report).expect("JSON report should serialize"),
+        @r#"
+    {
+      "elapsed_seconds": "[TIME]",
+      "schema_version": 2,
+      "stats": {
+        "errors": 0,
+        "failed": 1,
+        "flaky": 0,
+        "passed": 3,
+        "skipped": 0,
+        "slow": 0,
+        "total": 4
+      },
+      "status": "failed",
+      "tests": [
+        {
+          "duration_seconds": "[TIME]",
+          "full_name": "test_reports::doctest:@module",
+          "module": "test_reports",
+          "name": "doctest:@module",
+          "status": "passed"
+        },
+        {
+          "diagnostic": {
+            "code": "test-failure",
+            "message": "Test `doctest:broken` failed",
+            "rendered": "error[test-failure]: Test `doctest:broken` failed\n  --> test_reports.py:21:5\n   |/n21 |     >>> 3 * 3\n   |     ^^^\n   |/ninfo: Expected output:\n        10\n      Actual output:\n        9\n\n",
+            "severity": "error"
+          },
+          "duration_seconds": "[TIME]",
+          "full_name": "test_reports::doctest:broken",
+          "module": "test_reports",
+          "name": "doctest:broken",
+          "status": "failed"
+        },
+        {
+          "duration_seconds": "[TIME]",
+          "full_name": "test_reports::doctest:module",
+          "module": "test_reports",
+          "name": "doctest:module",
+          "status": "passed"
+        },
+        {
+          "duration_seconds": "[TIME]",
+          "full_name": "test_reports::test_regular",
+          "module": "test_reports",
+          "name": "test_regular",
+          "status": "passed"
+        }
+      ]
+    }
+    "#
     );
-    let failed = report["tests"]
-        .as_array()
-        .expect("JSON tests should be an array")
-        .iter()
-        .find(|test| test["name"] == "doctest:broken")
-        .expect("JSON report should include failing doctest");
-    assert_eq!(failed["status"], "failed");
-    let diagnostic = failed["diagnostic"]["rendered"]
-        .as_str()
-        .expect("failing JSON doctest should include a diagnostic");
-    assert!(diagnostic.contains("Expected:\n        10"));
-    assert!(diagnostic.contains("Got:\n        9"));
 
     assert_cmd_snapshot!(
         context.command_no_parallel().args([
@@ -532,12 +543,9 @@ def broken():
     21 |     >>> 3 * 3
        |     ^^^
        |
-    info: Doctest failed at test_reports.py:21
-          Example:
-            3 * 3
-          Expected:
+    info: Expected output:
             10
-          Got:
+          Actual output:
             9
 
     ────────────
@@ -547,50 +555,105 @@ def broken():
     "
     );
 
-    let doctest = context
+    let records = context
         .read_file("reports/results.jsonl")
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).expect("JSONL record should parse"))
-        .find(|record| record["type"] == "test" && record["name"] == "doctest:@module")
-        .expect("JSONL report should include module doctest");
-    assert_eq!(doctest["module"], "test_reports");
-    assert_eq!(doctest["full_name"], "test_reports::doctest:@module");
-
-    assert!(
-        context
-            .read_file("reports/results.jsonl")
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).expect("JSONL record should parse"))
-            .any(|record| record["full_name"] == "test_reports::doctest:module"),
-        "JSONL report should distinguish an object named module"
+        .collect::<Vec<_>>();
+    assert_snapshot!(
+        serde_json::to_string_pretty(&records).expect("JSONL records should serialize"),
+        @r#"
+    [
+      {
+        "duration_seconds": "[TIME]",
+        "full_name": "test_reports::doctest:@module",
+        "module": "test_reports",
+        "name": "doctest:@module",
+        "schema_version": 2,
+        "status": "passed",
+        "type": "test"
+      },
+      {
+        "diagnostic": {
+          "code": "test-failure",
+          "message": "Test `doctest:broken` failed",
+          "rendered": "error[test-failure]: Test `doctest:broken` failed\n  --> test_reports.py:21:5\n   |/n21 |     >>> 3 * 3\n   |     ^^^\n   |/ninfo: Expected output:\n        10\n      Actual output:\n        9\n\n",
+          "severity": "error"
+        },
+        "duration_seconds": "[TIME]",
+        "full_name": "test_reports::doctest:broken",
+        "module": "test_reports",
+        "name": "doctest:broken",
+        "schema_version": 2,
+        "status": "failed",
+        "type": "test"
+      },
+      {
+        "duration_seconds": "[TIME]",
+        "full_name": "test_reports::doctest:module",
+        "module": "test_reports",
+        "name": "doctest:module",
+        "schema_version": 2,
+        "status": "passed",
+        "type": "test"
+      },
+      {
+        "duration_seconds": "[TIME]",
+        "full_name": "test_reports::test_regular",
+        "module": "test_reports",
+        "name": "test_regular",
+        "schema_version": 2,
+        "status": "passed",
+        "type": "test"
+      },
+      {
+        "elapsed_seconds": "[TIME]",
+        "schema_version": 2,
+        "stats": {
+          "errors": 0,
+          "failed": 1,
+          "flaky": 0,
+          "passed": 3,
+          "skipped": 0,
+          "slow": 0,
+          "total": 4
+        },
+        "status": "failed",
+        "type": "run_finished"
+      }
+    ]
+    "#
     );
 
-    let failed = context
-        .read_file("reports/results.jsonl")
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).expect("JSONL record should parse"))
-        .find(|record| record["name"] == "doctest:broken")
-        .expect("JSONL report should include failing doctest");
-    assert_eq!(failed["status"], "failed");
-    let diagnostic = failed["diagnostic"]["rendered"]
-        .as_str()
-        .expect("failing JSONL doctest should include a diagnostic");
-    assert!(diagnostic.contains("Expected:\n        10"));
-    assert!(diagnostic.contains("Got:\n        9"));
+    let junit = Regex::new(r#"time="[0-9.]+""#)
+        .expect("valid time regex")
+        .replace_all(
+            &context.read_file("reports/results.xml"),
+            r#"time="[TIME]""#,
+        )
+        .to_string();
+    assert_snapshot!(junit, @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="4" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_reports" tests="4" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_reports" name="doctest:@module" time="[TIME]"/>
+        <testcase classname="test_reports" name="doctest:broken" time="[TIME]">
+          <failure message="Test `doctest:broken` failed" type="test-failure">error[test-failure]: Test `doctest:broken` failed
+      --&gt; test_reports.py:21:5
+       |
+    21 |     &gt;&gt;&gt; 3 * 3
+       |     ^^^
+       |
+    info: Expected output:
+            10
+          Actual output:
+            9
 
-    let junit = context.read_file("reports/results.xml");
-    assert!(
-        junit.contains(r#"<testcase classname="test_reports" name="doctest:@module""#),
-        "JUnit report should include module doctest ID"
-    );
-    assert!(
-        junit.contains(r#"<testcase classname="test_reports" name="doctest:module""#),
-        "JUnit report should distinguish an object named module"
-    );
-    assert!(
-        junit.contains(r#"<testcase classname="test_reports" name="doctest:broken""#)
-            && junit.contains("Expected:")
-            && junit.contains("Got:"),
-        "JUnit report should include the failing doctest diagnostic"
-    );
+    </failure>
+        </testcase>
+        <testcase classname="test_reports" name="doctest:module" time="[TIME]"/>
+        <testcase classname="test_reports" name="test_regular" time="[TIME]"/>
+      </testsuite>
+    </testsuites>
+    "#);
 }

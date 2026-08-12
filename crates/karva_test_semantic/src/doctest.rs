@@ -7,7 +7,6 @@ use pyo3::types::{PyDict, PyModule};
 
 const DOCTEST_RUNTIME_CODE: &std::ffi::CStr = c"
 import doctest
-import os
 import textwrap
 import traceback
 
@@ -22,13 +21,6 @@ def _block(label, value):
     value = value.rstrip('\\n') or '<nothing>'
     indented = textwrap.indent(value, '  ')
     return f'{label}:\\n{indented}'
-
-
-def _location(test, example):
-    if test.filename is not None and test.lineno is not None:
-        filename = os.path.relpath(test.filename)
-        return f'{filename}:{test.lineno + example.lineno + 1}'
-    return test.name
 
 
 def _function(test):
@@ -47,10 +39,8 @@ def _function(test):
             line = error.test.lineno + error.example.lineno + 1
             message = '\\n'.join(
                 (
-                    f'Doctest failed at {_location(error.test, error.example)}',
-                    _block('Example', error.example.source),
-                    _block('Expected', error.example.want),
-                    _block('Got', error.got),
+                    _block('Expected output', error.example.want),
+                    _block('Actual output', error.got),
                 )
             )
             raise _Failure(message, line) from None
@@ -59,13 +49,7 @@ def _function(test):
             exception = ''.join(
                 traceback.format_exception_only(*error.exc_info[:2])
             )
-            message = '\\n'.join(
-                (
-                    f'Doctest raised at {_location(error.test, error.example)}',
-                    _block('Example', error.example.source),
-                    _block('Exception', exception),
-                )
-            )
+            message = _block('Unexpected exception', exception)
             raise _Failure(message, line) from None
 
     return run
