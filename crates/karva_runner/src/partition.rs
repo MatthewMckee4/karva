@@ -78,7 +78,7 @@ impl Partition {
 
     /// Returns worker CLI selectors in execution order.
     #[cfg(test)]
-    pub(super) fn test_paths(&self) -> impl ExactSizeIterator<Item = &str> {
+    fn test_paths(&self) -> impl ExactSizeIterator<Item = &str> {
         self.tests.iter().map(|test| test.path.as_ref())
     }
 
