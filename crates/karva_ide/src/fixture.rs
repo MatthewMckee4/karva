@@ -1189,6 +1189,35 @@ pub(super) fn test_parameter_is_fixture(
     true
 }
 
+/// Returns whether recognized parametrization may capture unknown parameter names.
+pub(super) fn test_parametrization_is_dynamic(
+    module: &CollectedModule,
+    function: &StmtFunctionDef,
+) -> bool {
+    let bindings = FixtureBindings::from_statements(&module.module_body);
+    function.decorator_list.iter().any(|decorator| {
+        let Expr::Call(call) = &decorator.expression else {
+            return false;
+        };
+        if !bindings.is_parametrize_reference(call.func.as_ref()) {
+            return false;
+        }
+        let argnames = call.arguments.args.first().or_else(|| {
+            call.arguments
+                .keywords
+                .iter()
+                .find(|keyword| {
+                    keyword
+                        .arg
+                        .as_ref()
+                        .is_some_and(|argument| argument == "argnames")
+                })
+                .map(|keyword| &keyword.value)
+        });
+        argnames.is_none_or(|argnames| literal_names(argnames).is_none())
+    })
+}
+
 /// Returns `None` when a decorator may supply arguments dynamically.
 fn parametrized_names(
     module: &CollectedModule,

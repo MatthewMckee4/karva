@@ -6,6 +6,7 @@ mod fixture;
 mod hover;
 mod occurrences;
 mod references;
+mod rename;
 mod source_index;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -18,9 +19,13 @@ pub use definition::{FixtureDefinitionTarget, fixture_definition};
 use fixture::{FixtureDefinition, FixtureResolution};
 pub use fixture::{FixtureId, FixtureScope};
 pub use hover::{FixtureHover, hover_fixture};
-pub use occurrences::{FixtureOccurrence, fixture_target};
-pub(crate) use occurrences::{FixtureOccurrenceKind, fixture_occurrences};
+pub(crate) use occurrences::fixture_occurrences;
+pub use occurrences::{
+    FixtureOccurrence, FixtureOccurrenceKind, FixtureRenameTarget, fixture_document_highlights,
+    fixture_rename_target, fixture_target,
+};
 pub use references::{LocatedFixtureOccurrence, fixture_references};
+pub use rename::{is_valid_fixture_name, prepare_fixture_rename, rename_fixture};
 pub use source_index::WorkspaceSourceIndex;
 
 /// Owned Python source used as an input to source-only analysis.

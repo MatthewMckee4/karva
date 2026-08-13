@@ -4,9 +4,9 @@ use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
     CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
     DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
-    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, HoverRequest,
-    LspNotificationMethod, LspRequestMethod, Notification as _, ReferencesRequest, Request as _,
-    ShutdownRequest,
+    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
+    HoverRequest, LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
+    ReferencesRequest, RenameRequest, Request as _, ShutdownRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -20,13 +20,34 @@ mod traits;
 
 use self::traits::{BackgroundRequestHandler, SyncNotificationHandler, SyncRequestHandler};
 
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub(in crate::server::api) struct RequestError {
+    code: i32,
+    message: String,
+}
+
+impl RequestError {
+    fn invalid_params(message: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::InvalidParams as i32,
+            message: message.into(),
+        }
+    }
+}
+
 pub(super) fn request(request: Request) -> Task {
     match LspRequestMethod::from(request.method.as_str()) {
         ShutdownRequest::METHOD => sync_request_task::<requests::Shutdown>(request),
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
         HoverRequest::METHOD => background_request_task::<requests::Hover>(request),
+        DocumentHighlightRequest::METHOD => {
+            background_request_task::<requests::DocumentHighlight>(request)
+        }
+        PrepareRenameRequest::METHOD => background_request_task::<requests::PrepareRename>(request),
         ReferencesRequest::METHOD => background_request_task::<requests::References>(request),
+        RenameRequest::METHOD => background_request_task::<requests::Rename>(request),
         method => Task::immediate(Response::new_err(
             request.id,
             ErrorCode::MethodNotFound as i32,
@@ -172,7 +193,13 @@ fn result_response<R: serde::Serialize>(
             },
             Err(error) => Response::new_err(id, ErrorCode::InternalError as i32, error.to_string()),
         },
-        Err(error) => Response::new_err(id, ErrorCode::InternalError as i32, error.to_string()),
+        Err(error) => {
+            if let Some(error) = error.downcast_ref::<RequestError>() {
+                Response::new_err(id, error.code, error.message.clone())
+            } else {
+                Response::new_err(id, ErrorCode::InternalError as i32, error.to_string())
+            }
+        }
     }
 }
 

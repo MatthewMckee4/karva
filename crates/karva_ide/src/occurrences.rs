@@ -34,13 +34,23 @@ pub struct FixtureOccurrence {
     ///
     /// This is `None` when implicit string concatenation prevents a safe
     /// single edit.
-    edit_range: Option<TextRange>,
+    pub edit_range: Option<TextRange>,
 
     /// The kind of source construct containing the occurrence.
-    pub(super) kind: FixtureOccurrenceKind,
+    pub kind: FixtureOccurrenceKind,
 
     /// The fixture provider selected by static analysis.
     pub(super) fixture: FixtureId,
+}
+
+/// Fixture selected for rename plus its public-name placeholder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FixtureRenameTarget {
+    /// Resolved fixture selection under the cursor.
+    pub occurrence: FixtureOccurrence,
+
+    /// Public fixture name shown by rename-capable clients.
+    pub placeholder: String,
 }
 
 /// Enumerates statically resolved fixture occurrences in the current source.
@@ -119,6 +129,78 @@ pub fn fixture_target(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fix
                 .find(|definition| definition.name_range.contains_inclusive(offset))
                 .map(|definition| definition.id.clone())
         })
+}
+
+/// Returns fixture highlights in the current document for the provider under `offset`.
+///
+/// Fixture declarations and custom provider function names are writes. Fixture
+/// dependencies, test parameters, and `usefixtures` metadata are reads.
+pub fn fixture_document_highlights(
+    analysis: &SourceAnalysis,
+    offset: TextSize,
+) -> Option<Vec<FixtureOccurrence>> {
+    let fixture = fixture_target(analysis, offset)?;
+    let mut highlights: Vec<_> = fixture_occurrences(analysis)
+        .into_iter()
+        .filter(|occurrence| occurrence.fixture == fixture)
+        .collect();
+
+    if let Some(definition) = analysis
+        .fixtures
+        .iter()
+        .find(|definition| definition.id == fixture)
+        && definition.name_range != definition.public_name_range
+    {
+        highlights.push(FixtureOccurrence {
+            range: definition.name_range,
+            edit_range: None,
+            kind: FixtureOccurrenceKind::Definition,
+            fixture,
+        });
+    }
+    highlights.sort_by_key(|occurrence| occurrence.range.start());
+    Some(highlights)
+}
+
+/// Resolves a rename selection, including custom fixture provider anchors.
+///
+/// For `@fixture(name="public") def provider`, definition navigation lands on
+/// `provider`. Rename still edits only the public decorator name and its
+/// references, while the placeholder tells the client which name is changing.
+pub fn fixture_rename_target(
+    analysis: &SourceAnalysis,
+    offset: TextSize,
+) -> Option<FixtureRenameTarget> {
+    if let Some(occurrence) = fixture_occurrence(analysis, offset) {
+        let placeholder = fixture_name(analysis, &occurrence.fixture)?;
+        return Some(FixtureRenameTarget {
+            occurrence,
+            placeholder,
+        });
+    }
+
+    let definition = analysis
+        .fixtures
+        .iter()
+        .find(|definition| definition.name_range.contains_inclusive(offset))?;
+    Some(FixtureRenameTarget {
+        occurrence: FixtureOccurrence {
+            range: definition.name_range,
+            edit_range: definition.public_name_edit_range,
+            kind: FixtureOccurrenceKind::Definition,
+            fixture: definition.id.clone(),
+        },
+        placeholder: definition.name.clone(),
+    })
+}
+
+fn fixture_name(analysis: &SourceAnalysis, fixture: &FixtureId) -> Option<String> {
+    analysis
+        .fixtures
+        .iter()
+        .chain(&analysis.visible_fixtures)
+        .find(|definition| &definition.id == fixture)
+        .map(|definition| definition.name.clone())
 }
 
 fn resolve_source_fixture(analysis: &SourceAnalysis, name: &str) -> Option<FixtureId> {
@@ -264,6 +346,99 @@ mod tests {
             fixture_target(&analysis(source), at(source, "provider")).map(|fixture| fixture.path),
             Some("/project/test_example.py".into())
         );
+        let rename = fixture_rename_target(&analysis(source), at(source, "provider"))
+            .expect("custom provider should be a rename target");
+        assert_eq!(rename.placeholder, "данные");
+        assert_eq!(&source[rename.occurrence.range.to_std_range()], "provider");
+        let edit_range = rename
+            .occurrence
+            .edit_range
+            .expect("custom public name should be editable");
+        assert_eq!(&source[edit_range.to_std_range()], "данные");
+    }
+
+    #[test]
+    fn highlights_custom_provider_anchor_and_consumers() {
+        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database): pass\n";
+        let highlights = fixture_document_highlights(&analysis(source), at(source, "provider"))
+            .expect("custom fixture should highlight");
+
+        assert_eq!(
+            highlights
+                .iter()
+                .map(|occurrence| occurrence.kind)
+                .collect::<Vec<_>>(),
+            [
+                FixtureOccurrenceKind::Definition,
+                FixtureOccurrenceKind::Definition,
+                FixtureOccurrenceKind::TestParameter,
+            ]
+        );
+        assert_eq!(
+            highlights[0].range,
+            TextRange::at(at(source, "database"), TextSize::from(8)),
+        );
+        assert_eq!(
+            highlights[1].range,
+            TextRange::at(at(source, "provider"), TextSize::from(8)),
+        );
+    }
+
+    #[test]
+    fn highlights_only_the_selected_nested_provider() {
+        let root_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let nested_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let test_source = "def test_example(database): pass\n";
+        let root = SourceDocument::new(
+            Utf8PathBuf::from("/project/conftest.py"),
+            root_source.to_owned(),
+        );
+        let nested = SourceDocument::new(
+            Utf8PathBuf::from("/project/pkg/conftest.py"),
+            nested_source.to_owned(),
+        );
+        let test = SourceDocument::new(
+            Utf8PathBuf::from("/project/pkg/test_example.py"),
+            test_source.to_owned(),
+        );
+        let settings = SourceAnalysisSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test".to_owned(),
+            try_import_fixtures: false,
+        };
+        let analysis =
+            analyze_source_with_parents(test, [root, nested], Utf8Path::new("/project"), &settings)
+                .expect("test source should analyze");
+
+        let highlights = fixture_document_highlights(&analysis, at(test_source, "database"))
+            .expect("nested fixture should highlight");
+        assert_eq!(highlights.len(), 1);
+        assert_eq!(highlights[0].kind, FixtureOccurrenceKind::TestParameter);
+    }
+
+    #[test]
+    fn highlights_inherited_fixture_consumers_without_local_definition() {
+        let root = SourceDocument::new(
+            Utf8PathBuf::from("/project/conftest.py"),
+            "from karva import fixture\n@fixture\ndef database(): pass\n".to_owned(),
+        );
+        let test = SourceDocument::new(
+            Utf8PathBuf::from("/project/test_example.py"),
+            "def test_example(database): pass\n".to_owned(),
+        );
+        let settings = SourceAnalysisSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test".to_owned(),
+            try_import_fixtures: false,
+        };
+        let analysis =
+            analyze_source_with_parents(test, [root], Utf8Path::new("/project"), &settings)
+                .expect("test source should analyze");
+
+        let highlights = fixture_document_highlights(&analysis, TextSize::from(20))
+            .expect("inherited fixture should highlight");
+        assert_eq!(highlights.len(), 1);
+        assert_eq!(highlights[0].kind, FixtureOccurrenceKind::TestParameter);
     }
 
     #[test]
