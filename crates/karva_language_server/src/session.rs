@@ -16,7 +16,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use karva_ide::{
     SourceAnalysis, SourceAnalysisSettings, SourceDocument, analyze_source_with_parents,
 };
-use lsp_types::{LanguageKind, TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
+use lsp_types::{LanguageKind, MarkupKind, TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
 
 use crate::workspace::{WorkspaceError, Workspaces, uri_to_path};
 use crate::{PositionEncoding, TextDocument};
@@ -129,6 +129,7 @@ impl PreparedSourceAnalysis {
 pub struct Session {
     index: Index,
     position_encoding: PositionEncoding,
+    hover_markup_kind: MarkupKind,
     shutdown_requested: bool,
     request_queue: RequestQueue,
     supports_diagnostic_related_information: bool,
@@ -139,12 +140,14 @@ pub struct Session {
 impl Session {
     pub(super) fn new(
         position_encoding: PositionEncoding,
+        hover_markup_kind: MarkupKind,
         supports_diagnostic_related_information: bool,
         workspaces: Workspaces,
     ) -> Self {
         Self {
             index: Index::new(workspaces.folders().cloned()),
             position_encoding,
+            hover_markup_kind,
             request_queue: RequestQueue::default(),
             shutdown_requested: false,
             supports_diagnostic_related_information,
@@ -171,6 +174,10 @@ impl Session {
 
     pub(super) fn position_encoding(&self) -> PositionEncoding {
         self.position_encoding
+    }
+
+    pub(super) fn hover_markup_kind(&self) -> MarkupKind {
+        self.hover_markup_kind
     }
 
     pub(super) fn supports_diagnostic_related_information(&self) -> bool {
