@@ -16,10 +16,6 @@ pub(super) trait SyncRequestHandler: RequestHandler {
 }
 
 /// A request whose owned snapshot can run without blocking the event loop.
-#[expect(
-    dead_code,
-    reason = "the first background feature handler lands in the next stacked layer"
-)]
 pub(super) trait BackgroundRequestHandler: RequestHandler {
     type Snapshot: Send + 'static;
 
@@ -33,6 +29,10 @@ pub(super) trait BackgroundRequestHandler: RequestHandler {
         client: &Client,
         params: <<Self as RequestHandler>::RequestType as Request>::Params,
     ) -> anyhow::Result<<<Self as RequestHandler>::RequestType as Request>::Result>;
+
+    fn document_version(_snapshot: &Self::Snapshot) -> Option<(lsp_types::Uri, i32)> {
+        None
+    }
 }
 
 pub(super) trait NotificationHandler {

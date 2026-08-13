@@ -1,5 +1,6 @@
 //! End-to-end language-server tests over an in-memory LSP connection.
 
+mod completion;
 mod config_reload;
 mod diagnostics;
 mod document_sync;
@@ -9,9 +10,9 @@ use std::thread::JoinHandle;
 
 use lsp_server::{Connection, Message, RequestId, Response};
 use lsp_types::{
-    ClientCapabilities, ExitNotification, InitializeParams, InitializeRequest, InitializeResult,
-    InitializedNotification, InitializedParams, Notification, Request, ShutdownRequest,
-    WorkspaceFolder, WorkspaceFolders,
+    CancelNotification, CancelParams, ClientCapabilities, ExitNotification, InitializeParams,
+    InitializeRequest, InitializeResult, InitializedNotification, InitializedParams, Notification,
+    Request, ShutdownRequest, WorkspaceFolder, WorkspaceFolders,
 };
 
 use karva_language_server::{ConnectionInitializer, Server};
@@ -61,14 +62,23 @@ impl TestServer {
         &self.initialization_result
     }
 
-    fn request<R: Request>(&mut self, params: R::Params) -> R::Result {
+    fn send_request<R: Request>(&mut self, params: R::Params) -> RequestId {
+        self.send_request_raw(R::METHOD.as_str(), params)
+    }
+
+    fn send_request_raw<T: serde::Serialize>(&mut self, method: &str, params: T) -> RequestId {
         let id = RequestId::from(self.next_request_id);
         self.next_request_id += 1;
         self.send(Message::Request(lsp_server::Request::new(
             id.clone(),
-            R::METHOD.as_str().to_owned(),
+            method.to_owned(),
             params,
         )));
+        id
+    }
+
+    fn request<R: Request>(&mut self, params: R::Params) -> R::Result {
+        let id = self.send_request::<R>(params);
         let response = self.receive_response(&id);
         let value = response
             .response_result
@@ -77,14 +87,16 @@ impl TestServer {
     }
 
     fn request_raw(&mut self, method: &str, params: serde_json::Value) -> Response {
-        let id = RequestId::from(self.next_request_id);
-        self.next_request_id += 1;
-        self.send(Message::Request(lsp_server::Request {
-            id: id.clone(),
-            method: method.to_owned(),
-            params,
-        }));
+        let id = self.send_request_raw(method, params);
         self.receive_response(&id)
+    }
+
+    fn cancel(&self, request_id: &RequestId) {
+        let id = serde_json::from_value(
+            serde_json::to_value(request_id).expect("request ID should serialize"),
+        )
+        .expect("request ID should match the LSP cancellation ID");
+        self.notify::<CancelNotification>(CancelParams { id });
     }
 
     fn notify<N: Notification>(&self, params: N::Params) {
