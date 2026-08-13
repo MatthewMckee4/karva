@@ -322,7 +322,6 @@ def test_fixture(aliased_fixture):
       |
     5 | def source_fixture(missing_fixture):
       |     ^^^^^^^^^^^^^^
-      |
     info: Missing fixtures: `missing_fixture`
 
     ────────────

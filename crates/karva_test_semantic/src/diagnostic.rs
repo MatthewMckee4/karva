@@ -11,7 +11,7 @@ use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
 use pyo3::{PyErr, Python};
 use ruff_python_ast::{Parameters, StmtFunctionDef};
-use ruff_source_file::{OneIndexed, SourceFile, SourceFileBuilder};
+use ruff_source_file::{OneIndexed, SourceFile};
 use ruff_text_size::{TextRange, TextSize};
 
 mod metadata;
