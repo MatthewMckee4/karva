@@ -2,16 +2,18 @@ use lsp_types::{
     DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
     DidCloseTextDocumentNotification, DidCloseTextDocumentParams, DidOpenTextDocumentNotification,
     DidOpenTextDocumentParams, LanguageKind, Position, Range, TextDocumentContentChangeEvent,
-    TextDocumentContentChangePartial, TextDocumentIdentifier, TextDocumentItem, Uri,
+    TextDocumentContentChangePartial, TextDocumentIdentifier, TextDocumentItem,
     VersionedTextDocumentIdentifier,
 };
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 #[test]
 fn accepts_incremental_unsaved_document_changes() {
-    let mut server = TestServer::new(lsp_types::ClientCapabilities::default());
-    let uri = Uri::parse("file:///workspace/test_example.py").expect("test URI should be valid");
+    let workspace = Workspace::new();
+    let mut server =
+        TestServer::with_workspace(lsp_types::ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
             uri: uri.clone(),
