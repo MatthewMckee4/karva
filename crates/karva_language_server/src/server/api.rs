@@ -2,10 +2,10 @@
 
 use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
-    CancelNotification, DidChangeTextDocumentNotification, DidChangeWatchedFilesNotification,
-    DidChangeWorkspaceFoldersNotification, DidCloseTextDocumentNotification,
-    DidOpenTextDocumentNotification, LspNotificationMethod, LspRequestMethod, Notification as _,
-    Request as _, ShutdownRequest,
+    CancelNotification, CompletionRequest, DidChangeTextDocumentNotification,
+    DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
+    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, LspNotificationMethod,
+    LspRequestMethod, Notification as _, Request as _, ShutdownRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -22,6 +22,7 @@ use self::traits::{BackgroundRequestHandler, SyncNotificationHandler, SyncReques
 pub(super) fn request(request: Request) -> Task {
     match LspRequestMethod::from(request.method.as_str()) {
         ShutdownRequest::METHOD => sync_request_task::<requests::Shutdown>(request),
+        CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         method => Task::immediate(Response::new_err(
             request.id,
             ErrorCode::MethodNotFound as i32,
@@ -79,10 +80,6 @@ where
     })
 }
 
-#[expect(
-    dead_code,
-    reason = "the first background feature handler lands in the next stacked layer"
-)]
 fn background_request_task<H>(request: Request) -> Task
 where
     H: BackgroundRequestHandler,
@@ -120,6 +117,7 @@ where
                 "background request was not registered before scheduling"
             ))
         };
+        let document_version = snapshot.as_ref().ok().and_then(H::document_version);
 
         Box::new(move |client| {
             if cancellation
@@ -142,7 +140,12 @@ where
                     "background request handler panicked".to_owned(),
                 )
             };
-            if let Err(error) = client.respond(response) {
+            let send_result = if let Some((uri, version)) = document_version {
+                client.respond_versioned(response, uri, version)
+            } else {
+                client.respond(response)
+            };
+            if let Err(error) = send_result {
                 tracing::error!(%error, "failed to queue background request response");
             }
         })

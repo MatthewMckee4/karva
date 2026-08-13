@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use lsp_server::{ErrorCode, Message, RequestId, Response, ResponseError};
-use lsp_types::{Notification, Request};
+use lsp_types::{Notification, Request, Uri};
 
 use crate::server::{Action, Event, MainLoopSender};
 use crate::session::Session;
@@ -37,7 +37,10 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) fn send_notification<N: Notification>(&self, params: N::Params) -> anyhow::Result<()> {
+    pub(crate) fn send_notification<N: Notification>(
+        &self,
+        params: N::Params,
+    ) -> anyhow::Result<()> {
         let notification = lsp_server::Notification {
             method: N::METHOD.as_str().to_owned(),
             params: serde_json::to_value(params)?,
@@ -51,6 +54,22 @@ impl Client {
     pub(crate) fn respond(&self, response: Response) -> anyhow::Result<()> {
         self.main_loop_sender
             .send(Event::Action(Action::SendResponse(response)))?;
+        Ok(())
+    }
+
+    /// Queues a response that is valid only while a document version remains current.
+    pub(crate) fn respond_versioned(
+        &self,
+        response: Response,
+        uri: Uri,
+        version: i32,
+    ) -> anyhow::Result<()> {
+        self.main_loop_sender
+            .send(Event::Action(Action::SendVersionedResponse {
+                response,
+                uri,
+                version,
+            }))?;
         Ok(())
     }
 
@@ -124,7 +143,10 @@ mod tests {
             id: id.clone(),
             response_result: Ok(serde_json::Value::Null),
         })?;
-        let Event::Action(Action::SendResponse(late)) = event_receiver.recv()?;
+        let Event::Action(action) = event_receiver.recv()?;
+        let Action::SendResponse(late) = action else {
+            bail!("late response should use the unversioned response action");
+        };
         assert_eq!(late.id, id);
         assert!(
             session

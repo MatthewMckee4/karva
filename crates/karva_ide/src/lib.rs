@@ -1,5 +1,6 @@
 //! Source-only editor analysis for Karva projects.
 
+mod completion;
 mod fixture;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -7,10 +8,9 @@ use karva_collector::{CollectedModule, CollectionSettings, collect_source};
 use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextRange;
 
-use fixture::FixtureDefinition;
+pub use completion::{FixtureCompletion, complete_fixtures};
 
-#[cfg(test)]
-pub(crate) use fixture::FixtureResolution;
+use fixture::{FixtureDefinition, FixtureId, FixtureScope};
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +23,16 @@ impl SourceDocument {
     /// Creates a source document with its stable filesystem path.
     pub fn new(path: Utf8PathBuf, source_text: String) -> Self {
         Self { path, source_text }
+    }
+
+    /// Returns the document's filesystem path.
+    pub fn path(&self) -> &Utf8Path {
+        &self.path
+    }
+
+    /// Returns the complete source text owned by this document.
+    pub fn source_text(&self) -> &str {
+        &self.source_text
     }
 
     /// Consumes the document and returns its path and source text.
@@ -128,6 +138,13 @@ pub struct SourceAnalysis {
     /// Statically understood fixture declarations.
     fixtures: Vec<FixtureDefinition>,
 
+    /// Fixture declarations visible to the current module, including parents.
+    visible_fixtures: Vec<FixtureDefinition>,
+
+    fixture_completion_blocked_names: std::collections::HashSet<String>,
+
+    fixture_completion_builtins_visible: bool,
+
     /// Definite diagnostics. Unknown dynamic behavior remains silent.
     pub diagnostics: Vec<SourceDiagnostic>,
 }
@@ -155,9 +172,13 @@ pub(crate) fn analyze_source(
     };
     let module = collect_source(path, project_root, source_text, &collection_settings, &[])?;
     let (fixtures, diagnostics) = fixture::analyze(&module, settings.try_import_fixtures);
+    let visible_fixtures = fixture::visible_fixtures(&module, &[], settings.try_import_fixtures);
     Some(SourceAnalysis {
         module,
         fixtures,
+        visible_fixtures: visible_fixtures.definitions,
+        fixture_completion_blocked_names: visible_fixtures.blocked_names,
+        fixture_completion_builtins_visible: visible_fixtures.builtins_visible,
         diagnostics,
     })
 }
@@ -200,9 +221,14 @@ pub fn analyze_source_with_parents(
     let parent_modules = parent_modules.iter().collect::<Vec<_>>();
     let (fixtures, diagnostics) =
         fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
+    let visible_fixtures =
+        fixture::visible_fixtures(&current, &parent_modules, settings.try_import_fixtures);
     Some(SourceAnalysis {
         module: current,
         fixtures,
+        visible_fixtures: visible_fixtures.definitions,
+        fixture_completion_blocked_names: visible_fixtures.blocked_names,
+        fixture_completion_builtins_visible: visible_fixtures.builtins_visible,
         diagnostics,
     })
 }
@@ -226,9 +252,14 @@ pub(crate) fn analyze_sources(
     let parent_modules = parents.iter().collect::<Vec<_>>();
     let (fixtures, diagnostics) =
         fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
+    let visible_fixtures =
+        fixture::visible_fixtures(&current, &parent_modules, settings.try_import_fixtures);
     SourceAnalysis {
         module: current,
         fixtures,
+        visible_fixtures: visible_fixtures.definitions,
+        fixture_completion_blocked_names: visible_fixtures.blocked_names,
+        fixture_completion_builtins_visible: visible_fixtures.builtins_visible,
         diagnostics,
     }
 }

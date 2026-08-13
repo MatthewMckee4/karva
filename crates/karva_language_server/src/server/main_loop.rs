@@ -1,7 +1,7 @@
 //! Main-loop message ordering and cancellation-aware response delivery.
 
 use anyhow::bail;
-use crossbeam_channel::{Receiver, RecvError, Sender, select};
+use crossbeam_channel::{Receiver, RecvError, Sender, select_biased};
 use lsp_server::{ErrorCode, Message, Response};
 use lsp_types::{ExitNotification, Notification as _};
 
@@ -20,6 +20,12 @@ pub enum Event {
 #[derive(Debug)]
 pub enum Action {
     SendResponse(Response),
+
+    SendVersionedResponse {
+        response: Response,
+        uri: lsp_types::Uri,
+        version: i32,
+    },
 }
 
 enum NextEvent {
@@ -79,29 +85,36 @@ impl Server {
                     }
                 }
                 NextEvent::Action(Action::SendResponse(response)) => {
-                    if let Some((started, method)) = self
+                    self.send_response_if_pending(response)?;
+                }
+                NextEvent::Action(Action::SendVersionedResponse {
+                    response,
+                    uri,
+                    version,
+                }) => {
+                    let response = if self
                         .session
-                        .request_queue_mut()
-                        .incoming_mut()
-                        .complete(&response.id)
+                        .document(&uri)
+                        .is_some_and(|document| document.version() == version)
                     {
-                        tracing::debug!(
-                            id = %response.id,
-                            %method,
-                            elapsed = ?started.elapsed(),
-                            "completed request"
-                        );
-                        self.connection.sender.send(Message::Response(response))?;
+                        response
                     } else {
-                        tracing::debug!(id = %response.id, "discarding cancelled response");
-                    }
+                        Response::new_err(
+                            response.id,
+                            ErrorCode::ContentModified as i32,
+                            "document changed before request completed".to_owned(),
+                        )
+                    };
+                    self.send_response_if_pending(response)?;
                 }
             }
         }
     }
 
     fn next_event(&self) -> Result<Option<NextEvent>, RecvError> {
-        select! {
+        // Document mutations and cancellations already queued by the client
+        // take precedence over results computed from older session state.
+        select_biased! {
             recv(self.connection.receiver) -> message => {
                 Ok(message.ok().map(NextEvent::Message))
             },
@@ -111,5 +124,25 @@ impl Server {
                 }))
             },
         }
+    }
+
+    fn send_response_if_pending(&mut self, response: Response) -> anyhow::Result<()> {
+        if let Some((started, method)) = self
+            .session
+            .request_queue_mut()
+            .incoming_mut()
+            .complete(&response.id)
+        {
+            tracing::debug!(
+                id = %response.id,
+                %method,
+                elapsed = ?started.elapsed(),
+                "completed request"
+            );
+            self.connection.sender.send(Message::Response(response))?;
+        } else {
+            tracing::debug!(id = %response.id, "discarding cancelled response");
+        }
+        Ok(())
     }
 }
