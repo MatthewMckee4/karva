@@ -22,7 +22,7 @@ karva_ipc = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
-karva_python_semantic = { workspace = true }
+karva_python_semantic = { workspace = true, features = ["python-runtime"] }
 karva_static = { workspace = true }
 karva_test_semantic = { workspace = true }
 
