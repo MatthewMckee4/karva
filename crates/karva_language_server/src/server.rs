@@ -7,6 +7,7 @@ use lsp_types::{
     Notification as _, Registration, RegistrationParams, RegistrationRequest, WorkspaceFolders,
     WorkspaceFoldersInitializeParams,
 };
+use ruff_python_ast::PythonVersion;
 use serde::Deserialize;
 
 use crate::capabilities::{position_encoding, server_capabilities};
@@ -31,6 +32,7 @@ pub struct Server {
 #[serde(default, rename_all = "camelCase")]
 struct InitializationOptions {
     profile: Option<String>,
+    python_version: Option<String>,
 }
 
 impl Server {
@@ -55,11 +57,13 @@ impl Server {
             .map(serde_json::from_value)
             .transpose()?
             .unwrap_or_default();
-        let workspaces = Workspaces::new(
-            workspace_folders,
-            karva_python_semantic::current_python_version(),
-            options.profile,
-        )?;
+        let python_version = options
+            .python_version
+            .as_deref()
+            .map(str::parse)
+            .transpose()?
+            .unwrap_or_else(PythonVersion::latest);
+        let workspaces = Workspaces::new(workspace_folders, python_version, options.profile)?;
         let connection = connection.initialize_finish(
             id,
             &capabilities,
