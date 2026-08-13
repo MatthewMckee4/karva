@@ -33,13 +33,13 @@ a separate Karva project. The nearest project configuration is discovered for
 each folder, and the server keeps the workspace folder association across
 configuration reloads.
 
-The server currently understands Karva configuration from the project's
-`pyproject.toml`, `karva.toml`, or `karva.toml` profile files. Send
-The server registers a `workspace/didChangeWatchedFiles` watcher when the client
-supports dynamic file watching. After changing configuration, clients without
-that capability can use `karva.refreshWorkspace` through
-`workspace/executeCommand` to refresh project state without restarting the
-server.
+The server discovers Karva configuration from the nearest `pyproject.toml`
+(`tool.karva`) or `karva.toml`; an explicit `karva.toml` takes precedence when
+both are present. The server registers a `workspace/didChangeWatchedFiles`
+watcher when the client supports dynamic file watching. After changing
+configuration, clients without that capability can use `karva.refreshWorkspace`
+through `workspace/executeCommand` to refresh project state without restarting
+the server.
 
 ## Logs and startup failures
 
