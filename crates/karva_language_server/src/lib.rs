@@ -8,6 +8,7 @@ mod capabilities;
 mod document;
 mod server;
 mod session;
+mod workspace;
 
 pub use document::{PositionEncoding, TextDocument};
 
