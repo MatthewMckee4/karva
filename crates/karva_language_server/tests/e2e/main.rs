@@ -1,4 +1,8 @@
 //! End-to-end language-server tests over an in-memory LSP connection.
+//!
+//! [`TestServer`] deliberately models a client rather than assuming that each request is the
+//! next message on the wire. Servers may publish diagnostics or ask for configuration while a
+//! request is in flight, so the harness queues unrelated messages and matches by method or ID.
 
 mod completion;
 mod config_reload;
@@ -13,43 +17,67 @@ mod initialize;
 mod references;
 mod rename;
 
+use std::collections::{HashMap, VecDeque};
+use std::fs;
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
+use anyhow::{Context, Result, anyhow};
+use crossbeam_channel::RecvTimeoutError;
 use lsp_server::{Connection, Message, RequestId, Response};
 use lsp_types::{
-    CancelNotification, CancelParams, ClientCapabilities, ExitNotification, InitializeParams,
-    InitializeRequest, InitializeResult, InitializedNotification, InitializedParams, Notification,
-    Request, ShutdownRequest, WorkspaceFolder, WorkspaceFolders,
+    ClientCapabilities, ExitNotification, InitializeParams, InitializeRequest, InitializeResult,
+    InitializedNotification, InitializedParams, Notification, Request, ShutdownRequest, Uri,
+    WorkspaceFolder, WorkspaceFolders, WorkspaceFoldersInitializeParams,
 };
+use serde_json::Value;
+use tempfile::{TempDir, tempdir};
 
 use karva_language_server::{ConnectionInitializer, Server};
 
-struct TestServer {
+// Receipt: the full focused suite's slowest test took 70 ms on 2026-08-13. These tripwires leave
+// more than one order of magnitude for slower CI while still making a stalled server fail quickly.
+const RECEIVE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Errors reported when no matching server message arrives.
+#[derive(Debug, thiserror::Error)]
+enum ReceiveError {
+    #[error("waiting for server message timed out after {0:?}")]
+    Timeout(Duration),
+
+    #[error("language server disconnected while waiting for a message")]
+    Disconnected,
+}
+
+/// Test client for an in-process language server.
+pub(crate) struct TestServer {
     connection: Option<Connection>,
     server_thread: Option<JoinHandle<anyhow::Result<()>>>,
     next_request_id: i32,
     initialization_result: InitializeResult,
+    responses: HashMap<RequestId, Vec<Response>>,
+    notifications: VecDeque<lsp_server::Notification>,
+    requests: VecDeque<lsp_server::Request>,
 }
 
 impl TestServer {
-    fn new(capabilities: ClientCapabilities) -> Self {
-        Self::with_initialize_params(InitializeParams {
-            capabilities,
-            ..InitializeParams::default()
-        })
+    pub(crate) fn new(capabilities: ClientCapabilities) -> Self {
+        TestServerBuilder::new()
+            .with_client_capabilities(capabilities)
+            .build()
     }
 
-    fn with_workspace(capabilities: ClientCapabilities, folder: WorkspaceFolder) -> Self {
-        let mut params = InitializeParams {
-            capabilities,
-            ..InitializeParams::default()
-        };
-        params.workspace_folders_initialize_params.workspace_folders =
-            Some(WorkspaceFolders::WorkspaceFolderList(vec![folder]));
-        Self::with_initialize_params(params)
+    pub(crate) fn with_workspace(
+        capabilities: ClientCapabilities,
+        folder: WorkspaceFolder,
+    ) -> Self {
+        TestServerBuilder::new()
+            .with_client_capabilities(capabilities)
+            .with_workspace(folder)
+            .build()
     }
 
-    fn with_initialize_params(params: InitializeParams) -> Self {
+    fn from_builder(builder: TestServerBuilder) -> Self {
         let (server_connection, client_connection) = ConnectionInitializer::memory();
         let server_thread = std::thread::spawn(move || Server::new(server_connection)?.run());
         let mut server = Self {
@@ -57,6 +85,17 @@ impl TestServer {
             server_thread: Some(server_thread),
             next_request_id: 0,
             initialization_result: InitializeResult::default(),
+            responses: HashMap::new(),
+            notifications: VecDeque::new(),
+            requests: VecDeque::new(),
+        };
+
+        let mut params = builder.initialize_params;
+        params.capabilities = builder.client_capabilities;
+        params.workspace_folders_initialize_params = WorkspaceFoldersInitializeParams {
+            workspace_folders: Some(WorkspaceFolders::WorkspaceFolderList(
+                builder.workspace_folders,
+            )),
         };
 
         let initialization_result = server.request::<InitializeRequest>(params);
@@ -65,15 +104,19 @@ impl TestServer {
         server
     }
 
-    fn initialization_result(&self) -> &InitializeResult {
+    pub(crate) fn initialization_result(&self) -> &InitializeResult {
         &self.initialization_result
     }
 
-    fn send_request<R: Request>(&mut self, params: R::Params) -> RequestId {
+    pub(crate) fn send_request<R: Request>(&mut self, params: R::Params) -> RequestId {
         self.send_request_raw(R::METHOD.as_str(), params)
     }
 
-    fn send_request_raw<T: serde::Serialize>(&mut self, method: &str, params: T) -> RequestId {
+    pub(crate) fn send_request_raw<T: serde::Serialize>(
+        &mut self,
+        method: &str,
+        params: T,
+    ) -> RequestId {
         let id = RequestId::from(self.next_request_id);
         self.next_request_id += 1;
         self.send(Message::Request(lsp_server::Request::new(
@@ -84,29 +127,33 @@ impl TestServer {
         id
     }
 
-    fn request<R: Request>(&mut self, params: R::Params) -> R::Result {
+    #[track_caller]
+    pub(crate) fn request<R: Request>(&mut self, params: R::Params) -> R::Result {
         let id = self.send_request::<R>(params);
         let response = self.receive_response(&id);
         let value = response
             .response_result
-            .unwrap_or_else(|error| panic!("request failed: {error:?}"));
-        serde_json::from_value(value).expect("response should match the request result type")
+            .unwrap_or_else(|error| panic!("request {} failed: {error:?}", R::METHOD));
+        serde_json::from_value(value).unwrap_or_else(|error| {
+            panic!("response for {} had invalid result: {error}", R::METHOD)
+        })
     }
 
-    fn request_raw(&mut self, method: &str, params: serde_json::Value) -> Response {
+    #[track_caller]
+    pub(crate) fn request_raw(&mut self, method: &str, params: Value) -> Response {
         let id = self.send_request_raw(method, params);
         self.receive_response(&id)
     }
 
-    fn cancel(&self, request_id: &RequestId) {
+    pub(crate) fn cancel(&self, request_id: &RequestId) {
         let id = serde_json::from_value(
             serde_json::to_value(request_id).expect("request ID should serialize"),
         )
-        .expect("request ID should match the LSP cancellation ID");
-        self.notify::<CancelNotification>(CancelParams { id });
+        .expect("request ID should match LSP cancellation ID");
+        self.notify::<lsp_types::CancelNotification>(lsp_types::CancelParams { id });
     }
 
-    fn notify<N: Notification>(&self, params: N::Params) {
+    pub(crate) fn notify<N: Notification>(&self, params: N::Params) {
         self.send(Message::Notification(lsp_server::Notification::new(
             N::METHOD.as_str().to_owned(),
             params,
@@ -114,70 +161,148 @@ impl TestServer {
     }
 
     fn send(&self, message: Message) {
-        self.connection
-            .as_ref()
-            .expect("test client should be connected")
+        let Some(connection) = self.connection.as_ref() else {
+            panic!("test client connection already closed")
+        };
+        connection
             .sender
             .send(message)
-            .expect("test client should send a message");
+            .unwrap_or_else(|error| panic!("failed to send message to language server: {error}"));
     }
 
-    fn receive_response(&self, expected_id: &RequestId) -> Response {
+    #[track_caller]
+    pub(crate) fn receive_response(&mut self, expected_id: &RequestId) -> Response {
+        self.try_receive_response(expected_id, None)
+            .unwrap_or_else(|error| {
+                panic!("failed to receive response for request {expected_id}: {error}")
+            })
+    }
+
+    fn try_receive_response(
+        &mut self,
+        expected_id: &RequestId,
+        timeout: Option<Duration>,
+    ) -> Result<Response> {
+        let timeout = timeout.unwrap_or(RECEIVE_TIMEOUT);
+        let deadline = Instant::now() + timeout;
         loop {
-            let message = self
-                .connection
-                .as_ref()
-                .expect("test client should be connected")
-                .receiver
-                .recv()
-                .expect("language server should respond");
-            match message {
-                Message::Response(response) => {
-                    assert_eq!(&response.id, expected_id);
-                    return response;
+            if let Some(mut responses) = self.responses.remove(expected_id) {
+                if responses.len() != 1 {
+                    return Err(anyhow!(
+                        "received {} responses for request {expected_id}",
+                        responses.len()
+                    ));
                 }
-                Message::Notification(_) => {}
-                Message::Request(request) => {
-                    panic!("expected response, received request {request:?}");
-                }
+                return responses.pop().context("response queue unexpectedly empty");
             }
+            self.receive(deadline, timeout)
+                .map_err(|error| anyhow!(error))?;
         }
     }
 
-    fn receive_request<R: Request>(&self) -> (RequestId, R::Params) {
-        let message = self
-            .connection
-            .as_ref()
-            .expect("test client should be connected")
-            .receiver
-            .recv()
-            .expect("language server should send a request");
-        let Message::Request(request) = message else {
-            panic!("expected request, received {message:?}");
-        };
-        assert_eq!(request.method, R::METHOD.as_str());
-        let params = serde_json::from_value(request.params)
-            .expect("request parameters should match their protocol type");
-        (request.id, params)
+    #[track_caller]
+    pub(crate) fn receive_request<R: Request>(&mut self) -> (RequestId, R::Params) {
+        self.try_receive_request::<R>(None).unwrap_or_else(|error| {
+            panic!("failed to receive server request {}: {error}", R::METHOD)
+        })
     }
 
-    fn receive_notification<N: Notification>(&self) -> N::Params {
-        let message = self
-            .connection
-            .as_ref()
-            .expect("test client should be connected")
-            .receiver
-            .recv()
-            .expect("language server should send a notification");
-        let Message::Notification(notification) = message else {
-            panic!("expected notification, received {message:?}");
-        };
-        assert_eq!(notification.method, N::METHOD.as_str());
-        serde_json::from_value(notification.params)
-            .expect("notification parameters should match their protocol type")
+    fn try_receive_request<R: Request>(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Result<(RequestId, R::Params)> {
+        let timeout = timeout.unwrap_or(RECEIVE_TIMEOUT);
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(index) = self
+                .requests
+                .iter()
+                .position(|request| request.method == R::METHOD.as_str())
+            {
+                let request = self
+                    .requests
+                    .remove(index)
+                    .context("request queue unexpectedly empty")?;
+                let params = serde_json::from_value(request.params)
+                    .with_context(|| format!("invalid parameters for {}", R::METHOD))?;
+                return Ok((request.id, params));
+            }
+            self.receive(deadline, timeout)
+                .map_err(|error| anyhow!(error))?;
+        }
     }
 
-    fn respond<R: Request>(&self, id: RequestId, result: R::Result) {
+    #[track_caller]
+    pub(crate) fn receive_notification<N: Notification>(&mut self) -> N::Params {
+        self.try_receive_notification::<N>(None)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "failed to receive server notification {}: {error}",
+                    N::METHOD
+                )
+            })
+    }
+
+    fn try_receive_notification<N: Notification>(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Result<N::Params> {
+        let timeout = timeout.unwrap_or(RECEIVE_TIMEOUT);
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(index) = self
+                .notifications
+                .iter()
+                .position(|notification| notification.method == N::METHOD.as_str())
+            {
+                let notification = self
+                    .notifications
+                    .remove(index)
+                    .context("notification queue unexpectedly empty")?;
+                return serde_json::from_value(notification.params)
+                    .with_context(|| format!("invalid parameters for {}", N::METHOD));
+            }
+            self.receive(deadline, timeout)
+                .map_err(|error| anyhow!(error))?;
+        }
+    }
+
+    fn receive(
+        &mut self,
+        deadline: Instant,
+        timeout: Duration,
+    ) -> std::result::Result<(), ReceiveError> {
+        let Some(connection) = self.connection.as_ref() else {
+            return Err(ReceiveError::Disconnected);
+        };
+        let receiver = connection.receiver.clone();
+        let message = receiver
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .map_err(|error| match error {
+                RecvTimeoutError::Timeout => ReceiveError::Timeout(timeout),
+                RecvTimeoutError::Disconnected => ReceiveError::Disconnected,
+            })?;
+        self.queue_message(message);
+        while let Ok(message) = receiver.try_recv() {
+            self.queue_message(message);
+        }
+        Ok(())
+    }
+
+    fn queue_message(&mut self, message: Message) {
+        match message {
+            Message::Request(request) => self.requests.push_back(request),
+            Message::Response(response) => {
+                self.responses
+                    .entry(response.id.clone())
+                    .or_default()
+                    .push(response);
+            }
+            Message::Notification(notification) => self.notifications.push_back(notification),
+        }
+    }
+
+    pub(crate) fn respond<R: Request>(&self, id: RequestId, result: R::Result) {
         self.send(Message::Response(Response::new_ok(id, result)));
     }
 }
@@ -195,5 +320,220 @@ impl Drop for TestServer {
             .join()
             .expect("server thread should not panic");
         result.expect("server should complete the shutdown sequence");
+    }
+}
+
+/// Builder for deterministic in-memory LSP servers.
+pub(crate) struct TestServerBuilder {
+    client_capabilities: ClientCapabilities,
+    workspace_folders: Vec<WorkspaceFolder>,
+    initialize_params: InitializeParams,
+}
+
+impl TestServerBuilder {
+    pub(crate) fn new() -> Self {
+        Self {
+            client_capabilities: ClientCapabilities::default(),
+            workspace_folders: Vec::new(),
+            initialize_params: InitializeParams::default(),
+        }
+    }
+
+    pub(crate) fn with_client_capabilities(mut self, capabilities: ClientCapabilities) -> Self {
+        self.client_capabilities = capabilities;
+        self
+    }
+
+    pub(crate) fn with_workspace(mut self, folder: WorkspaceFolder) -> Self {
+        self.workspace_folders.push(folder);
+        self
+    }
+
+    pub(crate) fn build(self) -> TestServer {
+        TestServer::from_builder(self)
+    }
+}
+
+/// Temporary project shared by an e2e test's files, URIs, and snapshots.
+pub(crate) struct TestContext {
+    directory: TempDir,
+    root_uri: Uri,
+}
+
+pub(crate) type Workspace = TestContext;
+
+impl TestContext {
+    pub(crate) fn new() -> Self {
+        let directory = tempdir().expect("temporary workspace should be created");
+        fs::create_dir(directory.path().join(".git")).expect("workspace marker should be created");
+        let root_uri =
+            Uri::from_file_path(directory.path()).expect("workspace URI should be valid");
+        Self {
+            directory,
+            root_uri,
+        }
+    }
+
+    pub(crate) fn folder(&self) -> WorkspaceFolder {
+        WorkspaceFolder {
+            uri: self.root_uri.clone(),
+            name: "project".to_owned(),
+        }
+    }
+
+    pub(crate) fn uri(&self, relative: &str) -> Uri {
+        Uri::from_file_path(self.directory.path().join(relative))
+            .expect("document URI should be valid")
+    }
+
+    pub(crate) fn write(&self, relative: &str, source: &str) {
+        let path = self.directory.path().join(relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("workspace source parent should be created");
+        }
+        fs::write(path, source).expect("workspace source should be written");
+    }
+
+    pub(crate) fn normalize(&self, value: impl serde::Serialize) -> Value {
+        let mut value = serde_json::to_value(value).expect("e2e value should serialize");
+        normalize_paths(
+            &mut value,
+            self.root_uri.as_str(),
+            &self.directory.path().to_string_lossy(),
+        );
+        value
+    }
+}
+
+fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str) {
+    match value {
+        Value::Array(values) => values
+            .iter_mut()
+            .for_each(|value| normalize_paths(value, workspace_uri, workspace_path)),
+        Value::Object(values) => {
+            let original = std::mem::take(values);
+            for (key, mut value) in original {
+                normalize_paths(&mut value, workspace_uri, workspace_path);
+                values.insert(
+                    key.replace(workspace_uri, "file:///project")
+                        .replace(workspace_path, "/project"),
+                    value,
+                );
+            }
+        }
+        Value::String(value) => {
+            *value = value
+                .replace(workspace_uri, "file:///project")
+                .replace(workspace_path, "/project");
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
+#[cfg(test)]
+mod harness_tests {
+    use lsp_types::{
+        ConfigurationParams, ConfigurationRequest, MessageType, ShowMessageNotification,
+        ShowMessageParams,
+    };
+
+    use super::*;
+
+    #[test]
+    fn preserves_mixed_messages_while_correlating_responses() {
+        let mut server = detached_server(None);
+        let first = RequestId::from(1);
+        let second = RequestId::from(2);
+        let request = RequestId::from(3);
+        server.queue_message(Message::Notification(lsp_server::Notification::new(
+            ShowMessageNotification::METHOD.as_str().to_owned(),
+            ShowMessageParams {
+                kind: MessageType::Info,
+                message: "ready".to_owned(),
+            },
+        )));
+        server.queue_message(Message::Request(lsp_server::Request::new(
+            request.clone(),
+            ConfigurationRequest::METHOD.as_str().to_owned(),
+            ConfigurationParams { items: Vec::new() },
+        )));
+        server.queue_message(Message::Response(Response::new_ok(first.clone(), "first")));
+        server.queue_message(Message::Response(Response::new_ok(
+            second.clone(),
+            "second",
+        )));
+
+        assert_eq!(
+            server
+                .try_receive_response(&second, Some(Duration::ZERO))
+                .expect("queued response should be available")
+                .id,
+            second
+        );
+        assert_eq!(
+            server
+                .try_receive_notification::<ShowMessageNotification>(Some(Duration::ZERO))
+                .expect("queued notification should be available")
+                .message,
+            "ready"
+        );
+        assert_eq!(
+            server
+                .try_receive_request::<ConfigurationRequest>(Some(Duration::ZERO))
+                .expect("queued request should be available")
+                .0,
+            request
+        );
+        assert_eq!(
+            server
+                .try_receive_response(&first, Some(Duration::ZERO))
+                .expect("queued response should be preserved")
+                .id,
+            first
+        );
+    }
+
+    #[test]
+    fn reports_receive_timeout() {
+        let (server_connection, client_connection) = Connection::memory();
+        let mut server = detached_server(Some(client_connection));
+
+        let error = server
+            .try_receive_notification::<ShowMessageNotification>(Some(Duration::ZERO))
+            .expect_err("empty connected channel should time out");
+
+        assert!(matches!(
+            error.downcast_ref::<ReceiveError>(),
+            Some(ReceiveError::Timeout(timeout)) if timeout.is_zero()
+        ));
+        drop(server_connection);
+    }
+
+    #[test]
+    fn reports_server_disconnect() {
+        let (server_connection, client_connection) = Connection::memory();
+        drop(server_connection);
+        let mut server = detached_server(Some(client_connection));
+
+        let error = server
+            .try_receive_notification::<ShowMessageNotification>(Some(Duration::ZERO))
+            .expect_err("disconnected channel should fail");
+
+        assert!(matches!(
+            error.downcast_ref::<ReceiveError>(),
+            Some(ReceiveError::Disconnected)
+        ));
+    }
+
+    fn detached_server(connection: Option<Connection>) -> TestServer {
+        TestServer {
+            connection,
+            server_thread: None,
+            next_request_id: 0,
+            initialization_result: InitializeResult::default(),
+            responses: HashMap::new(),
+            notifications: VecDeque::new(),
+            requests: VecDeque::new(),
+        }
     }
 }
