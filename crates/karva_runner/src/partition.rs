@@ -36,7 +36,7 @@ pub struct CaseSelection {
 
 impl CaseSelection {
     /// Builds case selection from the resolved command-line test paths.
-    pub(crate) fn from_test_paths(test_paths: &[TestPath]) -> Self {
+    pub(super) fn from_test_paths(test_paths: &[TestPath]) -> Self {
         let mut selection = Self::default();
 
         for test_path in test_paths {
@@ -78,7 +78,7 @@ impl CaseSelection {
             .any(|root| path == *root || path.starts_with(root))
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.functions.is_empty() && self.unrestricted_paths.is_empty()
     }
 
