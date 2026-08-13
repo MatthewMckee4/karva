@@ -6,7 +6,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use karva_python_semantic::TestCacheKey;
+use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use rstest::rstest;
 
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
@@ -20,20 +20,20 @@ const BUFFERED_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
-        test_paths,
+        test_paths: test_paths.into_iter().map(Into::into).collect(),
         resume_skip: Vec::new(),
     }
 }
 
 fn accept_connections(server: &mut ControllerServer, count: usize) {
-    while server.readers.len() < count {
+    while server.reader_count() < count {
         server.accept_pending().expect("accept worker");
         thread::yield_now();
     }
 }
 
 #[test]
-fn streams_attributed_worker_events() {
+fn retains_attributed_worker_checkpoint_after_disconnect() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server
         .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
@@ -42,31 +42,36 @@ fn streams_attributed_worker_events() {
     let worker = thread::spawn(move || {
         let (client, selection) =
             WorkerClient::connect(address, "run-id", 7).expect("connect worker");
-        assert_eq!(selection.test_paths, ["mod::test"]);
+        assert_eq!(
+            selection
+                .test_paths
+                .iter()
+                .map(AsRef::as_ref)
+                .collect::<Vec<_>>(),
+            ["mod::test"]
+        );
+        let test_name = QualifiedTestName::new(QualifiedFunctionName::new(
+            "test".to_string(),
+            ModulePath::new_with_name("mod.py", "mod".to_string()),
+        ));
+        client.checkpoint(&test_name).expect("send checkpoint");
         client
-            .send_event(WorkerEvent::TestStarted {
-                name: None,
-                cache_key: TestCacheKey::function_name("mod::test"),
-            })
-            .expect("send event");
-        client.complete().expect("complete worker");
     });
 
     accept_connections(&mut server, 1);
-    worker.join().expect("join worker");
+    let client = worker.join().expect("join worker");
+    drop(client);
     server.finish().expect("finish readers");
-    let event = server
-        .try_recv()
-        .expect("receive event")
-        .expect("queued event");
+    let checkpoint = server
+        .take_worker_checkpoint(7)
+        .expect("read checkpoint")
+        .expect("active checkpoint");
 
-    assert_eq!(event.worker_id, 7);
-    assert!(matches!(
-        *event.event,
-        WorkerEvent::TestStarted { name, cache_key }
-            if name.is_none()
-                && cache_key == TestCacheKey::function_name("mod::test")
-    ));
+    assert_eq!(checkpoint.name, "mod::test");
+    assert_eq!(
+        checkpoint.cache_key,
+        TestCacheKey::function_name("mod::test")
+    );
 }
 
 #[cfg(unix)]
@@ -90,7 +95,19 @@ fn controller_can_close_stream_retained_after_worker_exit() {
         thread::yield_now();
     }
 
-    server.disconnect_worker(7).expect("disconnect worker");
+    server.disconnect_readers().expect("disconnect readers");
+    server.finish().expect("finish readers");
+    drop(retained_connection);
+}
+
+#[test]
+fn controller_can_close_unauthenticated_reader_after_termination() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    let retained_connection = TcpStream::connect(server.address().expect("address"))
+        .expect("connect unauthenticated client");
+    accept_connections(&mut server, 1);
+
+    server.disconnect_readers().expect("disconnect readers");
     server.finish().expect("finish readers");
     drop(retained_connection);
 }
@@ -160,7 +177,7 @@ fn transfers_resume_skip_cases() {
         .register_worker_selection(
             7,
             WorkerSelection {
-                test_paths: vec!["mod::test".to_string()],
+                test_paths: vec!["mod::test".into()],
                 resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
             },
         )
@@ -207,9 +224,7 @@ fn truncated_terminal_event_is_a_worker_disconnect() {
             .expect("read selection");
         assert!(!selection.is_empty());
 
-        stream
-            .write_all(br#"{"Event":{"TestStarted""#)
-            .expect("write truncated event");
+        stream.write_all(br#"{"C""#).expect("write truncated event");
         stream.flush().expect("flush truncated event");
         stream
             .shutdown(Shutdown::Write)
@@ -247,12 +262,12 @@ fn transfers_large_worker_selection(#[values(50_000, 1_000_000)] path_count: usi
         let test_paths = selection.test_paths;
         assert_eq!(test_paths.len(), path_count);
         assert_eq!(
-            test_paths.first().map(String::as_str),
+            test_paths.first().map(AsRef::as_ref),
             Some("tests/test_0.py::test_case")
         );
         let last_path = format!("tests/test_{}.py::test_case", path_count - 1);
         assert_eq!(
-            test_paths.last().map(String::as_str),
+            test_paths.last().map(AsRef::as_ref),
             Some(last_path.as_str())
         );
         client.complete().expect("complete worker");

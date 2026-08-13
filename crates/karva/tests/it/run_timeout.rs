@@ -1,5 +1,12 @@
 use insta_cmd::assert_cmd_snapshot;
 
+#[cfg(unix)]
+use insta::assert_snapshot;
+#[cfg(unix)]
+use std::process::Stdio;
+#[cfg(unix)]
+use std::time::{Duration, Instant};
+
 use crate::common::TestContext;
 
 /// A run that exceeds `--run-timeout` is stopped and reported as a failure.
@@ -112,6 +119,96 @@ def test_slow():
     );
 
     assert!(context.root().join("terminated").exists());
+}
+
+/// A descendant outside the worker process group cannot retain the controller
+/// stream and stall timeout cleanup.
+#[cfg(unix)]
+#[test]
+fn test_run_timeout_closes_stream_held_by_escaped_descendant() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import os
+from pathlib import Path
+import time
+
+def test_slow():
+    ready_read, ready_write = os.pipe()
+    if os.fork() == 0:
+        os.close(ready_read)
+        os.setsid()
+        Path('escaped_pid').write_text(str(os.getpid()))
+        os.write(ready_write, b'1')
+        time.sleep(30)
+        os._exit(0)
+    os.close(ready_write)
+    os.read(ready_read, 1)
+    time.sleep(30)
+",
+    );
+    let mut child = context
+        .command()
+        .args(["--run-timeout=1", "--termination-grace-period=0"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn Karva");
+
+    // Receipt: the configured one-second timeout gets four additional seconds
+    // for loaded CI scheduling. The escaped child sleeps for 30 seconds, so a
+    // retained controller stream would exceed this tripwire deterministically.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("poll Karva") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            child.kill().expect("kill stalled Karva");
+            if let Ok(pid) =
+                std::fs::read_to_string(context.root().join("escaped_pid")).and_then(|pid| {
+                    pid.parse::<u32>()
+                        .map_err(|error| std::io::Error::other(error.to_string()))
+                })
+            {
+                std::process::Command::new("kill")
+                    .args(["-KILL", &pid.to_string()])
+                    .status()
+                    .expect("kill escaped descendant");
+            }
+            panic!("Karva did not close the escaped descendant's controller stream");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let output = child.wait_with_output().expect("collect Karva output");
+    if let Ok(pid) = std::fs::read_to_string(context.root().join("escaped_pid")).and_then(|pid| {
+        pid.parse::<u32>()
+            .map_err(|error| std::io::Error::other(error.to_string()))
+    }) {
+        std::process::Command::new("kill")
+            .args(["-KILL", &pid.to_string()])
+            .status()
+            .expect("kill escaped descendant");
+    }
+
+    assert_snapshot!(format!(
+        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        status.success(),
+        status.code().map_or_else(|| "none".to_string(), |code| code.to_string()),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    ), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    error: run timed out before all tests completed
+
+    ----- stderr -----
+    ");
 }
 
 /// A run that finishes within `--run-timeout` is unaffected.

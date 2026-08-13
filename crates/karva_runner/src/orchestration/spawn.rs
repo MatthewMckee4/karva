@@ -27,7 +27,7 @@ pub(super) fn spawn_workers(
     let mut supervisor = WorkerSupervisor::with_test_capacity(test_capacity, result_retention);
 
     for (worker_id, partition) in partitions.into_iter().enumerate() {
-        if partition.tests().is_empty() {
+        if partition.is_empty() {
             tracing::debug!(target: "karva_runner::orchestration", "Skipping worker {} with no tests", worker_id);
             continue;
         }
@@ -53,11 +53,11 @@ pub(super) fn spawn_worker(
     partition: Partition,
     forward_stdout: bool,
 ) -> Result<()> {
-    let test_count = partition.tests().len();
+    let test_count = partition.test_count();
     controller.register_worker_selection(
         worker_id,
         WorkerSelection {
-            test_paths: partition.tests().to_vec(),
+            test_paths: partition.worker_test_paths(),
             resume_skip: partition.resume_skip().to_vec(),
         },
     )?;
@@ -92,12 +92,7 @@ pub(super) fn spawn_worker(
     supervisor.spawn(
         worker_id,
         partition,
-        WorkerResources {
-            child,
-            output,
-            stderr,
-            stderr_capture,
-        },
+        WorkerResources::new(child, output, stderr, stderr_capture),
     );
     Ok(())
 }

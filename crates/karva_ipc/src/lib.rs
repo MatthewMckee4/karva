@@ -9,6 +9,6 @@ mod controller;
 mod protocol;
 mod worker;
 
-pub use controller::{ControllerEvent, ControllerServer};
+pub use controller::{ControllerEvent, ControllerServer, WorkerCheckpoint};
 pub use protocol::{WorkerEvent, WorkerSelection};
 pub use worker::WorkerClient;

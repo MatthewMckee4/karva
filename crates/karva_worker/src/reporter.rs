@@ -91,13 +91,7 @@ impl Reporter for WorkerReporter {
     }
 
     fn report_test_started(&self, test_name: &QualifiedTestName) {
-        let cache_key = test_name.cache_key();
-        let name = if test_name.parameters().is_none() && !cache_key.is_parameter_case() {
-            None
-        } else {
-            Some(test_name.to_string())
-        };
-        self.send(WorkerEvent::TestStarted { name, cache_key });
+        self.record_send_result(self.client.checkpoint(test_name));
     }
 
     fn report_test_identified(&self, test_name: &QualifiedTestName) {

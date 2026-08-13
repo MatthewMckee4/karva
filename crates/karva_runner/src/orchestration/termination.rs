@@ -8,7 +8,6 @@ use colored::Colorize;
 use karva_ipc::ControllerServer;
 use karva_logging::Printer;
 
-use super::dispatcher::{InFlightTest, InterruptedTest};
 use super::output::{LABEL_COLUMN_WIDTH, format_in_flight_test};
 use super::process_control;
 use super::supervision::WorkerSupervisor;
@@ -25,14 +24,35 @@ struct WorkerProcessId {
     process_id: u32,
 }
 
+/// Snapshot of one worker's current test taken after process termination.
+struct InFlightTest {
+    /// Worker that owns this snapshot.
+    worker_id: usize,
+
+    /// Refined test name, or `None` between tests.
+    name: Option<String>,
+
+    /// Elapsed time since test start.
+    elapsed: Duration,
+}
+
+/// Executing test converted into a synthetic failed result after interruption.
+pub(super) struct InterruptedTest {
+    /// Test rendered as interrupted after cancellation.
+    pub(super) name: String,
+
+    /// Duration measured before worker termination.
+    pub(super) duration: Duration,
+}
+
 impl WorkerSupervisor {
     /// Terminates all unfinished workers, allowing graceful shutdown first.
     pub(super) fn terminate_remaining(&mut self, grace_period: Duration) {
-        if self.workers.is_empty() {
+        if !self.has_workers() {
             return;
         }
         let processes: Vec<_> = self
-            .workers
+            .workers()
             .iter()
             .filter(|worker| !self.worker_completed(worker.id()))
             .map(|worker| WorkerProcessId {
@@ -40,9 +60,8 @@ impl WorkerSupervisor {
                 process_id: worker.process_id(),
             })
             .collect();
-        let dispatcher = &self.dispatcher;
-
-        for worker in &mut self.workers {
+        let (workers, dispatcher) = self.worker_state();
+        for worker in workers {
             if dispatcher.worker_completed(worker.id()) {
                 continue;
             }
@@ -61,7 +80,7 @@ impl WorkerSupervisor {
         let deadline = Instant::now() + grace_period;
         loop {
             self.reap_during_shutdown();
-            if self.workers.is_empty()
+            if !self.has_workers()
                 && !processes
                     .iter()
                     .any(|process| process_control::is_running(process.process_id))
@@ -82,7 +101,7 @@ impl WorkerSupervisor {
                 );
             }
         }
-        for worker in &mut self.workers {
+        for worker in self.workers_mut() {
             #[cfg(not(unix))]
             if let Err(error) = process_control::force_kill_child(worker.child_mut()) {
                 tracing::warn!(target: "karva_runner::orchestration",
@@ -96,10 +115,11 @@ impl WorkerSupervisor {
                     "failed to wait for worker process: {error}"
                 );
             }
+            worker.mark_forced_disconnect();
             worker.join_output();
             worker.join_stderr(false);
         }
-        self.workers.clear();
+        self.clear_workers();
     }
 
     /// Stops workers and renders interruption lines for tests still in flight.
@@ -109,31 +129,38 @@ impl WorkerSupervisor {
         server: &mut ControllerServer,
         grace_period: Duration,
     ) -> Result<Vec<InterruptedTest>> {
-        if self.workers.is_empty() {
+        if !self.has_workers() {
             return Ok(Vec::new());
         }
-        self.dispatcher.dispatch_pending(server)?;
+        self.dispatch_events(server)?;
         std::thread::sleep(CANCELLATION_EVENT_SETTLE);
-        self.dispatcher.dispatch_pending(server)?;
+        self.dispatch_events(server)?;
         #[expect(
             clippy::needless_collect,
             reason = "termination clears workers before late events are attributed"
         )]
-        let worker_ids: Vec<_> = self.workers.iter().map(Worker::id).collect();
+        let worker_ids: Vec<_> = self.workers().iter().map(Worker::id).collect();
         self.terminate_remaining(grace_period);
-        self.dispatcher.finish(server)?;
+        server.disconnect_readers()?;
+        self.finish_events(server)?;
 
-        let in_flight: Vec<_> = worker_ids
+        let in_flight = worker_ids
             .into_iter()
             .map(|worker_id| {
-                let current = self.dispatcher.active_test(worker_id);
-                InFlightTest {
-                    worker_id,
-                    name: current.map(|current| current.name.clone()),
-                    elapsed: current.map_or(Duration::ZERO, |current| current.started.elapsed()),
-                }
+                Ok(match server.take_worker_checkpoint(worker_id)? {
+                    Some(current) => InFlightTest {
+                        worker_id,
+                        name: Some(current.name),
+                        elapsed: current.started.elapsed(),
+                    },
+                    None => InFlightTest {
+                        worker_id,
+                        name: None,
+                        elapsed: Duration::ZERO,
+                    },
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         let running_tests = in_flight.iter().filter(|test| test.name.is_some()).count();
         let test_label = if running_tests == 1 { "test" } else { "tests" };
@@ -187,7 +214,7 @@ impl WorkerSupervisor {
 
 impl Drop for WorkerSupervisor {
     fn drop(&mut self) {
-        for worker in &mut self.workers {
+        for worker in self.workers_mut() {
             if !worker.has_exit_status()
                 && let Err(error) = process_control::force_kill(worker.process_id())
             {

@@ -34,16 +34,33 @@ pub(super) struct Worker {
 /// Resources acquired while constructing one child process.
 pub(super) struct WorkerResources {
     /// Spawned child process.
-    pub(super) child: Child,
+    child: Child,
 
     /// Optional stdout forwarder.
-    pub(super) output: Option<WorkerOutputForwarder>,
+    output: Option<WorkerOutputForwarder>,
 
     /// Stderr forwarder.
-    pub(super) stderr: WorkerStderrForwarder,
+    stderr: WorkerStderrForwarder,
 
     /// Temporary bounded stderr capture.
-    pub(super) stderr_capture: NamedTempFile,
+    stderr_capture: NamedTempFile,
+}
+
+impl WorkerResources {
+    /// Groups all owned resources acquired before a worker enters supervision.
+    pub(super) fn new(
+        child: Child,
+        output: Option<WorkerOutputForwarder>,
+        stderr: WorkerStderrForwarder,
+        stderr_capture: NamedTempFile,
+    ) -> Self {
+        Self {
+            child,
+            output,
+            stderr,
+            stderr_capture,
+        }
+    }
 }
 
 /// Tests owned by one worker generation.

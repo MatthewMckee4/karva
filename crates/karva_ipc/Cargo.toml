@@ -16,7 +16,7 @@ karva_python_semantic = { workspace = true }
 
 anyhow = { workspace = true }
 crossbeam-channel = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]

@@ -19,6 +19,6 @@ pub use run::run_parallel_tests;
 
 // Receipt: worker writes and controller reads each advance every 10 ms. With
 // no window the cancellation integration test consistently missed the first
-// TestStarted; five intervals passed 20 consecutive repetitions.
+// test checkpoint; five intervals passed 20 consecutive repetitions.
 const CANCELLATION_EVENT_SETTLE: Duration = Duration::from_millis(50);
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);

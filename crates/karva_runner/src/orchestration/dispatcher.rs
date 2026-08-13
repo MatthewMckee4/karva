@@ -4,13 +4,13 @@
 //! frames serially so result aggregation and active-test attribution have one
 //! owner.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::process::ExitStatus;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use karva_diagnostic::AggregatedResults;
-use karva_ipc::{ControllerServer, WorkerEvent};
+use karva_ipc::{ControllerServer, WorkerCheckpoint, WorkerEvent};
 use karva_python_semantic::TestCacheKey;
 
 use super::config::TestResultRetention;
@@ -24,9 +24,6 @@ pub(super) struct EventDispatcher {
 
     /// Worker generations that sent their terminal lifecycle event.
     completed_workers: HashSet<usize>,
-
-    /// Latest started but unfinished test for each worker generation.
-    in_flight: HashMap<usize, RunningTest>,
 
     /// Results and diagnostics aggregated across every worker generation.
     results: AggregatedResults,
@@ -57,48 +54,23 @@ struct CrashedTest {
     stderr: String,
 }
 
-/// Controller-owned state for one executing test.
-#[derive(Debug)]
-pub(super) struct RunningTest {
-    /// Refined display name, including fixture-derived parameters.
-    pub(super) name: String,
-    /// Cache identity used to match completion and crash recovery.
-    pub(super) cache_key: TestCacheKey,
-    /// Monotonic start time used for interruption duration.
-    pub(super) started: Instant,
-}
-
-#[derive(Debug)]
 /// Unexpected worker exit plus state needed to report and retry it.
+#[derive(Debug)]
 pub(super) struct CrashedWorker {
     /// Worker generation that exited unexpectedly.
     pub(super) id: usize,
+
     /// Remaining selection eligible for replacement execution.
     pub(super) partition: Partition,
+
     /// Exit status captured before process reaping.
     pub(super) status: ExitStatus,
+
     /// Bounded stderr diagnostic captured from the worker.
     pub(super) stderr: String,
+
     /// Test active when process exited, if any.
-    pub(super) active: Option<RunningTest>,
-}
-
-/// Snapshot of one worker's current test taken before process termination.
-pub(super) struct InFlightTest {
-    /// Worker that owns this snapshot.
-    pub(super) worker_id: usize,
-    /// Refined test name, or `None` between tests.
-    pub(super) name: Option<String>,
-    /// Elapsed time since test start.
-    pub(super) elapsed: Duration,
-}
-
-/// Executing test converted into a synthetic failed result after interruption.
-pub(super) struct InterruptedTest {
-    /// Test rendered as interrupted after cancellation.
-    pub(super) name: String,
-    /// Duration measured before worker termination.
-    pub(super) duration: Duration,
+    pub(super) active: Option<WorkerCheckpoint>,
 }
 
 impl EventDispatcher {
@@ -114,7 +86,6 @@ impl EventDispatcher {
         Self {
             expected_workers: HashSet::new(),
             completed_workers: HashSet::new(),
-            in_flight: HashMap::new(),
             results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
             crashed_tests: Vec::new(),
             result_retention,
@@ -135,40 +106,8 @@ impl EventDispatcher {
                 anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
             }
             match *message.event {
-                WorkerEvent::TestStarted { name, cache_key } => {
-                    let name = name.unwrap_or_else(|| cache_key.to_string());
-                    if let Some(running) = self.in_flight.get_mut(&worker_id) {
-                        if running.cache_key.test_function_name() != cache_key.test_function_name()
-                        {
-                            anyhow::bail!(
-                                "Karva worker {worker_id} started `{name}` before finishing `{}`",
-                                running.name
-                            );
-                        }
-                        running.name = name;
-                        running.cache_key = cache_key;
-                    } else {
-                        self.in_flight.insert(
-                            worker_id,
-                            RunningTest {
-                                name,
-                                cache_key,
-                                started: Instant::now(),
-                            },
-                        );
-                    }
-                }
                 WorkerEvent::TestSlow => self.results.register_slow_test(),
                 WorkerEvent::TestFinished { cache_key, result } => {
-                    if let Some(running) = self.in_flight.remove(&worker_id)
-                        && running.cache_key != cache_key
-                    {
-                        anyhow::bail!(
-                            "Karva worker {worker_id} started `{}` but finished `{}`",
-                            running.name,
-                            result.full_name()
-                        );
-                    }
                     self.results.register_rendered_test_case(
                         cache_key,
                         *result,
@@ -181,12 +120,6 @@ impl EventDispatcher {
                 WorkerEvent::WorkerFinished => {
                     if !self.completed_workers.insert(worker_id) {
                         anyhow::bail!("Karva worker {worker_id} completed more than once");
-                    }
-                    if let Some(running) = self.in_flight.get(&worker_id) {
-                        anyhow::bail!(
-                            "Karva worker {worker_id} completed while `{}` was still running",
-                            running.name
-                        );
                     }
                 }
             }
@@ -283,16 +216,6 @@ impl EventDispatcher {
             );
         }
         results
-    }
-
-    /// Borrows the latest active-test checkpoint for cancellation reporting.
-    pub(super) fn active_test(&self, worker_id: usize) -> Option<&RunningTest> {
-        self.in_flight.get(&worker_id)
-    }
-
-    /// Removes the latest active checkpoint when ownership moves to crash recovery.
-    pub(super) fn take_active_test(&mut self, worker_id: usize) -> Option<RunningTest> {
-        self.in_flight.remove(&worker_id)
     }
 }
 

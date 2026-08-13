@@ -149,7 +149,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .test_paths
         .into_iter()
         .map(|path| {
-            let path = absolute(&path, &cwd);
+            let path = absolute(path.as_ref(), &cwd);
             TestPath::new(path.as_str())
         })
         .collect();

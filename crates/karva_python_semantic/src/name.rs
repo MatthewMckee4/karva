@@ -163,6 +163,11 @@ impl QualifiedTestName {
         self.parameters.as_deref()
     }
 
+    /// Returns the stable expansion index for a parameter case, when known.
+    pub fn case_index(&self) -> Option<usize> {
+        self.case_index
+    }
+
     /// Stable string identifier for cache and partitioning, of the form
     /// `module::test_name` (no parametrize) or `module::test_name[idx]`.
     ///

@@ -85,10 +85,7 @@ pub fn run_parallel_tests(
         config.partition,
         config.test_ordering,
     );
-    let scheduled_cases: usize = partitions
-        .iter()
-        .map(|partition| partition.tests().len())
-        .sum();
+    let scheduled_cases: usize = partitions.iter().map(Partition::test_count).sum();
     let scheduled_tests = if config.last_failed || config.partition.is_some() {
         partitions
             .iter()
@@ -100,7 +97,7 @@ pub fn run_parallel_tests(
     };
     let scheduled_workers = partitions
         .iter()
-        .filter(|partition| !partition.tests().is_empty())
+        .filter(|partition| !partition.is_empty())
         .count();
 
     if scheduled_cases > 0 {
@@ -181,7 +178,7 @@ pub fn run_parallel_tests(
                         let pending = crashed_worker
                             .partition
                             .pending_after_crash(&completed_tests, None);
-                        if !pending.tests().is_empty() {
+                        if !pending.is_empty() {
                             replacements.push(pending);
                         }
                         continue;
@@ -202,7 +199,7 @@ pub fn run_parallel_tests(
                         &termination,
                         &crashed_worker.stderr,
                     );
-                    if !pending.tests().is_empty() {
+                    if !pending.is_empty() {
                         replacements.push(pending);
                     }
                 }
@@ -234,6 +231,9 @@ pub fn run_parallel_tests(
         worker_manager.cancel_and_kill(printer, &mut controller, termination_grace_period)?
     } else {
         worker_manager.terminate_remaining(termination_grace_period);
+        if matches!(outcome, WaitOutcome::FailFast | WaitOutcome::TimedOut) {
+            controller.disconnect_readers()?;
+        }
         Vec::new()
     };
 
