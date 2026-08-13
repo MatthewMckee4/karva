@@ -4,6 +4,7 @@ mod completion;
 mod config_reload;
 mod definition;
 mod diagnostics;
+mod document_highlight;
 mod document_sync;
 mod hover;
 mod initialize;

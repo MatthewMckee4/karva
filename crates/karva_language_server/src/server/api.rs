@@ -4,8 +4,8 @@ use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
     CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
     DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
-    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, HoverRequest,
-    LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
+    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
+    HoverRequest, LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
     ReferencesRequest, RenameRequest, Request as _, ShutdownRequest,
 };
 
@@ -42,6 +42,9 @@ pub(super) fn request(request: Request) -> Task {
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
         HoverRequest::METHOD => background_request_task::<requests::Hover>(request),
+        DocumentHighlightRequest::METHOD => {
+            background_request_task::<requests::DocumentHighlight>(request)
+        }
         PrepareRenameRequest::METHOD => background_request_task::<requests::PrepareRename>(request),
         ReferencesRequest::METHOD => background_request_task::<requests::References>(request),
         RenameRequest::METHOD => background_request_task::<requests::Rename>(request),

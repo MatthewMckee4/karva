@@ -166,7 +166,8 @@ mod tests {
     use ruff_text_size::TextSize;
 
     use super::*;
-    use crate::{SourceAnalysisSettings, SourceDocument, fixture_occurrence};
+    use crate::occurrences::fixture_occurrence;
+    use crate::{SourceAnalysisSettings, SourceDocument};
 
     fn settings() -> SourceAnalysisSettings {
         SourceAnalysisSettings {
