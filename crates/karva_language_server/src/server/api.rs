@@ -2,7 +2,7 @@
 
 use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
-    CancelNotification, CompletionRequest, DidChangeTextDocumentNotification,
+    CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
     DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
     DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, HoverRequest,
     LspNotificationMethod, LspRequestMethod, Notification as _, Request as _, ShutdownRequest,
@@ -23,6 +23,7 @@ pub(super) fn request(request: Request) -> Task {
     match LspRequestMethod::from(request.method.as_str()) {
         ShutdownRequest::METHOD => sync_request_task::<requests::Shutdown>(request),
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
+        DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
         HoverRequest::METHOD => background_request_task::<requests::Hover>(request),
         method => Task::immediate(Response::new_err(
             request.id,
