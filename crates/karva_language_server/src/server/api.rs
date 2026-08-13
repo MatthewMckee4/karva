@@ -41,6 +41,10 @@ impl RequestError {
 }
 
 pub(super) fn request(request: Request) -> Task {
+    if request.method == requests::RunnablesRequest::METHOD.as_str() {
+        return background_request_task::<requests::Runnables>(request);
+    }
+
     match LspRequestMethod::from(request.method.as_str()) {
         ShutdownRequest::METHOD => sync_request_task::<requests::Shutdown>(request),
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),

@@ -9,18 +9,8 @@ Add Karva to the project's UV development dependencies:
 uv add --dev karva
 ```
 
-Install this directory with Zed's `Install Dev Extension` command, then enable
-Karva in `settings.json`:
-
-```json
-{
-  "languages": {
-    "Python": {
-      "language_servers": ["karva", "ty"]
-    }
-  }
-}
-```
+Install this directory with Zed's `Install Dev Extension` command. Zed starts
+the Karva language server for Python automatically.
 
 The extension starts the project version with `uv run karva server`. Keep `uv`
 on Zed's worktree `PATH`; no language-server binary path or release download is
@@ -44,29 +34,13 @@ Initialization and workspace settings remain available under `lsp.karva`:
 
 ## Gutter test runs
 
-Zed detects Python `test_*` functions itself and binds their gutter play icons
-to pytest by default. A project can bind the same runnable tag to Karva with
-`.zed/tasks.json`:
+Karva exposes project, file, top-level function, parametrized-case, and doctest
+targets through `experimental/runnables`. Zed uses them as native gutter tasks
+when it supports capability-advertised LSP runnables. No `.zed/tasks.json` or
+language setting is required.
 
-```json
-[
-  {
-    "label": "Karva $ZED_CUSTOM_PYTHON_TEST_TARGET",
-    "command": "uv",
-    "args": [
-      "run",
-      "karva",
-      "test",
-      "$ZED_CUSTOM_PYTHON_TEST_TARGET"
-    ],
-    "cwd": "$ZED_WORKTREE_ROOT",
-    "tags": ["python-pytest-method"]
-  }
-]
-```
-
-This file changes only the gutter action; the language server does not require
-it.
+Released Zed versions that do not yet discover runnable-capable Python language
+servers continue to show the built-in pytest tasks.
 
 ## Development
 

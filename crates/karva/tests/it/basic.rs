@@ -91,6 +91,32 @@ fn test_single_function() {
 }
 
 #[test]
+fn test_single_parametrized_case() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("value", [0, 1, 2, 3])
+def test_param(value):
+    assert value >= 0
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("test.py::test_param[2]"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_param(value=2)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_single_function_shadowed_by_file() {
     let context = TestContext::with_file(
         "test.py",

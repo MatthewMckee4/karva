@@ -8,6 +8,7 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions, WorkDoneProgressOptions,
     WorkspaceFoldersServerCapabilities,
 };
+use serde_json::json;
 
 use crate::PositionEncoding;
 
@@ -84,6 +85,11 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
         rename_provider: Some(
             RenameOptions::new(Some(true), WorkDoneProgressOptions::default()).into(),
         ),
+        experimental: Some(json!({
+            "runnables": {
+                "kinds": ["shell"]
+            }
+        })),
         workspace: Some(lsp_types::WorkspaceOptions {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                 supported: Some(true),

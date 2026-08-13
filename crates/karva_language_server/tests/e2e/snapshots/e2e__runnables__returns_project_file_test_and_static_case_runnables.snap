@@ -1,0 +1,227 @@
+---
+source: crates/karva_language_server/tests/e2e/runnables.rs
+expression: response
+---
+[
+  {
+    "args": {
+      "args": [
+        "run",
+        "karva",
+        "test"
+      ],
+      "cwd": "/project",
+      "program": "uv"
+    },
+    "kind": "shell",
+    "label": "Run Karva project",
+    "location": {
+      "targetRange": {
+        "end": {
+          "character": 0,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 0,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "targetUri": "file:///project/tests/test_runnables.py"
+    }
+  },
+  {
+    "args": {
+      "args": [
+        "run",
+        "karva",
+        "test",
+        "tests/test_runnables.py"
+      ],
+      "cwd": "/project",
+      "program": "uv"
+    },
+    "kind": "shell",
+    "label": "Run Karva file",
+    "location": {
+      "targetRange": {
+        "end": {
+          "character": 0,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 0,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "targetUri": "file:///project/tests/test_runnables.py"
+    }
+  },
+  {
+    "args": {
+      "args": [
+        "run",
+        "karva",
+        "test",
+        "tests/test_runnables.py::test_static"
+      ],
+      "cwd": "/project",
+      "program": "uv"
+    },
+    "kind": "shell",
+    "label": "Run test_static",
+    "location": {
+      "targetRange": {
+        "end": {
+          "character": 28,
+          "line": 9
+        },
+        "start": {
+          "character": 4,
+          "line": 9
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 15,
+          "line": 9
+        },
+        "start": {
+          "character": 4,
+          "line": 9
+        }
+      },
+      "targetUri": "file:///project/tests/test_runnables.py"
+    }
+  },
+  {
+    "args": {
+      "args": [
+        "run",
+        "karva",
+        "test",
+        "tests/test_runnables.py::test_static[0]"
+      ],
+      "cwd": "/project",
+      "program": "uv"
+    },
+    "kind": "shell",
+    "label": "Run test_static[0]",
+    "location": {
+      "targetRange": {
+        "end": {
+          "character": 28,
+          "line": 9
+        },
+        "start": {
+          "character": 4,
+          "line": 9
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 15,
+          "line": 9
+        },
+        "start": {
+          "character": 4,
+          "line": 9
+        }
+      },
+      "targetUri": "file:///project/tests/test_runnables.py"
+    }
+  },
+  {
+    "args": {
+      "args": [
+        "run",
+        "karva",
+        "test",
+        "tests/test_runnables.py::test_static[1]"
+      ],
+      "cwd": "/project",
+      "program": "uv"
+    },
+    "kind": "shell",
+    "label": "Run test_static[1]",
+    "location": {
+      "targetRange": {
+        "end": {
+          "character": 28,
+          "line": 9
+        },
+        "start": {
+          "character": 4,
+          "line": 9
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 15,
+          "line": 9
+        },
+        "start": {
+          "character": 4,
+          "line": 9
+        }
+      },
+      "targetUri": "file:///project/tests/test_runnables.py"
+    }
+  },
+  {
+    "args": {
+      "args": [
+        "run",
+        "karva",
+        "test",
+        "tests/test_runnables.py::test_dynamic"
+      ],
+      "cwd": "/project",
+      "program": "uv"
+    },
+    "kind": "shell",
+    "label": "Run test_dynamic",
+    "location": {
+      "targetRange": {
+        "end": {
+          "character": 24,
+          "line": 11
+        },
+        "start": {
+          "character": 4,
+          "line": 11
+        }
+      },
+      "targetSelectionRange": {
+        "end": {
+          "character": 16,
+          "line": 11
+        },
+        "start": {
+          "character": 4,
+          "line": 11
+        }
+      },
+      "targetUri": "file:///project/tests/test_runnables.py"
+    }
+  }
+]

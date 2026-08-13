@@ -13,6 +13,7 @@ mod implementation;
 mod prepare_rename;
 mod references;
 mod rename;
+mod runnables;
 
 pub(super) use completion::Completion;
 pub(super) use definition::Definition;
@@ -23,6 +24,7 @@ pub(super) use implementation::Implementation;
 pub(super) use prepare_rename::PrepareRename;
 pub(super) use references::References;
 pub(super) use rename::Rename;
+pub(super) use runnables::{Runnables, RunnablesRequest};
 
 pub(super) struct Shutdown;
 

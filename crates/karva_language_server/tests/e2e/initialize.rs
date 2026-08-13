@@ -95,6 +95,14 @@ fn initialization_advertises_document_and_workspace_sync() {
     assert!(capabilities.document_highlight_provider.is_some());
     assert!(capabilities.references_provider.is_some());
     assert!(capabilities.document_symbol_provider.is_some());
+    assert_eq!(
+        capabilities.experimental,
+        Some(serde_json::json!({
+            "runnables": {
+                "kinds": ["shell"]
+            }
+        }))
+    );
     assert!(matches!(
         capabilities.rename_provider,
         Some(lsp_types::RenameProvider::RenameOptions(options))

@@ -10,6 +10,7 @@ mod references;
 mod rename;
 mod source_index;
 mod symbols;
+mod test_targets;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::{CollectedModule, CollectionSettings, collect_source};
@@ -31,6 +32,7 @@ pub use references::{LocatedFixtureOccurrence, fixture_references};
 pub use rename::{is_valid_fixture_name, prepare_fixture_rename, rename_fixture};
 pub use source_index::WorkspaceSourceIndex;
 pub use symbols::{SourceSymbol, SourceSymbolKind, source_symbols};
+pub use test_targets::{SourceTestTarget, SourceTestTargetKind, source_test_targets};
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]
