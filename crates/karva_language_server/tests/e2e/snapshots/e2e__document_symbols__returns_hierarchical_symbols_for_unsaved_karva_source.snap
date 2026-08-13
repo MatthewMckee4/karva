@@ -1,0 +1,55 @@
+---
+source: crates/karva_language_server/tests/e2e/document_symbols.rs
+expression: response
+---
+[
+  {
+    "name": "данные",
+    "kind": 12,
+    "range": {
+      "start": {
+        "line": 3,
+        "character": 0
+      },
+      "end": {
+        "line": 4,
+        "character": 20
+      }
+    },
+    "selectionRange": {
+      "start": {
+        "line": 3,
+        "character": 15
+      },
+      "end": {
+        "line": 3,
+        "character": 21
+      }
+    }
+  },
+  {
+    "name": "test_example",
+    "detail": "2 cases",
+    "kind": 12,
+    "range": {
+      "start": {
+        "line": 6,
+        "character": 0
+      },
+      "end": {
+        "line": 7,
+        "character": 29
+      }
+    },
+    "selectionRange": {
+      "start": {
+        "line": 7,
+        "character": 4
+      },
+      "end": {
+        "line": 7,
+        "character": 16
+      }
+    }
+  }
+]
