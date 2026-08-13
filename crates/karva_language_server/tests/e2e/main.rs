@@ -1,5 +1,6 @@
 //! End-to-end language-server tests over an in-memory LSP connection.
 
+mod config_reload;
 mod document_sync;
 mod initialize;
 
@@ -88,6 +89,27 @@ impl TestServer {
         };
         assert_eq!(&response.id, expected_id);
         response
+    }
+
+    fn receive_request<R: Request>(&self) -> (RequestId, R::Params) {
+        let message = self
+            .connection
+            .as_ref()
+            .expect("test client should be connected")
+            .receiver
+            .recv()
+            .expect("language server should send a request");
+        let Message::Request(request) = message else {
+            panic!("expected request, received {message:?}");
+        };
+        assert_eq!(request.method, R::METHOD.as_str());
+        let params = serde_json::from_value(request.params)
+            .expect("request parameters should match their protocol type");
+        (request.id, params)
+    }
+
+    fn respond<R: Request>(&self, id: RequestId, result: R::Result) {
+        self.send(Message::Response(Response::new_ok(id, result)));
     }
 }
 

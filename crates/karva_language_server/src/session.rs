@@ -1,6 +1,8 @@
 //! Mutable language-server state.
 
+pub(super) mod client;
 mod index;
+mod request_queue;
 
 use std::sync::Arc;
 
@@ -11,6 +13,7 @@ use crate::workspace::{WorkspaceError, Workspaces};
 use crate::{PositionEncoding, TextDocument};
 
 use self::index::Index;
+use self::request_queue::RequestQueue;
 
 /// Failure to apply a document or workspace notification.
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +41,7 @@ pub struct Session {
     index: Index,
     position_encoding: PositionEncoding,
     shutdown_requested: bool,
+    request_queue: RequestQueue,
     workspaces: Workspaces,
 }
 
@@ -46,6 +50,7 @@ impl Session {
         Self {
             index: Index::new(workspaces.folders().cloned()),
             position_encoding,
+            request_queue: RequestQueue::default(),
             shutdown_requested: false,
             workspaces,
         }
@@ -59,12 +64,21 @@ impl Session {
         self.shutdown_requested = true;
     }
 
+    pub(super) fn request_queue_mut(&mut self) -> &mut RequestQueue {
+        &mut self.request_queue
+    }
+
     pub(super) fn open_document(&mut self, document: TextDocument) {
         self.index.open_document(document);
     }
 
     pub(super) fn project_for_uri(&mut self, uri: &Uri) -> Result<Arc<Project>, SessionError> {
         Ok(self.workspaces.project_for_uri(uri)?)
+    }
+
+    pub(super) fn configuration_changed(&mut self, uri: &Uri) -> Result<(), SessionError> {
+        self.workspaces.configuration_changed(uri)?;
+        Ok(())
     }
 
     pub(super) fn update_document(
