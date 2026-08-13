@@ -112,6 +112,12 @@ pub struct FixtureDefinition {
     /// Function-name source range.
     pub name_range: TextRange,
 
+    /// Source signature of the provider function.
+    pub signature: String,
+
+    /// Leading function docstring, when statically available.
+    pub docstring: Option<String>,
+
     /// Statically known scope, or `None` for dynamic scope metadata.
     pub scope: Option<FixtureScope>,
 
@@ -144,64 +150,100 @@ struct InvalidMetadata {
     message: String,
 }
 
+/// Static metadata for a fixture bundled with Karva.
 #[derive(Clone, Copy)]
-struct BuiltinFixture {
-    name: &'static str,
-    scope: FixtureScope,
+pub struct BuiltinFixture {
+    /// Public fixture name.
+    pub name: &'static str,
+
+    /// Runtime fixture scope.
+    pub scope: FixtureScope,
+
+    /// Source-like signature shown by editor features.
+    pub signature: &'static str,
+
+    /// User-facing description derived from the bundled implementation.
+    pub docstring: &'static str,
 }
 
 const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     BuiltinFixture {
         name: "monkeypatch",
         scope: FixtureScope::Function,
+        signature: "monkeypatch() -> Generator[MockEnv, None, None]",
+        docstring: "Fixture that provides a `MockEnv` for patching during a test.",
     },
     BuiltinFixture {
         name: "capsys",
         scope: FixtureScope::Function,
+        signature: "capsys() -> Generator[_CapsysFixture, None, None]",
+        docstring: "Capture writes to `sys.stdout` and `sys.stderr`.",
     },
     BuiltinFixture {
         name: "capfd",
         scope: FixtureScope::Function,
+        signature: "capfd() -> Generator[_CapfdFixture, None, None]",
+        docstring: "Capture writes to file descriptors 1 and 2 as strings.",
     },
     BuiltinFixture {
         name: "capsysbinary",
         scope: FixtureScope::Function,
+        signature: "capsysbinary() -> Generator[_CapsysBinaryFixture, None, None]",
+        docstring: "Capture writes to `sys.stdout` and `sys.stderr` as bytes.",
     },
     BuiltinFixture {
         name: "capfdbinary",
         scope: FixtureScope::Function,
+        signature: "capfdbinary() -> Generator[_CapsysBinaryFixture, None, None]",
+        docstring: "Capture writes to `sys.stdout` and `sys.stderr` as bytes (fd-level alias).",
     },
     BuiltinFixture {
         name: "caplog",
         scope: FixtureScope::Function,
+        signature: "caplog() -> Generator[_CapLog, None, None]",
+        docstring: "Capture log records emitted during a test.",
     },
     BuiltinFixture {
         name: "tmp_path",
         scope: FixtureScope::Function,
+        signature: "tmp_path(tmp_path_factory: TempPathFactory) -> Path",
+        docstring: "Provide a temporary directory as a `pathlib.Path` object.",
     },
     BuiltinFixture {
         name: "temp_path",
         scope: FixtureScope::Function,
+        signature: "temp_path(tmp_path_factory: TempPathFactory) -> Path",
+        docstring: "Alias for `tmp_path`.",
     },
     BuiltinFixture {
         name: "temp_dir",
         scope: FixtureScope::Function,
+        signature: "temp_dir(tmp_path_factory: TempPathFactory) -> Path",
+        docstring: "Alias for `tmp_path`.",
     },
     BuiltinFixture {
         name: "tmpdir",
         scope: FixtureScope::Function,
+        signature: "tmpdir(tmp_path_factory: TempPathFactory) -> Path",
+        docstring: "Provide a temporary directory as a `pathlib.Path` object.",
     },
     BuiltinFixture {
         name: "tmp_path_factory",
         scope: FixtureScope::Session,
+        signature: "tmp_path_factory() -> TempPathFactory",
+        docstring: "Session-scoped factory for creating numbered temporary directories.",
     },
     BuiltinFixture {
         name: "tmpdir_factory",
         scope: FixtureScope::Session,
+        signature: "tmpdir_factory() -> TempPathFactory",
+        docstring: "Session-scoped factory for creating numbered temporary directories.",
     },
     BuiltinFixture {
         name: "recwarn",
         scope: FixtureScope::Function,
+        signature: "recwarn() -> Generator[WarningsRecorder, None, None]",
+        docstring: "Return a `WarningsRecorder` that records warnings raised during a test.",
     },
 ];
 
@@ -361,6 +403,11 @@ pub fn builtin_fixtures() -> impl Iterator<Item = (&'static str, FixtureScope)> 
         .map(|fixture| (fixture.name, fixture.scope))
 }
 
+/// Returns bundled metadata for a built-in fixture name.
+pub fn builtin_info(name: &str) -> Option<BuiltinFixture> {
+    builtin(name)
+}
+
 impl FixtureProvider {
     fn from_parsed(
         parsed: &[ParsedFixture],
@@ -419,7 +466,7 @@ fn parse_provider(module: &CollectedModule, try_import_fixtures: bool) -> Fixtur
     let parsed = module
         .fixture_function_defs
         .iter()
-        .map(|function| parse_fixture(function, &path, bindings))
+        .map(|function| parse_fixture(function, &path, bindings, &module.source_text))
         .collect::<Vec<_>>();
     let imported_fixtures_unknown = (try_import_fixtures
         || module.module_type == ModuleType::Configuration)
@@ -471,12 +518,60 @@ impl FixtureBindings {
         }
         bindings
     }
+
+    fn is_parametrize_reference(self, expression: &Expr) -> bool {
+        match expression {
+            Expr::Name(name) => name.id == "parametrize",
+            Expr::Attribute(attribute) if attribute.attr.id == "parametrize" => {
+                matches!(
+                    attribute.value.as_ref(),
+                    Expr::Attribute(namespace)
+                        if matches!(
+                            (namespace.value.as_ref(), namespace.attr.id.as_str()),
+                            (Expr::Name(name), "mark") if self.pytest && name.id == "pytest"
+                        ) || matches!(
+                            (namespace.value.as_ref(), namespace.attr.id.as_str()),
+                            (Expr::Name(name), "tags") if self.karva && name.id == "karva"
+                        )
+                )
+            }
+            _ => false,
+        }
+    }
+
+    fn is_use_fixtures_reference(self, expression: &Expr) -> bool {
+        let Expr::Attribute(attribute) = expression else {
+            return false;
+        };
+        match attribute.attr.as_str() {
+            "use_fixtures" => matches!(
+                attribute.value.as_ref(),
+                Expr::Attribute(namespace)
+                    if self.karva
+                        && namespace.attr.as_str() == "tags"
+                        && matches!(namespace.value.as_ref(), Expr::Name(name) if name.id == "karva")
+            ),
+            "usefixtures" => matches!(
+                attribute.value.as_ref(),
+                Expr::Attribute(namespace)
+                    if self.pytest
+                        && namespace.attr.as_str() == "mark"
+                        && matches!(namespace.value.as_ref(), Expr::Name(name) if name.id == "pytest")
+            ),
+            _ => false,
+        }
+    }
+}
+
+pub fn is_use_fixtures_reference(module: &CollectedModule, expression: &Expr) -> bool {
+    FixtureBindings::from_statements(&module.module_body).is_use_fixtures_reference(expression)
 }
 
 fn parse_fixture(
     function: &StmtFunctionDef,
     path: &Utf8PathBuf,
     bindings: FixtureBindings,
+    source: &str,
 ) -> ParsedFixture {
     let mut public_name = function.name.to_string();
     let mut public_name_known = false;
@@ -497,7 +592,14 @@ fn parse_fixture(
             _ => None,
         }) else {
             return ParsedFixture {
-                definition: fixture_definition(function, path, public_name, scope, auto_use),
+                definition: fixture_definition(
+                    function,
+                    path,
+                    public_name,
+                    scope,
+                    auto_use,
+                    source,
+                ),
                 public_name_known,
                 invalid,
             };
@@ -570,7 +672,7 @@ fn parse_fixture(
     }
 
     ParsedFixture {
-        definition: fixture_definition(function, path, public_name, scope, auto_use),
+        definition: fixture_definition(function, path, public_name, scope, auto_use, source),
         public_name_known,
         invalid,
     }
@@ -582,6 +684,7 @@ fn fixture_definition(
     name: String,
     scope: Option<FixtureScope>,
     auto_use: Option<bool>,
+    source: &str,
 ) -> FixtureDefinition {
     FixtureDefinition {
         id: FixtureId {
@@ -591,6 +694,8 @@ fn fixture_definition(
         name,
         defining_name: function.name.to_string(),
         name_range: function.name.range,
+        signature: function_signature(function, source),
+        docstring: function_docstring(function),
         scope,
         auto_use,
         dependencies: function
@@ -603,6 +708,37 @@ fn fixture_definition(
             })
             .collect(),
     }
+}
+
+fn function_signature(function: &StmtFunctionDef, source: &str) -> String {
+    let start = function.range.start().to_usize();
+    let end = function
+        .body
+        .first()
+        .map_or(function.range, Ranged::range)
+        .start()
+        .to_usize();
+    source.get(start..end).map_or_else(
+        || format!("def {}(...)", function.name),
+        |signature| {
+            let signature = signature.trim();
+            let start = signature
+                .find("async def ")
+                .or_else(|| signature.find("def "))
+                .unwrap_or(0);
+            signature[start..].to_owned()
+        },
+    )
+}
+
+fn function_docstring(function: &StmtFunctionDef) -> Option<String> {
+    let Stmt::Expr(statement) = function.body.first()? else {
+        return None;
+    };
+    let Expr::StringLiteral(string) = statement.value.as_ref() else {
+        return None;
+    };
+    Some(string.value.to_str().to_owned())
 }
 
 fn is_fixture_decorator(expression: &Expr, bindings: FixtureBindings) -> bool {
@@ -905,7 +1041,7 @@ fn test_diagnostics(
     let path = module.path.path();
     let mut diagnostics = Vec::new();
     for test in &module.test_function_defs {
-        let Some(parametrized) = parametrized_names(test) else {
+        let Some(parametrized) = parametrized_names(module, test) else {
             continue;
         };
         diagnostics.extend(
@@ -951,14 +1087,55 @@ fn test_diagnostics(
     diagnostics
 }
 
+pub fn test_parameter_is_fixture(
+    module: &CollectedModule,
+    function: &StmtFunctionDef,
+    name: &str,
+) -> bool {
+    let bindings = FixtureBindings::from_statements(&module.module_body);
+    for decorator in &function.decorator_list {
+        let Expr::Call(call) = &decorator.expression else {
+            continue;
+        };
+        if !bindings.is_parametrize_reference(call.func.as_ref()) {
+            continue;
+        }
+        let Some(argnames) = call.arguments.args.first().or_else(|| {
+            call.arguments
+                .keywords
+                .iter()
+                .find(|keyword| {
+                    keyword
+                        .arg
+                        .as_ref()
+                        .is_some_and(|argument| argument == "argnames")
+                })
+                .map(|keyword| &keyword.value)
+        }) else {
+            return false;
+        };
+        let Some(names) = literal_names(argnames) else {
+            return false;
+        };
+        if names.iter().any(|parameter| parameter == name) {
+            return false;
+        }
+    }
+    true
+}
+
 /// Returns `None` when a decorator may supply arguments dynamically.
-fn parametrized_names(function: &StmtFunctionDef) -> Option<HashSet<String>> {
+fn parametrized_names(
+    module: &CollectedModule,
+    function: &StmtFunctionDef,
+) -> Option<HashSet<String>> {
+    let bindings = FixtureBindings::from_statements(&module.module_body);
     let mut names = HashSet::new();
     for decorator in &function.decorator_list {
         let Expr::Call(call) = &decorator.expression else {
             return None;
         };
-        if !is_parametrize_reference(call.func.as_ref()) {
+        if !bindings.is_parametrize_reference(call.func.as_ref()) {
             return None;
         }
         let argnames = call.arguments.args.first().or_else(|| {
@@ -971,26 +1148,6 @@ fn parametrized_names(function: &StmtFunctionDef) -> Option<HashSet<String>> {
         names.extend(literal_names(argnames)?);
     }
     Some(names)
-}
-
-fn is_parametrize_reference(expression: &Expr) -> bool {
-    match expression {
-        Expr::Name(name) => name.id == "parametrize",
-        Expr::Attribute(attribute) if attribute.attr.id == "parametrize" => {
-            matches!(
-                attribute.value.as_ref(),
-                Expr::Attribute(namespace)
-                    if matches!(
-                        (namespace.value.as_ref(), namespace.attr.id.as_str()),
-                        (Expr::Name(name), "mark") if name.id == "pytest"
-                    ) || matches!(
-                        (namespace.value.as_ref(), namespace.attr.id.as_str()),
-                        (Expr::Name(name), "tags") if name.id == "karva"
-                    )
-            )
-        }
-        _ => false,
-    }
 }
 
 fn literal_names(expression: &Expr) -> Option<Vec<String>> {

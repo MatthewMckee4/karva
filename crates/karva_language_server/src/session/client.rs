@@ -103,6 +103,7 @@ mod tests {
         let client = Client::new(event_sender, connection_sender);
         let mut session = Session::new(
             PositionEncoding::UTF16,
+            lsp_types::MarkupKind::PlainText,
             false,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );

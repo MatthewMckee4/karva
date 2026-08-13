@@ -2,6 +2,7 @@
 
 mod completion;
 mod fixture;
+mod hover;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::{CollectedModule, CollectionSettings, collect_source};
@@ -12,6 +13,7 @@ pub use completion::{FixtureCompletion, complete_fixtures};
 pub use fixture::{
     FixtureDefinition, FixtureId, FixtureReference, FixtureResolution, FixtureScope,
 };
+pub use hover::{FixtureHover, hover_fixture};
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]

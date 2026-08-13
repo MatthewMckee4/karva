@@ -4,6 +4,7 @@ mod completion;
 mod config_reload;
 mod diagnostics;
 mod document_sync;
+mod hover;
 mod initialize;
 
 use std::thread::JoinHandle;
