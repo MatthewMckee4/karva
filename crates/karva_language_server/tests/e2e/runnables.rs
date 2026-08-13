@@ -23,7 +23,7 @@ const SOURCE: &str = concat!(
 );
 
 #[test]
-fn returns_project_file_test_and_static_case_runnables() {
+fn returns_project_file_and_test_runnables() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/test_runnables.py");
@@ -127,14 +127,7 @@ fn position_returns_only_the_containing_test() {
         })
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        labels,
-        [
-            "Run test_static",
-            "Run test_static[0]",
-            "Run test_static[1]"
-        ]
-    );
+    assert_eq!(labels, ["Run test_static"]);
 }
 
 #[test]

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use camino::Utf8PathBuf;
-use karva_ide::{SourceTestTarget, SourceTestTargetKind, source_test_targets};
+use karva_ide::{SourceTestTarget, source_test_targets};
 use lsp_types::{
     LocationLink, LspRequestMethod, MessageDirection, Position, TextDocumentIdentifier,
 };
@@ -170,23 +170,9 @@ impl BackgroundRequestHandler for Runnables {
                 format!("Run {}", target.name),
                 project_root.clone(),
                 profile.as_deref(),
-                Some(selector.clone()),
-                location.clone(),
+                Some(selector),
+                location,
             ));
-            if let SourceTestTargetKind::Function {
-                case_count: Some(case_count),
-            } = target.kind
-            {
-                runnables.extend((0..case_count).map(|index| {
-                    shell_runnable_at(
-                        format!("Run {}[{index}]", target.name),
-                        project_root.clone(),
-                        profile.as_deref(),
-                        Some(format!("{selector}[{index}]")),
-                        location.clone(),
-                    )
-                }));
-            }
         }
 
         Ok(runnables)

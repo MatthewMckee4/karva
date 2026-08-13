@@ -1,17 +1,7 @@
-use karva_collector::{ModuleType, collect_doctests, count_parametrize_cases};
+use karva_collector::{ModuleType, collect_doctests};
 use ruff_text_size::{Ranged, TextRange};
 
 use crate::SourceAnalysis;
-
-/// Kind of test target exposed by Karva's editor analysis.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SourceTestTargetKind {
-    /// A top-level test function and its statically discoverable case count.
-    Function { case_count: Option<usize> },
-
-    /// One docstring containing executable examples.
-    Doctest,
-}
 
 /// Exact runtime target found in one source document.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,9 +14,6 @@ pub struct SourceTestTarget {
 
     /// Range an editor should highlight for the target.
     pub selection_range: TextRange,
-
-    /// Runtime target kind.
-    pub kind: SourceTestTargetKind,
 }
 
 /// Returns executable targets in source order.
@@ -42,9 +29,6 @@ pub fn source_test_targets(
             name: function.name.to_string(),
             range: function.range(),
             selection_range: function.name.range,
-            kind: SourceTestTargetKind::Function {
-                case_count: count_parametrize_cases(function),
-            },
         })
         .collect::<Vec<_>>();
 
@@ -56,7 +40,6 @@ pub fn source_test_targets(
                     name: doctest.name,
                     range: doctest.range,
                     selection_range: doctest.range,
-                    kind: SourceTestTargetKind::Doctest,
                 }),
         );
     }
@@ -89,7 +72,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_functions_cases_and_doctests_in_source_order() {
+    fn returns_functions_and_doctests_in_source_order() {
         let targets = targets(
             "\"\"\">>> 1 + 1\n2\n\"\"\"\n\n@karva.tags.parametrize(\"value\", [1, 2])\ndef test_example(value): pass\n",
             true,
@@ -98,17 +81,9 @@ mod tests {
         assert_eq!(
             targets
                 .iter()
-                .map(|target| (target.name.as_str(), target.kind))
+                .map(|target| target.name.as_str())
                 .collect::<Vec<_>>(),
-            [
-                ("doctest:@module", SourceTestTargetKind::Doctest),
-                (
-                    "test_example",
-                    SourceTestTargetKind::Function {
-                        case_count: Some(2)
-                    }
-                ),
-            ]
+            ["doctest:@module", "test_example"]
         );
     }
 

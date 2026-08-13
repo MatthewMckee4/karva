@@ -34,7 +34,7 @@ Initialization and workspace settings remain available under `lsp.karva`:
 
 ## Gutter test runs
 
-Karva exposes project, file, top-level function, parametrized-case, and doctest
+Karva exposes project, file, top-level function, and doctest
 targets through `experimental/runnables`. Zed uses them as native gutter tasks
 when it supports capability-advertised LSP runnables. No `.zed/tasks.json` or
 language setting is required.
