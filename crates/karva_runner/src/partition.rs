@@ -23,7 +23,7 @@ pub enum TestOrdering {
 
 /// Explicit function-case selectors supplied to one test invocation.
 #[derive(Debug, Default)]
-pub(crate) struct CaseSelection {
+pub struct CaseSelection {
     /// Function selectors keyed by their resolved file and name. `None` means
     /// that all cases are selected for that function.
     functions: HashMap<(Utf8PathBuf, String), Option<Vec<usize>>>,
@@ -244,7 +244,7 @@ pub fn partition_collected_tests(
 }
 
 /// Partitions collected tests while respecting explicit parameter-case selectors.
-pub(crate) fn partition_collected_tests_with_case_selection(
+pub fn partition_collected_tests_with_case_selection(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
     previous_durations: &HashMap<TestCacheKey, Duration>,

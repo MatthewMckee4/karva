@@ -30,7 +30,7 @@ fn returns_project_file_test_and_static_case_runnables() {
     workspace.write("tests/test_runnables.py", "");
     open(&mut server, uri.clone(), SOURCE);
 
-    let response = request(&mut server, &workspace, uri, None);
+    let response = request(&mut server, &workspace, &uri, None);
 
     assert_json_snapshot!(response);
 }
@@ -47,7 +47,7 @@ fn uses_nested_project_root_for_cwd_and_relative_selector() {
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     open(&mut server, uri.clone(), "def check_nested(): pass\n");
 
-    let response = request(&mut server, &workspace, uri, None);
+    let response = request(&mut server, &workspace, &uri, None);
 
     assert_eq!(response[0]["args"]["cwd"], "/project/nested");
     assert_eq!(response[0]["args"]["args"], json!(["run", "karva", "test"]));
@@ -86,8 +86,8 @@ fn keeps_runnables_independent_across_workspace_roots() {
     open(&mut server, first_uri.clone(), "def first_case(): pass\n");
     open(&mut server, second_uri.clone(), "def second_case(): pass\n");
 
-    let first_response = request(&mut server, &first, first_uri, None);
-    let second_response = request(&mut server, &second, second_uri, None);
+    let first_response = request(&mut server, &first, &first_uri, None);
+    let second_response = request(&mut server, &second, &second_uri, None);
     server.receive_notification::<PublishDiagnosticsNotification>();
 
     assert_eq!(first_response[0]["args"]["cwd"], "/project");
@@ -113,8 +113,8 @@ fn position_returns_only_the_containing_test() {
     let response = request(
         &mut server,
         &workspace,
-        uri,
-        Some(json!({"line": 9, "character": 8})),
+        &uri,
+        Some(&json!({"line": 9, "character": 8})),
     );
     let labels = response
         .as_array()
@@ -166,7 +166,7 @@ fn uses_live_source_and_selected_profile() {
     });
     server.receive_notification::<PublishDiagnosticsNotification>();
 
-    let response = request(&mut server, &workspace, uri, None);
+    let response = request(&mut server, &workspace, &uri, None);
     let serialized = serde_json::to_string(&response).expect("response should serialize");
 
     assert!(serialized.contains("check_after"));
@@ -191,7 +191,7 @@ fn returns_doctests_when_enabled_by_the_profile() {
         "\"\"\">>> 1 + 1\n2\n\"\"\"\n\nclass Example:\n    \"\"\">>> 2 + 2\n    4\n    \"\"\"\n",
     );
 
-    let response = request(&mut server, &workspace, uri, None);
+    let response = request(&mut server, &workspace, &uri, None);
     let labels = response
         .as_array()
         .expect("runnables response should be an array")
@@ -231,7 +231,7 @@ fn cancels_a_background_runnable_request_once() {
     let uri = workspace.uri("tests/test_cancel.py");
     open(&mut server, uri.clone(), "def test_cancel(): pass\n");
 
-    let request_id = server.send_request_raw(METHOD, params(uri.clone(), None));
+    let request_id = server.send_request_raw(METHOD, params(&uri, None));
     server.cancel(&request_id);
     let response = server.receive_response(&request_id);
     let error = response
@@ -240,7 +240,7 @@ fn cancels_a_background_runnable_request_once() {
 
     assert_eq!(error.code, lsp_server::ErrorCode::RequestCanceled as i32);
     assert!(
-        !request(&mut server, &workspace, uri, None)
+        !request(&mut server, &workspace, &uri, None)
             .as_array()
             .expect("runnables response should be an array")
             .is_empty()
@@ -255,7 +255,7 @@ fn rejects_runnables_from_a_stale_document_version() {
     let uri = workspace.uri("tests/test_stale.py");
     open(&mut server, uri.clone(), "def test_before(): pass\n");
 
-    let request_id = server.send_request_raw(METHOD, params(uri.clone(), None));
+    let request_id = server.send_request_raw(METHOD, params(&uri, None));
     change(&server, uri.clone(), 2, "def test_after(): pass\n");
     let response = server.receive_response(&request_id);
     server.receive_notification::<PublishDiagnosticsNotification>();
@@ -264,7 +264,7 @@ fn rejects_runnables_from_a_stale_document_version() {
         .expect_err("stale runnable request should fail");
 
     assert_eq!(error.code, lsp_server::ErrorCode::ContentModified as i32);
-    let fresh = request(&mut server, &workspace, uri, None);
+    let fresh = request(&mut server, &workspace, &uri, None);
     let serialized = serde_json::to_string(&fresh).expect("response should serialize");
     assert!(serialized.contains("test_after"));
     assert!(!serialized.contains("test_before"));
@@ -310,7 +310,7 @@ fn change(server: &TestServer, uri: lsp_types::Uri, version: i32, source: &str) 
     });
 }
 
-fn params(uri: lsp_types::Uri, position: Option<Value>) -> Value {
+fn params(uri: &lsp_types::Uri, position: Option<&Value>) -> Value {
     json!({
         "textDocument": {"uri": uri},
         "position": position,
@@ -320,8 +320,8 @@ fn params(uri: lsp_types::Uri, position: Option<Value>) -> Value {
 fn request(
     server: &mut TestServer,
     workspace: &Workspace,
-    uri: lsp_types::Uri,
-    position: Option<Value>,
+    uri: &lsp_types::Uri,
+    position: Option<&Value>,
 ) -> Value {
     let response = server.request_raw(METHOD, params(uri, position));
     let result = response
