@@ -223,9 +223,14 @@ fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str)
             }
         }
         Value::String(value) => {
+            let contains_workspace =
+                value.contains(workspace_uri) || value.contains(workspace_path);
             *value = value
                 .replace(workspace_uri, "file:///project")
                 .replace(workspace_path, "/project");
+            if contains_workspace {
+                *value = value.replace('\\', "/");
+            }
         }
         Value::Null | Value::Bool(_) | Value::Number(_) => {}
     }
