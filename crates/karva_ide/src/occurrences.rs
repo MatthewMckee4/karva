@@ -100,6 +100,22 @@ pub fn fixture_occurrence(
         .find(|occurrence| occurrence.range.contains_inclusive(offset))
 }
 
+/// Resolves the fixture symbol under `offset` to its provider identity.
+///
+/// Custom public fixture names remain addressable from both the decorator
+/// string and the provider function name used by definition navigation.
+pub fn fixture_target(analysis: &SourceAnalysis, offset: TextSize) -> Option<FixtureId> {
+    fixture_occurrence(analysis, offset)
+        .map(|occurrence| occurrence.fixture)
+        .or_else(|| {
+            analysis
+                .fixtures
+                .iter()
+                .find(|definition| definition.name_range.contains_inclusive(offset))
+                .map(|definition| definition.id.clone())
+        })
+}
+
 fn resolve_source_fixture(analysis: &SourceAnalysis, name: &str) -> Option<FixtureId> {
     if analysis
         .visible_fixtures
@@ -239,6 +255,10 @@ mod tests {
             )
         );
         assert!(fixture_occurrence(&analysis(source), at(source, "provider")).is_none());
+        assert_eq!(
+            fixture_target(&analysis(source), at(source, "provider")).map(|fixture| fixture.path),
+            Some("/project/test_example.py".into())
+        );
     }
 
     #[test]

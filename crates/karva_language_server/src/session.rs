@@ -21,7 +21,7 @@ use crate::{PositionEncoding, TextDocument};
 
 use self::index::Index;
 use self::request_queue::RequestQueue;
-use self::source_index::SourceIndexCache;
+use self::source_index::{SourceIndexCache, SourceIndexScope};
 
 pub use self::request_queue::RequestCancellationToken;
 pub use self::source_index::{PreparedSourceIndex, SourceIndexError};
@@ -149,7 +149,7 @@ pub struct Session {
     workspaces: Workspaces,
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
-    source_indexes: HashMap<Utf8PathBuf, SourceIndexCache>,
+    source_indexes: HashMap<(Utf8PathBuf, SourceIndexScope), SourceIndexCache>,
     source_index_revision: SourceIndexRevision,
 }
 
@@ -305,6 +305,22 @@ impl Session {
         &mut self,
         uri: &Uri,
     ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
+        self.prepare_source_analysis_with_scope(uri, SourceIndexScope::TestSelection)
+    }
+
+    /// Captures source state for a project-wide symbol query.
+    pub fn prepare_project_source_analysis(
+        &mut self,
+        uri: &Uri,
+    ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
+        self.prepare_source_analysis_with_scope(uri, SourceIndexScope::Project)
+    }
+
+    fn prepare_source_analysis_with_scope(
+        &mut self,
+        uri: &Uri,
+        scope: SourceIndexScope,
+    ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
         let document = self
             .index
             .document(uri)
@@ -335,7 +351,7 @@ impl Session {
             .collect::<BTreeMap<_, _>>();
         let source_index_cache = if self.cache_source_indexes {
             self.source_indexes
-                .entry(project_root.clone())
+                .entry((project_root.clone(), scope))
                 .or_default()
                 .clone()
         } else {
@@ -347,6 +363,7 @@ impl Session {
             open_sources,
             settings,
             project.settings().src().respect_ignore_files,
+            scope,
             source_index_cache,
         );
 

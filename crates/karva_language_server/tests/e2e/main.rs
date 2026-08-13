@@ -7,6 +7,7 @@ mod diagnostics;
 mod document_sync;
 mod hover;
 mod initialize;
+mod references;
 
 use std::thread::JoinHandle;
 
