@@ -7,6 +7,7 @@ mod dispatcher;
 mod output;
 mod planning;
 mod process_control;
+mod recovery;
 mod run;
 mod spawn;
 mod streams;

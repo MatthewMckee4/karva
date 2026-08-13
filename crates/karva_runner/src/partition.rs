@@ -3,8 +3,8 @@
 mod balancing;
 mod collection;
 mod ordering;
+mod recovery;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 pub use balancing::partition_collected_tests;
@@ -14,6 +14,7 @@ use collection::TestInfo;
 use karva_python_semantic::TestCacheKey;
 #[cfg(test)]
 use ordering::order_tests_for_partitioning;
+pub use recovery::{CompletedTestIndex, UnattributedCrashRecovery};
 
 /// Ordering strategy for partition inputs.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -40,8 +41,8 @@ pub struct Partition {
     /// Cumulative historical microseconds, using one per unknown test.
     weight: u128,
 
-    /// Completed cases seen before retrying a crash with no attributable test.
-    completed_before_unattributed_retry: Option<usize>,
+    /// Completed cases in this assignment when its recovery worker was spawned.
+    unattributed_retry_baseline: Option<usize>,
 }
 
 /// One schedulable selector retained while its worker generation runs.
@@ -73,7 +74,7 @@ impl Partition {
             tests: Vec::new(),
             resume_skip: Vec::new(),
             weight: 0,
-            completed_before_unattributed_retry: None,
+            unattributed_retry_baseline: None,
         }
     }
 
@@ -128,75 +129,6 @@ impl Partition {
     /// Runtime-expanded cases already handled by an earlier worker generation.
     pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
         &self.resume_skip
-    }
-
-    /// Returns work not committed before a worker crash, excluding the test
-    /// that terminated the worker.
-    pub(super) fn pending_after_crash(
-        &self,
-        completed: &HashSet<TestCacheKey>,
-        crashed: Option<&TestCacheKey>,
-    ) -> Self {
-        let mut pending = Self::new();
-        pending.resume_skip.clone_from(&self.resume_skip);
-        pending.completed_before_unattributed_retry = self.completed_before_unattributed_retry;
-        if crashed.is_none() {
-            let function_roots = self
-                .tests
-                .iter()
-                .map(|test| test.function_root.as_ref())
-                .collect::<HashSet<_>>();
-            let completed_in_partition = completed
-                .iter()
-                .filter(|completed| function_roots.contains(completed.test_function_name()))
-                .count();
-            if self.completed_before_unattributed_retry == Some(completed_in_partition) {
-                return pending;
-            }
-            pending.completed_before_unattributed_retry = Some(completed_in_partition);
-        }
-        for test in &self.tests {
-            let cache_key = test.cache_key();
-            let completed_function = completed
-                .iter()
-                .any(|completed| completed.test_function_name() == test.function_root.as_ref());
-            let contains_crashed_dynamic_case = crashed.is_some_and(|crashed| {
-                crashed.is_parameter_case()
-                    && test.case_index.is_none()
-                    && test.function_root.as_ref() == crashed.test_function_name()
-            });
-            let contains_completed_dynamic_case = crashed.is_none()
-                && test.case_index.is_none()
-                && !completed.contains(&cache_key)
-                && completed_function;
-            // A function-level selector with case-level progress was expanded
-            // at runtime. Retry the active function, or every possibly active
-            // function after an unattributed crash, and skip handled cases.
-            if contains_crashed_dynamic_case || contains_completed_dynamic_case {
-                pending.tests.push(test.clone());
-                pending.resume_skip.extend(
-                    completed
-                        .iter()
-                        .filter(|completed| {
-                            completed.test_function_name() == test.function_root.as_ref()
-                        })
-                        .cloned(),
-                );
-                if let Some(crashed) = crashed {
-                    pending.resume_skip.push(crashed.clone());
-                }
-                continue;
-            }
-            if !completed.contains(&cache_key)
-                && (!completed_function || test.case_index.is_some())
-                && crashed != Some(&cache_key)
-            {
-                pending.tests.push(test.clone());
-            }
-        }
-        pending.resume_skip.sort();
-        pending.resume_skip.dedup();
-        pending
     }
 }
 

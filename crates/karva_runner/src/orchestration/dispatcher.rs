@@ -71,6 +71,9 @@ pub(super) struct CrashedWorker {
 
     /// Test active when process exited, if any.
     pub(super) active: Option<WorkerCheckpoint>,
+
+    /// Whether the process authenticated its controller connection before exit.
+    pub(super) controller_authenticated: bool,
 }
 
 impl EventDispatcher {
@@ -164,14 +167,8 @@ impl EventDispatcher {
     }
 
     /// Adds a run-level diagnostic when no active test checkpoint survived an exit.
-    pub(super) fn register_worker_exit(
-        &mut self,
-        worker_id: usize,
-        termination: &str,
-        stderr: &str,
-    ) {
-        self.results
-            .register_worker_exit(worker_id, termination, stderr);
+    pub(super) fn register_worker_exit(&mut self, summary: &str, recovery: &str, stderr: &str) {
+        self.results.register_worker_exit(summary, recovery, stderr);
     }
 
     /// Defers one synthetic crash result so it cannot look committed to recovery.

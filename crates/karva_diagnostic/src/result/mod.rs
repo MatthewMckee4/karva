@@ -217,12 +217,10 @@ impl RunResults<RenderedDiagnostic> {
         );
     }
 
-    /// Records an unexpected worker exit that happened between tests.
-    pub fn register_worker_exit(&mut self, worker_id: usize, termination: &str, stderr: &str) {
+    /// Records an unexpected worker exit with no active test checkpoint.
+    pub fn register_worker_exit(&mut self, summary: &str, recovery: &str, stderr: &str) {
         self.add_rendered_run_diagnostic(RenderedDiagnostic::worker_exited(
-            worker_id,
-            termination,
-            stderr,
+            summary, recovery, stderr,
         ));
     }
 }

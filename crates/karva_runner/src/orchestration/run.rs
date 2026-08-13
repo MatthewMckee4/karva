@@ -13,8 +13,8 @@ use karva_logging::Printer;
 use karva_project::Project;
 
 use super::config::{ParallelTestConfig, RunOutput};
-use super::output::{print_crashed_test, termination_description};
 use super::planning::{collect_tests, last_failed_set, previous_durations, write_last_failed};
+use super::recovery::recover_crashed_workers;
 use super::spawn::{spawn_worker, spawn_workers};
 use super::supervision::WaitOutcome;
 use crate::binary::find_karva_worker_binary;
@@ -163,52 +163,18 @@ pub fn run_parallel_tests(
         )? {
             WaitOutcome::WorkersCrashed(crashed_workers) => {
                 worker_crashed = true;
-                worker_manager.dispatch_events(&mut controller)?;
-                let mut replacements = Vec::new();
-                let completed_tests = worker_manager.completed_test_keys();
-                for crashed_worker in crashed_workers {
-                    worker_manager.abandon_worker(crashed_worker.id);
-                    let termination = termination_description(crashed_worker.status);
-                    let Some(active) = crashed_worker.active else {
-                        worker_manager.register_worker_exit(
-                            crashed_worker.id,
-                            &termination,
-                            &crashed_worker.stderr,
-                        );
-                        let pending = crashed_worker
-                            .partition
-                            .pending_after_crash(&completed_tests, None);
-                        if !pending.is_empty() {
-                            replacements.push(pending);
-                        }
-                        continue;
-                    };
-                    let active = {
-                        let duration = active.started.elapsed();
-                        (active.name, active.cache_key, duration)
-                    };
-                    let (name, cache_key, duration) = active;
-                    print_crashed_test(printer, &name, duration);
-                    let pending = crashed_worker
-                        .partition
-                        .pending_after_crash(&completed_tests, Some(&cache_key));
-                    worker_manager.register_crashed_test(
-                        &name,
-                        cache_key,
-                        duration,
-                        &termination,
-                        &crashed_worker.stderr,
-                    );
-                    if !pending.is_empty() {
-                        replacements.push(pending);
-                    }
-                }
-                let failures = worker_manager.failure_count();
-                if max_fail.is_exceeded_by(failures) {
+                let recovery = recover_crashed_workers(
+                    &mut worker_manager,
+                    &mut controller,
+                    crashed_workers,
+                    max_fail,
+                    printer,
+                )?;
+                if recovery.failure_limit_reached() {
                     tracing::info!(target: "karva_runner::orchestration", "Failure budget exhausted — stopping remaining workers");
                     break WaitOutcome::FailFast;
                 }
-                for pending in replacements {
+                for pending in recovery.into_replacements() {
                     spawn_worker(
                         &mut worker_manager,
                         &spawn,

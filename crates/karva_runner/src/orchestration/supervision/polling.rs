@@ -67,9 +67,8 @@ impl WorkerSupervisor {
                     if !worker.has_exit_status() {
                         worker.observe_exit(status, server.worker_event_count(worker.id()));
                     }
-                    if server.worker_started(worker.id())?
-                        && !server.worker_disconnected(worker.id())
-                    {
+                    let controller_authenticated = server.worker_started(worker.id())?;
+                    if controller_authenticated && !server.worker_disconnected(worker.id()) {
                         let event_count = server.worker_event_count(worker.id());
                         if event_count != worker.event_count() {
                             worker.note_event_count(event_count);
@@ -112,6 +111,7 @@ impl WorkerSupervisor {
                             status,
                             stderr,
                             active,
+                            controller_authenticated,
                         });
                     }
                 }

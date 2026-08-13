@@ -69,14 +69,9 @@ impl WorkerSupervisor {
     }
 
     /// Records a run-level diagnostic for an exit with no active test checkpoint.
-    pub(super) fn register_worker_exit(
-        &mut self,
-        worker_id: usize,
-        termination: &str,
-        stderr: &str,
-    ) {
+    pub(super) fn register_worker_exit(&mut self, summary: &str, recovery: &str, stderr: &str) {
         self.dispatcher
-            .register_worker_exit(worker_id, termination, stderr);
+            .register_worker_exit(summary, recovery, stderr);
     }
 
     /// Defers an active-test crash result until recovery no longer reads completion state.

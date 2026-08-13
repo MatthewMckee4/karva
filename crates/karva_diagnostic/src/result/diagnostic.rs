@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Severity;
 
+mod worker_exit;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Diagnostic serialized for controller-side display after worker execution.
 pub struct RenderedDiagnostic {
@@ -63,15 +65,8 @@ impl RenderedDiagnostic {
     }
 
     /// Creates a run-level diagnostic when no active test can be identified.
-    pub(super) fn worker_exited(worker_id: usize, termination: &str, stderr: &str) -> Self {
-        let message = format!("Worker {worker_id} terminated with {termination}");
-        let mut rendered = format!("error[worker-crashed]: {message}\n");
-        if !stderr.trim().is_empty() {
-            rendered.push_str("\nWorker stderr:\n");
-            rendered.push_str(stderr.trim_end());
-            rendered.push('\n');
-        }
-        Self::new("worker-crashed", Severity::Error, &message, rendered)
+    pub(super) fn worker_exited(summary: &str, recovery: &str, stderr: &str) -> Self {
+        worker_exit::render(summary, recovery, stderr)
     }
 
     pub fn code(&self) -> &str {
