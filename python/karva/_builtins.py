@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
-from karva._fixtures.tmpdir import TempPathFactory
+from karva._fixtures.tmpdir import LegacyPath, TempPathFactory
 from karva._karva import fixture
 
 __all__ = [
@@ -503,9 +503,9 @@ def temp_dir(tmp_path_factory: TempPathFactory) -> Path:
 
 
 @fixture
-def tmpdir(tmp_path_factory: TempPathFactory) -> Path:
-    """Provide a temporary directory as a :class:`pathlib.Path`."""
-    return tmp_path_factory.mktemp("test")
+def tmpdir(tmp_path_factory: TempPathFactory) -> LegacyPath:
+    """Provide a temporary directory with pytest's legacy path methods."""
+    return LegacyPath(tmp_path_factory.mktemp("test"))
 
 
 @fixture(scope="session")

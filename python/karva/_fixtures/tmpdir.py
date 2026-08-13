@@ -30,6 +30,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal, final
 
+if os.name == "nt":
+    from pathlib import WindowsPath as PlatformPath
+else:
+    from pathlib import PosixPath as PlatformPath
+
 from karva._fixtures.pathlib import (
     LOCK_TIMEOUT,
     make_numbered_dir,
@@ -38,6 +43,35 @@ from karva._fixtures.pathlib import (
 )
 
 RetentionType = Literal["all", "failed", "none"]
+
+
+class LegacyPath(PlatformPath):
+    """Path with the legacy methods exposed by pytest's ``tmpdir`` fixture."""
+
+    @property
+    def strpath(self) -> str:
+        """Return the path as a string."""
+        return str(self)
+
+    def join(self, *parts: str | os.PathLike[str]) -> LegacyPath:
+        """Return a path formed by appending path components."""
+        return self.joinpath(*parts)
+
+    def write(self, data: str) -> None:
+        """Write UTF-8 text to the path."""
+        self.write_text(data, encoding="utf-8")
+
+    def read(self) -> str:
+        """Read UTF-8 text from the path."""
+        return self.read_text(encoding="utf-8")
+
+    def write_binary(self, data: bytes) -> None:
+        """Write bytes to the path."""
+        self.write_bytes(data)
+
+    def read_binary(self) -> bytes:
+        """Read bytes from the path."""
+        return self.read_bytes()
 
 
 def _noop_trace(*_args: object, **_kwargs: object) -> None:
