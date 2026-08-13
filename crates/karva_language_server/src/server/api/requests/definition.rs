@@ -8,7 +8,7 @@ use super::super::traits::{BackgroundRequestHandler, RequestHandler};
 use crate::PositionEncoding;
 use crate::document::{position_to_text_size, text_range_to_range};
 use crate::session::client::Client;
-use crate::session::{PreparedSourceAnalysis, Session};
+use crate::session::{PreparedSourceAnalysis, RequestCancellationToken, Session};
 
 pub(in crate::server::api) struct Definition;
 
@@ -36,6 +36,7 @@ impl BackgroundRequestHandler for Definition {
         snapshot: Self::Snapshot,
         _client: &Client,
         params: DefinitionParams,
+        _cancellation: &RequestCancellationToken,
     ) -> anyhow::Result<Option<DefinitionResponse>> {
         let Some(prepared) = snapshot.analysis else {
             return Ok(None);

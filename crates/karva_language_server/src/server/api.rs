@@ -9,8 +9,8 @@ use lsp_types::{
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
+use crate::session::Session;
 use crate::session::client::Client;
-use crate::session::{RequestCancellationToken, Session};
 
 mod diagnostics;
 mod notifications;
@@ -122,15 +122,16 @@ where
         let document_version = snapshot.as_ref().ok().and_then(H::document_version);
 
         Box::new(move |client| {
-            if cancellation
-                .as_ref()
-                .is_some_and(RequestCancellationToken::is_cancelled)
-            {
+            let Some(cancellation) = cancellation else {
+                return;
+            };
+            if cancellation.is_cancelled() {
                 return;
             }
             let response = if let Ok(response) =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let result = snapshot.and_then(|snapshot| H::run(snapshot, client, params));
+                    let result = snapshot
+                        .and_then(|snapshot| H::run(snapshot, client, params, &cancellation));
                     result_response(id.clone(), result)
                 })) {
                 response
@@ -142,6 +143,9 @@ where
                     "background request handler panicked".to_owned(),
                 )
             };
+            if cancellation.is_cancelled() {
+                return;
+            }
             let send_result = if let Some((uri, version)) = document_version {
                 client.respond_versioned(response, uri, version)
             } else {
