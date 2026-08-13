@@ -8,7 +8,7 @@ use super::super::traits::{BackgroundRequestHandler, RequestHandler};
 use crate::PositionEncoding;
 use crate::document::{position_to_text_size, text_range_to_range};
 use crate::session::client::Client;
-use crate::session::{PreparedSourceAnalysis, Session};
+use crate::session::{PreparedSourceAnalysis, RequestCancellationToken, Session};
 
 pub(in crate::server::api) struct Hover;
 
@@ -38,6 +38,7 @@ impl BackgroundRequestHandler for Hover {
         snapshot: Self::Snapshot,
         _client: &Client,
         params: HoverParams,
+        _cancellation: &RequestCancellationToken,
     ) -> anyhow::Result<Option<lsp_types::Hover>> {
         let Some(prepared) = snapshot.analysis else {
             return Ok(None);

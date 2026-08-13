@@ -1,7 +1,7 @@
 use lsp_types::{Notification, Request};
 
-use crate::session::Session;
 use crate::session::client::Client;
+use crate::session::{RequestCancellationToken, Session};
 
 pub(super) trait RequestHandler {
     type RequestType: Request;
@@ -28,6 +28,7 @@ pub(super) trait BackgroundRequestHandler: RequestHandler {
         snapshot: Self::Snapshot,
         client: &Client,
         params: <<Self as RequestHandler>::RequestType as Request>::Params,
+        cancellation: &RequestCancellationToken,
     ) -> anyhow::Result<<<Self as RequestHandler>::RequestType as Request>::Result>;
 
     fn document_version(_snapshot: &Self::Snapshot) -> Option<(lsp_types::Uri, i32)> {
