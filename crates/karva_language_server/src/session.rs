@@ -88,6 +88,12 @@ pub struct DiagnosticAnalysisSnapshot {
     pub sources: HashMap<Utf8PathBuf, String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum HierarchicalDocumentSymbols {
+    Supported,
+    Unsupported,
+}
+
 /// Owned inputs for source analysis that can move off the event-loop thread.
 #[derive(Debug)]
 pub struct PreparedSourceAnalysis {
@@ -146,6 +152,7 @@ pub struct Session {
     shutdown_requested: bool,
     request_queue: RequestQueue,
     supports_diagnostic_related_information: bool,
+    hierarchical_document_symbols: HierarchicalDocumentSymbols,
     workspaces: Workspaces,
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
@@ -158,6 +165,7 @@ impl Session {
         position_encoding: PositionEncoding,
         hover_markup_kind: MarkupKind,
         supports_diagnostic_related_information: bool,
+        supports_hierarchical_document_symbols: bool,
         workspaces: Workspaces,
     ) -> Self {
         Self {
@@ -167,6 +175,11 @@ impl Session {
             request_queue: RequestQueue::default(),
             shutdown_requested: false,
             supports_diagnostic_related_information,
+            hierarchical_document_symbols: if supports_hierarchical_document_symbols {
+                HierarchicalDocumentSymbols::Supported
+            } else {
+                HierarchicalDocumentSymbols::Unsupported
+            },
             workspaces,
             published_diagnostic_paths: HashSet::new(),
             cache_source_indexes: false,
@@ -201,6 +214,13 @@ impl Session {
 
     pub fn supports_diagnostic_related_information(&self) -> bool {
         self.supports_diagnostic_related_information
+    }
+
+    pub fn supports_hierarchical_document_symbols(&self) -> bool {
+        matches!(
+            self.hierarchical_document_symbols,
+            HierarchicalDocumentSymbols::Supported
+        )
     }
 
     pub fn open_document_uris(&self) -> impl Iterator<Item = &Uri> {

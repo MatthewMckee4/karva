@@ -46,6 +46,16 @@ pub fn supports_diagnostic_related_information(capabilities: &ClientCapabilities
         .unwrap_or(false)
 }
 
+/// Returns whether the client accepts hierarchical document symbols.
+pub fn supports_hierarchical_document_symbols(capabilities: &ClientCapabilities) -> bool {
+    capabilities
+        .text_document
+        .as_ref()
+        .and_then(|text_document| text_document.document_symbol.as_ref())
+        .and_then(|document_symbol| document_symbol.hierarchical_document_symbol_support)
+        .unwrap_or(false)
+}
+
 pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabilities {
     ServerCapabilities {
         position_encoding: Some(position_encoding.into()),
@@ -64,6 +74,7 @@ pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabil
         hover_provider: Some(true.into()),
         references_provider: Some(true.into()),
         document_highlight_provider: Some(true.into()),
+        document_symbol_provider: Some(true.into()),
         rename_provider: Some(
             RenameOptions::new(Some(true), WorkDoneProgressOptions::default()).into(),
         ),

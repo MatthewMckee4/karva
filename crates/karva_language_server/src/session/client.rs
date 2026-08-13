@@ -103,6 +103,7 @@ mod tests {
             PositionEncoding::UTF16,
             lsp_types::MarkupKind::PlainText,
             false,
+            false,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         let id = RequestId::from(7);
