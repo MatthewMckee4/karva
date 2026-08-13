@@ -1164,6 +1164,7 @@ dependencies = [
  "camino",
  "karva_collector",
  "ruff_python_ast",
+ "ruff_python_stdlib",
  "ruff_text_size",
 ]
 
