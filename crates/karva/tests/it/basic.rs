@@ -910,7 +910,7 @@ fn test_fixture_generator_two_yields_failing_test() {
     9 | def test_fixture_generator(fixture_generator):
       |     ^^^^^^^^^^^^^^^^^^^^^^
     info: Test ran with arguments:
-      info: `fixture_generator`: `1`
+    info:   `fixture_generator`: `1`
     info: Test failed here
       --> test.py:10:5
        |
@@ -1011,7 +1011,7 @@ fn test_fixture_generator_setup_failure_reports_arguments() {
     9 | def broken_generator(dependency):
       |     ^^^^^^^^^^^^^^^^
     info: Fixture ran with arguments:
-      info: `dependency`: `prepared`
+    info:   `dependency`: `prepared`
     info: Fixture failed here
       --> test.py:10:5
        |
@@ -1312,7 +1312,7 @@ def test_1(fixture_very_very_very_very_very_long_name):
     8 | def test_1(fixture_very_very_very_very_very_long_name):
       |     ^^^^^^
     info: Test ran with arguments:
-      info: `fixture_very_very_very_very...`: `fixture_very_very_very_very...`
+    info:   `fixture_very_very_very_very...`: `fixture_very_very_very_very...`
     info: Test failed here
      --> test_file.py:9:5
       |
