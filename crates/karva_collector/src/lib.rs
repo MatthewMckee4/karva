@@ -60,23 +60,43 @@ pub fn collect_file(
     settings: &CollectionSettings,
     function_names: &[String],
 ) -> Result<Option<CollectedModule>, CollectionError> {
-    let Some(module_path) = ModulePath::new(path, cwd) else {
+    if ModulePath::new(path, cwd).is_none() {
         return Ok(None);
-    };
+    }
 
     let source_text = fs::read_to_string(path).map_err(|source| CollectionError::ReadSource {
         path: path.clone(),
         source,
     })?;
 
+    Ok(collect_source(
+        path,
+        cwd,
+        source_text,
+        settings,
+        function_names,
+    ))
+}
+
+/// Collects tests and fixtures from supplied Python source.
+///
+/// This is the source-first collection boundary used for unsaved editor buffers.
+/// Ruff's error recovery preserves any functions it can parse from incomplete source.
+/// Returns `None` when `path` lies outside `cwd` or cannot produce a module syntax tree.
+pub fn collect_source(
+    path: &Utf8PathBuf,
+    cwd: &Utf8Path,
+    source_text: String,
+    settings: &CollectionSettings,
+    function_names: &[String],
+) -> Option<CollectedModule> {
+    let module_path = ModulePath::new(path, cwd)?;
     let module_type: ModuleType = path.into();
 
     let parse_options =
         ParseOptions::from(Mode::Module).with_target_version(settings.python_version);
 
-    let Some(parsed) = parse_unchecked(&source_text, parse_options).try_into_module() else {
-        return Ok(None);
-    };
+    let parsed = parse_unchecked(&source_text, parse_options).try_into_module()?;
 
     let module_body = parsed.into_suite();
     let function_defs = module_body
@@ -119,7 +139,7 @@ pub fn collect_file(
         }
     }
 
-    Ok(Some(collected_module))
+    Some(collected_module)
 }
 
 fn collect_doctests(module_body: &[Stmt], source_text: &str) -> Vec<CollectedDoctest> {
@@ -523,6 +543,102 @@ class Thing:
             .expect("outside temp path should be UTF-8");
 
         let module = collect_file(&path, &cwd, &settings(), &[]).expect("collect file");
+
+        assert!(module.is_none());
+    }
+
+    #[test]
+    fn collect_file_skips_unreadable_paths_outside_cwd() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
+            .expect("temp path should be UTF-8");
+        let outside_dir = tempfile::tempdir().expect("create outside temp dir");
+        let cwd = Utf8PathBuf::from_path_buf(outside_dir.path().to_path_buf())
+            .expect("outside temp path should be UTF-8");
+
+        let module =
+            collect_file(&root.join("missing.py"), &cwd, &settings(), &[]).expect("collect file");
+
+        assert!(module.is_none());
+    }
+
+    #[test]
+    fn collect_source_uses_unsaved_text() {
+        let (_temp_dir, root, path) = python_file("test_sample.py", "def helper(): pass\n");
+        let source_text = "def test_unsaved(): pass\n".to_string();
+
+        let module = collect_source(&path, &root, source_text.clone(), &settings(), &[])
+            .expect("module should collect");
+
+        assert_eq!(function_names(&module.test_function_defs), ["test_unsaved"]);
+        let range = module.test_function_defs[0].range;
+        assert_eq!(
+            module
+                .source_text
+                .get(usize::from(range.start())..usize::from(range.end())),
+            Some("def test_unsaved(): pass")
+        );
+        assert_eq!(module.source_text, source_text);
+    }
+
+    #[test]
+    fn collect_source_recovers_from_syntax_errors() {
+        let (_temp_dir, root, path) = python_file("test_sample.py", "");
+        let source_text = "broken =\ndef test_after_error(): pass\n".to_string();
+
+        let module = collect_source(&path, &root, source_text, &settings(), &[])
+            .expect("module should collect");
+
+        assert_eq!(
+            function_names(&module.test_function_defs),
+            ["test_after_error"]
+        );
+    }
+
+    #[test]
+    fn collect_source_respects_configured_prefix() {
+        let (_temp_dir, root, path) = python_file("test_sample.py", "");
+        let source_text = "def test_default(): pass\ndef spec_custom(): pass\n".to_string();
+        let settings = CollectionSettings {
+            test_function_prefix: "spec_",
+            ..settings()
+        };
+
+        let module = collect_source(&path, &root, source_text, &settings, &[])
+            .expect("module should collect");
+
+        assert_eq!(function_names(&module.test_function_defs), ["spec_custom"]);
+    }
+
+    #[test]
+    fn collect_source_collects_fixtures() {
+        let (_temp_dir, root, path) = python_file("test_sample.py", "");
+        let source_text = "from karva import fixture\n@fixture\ndef database(): pass\n".to_string();
+        let settings = CollectionSettings {
+            collect_fixtures: true,
+            ..settings()
+        };
+
+        let module = collect_source(&path, &root, source_text, &settings, &[])
+            .expect("module should collect");
+
+        assert_eq!(function_names(&module.fixture_function_defs), ["database"]);
+    }
+
+    #[test]
+    fn collect_source_skips_paths_outside_cwd() {
+        let (_temp_dir, _root, path) = python_file("test_sample.py", "");
+        let outside_dir = tempfile::tempdir().expect("create outside temp dir");
+        let cwd = Utf8PathBuf::from_path_buf(outside_dir.path().to_path_buf())
+            .expect("outside temp path should be UTF-8");
+
+        let module = collect_source(
+            &path,
+            &cwd,
+            "def test_sample(): pass\n".to_string(),
+            &settings(),
+            &[],
+        );
 
         assert!(module.is_none());
     }
