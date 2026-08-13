@@ -7,8 +7,11 @@ mod name;
 
 pub use function_kind::FunctionKind;
 pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
+#[cfg(feature = "python-runtime")]
 use pyo3::Python;
-use ruff_python_ast::{Expr, PythonVersion, StmtFunctionDef};
+#[cfg(feature = "python-runtime")]
+use ruff_python_ast::PythonVersion;
+use ruff_python_ast::{Expr, StmtFunctionDef};
 
 /// Check whether a file path has a `.py` extension.
 pub fn is_python_file(path: &Utf8Path) -> bool {
@@ -63,6 +66,7 @@ pub(crate) fn module_name(cwd: &Utf8Path, path: &Utf8Path) -> Option<String> {
 /// This function queries the embedded Python interpreter to determine
 /// the major and minor version numbers, which are used for AST parsing
 /// compatibility and feature detection.
+#[cfg(feature = "python-runtime")]
 pub fn current_python_version() -> PythonVersion {
     Python::initialize();
     PythonVersion::from(Python::attach(|py| {

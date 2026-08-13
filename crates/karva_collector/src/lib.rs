@@ -83,7 +83,7 @@ pub fn collect_file(
 /// This is the source-first collection boundary used for unsaved editor buffers.
 /// Ruff's error recovery preserves any functions it can parse from incomplete source.
 /// Returns `None` when `path` lies outside `cwd` or cannot produce a module syntax tree.
-fn collect_source(
+pub fn collect_source(
     path: &Utf8PathBuf,
     cwd: &Utf8Path,
     source_text: String,
