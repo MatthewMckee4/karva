@@ -21,6 +21,7 @@ karva_coverage = { path = "crates/karva_coverage" }
 karva_diagnostic = { path = "crates/karva_diagnostic" }
 karva_ide = { path = "crates/karva_ide" }
 karva_ipc = { path = "crates/karva_ipc" }
+karva_language_server = { path = "crates/karva_language_server" }
 karva_logging = { path = "crates/karva_logging" }
 karva_macros = { path = "crates/karva_macros" }
 karva_metadata = { path = "crates/karva_metadata" }

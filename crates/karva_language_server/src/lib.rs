@@ -68,7 +68,7 @@ fn discover_project(
 }
 
 /// Runs the Karva language server over standard input and output.
-pub fn run() -> anyhow::Result<()> {
+pub fn run_server() -> anyhow::Result<()> {
     let (connection, io_threads) = ConnectionInitializer::stdio();
     let server_result = Server::new(connection)
         .context("failed to initialize language server")?

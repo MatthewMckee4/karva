@@ -3283,12 +3283,34 @@ fn test_no_subcommand_prints_help() {
       coverage     Read and report native Karva coverage data
       cache        Manage the karva cache
       show-config  Print the resolved configuration karva would run with
+      server       Run the language server
       version      Display Karva's version
       help         Print this message or the help of the given subcommand(s)
 
     Options:
       -h, --help     Print help
       -V, --version  Print version
+    ");
+}
+
+#[test]
+fn test_server_subcommand_prints_help() {
+    let context = TestContext::new();
+    let mut command = context.karva_command_in(context.root());
+    command.args(["server", "--help"]);
+
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Run the language server
+
+    Usage: karva server
+
+    Options:
+      -h, --help  Print help
+
+    ----- stderr -----
     ");
 }
 

@@ -68,6 +68,9 @@ pub enum Command {
     /// Print the resolved configuration karva would run with.
     ShowConfig(ShowConfigCommand),
 
+    /// Run the language server.
+    Server,
+
     /// Generate shell completion.
     #[command(hide = true)]
     GenerateShellCompletion {
