@@ -8,7 +8,9 @@ use super::super::traits::{BackgroundRequestHandler, RequestHandler};
 use crate::PositionEncoding;
 use crate::document::{position_to_text_size, text_range_to_range};
 use crate::session::client::Client;
-use crate::session::{PreparedSourceAnalysis, RequestCancellationToken, Session};
+use crate::session::{
+    DocumentSnapshotVersion, PreparedSourceAnalysis, RequestCancellationToken, Session,
+};
 
 pub(in crate::server::api) struct Hover;
 
@@ -38,7 +40,7 @@ impl BackgroundRequestHandler for Hover {
         snapshot: Self::Snapshot,
         _client: &Client,
         params: HoverParams,
-        _cancellation: &RequestCancellationToken,
+        cancellation: &RequestCancellationToken,
     ) -> anyhow::Result<Option<lsp_types::Hover>> {
         let Some(prepared) = snapshot.analysis else {
             return Ok(None);
@@ -51,7 +53,7 @@ impl BackgroundRequestHandler for Hover {
             &index,
             snapshot.position_encoding,
         );
-        let Some(analysis) = prepared.analyze()? else {
+        let Some(analysis) = prepared.analyze(cancellation)? else {
             return Ok(None);
         };
         let Some(hover) = hover_fixture(&analysis.analysis, offset) else {
@@ -74,11 +76,11 @@ impl BackgroundRequestHandler for Hover {
         )))
     }
 
-    fn document_version(snapshot: &Self::Snapshot) -> Option<(lsp_types::Uri, i32)> {
+    fn document_version(snapshot: &Self::Snapshot) -> Option<DocumentSnapshotVersion> {
         snapshot
             .analysis
             .as_ref()
-            .map(|analysis| (analysis.document_uri().clone(), analysis.document_version()))
+            .map(PreparedSourceAnalysis::response_version)
     }
 }
 

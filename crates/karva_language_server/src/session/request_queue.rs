@@ -96,7 +96,7 @@ impl RequestCancellationToken {
         self.0.load(Ordering::Relaxed)
     }
 
-    fn cancel(&self) {
+    pub(super) fn cancel(&self) {
         self.0.store(true, Ordering::Relaxed);
     }
 }
