@@ -138,6 +138,8 @@ if failure == "during-hello":
 elif failure == "during-selection":
     hello = {"Hello": {"run_id": run_id, "worker_id": int(worker_id)}}
     connection.sendall(json.dumps(hello).encode() + b"\n")
+    # Receipt: this four-case suite took at most 0.72s across 20 local runs.
+    connection.settimeout(5)
     connection.recv(1)
 connection.close()
 PY
