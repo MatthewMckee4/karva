@@ -7,6 +7,7 @@ mod cancel;
 mod configuration;
 mod coverage;
 mod coverage_command;
+#[cfg(unix)]
 mod diagnostic_svg;
 mod discovery;
 mod doctest;
