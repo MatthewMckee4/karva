@@ -8,6 +8,7 @@ mod document_highlight;
 mod document_symbols;
 mod document_sync;
 mod hover;
+mod implementation;
 mod initialize;
 mod references;
 mod rename;

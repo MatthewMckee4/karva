@@ -16,15 +16,17 @@ pub(super) use task::{BackgroundSchedule, Task};
 pub(super) struct Scheduler {
     worker_threads: NonZeroUsize,
     background_pool: Option<thread::Pool>,
+    latest_pool: thread::LatestPool,
 }
 
 impl Scheduler {
     /// Creates scheduler using explicit worker count.
-    pub(super) fn new(worker_threads: NonZeroUsize) -> Self {
-        Self {
+    pub(super) fn new(worker_threads: NonZeroUsize) -> io::Result<Self> {
+        Ok(Self {
             worker_threads,
             background_pool: None,
-        }
+            latest_pool: thread::LatestPool::new()?,
+        })
     }
 
     /// Dispatches task while retaining mutable session access only for sync work.
@@ -42,6 +44,9 @@ impl Scheduler {
                             job();
                         }
                     },
+                    BackgroundSchedule::Latest => {
+                        self.latest_pool.spawn(job);
+                    }
                 }
             }
         }

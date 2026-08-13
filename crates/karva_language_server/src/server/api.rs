@@ -5,21 +5,24 @@ use lsp_types::{
     CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
     DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
     DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
-    DocumentSymbolRequest, HoverRequest, LspNotificationMethod, LspRequestMethod,
-    Notification as _, PrepareRenameRequest, ReferencesRequest, RenameRequest, Request as _,
-    ShutdownRequest,
+    DocumentSymbolRequest, HoverRequest, ImplementationRequest, LspNotificationMethod,
+    LspRequestMethod, Notification as _, PrepareRenameRequest, ReferencesRequest, RenameRequest,
+    Request as _, ShutdownRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
 use crate::session::Session;
 use crate::session::client::Client;
 
-mod diagnostics;
+pub(super) mod diagnostics;
 mod notifications;
 mod requests;
 mod traits;
 
-use self::traits::{BackgroundRequestHandler, SyncNotificationHandler, SyncRequestHandler};
+use self::traits::{
+    BackgroundRequestHandler, DiagnosticNotificationHandler, NotificationHandler,
+    SyncNotificationHandler, SyncRequestHandler,
+};
 
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]
@@ -43,6 +46,9 @@ pub(super) fn request(request: Request) -> Task {
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
         HoverRequest::METHOD => background_request_task::<requests::Hover>(request),
+        ImplementationRequest::METHOD => {
+            background_request_task::<requests::Implementation>(request)
+        }
         DocumentHighlightRequest::METHOD => {
             background_request_task::<requests::DocumentHighlight>(request)
         }
@@ -64,20 +70,20 @@ pub(super) fn notification(notification: Notification) -> Task {
     match LspNotificationMethod::from(notification.method.as_str()) {
         CancelNotification::METHOD => sync_notification_task::<notifications::Cancel>(notification),
         DidOpenTextDocumentNotification::METHOD => {
-            sync_notification_task::<notifications::DidOpen>(notification)
+            background_diagnostic_notification_task::<notifications::DidOpen>(notification)
         }
         DidChangeTextDocumentNotification::METHOD => {
-            sync_notification_task::<notifications::DidChange>(notification)
+            background_diagnostic_notification_task::<notifications::DidChange>(notification)
         }
         DidCloseTextDocumentNotification::METHOD => {
-            sync_notification_task::<notifications::DidClose>(notification)
+            background_diagnostic_notification_task::<notifications::DidClose>(notification)
         }
-        DidChangeWorkspaceFoldersNotification::METHOD => {
-            sync_notification_task::<notifications::DidChangeWorkspaceFolders>(notification)
-        }
-        DidChangeWatchedFilesNotification::METHOD => {
-            sync_notification_task::<notifications::DidChangeWatchedFiles>(notification)
-        }
+        DidChangeWorkspaceFoldersNotification::METHOD => background_diagnostic_notification_task::<
+            notifications::DidChangeWorkspaceFolders,
+        >(notification),
+        DidChangeWatchedFilesNotification::METHOD => background_diagnostic_notification_task::<
+            notifications::DidChangeWatchedFiles,
+        >(notification),
         method => {
             tracing::debug!(%method, "ignoring unsupported notification");
             Task::nothing()
@@ -223,5 +229,41 @@ where
         if let Err(error) = H::run(session, client, params) {
             tracing::warn!(%error, "failed to handle notification");
         }
+    })
+}
+
+fn background_diagnostic_notification_task<H>(notification: Notification) -> Task
+where
+    H: DiagnosticNotificationHandler,
+    <<H as NotificationHandler>::NotificationType as lsp_types::Notification>::Params:
+        Send + 'static,
+{
+    let params = match serde_json::from_value(notification.params) {
+        Ok(params) => params,
+        Err(error) => {
+            tracing::warn!(%error, "invalid notification parameters");
+            return Task::nothing();
+        }
+    };
+
+    Task::background(BackgroundSchedule::Latest, move |session| {
+        if let Err(error) = H::run(session, params) {
+            tracing::warn!(%error, "failed to handle notification");
+        }
+        let prepared = session.prepare_diagnostics();
+        let position_encoding = session.position_encoding();
+        let supports_related_information = session.supports_diagnostic_related_information();
+        Box::new(move |client| {
+            let Some(publication) = diagnostics::compute_diagnostics(
+                prepared,
+                position_encoding,
+                supports_related_information,
+            ) else {
+                return;
+            };
+            if let Err(error) = client.publish_diagnostics(publication) {
+                tracing::warn!(%error, "failed to queue diagnostics");
+            }
+        })
     })
 }

@@ -47,3 +47,11 @@ pub(super) trait SyncNotificationHandler: NotificationHandler {
         params: <<Self as NotificationHandler>::NotificationType as Notification>::Params,
     ) -> anyhow::Result<()>;
 }
+
+/// A notification whose mutation can be followed by background diagnostics.
+pub(super) trait DiagnosticNotificationHandler: NotificationHandler {
+    fn run(
+        session: &mut Session,
+        params: <<Self as NotificationHandler>::NotificationType as Notification>::Params,
+    ) -> anyhow::Result<()>;
+}

@@ -76,6 +76,7 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
         ),
         completion_provider: Some(CompletionOptions::default()),
         definition_provider: Some(true.into()),
+        implementation_provider: Some(true.into()),
         hover_provider: Some(true.into()),
         references_provider: Some(true.into()),
         document_highlight_provider: Some(true.into()),
