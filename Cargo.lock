@@ -1158,6 +1158,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_ide"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "karva_collector",
+ "ruff_python_ast",
+ "ruff_text_size",
+]
+
+[[package]]
 name = "karva_ipc"
 version = "0.0.0"
 dependencies = [
