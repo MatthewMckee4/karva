@@ -1,0 +1,46 @@
+---
+source: crates/karva_language_server/tests/e2e/implementation.rs
+expression: "workspace.normalize([parameter, metadata, local, builtin])"
+---
+[
+  {
+    "range": {
+      "end": {
+        "character": 18,
+        "line": 3
+      },
+      "start": {
+        "character": 4,
+        "line": 3
+      }
+    },
+    "uri": "file:///project/conftest.py"
+  },
+  {
+    "range": {
+      "end": {
+        "character": 18,
+        "line": 3
+      },
+      "start": {
+        "character": 4,
+        "line": 3
+      }
+    },
+    "uri": "file:///project/conftest.py"
+  },
+  {
+    "range": {
+      "end": {
+        "character": 9,
+        "line": 4
+      },
+      "start": {
+        "character": 4,
+        "line": 4
+      }
+    },
+    "uri": "file:///project/test_example.py"
+  },
+  null
+]

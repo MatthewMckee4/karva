@@ -120,7 +120,7 @@ pub(super) struct FixtureDefinition {
 
     /// Source range of the provider's first yield expression, or its function
     /// name when the provider is not a generator.
-    pub implementation_range: TextRange,
+    pub(super) implementation_range: TextRange,
 
     /// Source range representing the public fixture name.
     ///
