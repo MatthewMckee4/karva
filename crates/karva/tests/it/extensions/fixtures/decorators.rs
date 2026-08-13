@@ -195,7 +195,6 @@ def test_fixtures_given_by_decorator(a, b):
        |
     13 | def test_fixtures_given_by_decorator(a, b):
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Missing fixtures: `b`
 
     ────────────

@@ -2,8 +2,12 @@ use std::borrow::Cow;
 use std::fmt::Write;
 use std::io;
 
+use annotate_snippets::{Group, Level, Patch, Renderer, Snippet};
 use colored::Colorize;
-use similar::{Algorithm, ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, DiffTag, TextDiff};
+
+/// Snapshot content follows the opening delimiter, metadata line, and closing delimiter.
+const SNAPSHOT_CONTENT_LINE: usize = 4;
 
 /// Append a trailing newline if the input is non-empty and doesn't already end
 /// with one. `diff_lines` keeps each line's terminator as part of the line,
@@ -21,7 +25,7 @@ fn ensure_trailing_newline(s: &str) -> Cow<'_, str> {
 ///
 /// Uses `grouped_ops` for context-aware output with separators between groups,
 /// and `iter_inline_changes` for word-level emphasis on changed portions.
-fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
+fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered: bool) {
     let old = ensure_trailing_newline(old);
     let new = ensure_trailing_newline(new);
 
@@ -35,22 +39,28 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
     }
 
     let max_line = old.lines().count().max(new.lines().count());
-    let num_width = max_line.to_string().len().max(5);
-    let gutter_width = 2 * num_width + 2;
+    let num_width = if bordered {
+        max_line.to_string().len().max(5)
+    } else {
+        max_line.to_string().len()
+    };
+    let gutter_width = if bordered {
+        2 * num_width + 2
+    } else {
+        num_width + 1
+    };
     let content_width = width.saturating_sub(gutter_width + 1);
-    let separator_pad = gutter_width.saturating_sub(4);
-    let _ = writeln!(output, "{:─<gutter_width$}┬{:─<content_width$}", "", "");
+    if bordered {
+        let _ = writeln!(output, "{:─<gutter_width$}┬{:─<content_width$}", "", "");
+    }
 
     for (group_idx, group) in ops.iter().enumerate() {
         if group_idx > 0 {
-            let _ = writeln!(output, "{:separator_pad$}┈┈┈┈┼{:┈<content_width$}", "", "");
+            let _ = writeln!(output, "{:┈<gutter_width$}┼{:┈<content_width$}", "", "");
         }
 
         for op in group {
             for change in diff.iter_inline_changes(op) {
-                let old_num = format_line_num(change.old_index(), num_width);
-                let new_num = format_line_num(change.new_index(), num_width);
-
                 let (marker, style) = match change.tag() {
                     ChangeTag::Delete => ("-", Style::Delete),
                     ChangeTag::Insert => ("+", Style::Insert),
@@ -59,16 +69,31 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
 
                 let mut content = String::new();
                 for (emphasized, value) in change.iter_strings_lossy() {
-                    let _ = write!(content, "{}", style_content(&value, &style, emphasized));
+                    if let Some(value) = value.strip_suffix('\n') {
+                        let _ = write!(content, "{}", style_content(value, &style, emphasized));
+                        content.push('\n');
+                    } else {
+                        let _ = write!(content, "{}", style_content(&value, &style, emphasized));
+                    }
                 }
 
                 let colored_marker = style.apply_to_marker(marker);
-                let (styled_old, styled_new) = style.apply_to_line_numbers(old_num, new_num);
-
-                let _ = write!(
-                    output,
-                    "{styled_old} {styled_new} │ {colored_marker}{content}",
-                );
+                if bordered {
+                    let old_num = format_line_num(change.old_index(), num_width);
+                    let new_num = format_line_num(change.new_index(), num_width);
+                    let (styled_old, styled_new) = style.apply_to_line_numbers(old_num, new_num);
+                    let _ = write!(
+                        output,
+                        "{styled_old} {styled_new} │ {colored_marker}{content}",
+                    );
+                } else {
+                    let line_num = format_line_num(
+                        change.new_index().or_else(|| change.old_index()),
+                        num_width,
+                    );
+                    let styled_line_num = style.apply_to_line_number(&line_num);
+                    let _ = write!(output, "{styled_line_num} │ {colored_marker}{content}");
+                }
 
                 if change.missing_newline() {
                     let _ = writeln!(output);
@@ -77,16 +102,79 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize) {
         }
     }
 
-    let _ = writeln!(output, "{:─<gutter_width$}┴{:─<content_width$}", "", "");
+    if bordered {
+        let _ = writeln!(output, "{:─<gutter_width$}┴{:─<content_width$}", "", "");
+    }
 }
 
 /// Format a diff for use in error messages.
 ///
-/// Uses a fixed total width of 40 characters to match standard border width.
+/// Uses a compact borderless layout with a fixed width of 40 characters.
 pub fn format_diff(old: &str, new: &str) -> String {
     let mut output = String::new();
-    render_diff(&mut output, old, new, 40);
+    render_diff(&mut output, old, new, 40, false);
     output
+}
+
+/// Format a diagnostic diff with a source-style snapshot origin.
+pub fn format_diff_with_path(old: &str, new: &str, path: &str) -> String {
+    let old = ensure_trailing_newline(old);
+    let new = ensure_trailing_newline(new);
+    let diff = TextDiff::configure()
+        .algorithm(Algorithm::Patience)
+        .diff_lines(&old, &new);
+    let mut old_offsets = Vec::with_capacity(diff.old_len() + 1);
+    old_offsets.push(0);
+    for index in 0..diff.old_len() {
+        old_offsets.push(old_offsets[index] + diff.old_slice(index).map_or(0, str::len));
+    }
+    let mut new_offsets = Vec::with_capacity(diff.new_len() + 1);
+    new_offsets.push(0);
+    for index in 0..diff.new_len() {
+        new_offsets.push(new_offsets[index] + diff.new_slice(index).map_or(0, str::len));
+    }
+
+    let mut snippet = Snippet::source(old.as_ref())
+        .line_start(SNAPSHOT_CONTENT_LINE)
+        .path(path);
+    for op in diff.ops() {
+        if op.tag() == DiffTag::Equal {
+            continue;
+        }
+        let old_range = op.old_range();
+        let new_range = op.new_range();
+        let old_start = old_offsets[old_range.start];
+        let old_end = old_offsets[old_range.end];
+        let new_start = new_offsets[new_range.start];
+        let new_end = new_offsets[new_range.end];
+        let old_chunk = &old[old_start..old_end];
+        let new_chunk = &new[new_start..new_end];
+        let prefix = old_chunk
+            .chars()
+            .zip(new_chunk.chars())
+            .take_while(|(old, new)| old == new)
+            .map(|(character, _)| character.len_utf8())
+            .sum::<usize>();
+        let suffix = old_chunk[prefix..]
+            .chars()
+            .rev()
+            .zip(new_chunk[prefix..].chars().rev())
+            .take_while(|(old, new)| old == new)
+            .map(|(character, _)| character.len_utf8())
+            .sum::<usize>();
+        snippet = snippet.patch(Patch::new(
+            old_start + prefix..old_end - suffix,
+            &new[new_start + prefix..new_end - suffix],
+        ));
+    }
+
+    let report = [Group::with_level(Level::INFO).element(snippet)];
+    let renderer = if colored::control::SHOULD_COLORIZE.should_colorize() {
+        Renderer::styled()
+    } else {
+        Renderer::plain()
+    };
+    format!("{}\n", renderer.render(&report))
 }
 
 /// Write a diff to the given output stream, adapting borders to terminal width.
@@ -95,7 +183,7 @@ pub fn format_diff(old: &str, new: &str) -> String {
 pub(crate) fn print_changeset(out: &mut impl io::Write, old: &str, new: &str) -> io::Result<()> {
     let width = terminal_size::terminal_size().map_or(80, |(w, _)| w.0 as usize);
     let mut output = String::new();
-    render_diff(&mut output, old, new, width);
+    render_diff(&mut output, old, new, width, true);
     write!(out, "{output}")
 }
 
@@ -109,9 +197,9 @@ fn format_line_num(num: Option<usize>, width: usize) -> String {
 /// Apply color and emphasis to a diff content fragment based on the change style.
 fn style_content(value: &str, style: &Style, emphasized: bool) -> String {
     match (style, emphasized) {
-        (Style::Delete, true) => value.red().underline().to_string(),
+        (Style::Delete, true) => value.red().to_string().underline().to_string(),
         (Style::Delete, false) => value.red().to_string(),
-        (Style::Insert, true) => value.green().underline().to_string(),
+        (Style::Insert, true) => value.green().to_string().underline().to_string(),
         (Style::Insert, false) => value.green().to_string(),
         (Style::Equal, true) => value.to_string(),
         (Style::Equal, false) => value.dimmed().to_string(),
@@ -142,6 +230,15 @@ impl Style {
             Self::Equal => (old_num.dimmed().to_string(), new_num.dimmed().to_string()),
         }
     }
+
+    /// Style a compact line number to match the change style.
+    fn apply_to_line_number(&self, line_num: &str) -> String {
+        match self {
+            Self::Delete => line_num.cyan().dimmed().to_string(),
+            Self::Insert => line_num.cyan().dimmed().bold().to_string(),
+            Self::Equal => line_num.dimmed().to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -167,11 +264,9 @@ mod tests {
     #[test]
     fn addition() {
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @r"
-            ────────────┬───────────────────────────
-                1     1 │  a
-                      2 │ +b
-            ────────────┴───────────────────────────
+            insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @"
+            1 │  a
+            2 │ +b
             ");
         });
     }
@@ -179,11 +274,9 @@ mod tests {
     #[test]
     fn deletion() {
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @r"
-            ────────────┬───────────────────────────
-                1     1 │  a
-                2       │ -b
-            ────────────┴───────────────────────────
+            insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @"
+            1 │  a
+            2 │ -b
             ");
         });
     }
@@ -201,22 +294,20 @@ mod tests {
             }
         }
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @r"
-            ────────────┬───────────────────────────
-                1       │ -line 1
-                      1 │ +CHANGED 1
-                2     2 │  line 2
-                3     3 │  line 3
-                4     4 │  line 4
-                5     5 │  line 5
-                    ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-               16    16 │  line 16
-               17    17 │  line 17
-               18    18 │  line 18
-               19    19 │  line 19
-               20       │ -line 20
-                     20 │ +CHANGED 20
-            ────────────┴───────────────────────────
+            insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @"
+             1 │ -line 1
+             1 │ +CHANGED 1
+             2 │  line 2
+             3 │  line 3
+             4 │  line 4
+             5 │  line 5
+            ┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            16 │  line 16
+            17 │  line 17
+            18 │  line 18
+            19 │  line 19
+            20 │ -line 20
+            20 │ +CHANGED 20
             ");
         });
     }
@@ -234,44 +325,42 @@ mod tests {
             }
         }
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff(&old, &new), @r"
-            ──────────────┬─────────────────────────
-                 1        │ -line 1
-                        1 │ +CHANGED 1
-                 2      2 │  line 2
-                 3      3 │  line 3
-                 4      4 │  line 4
-                 5      5 │  line 5
-                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-               996    996 │  line 996
-               997    997 │  line 997
-               998    998 │  line 998
-               999    999 │  line 999
-              1000        │ -line 1000
-                     1000 │ +CHANGED 1000
-              1001   1001 │  line 1001
-              1002   1002 │  line 1002
-              1003   1003 │  line 1003
-              1004   1004 │  line 1004
-                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-              9996   9996 │  line 9996
-              9997   9997 │  line 9997
-              9998   9998 │  line 9998
-              9999   9999 │  line 9999
-             10000        │ -line 10000
-                    10000 │ +CHANGED 10000
-             10001  10001 │  line 10001
-             10002  10002 │  line 10002
-             10003  10003 │  line 10003
-             10004  10004 │  line 10004
-                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-             99996  99996 │  line 99996
-             99997  99997 │  line 99997
-             99998  99998 │  line 99998
-             99999  99999 │  line 99999
-            100000        │ -line 100000
-                   100000 │ +CHANGED 100000
-            ──────────────┴─────────────────────────
+            insta::assert_snapshot!(format_diff(&old, &new), @"
+                 1 │ -line 1
+                 1 │ +CHANGED 1
+                 2 │  line 2
+                 3 │  line 3
+                 4 │  line 4
+                 5 │  line 5
+            ┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+               996 │  line 996
+               997 │  line 997
+               998 │  line 998
+               999 │  line 999
+              1000 │ -line 1000
+              1000 │ +CHANGED 1000
+              1001 │  line 1001
+              1002 │  line 1002
+              1003 │  line 1003
+              1004 │  line 1004
+            ┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+              9996 │  line 9996
+              9997 │  line 9997
+              9998 │  line 9998
+              9999 │  line 9999
+             10000 │ -line 10000
+             10000 │ +CHANGED 10000
+             10001 │  line 10001
+             10002 │  line 10002
+             10003 │  line 10003
+             10004 │  line 10004
+            ┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+             99996 │  line 99996
+             99997 │  line 99997
+             99998 │  line 99998
+             99999 │  line 99999
+            100000 │ -line 100000
+            100000 │ +CHANGED 100000
             ");
         });
     }
@@ -292,15 +381,13 @@ mod tests {
         let new = "{\n  \"roles\": [\n    \"user\",\n    \"hr\"\n  ]\n}";
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(old, new), @r#"
-            ────────────┬───────────────────────────
-                1     1 │  {
-                2     2 │    "roles": [
-                3       │ -    "user"
-                      3 │ +    "user",
-                      4 │ +    "hr"
-                4     5 │    ]
-                5     6 │  }
-            ────────────┴───────────────────────────
+            1 │  {
+            2 │    "roles": [
+            3 │ -    "user"
+            3 │ +    "user",
+            4 │ +    "hr"
+            5 │    ]
+            6 │  }
             "#);
         });
     }

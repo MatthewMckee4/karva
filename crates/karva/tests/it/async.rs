@@ -85,13 +85,11 @@ async def test_async_fails():
       |
     4 | async def test_async_fails():
       |           ^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:6:5
       |
     6 |     assert False, 'async test failed'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: async test failed
 
     ────────────
@@ -271,13 +269,11 @@ async def test_background_work():
       |
     7 | async def test_background_work():
       |           ^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     raise RuntimeError('lost failure')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: lost failure
 
     ────────────
@@ -394,13 +390,11 @@ async def test_two_failures():
       |
     7 | async def test_two_failures():
       |           ^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     raise RuntimeError(message)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: 2 unhandled exceptions in background tasks:
             [1] Task-[N]: RuntimeError: first
             [2] Task-[N]: RuntimeError: second
@@ -448,13 +442,11 @@ async def test_with_timeout():
       |
     9 | async def test_with_timeout():
       |           ^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError('under timeout')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: under timeout
 
     ────────────
@@ -504,13 +496,11 @@ async def test_uses_leaky_fixture(leaky):
       |
     9 | async def leaky():
       |           ^^^^^
-      |
     info: Fixture failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError('fixture background')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: fixture background
 
     ────────────
@@ -593,15 +583,13 @@ async def test_isolated(value):
       |
     9 | async def test_isolated(value):
       |           ^^^^^^^^^^^^^
-      |
     info: Test ran with arguments:
-    info: `value`: `1`
+    info:   `value`: `1`
     info: Test failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError('only for 1')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: only for 1
 
     ────────────
@@ -656,13 +644,11 @@ async def test_retained_future():
        |
     13 | async def test_retained_future():
        |           ^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test failed here
       --> test.py:16:9
        |
     16 |         raise RuntimeError('retained future')
        |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Unhandled exception in background task: Future exception was never retrieved; future=<Future finished exception=RuntimeError('retained future')>: RuntimeError: retained future
 
     test::test_retained_task:
@@ -672,13 +658,11 @@ async def test_retained_future():
       |
     9 | async def test_retained_task():
       |           ^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:7:5
       |
     7 |     raise RuntimeError('retained task')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: retained task
 
     ────────────
@@ -721,13 +705,11 @@ async def test_callback_failure():
       |
     7 | async def test_callback_failure():
       |           ^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     raise RuntimeError('callback failure')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Exception in callback fail_callback() at <temp_dir>/test.py:4; handle=<Handle fail_callback() at <temp_dir>/test.py:4>: RuntimeError: callback failure
 
     ────────────
@@ -784,13 +766,11 @@ async def test_existing_handler():
        |
     20 | async def test_existing_handler():
        |           ^^^^^^^^^^^^^^^^^^^^^
-       |
     info: Test failed here
      --> test.py:8:5
       |
     8 |     raise RuntimeError('forwarded failure')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: forwarded failure
 
     ────────────

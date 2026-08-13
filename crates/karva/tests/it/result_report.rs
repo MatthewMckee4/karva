@@ -58,7 +58,6 @@ fn writes_json_result_report() {
        |
     14 | def test_error(missing_fixture):
        |     ^^^^^^^^^^
-       |
     info: Missing fixtures: `missing_fixture`
 
     test_report::test_fail:
@@ -68,13 +67,11 @@ fn writes_json_result_report() {
        |
     10 | def test_fail():
        |     ^^^^^^^^^
-       |
     info: Test failed here
       --> test_report.py:12:5
        |
     12 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     captured stderr:
     fail stderr
@@ -115,7 +112,7 @@ fn writes_json_result_report() {
             "code": "missing-fixtures",
             "severity": "error",
             "message": "Test `test_error` has missing fixtures",
-            "rendered": "error[missing-fixtures]: Test `test_error` has missing fixtures\n  --> test_report.py:14:5\n   |/n14 | def test_error(missing_fixture):\n   |     ^^^^^^^^^^\n   |/ninfo: Missing fixtures: `missing_fixture`\n\n"
+            "rendered": "error[missing-fixtures]: Test `test_error` has missing fixtures\n  --> test_report.py:14:5\n   |/n14 | def test_error(missing_fixture):\n   |     ^^^^^^^^^^/ninfo: Missing fixtures: `missing_fixture`\n\n"
           }
         },
         {
@@ -135,7 +132,7 @@ fn writes_json_result_report() {
             "code": "test-failure",
             "severity": "error",
             "message": "Test `test_fail` failed",
-            "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+            "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n\n"
           },
           "attempts": [
             {
@@ -149,7 +146,7 @@ fn writes_json_result_report() {
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_fail` failed",
-                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n\n"
               }
             },
             {
@@ -163,7 +160,7 @@ fn writes_json_result_report() {
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_fail` failed",
-                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+                "rendered": "error[test-failure]: Test `test_fail` failed\n  --> test_report.py:10:5\n   |/n10 | def test_fail():\n   |     ^^^^^^^^^/ninfo: Test failed here\n  --> test_report.py:12:5\n   |/n12 |     assert False\n   |     ^^^^^^^^^^^^\n\n"
               }
             }
           ]
@@ -194,7 +191,7 @@ fn writes_json_result_report() {
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_flaky` failed",
-                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^\n   |/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^\n   |\n\n"
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^\n\n"
               }
             },
             {
@@ -263,13 +260,11 @@ fn writes_jsonl_result_records() {
       |
     5 | def test_fail():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test_events.py:6:5
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -279,7 +274,7 @@ fn writes_jsonl_result_records() {
     );
 
     assert_snapshot!(context.read_file("reports/events.jsonl"), @r#"
-    {"schema_version":2,"type":"test","module":"test_events","name":"test_fail","full_name":"test_events::test_fail","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_fail` failed","rendered":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n  |\n\n"}}
+    {"schema_version":2,"type":"test","module":"test_events","name":"test_fail","full_name":"test_events::test_fail","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_fail` failed","rendered":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n\n"}}
     {"schema_version":2,"type":"test","module":"test_events","name":"test_pass","full_name":"test_events::test_pass","status":"passed","duration_seconds":"[TIME]"}
     {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":2,"passed":1,"failed":1,"errors":0,"skipped":0,"flaky":0,"slow":0}}
     "#);
@@ -327,19 +322,16 @@ def test_blocked(nested, value):
       |
     5 | def root():
       |     ^^^^
-      |
     info: Fixture `nested` requires `root`
      --> test_fixture.py:9:5
       |
     9 | def nested(root):
       |     ^^^^^^
-      |
     info: Fixture failed here
      --> test_fixture.py:6:5
       |
     6 |     raise RuntimeError("setup failed")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: setup failed
 
     ────────────
@@ -390,19 +382,16 @@ def test_blocked(nested, value):
           |
         5 | def root():
           |     ^^^^
-          |
         info: Fixture `nested` requires `root`
          --> test_fixture.py:9:5
           |
         9 | def nested(root):
           |     ^^^^^^
-          |
         info: Fixture failed here
          --> test_fixture.py:6:5
           |
         6 |     raise RuntimeError("setup failed")
           |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-          |
         info: setup failed
 
         ────────────
@@ -491,7 +480,7 @@ def test_flaky():
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_flaky` failed",
-                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n\n"
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"
               }
             },
             {
@@ -539,7 +528,7 @@ def test_flaky():
     "
     );
     assert_snapshot!(context.read_file("results.jsonl"), @r#"
-    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^\n  |/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
+    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
     {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"flaky":1,"slow":0}}
     "#);
 }
@@ -582,7 +571,6 @@ def test_resource(resource):
        |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
-       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     ────────────
@@ -627,7 +615,7 @@ def test_resource(resource):
             "code": "fail-slow-exceeded",
             "severity": "error",
             "message": "Test `test_resource` exceeded its fail-slow budget",
-            "rendered": "error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"
+            "rendered": "error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"
           }
         }
       ]
@@ -655,7 +643,6 @@ def test_resource(resource):
        |
     11 | def test_resource(resource):
        |     ^^^^^^^^^^^^^
-       |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)
 
     ────────────
@@ -682,7 +669,7 @@ def test_resource(resource):
     assert_snapshot!(
         report,
         @r#"
-    {"schema_version":2,"type":"test","module":"test_fail_slow","name":"test_resource(resource=None)","full_name":"test_fail_slow::test_resource(resource=None)","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"fail-slow-exceeded","severity":"error","message":"Test `test_resource` exceeded its fail-slow budget","rendered":"error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^\n   |/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"}}
+    {"schema_version":2,"type":"test","module":"test_fail_slow","name":"test_resource(resource=None)","full_name":"test_fail_slow::test_resource(resource=None)","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"fail-slow-exceeded","severity":"error","message":"Test `test_resource` exceeded its fail-slow budget","rendered":"error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"}}
     {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":1,"errors":0,"skipped":0,"flaky":0,"slow":0}}
     "#
     );
@@ -724,22 +711,19 @@ fn writes_related_test_diagnostics() {
       |
     9 | def test_failure(broken_teardown):
       |     ^^^^^^^^^^^^
-      |
     info: Test ran with arguments:
-    info: `broken_teardown`: `None`
+    info:   `broken_teardown`: `None`
     info: Test failed here
       --> test_related.py:10:5
        |
     10 |     assert False
        |     ^^^^^^^^^^^^
-       |
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`
      --> test_related.py:5:5
       |
     5 | def broken_teardown():
       |     ^^^^^^^^^^^^^^^
-      |
     info: Failed to reset fixture: teardown failed
 
     ────────────
@@ -774,14 +758,14 @@ fn writes_related_test_diagnostics() {
             "code": "test-failure",
             "severity": "error",
             "message": "Test `test_failure` failed",
-            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^\n  |/ninfo: Test ran with arguments:/ninfo: `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n   |\n\n"
+            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^/ninfo: Test ran with arguments:/ninfo:   `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n\n"
           },
           "related_diagnostics": [
             {
               "code": "invalid-fixture-finalizer",
               "severity": "error",
               "message": "Discovered an invalid fixture finalizer `broken_teardown`",
-              "rendered": "error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`\n --> test_related.py:5:5\n  |/n5 | def broken_teardown():\n  |     ^^^^^^^^^^^^^^^\n  |/ninfo: Failed to reset fixture: teardown failed\n\n"
+              "rendered": "error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken_teardown`\n --> test_related.py:5:5\n  |/n5 | def broken_teardown():\n  |     ^^^^^^^^^^^^^^^/ninfo: Failed to reset fixture: teardown failed\n\n"
             }
           ]
         }

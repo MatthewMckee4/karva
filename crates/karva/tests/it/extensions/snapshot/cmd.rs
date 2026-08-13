@@ -103,16 +103,13 @@ def test_echo():
       |
     5 | def test_echo():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:7:5
       |
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
-    info: New snapshot for 'test_echo'.
-          Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
-          Pending file: snapshots/test__test_echo.snap.new
+    info: New snapshot for 'test_echo' in snapshots/test__test_echo.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -536,22 +533,19 @@ def test_inline_wrong():
       |
     5 | def test_inline_wrong():
       |     ^^^^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:7:5
       |
     7 |     karva.assert_cmd_snapshot(cmd, inline="wrong value")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Inline snapshot mismatch for 'test_inline_wrong'.
-          ────────────┬───────────────────────────
-              1       │ -wrong value
-                    1 │ +success: true
-                    2 │ +exit_code: 0
-                    3 │ +----- stdout -----
-                    4 │ +actual
-                    5 │ +----- stderr -----
-          ────────────┴───────────────────────────
+    1 │ -wrong value
+    1 │ +success: true
+    2 │ +exit_code: 0
+    3 │ +----- stdout -----
+    4 │ +actual
+    5 │ +----- stderr -----
+    info: Re-run with `--snapshot-update` to accept.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -621,23 +615,18 @@ def test_change():
       |
     5 | def test_change():
       |     ^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:7:5
       |
     7 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Snapshot mismatch for 'test_change'.
-          Snapshot file: snapshots/test__test_change.snap
-          ────────────┬───────────────────────────
-              1     1 │  success: true
-              2     2 │  exit_code: 0
-              3     3 │  ----- stdout -----
-              4       │ -first
-                    4 │ +second
-              5     5 │  ----- stderr -----
-          ────────────┴───────────────────────────
+     --> snapshots/test__test_change.snap:7:1
+      |
+    7 - first
+    7 + second
+      |
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -675,13 +664,11 @@ def test_bad_cmd():
       |
     4 | def test_bad_cmd():
       |     ^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:6:5
       |
     6 |     karva.assert_cmd_snapshot(cmd)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Failed to run command `nonexistent_program_xyz_12345` (NotFound)
 
     ────────────
@@ -1052,13 +1039,11 @@ def test_both_args():
       |
     5 | def test_both_args():
       |     ^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:7:5
       |
     7 |     karva.assert_cmd_snapshot(cmd, inline="x", name="y")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: assert_snapshot() cannot use both 'inline' and 'name' arguments
 
     ────────────

@@ -65,7 +65,6 @@ fn doctest_modules_is_opt_in() {
        |
     11 |     >>> 2 + 2
        |     ^^^
-       |
     info: Expected output:
             5
           Actual output:
@@ -78,7 +77,6 @@ fn doctest_modules_is_opt_in() {
        |
     18 |     >>> 1 / 0
        |     ^^^
-       |
     info: Unexpected exception:
             ZeroDivisionError: division by zero
 
@@ -121,7 +119,6 @@ doctest-modules = true
        |
     11 |     >>> 2 + 2
        |     ^^^
-       |
     info: Expected output:
             5
           Actual output:
@@ -134,7 +131,6 @@ doctest-modules = true
        |
     18 |     >>> 1 / 0
        |     ^^^
-       |
     info: Unexpected exception:
             ZeroDivisionError: division by zero
 
@@ -262,7 +258,6 @@ def documented():
       |
     7 |     >>> 2 + 2
       |     ^^^
-      |
     info: Expected output:
             5
           Actual output:
@@ -313,7 +308,6 @@ pytestmark = pytest.mark.typo
       |
     9 | pytestmark = pytest.mark.typo
       |                          ^^^^ unregistered tag
-      |
     info: Register `typo` in the project-wide `[tags]` table.
 
     ────────────
@@ -485,7 +479,6 @@ def broken():
        |
     21 |     >>> 3 * 3
        |     ^^^
-       |
     info: Expected output:
             10
           Actual output:
@@ -528,7 +521,7 @@ def broken():
           "diagnostic": {
             "code": "test-failure",
             "message": "Test `doctest:broken` failed",
-            "rendered": "error[test-failure]: Test `doctest:broken` failed\n  --> test_reports.py:21:5\n   |/n21 |     >>> 3 * 3\n   |     ^^^\n   |/ninfo: Expected output:\n        10\n      Actual output:\n        9\n\n",
+            "rendered": "error[test-failure]: Test `doctest:broken` failed\n  --> test_reports.py:21:5\n   |/n21 |     >>> 3 * 3\n   |     ^^^/ninfo: Expected output:\n        10\n      Actual output:\n        9\n\n",
             "severity": "error"
           },
           "duration_seconds": "[TIME]",
@@ -577,7 +570,6 @@ def broken():
        |
     21 |     >>> 3 * 3
        |     ^^^
-       |
     info: Expected output:
             10
           Actual output:
@@ -612,7 +604,7 @@ def broken():
         "diagnostic": {
           "code": "test-failure",
           "message": "Test `doctest:broken` failed",
-          "rendered": "error[test-failure]: Test `doctest:broken` failed\n  --> test_reports.py:21:5\n   |/n21 |     >>> 3 * 3\n   |     ^^^\n   |/ninfo: Expected output:\n        10\n      Actual output:\n        9\n\n",
+          "rendered": "error[test-failure]: Test `doctest:broken` failed\n  --> test_reports.py:21:5\n   |/n21 |     >>> 3 * 3\n   |     ^^^/ninfo: Expected output:\n        10\n      Actual output:\n        9\n\n",
           "severity": "error"
         },
         "duration_seconds": "[TIME]",
@@ -678,7 +670,6 @@ def broken():
        |
     21 |     &gt;&gt;&gt; 3 * 3
        |     ^^^
-       |
     info: Expected output:
             10
           Actual output:

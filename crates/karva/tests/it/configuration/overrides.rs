@@ -86,13 +86,11 @@ def test_flaky():
       |
     2 | def test_flaky():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:3:5
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -145,13 +143,11 @@ def test_unit():
       |
     5 | def test_unit():
       |     ^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:6:5
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
-      |
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -311,7 +307,6 @@ def test_slow():
       |
     6 | def test_slow():
       |     ^^^^^^^^^
-      |
     info: Test exceeded timeout of 0.1 seconds
 
     ────────────
@@ -449,7 +444,6 @@ def test_slow():
       |
     6 | def test_slow():
       |     ^^^^^^^^^
-      |
     info: Configured budget: [TIME], actual duration: [TIME] (slowest phase: call)
 
     ────────────

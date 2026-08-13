@@ -71,19 +71,18 @@ def test_hello():
       |
     4 | def test_hello():
       |     ^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:5:5
       |
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Snapshot mismatch for 'test_hello'.
-          Snapshot file: snapshots/test__test_hello.snap
-          ────────────┬───────────────────────────
-              1       │ -hello world
-                    1 │ +goodbye world
-          ────────────┴───────────────────────────
+     --> snapshots/test__test_hello.snap:4:1
+      |
+    4 - hello world
+    4 + goodbye world
+      |
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -156,26 +155,18 @@ def test_user_data():
       |
     7 | def test_user_data():
       |     ^^^^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:9:5
       |
     9 |     karva.assert_json_snapshot(result)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Snapshot mismatch for 'test_user_data'.
-          Snapshot file: snapshots/test__test_user_data.snap
-          ────────────┬───────────────────────────
-              2     2 │    "id": 1,
-              3     3 │    "name": "Alice",
-              4     4 │    "roles": [
-              5     5 │      "admin",
-              6       │ -    "user"
-                    6 │ +    "user",
-                    7 │ +    "hr"
-              7     8 │    ]
-              8     9 │  }
-          ────────────┴───────────────────────────
+      --> snapshots/test__test_user_data.snap:9:11
+       |
+     9 ~     "user",
+    10 +     "hr"
+       |
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -343,21 +334,18 @@ def test_second():
       |
     7 | def test_second():
       |     ^^^^^^^^^^^
-      |
     info: Test failed here
      --> test.py:8:5
       |
     8 |     karva.assert_json_snapshot({"value": 99})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Snapshot mismatch for 'test_second'.
-          Snapshot file: snapshots/test__test_second.snap
-          ────────────┬───────────────────────────
-              1     1 │  {
-              2       │ -  "value": 2
-                    2 │ +  "value": 99
-              3     3 │  }
-          ────────────┴───────────────────────────
+     --> snapshots/test__test_second.snap:5:12
+      |
+    5 -   "value": 2
+    5 +   "value": 99
+      |
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
