@@ -21,8 +21,8 @@ pub use fixture::{
 };
 pub use hover::{FixtureHover, hover_fixture};
 pub use occurrences::{
-    FixtureOccurrence, FixtureOccurrenceKind, FixtureRenameTarget, fixture_occurrence,
-    fixture_occurrences, fixture_rename_target, fixture_target,
+    FixtureOccurrence, FixtureOccurrenceKind, FixtureRenameTarget, fixture_document_highlights,
+    fixture_occurrence, fixture_occurrences, fixture_rename_target, fixture_target,
 };
 pub use references::{LocatedFixtureOccurrence, fixture_references};
 pub use rename::{is_valid_fixture_name, prepare_fixture_rename, rename_fixture};
