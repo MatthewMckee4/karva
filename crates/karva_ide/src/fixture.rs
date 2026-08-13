@@ -14,9 +14,9 @@ use crate::{DiagnosticCode, RelatedInformation, SourceDiagnostic, SourceLocation
 
 /// Stable identity for a fixture provider.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct FixtureId {
+pub(super) struct FixtureId {
     /// File containing the fixture.
-    path: Utf8PathBuf,
+    pub(super) path: Utf8PathBuf,
 
     /// Range of the fixture definition.
     range: TextRange,
@@ -24,7 +24,7 @@ pub(crate) struct FixtureId {
 
 /// Runtime lifetime of a fixture value.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum FixtureScope {
+pub(super) enum FixtureScope {
     /// Recreated for every test attempt.
     #[default]
     Function,
@@ -46,7 +46,7 @@ impl FixtureScope {
     }
 
     /// Returns the configuration spelling of the scope.
-    const fn as_str(self) -> &'static str {
+    pub(super) const fn as_str(self) -> &'static str {
         match self {
             Self::Function => "function",
             Self::Module => "module",
@@ -72,7 +72,7 @@ impl TryFrom<&str> for FixtureScope {
 
 /// Result of resolving one fixture reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FixtureResolution {
+enum FixtureResolution {
     /// The reference resolves to a source fixture.
     Resolved(FixtureId),
 
@@ -91,7 +91,7 @@ pub(crate) enum FixtureResolution {
 
 /// One fixture reference from a function parameter.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FixtureReference {
+struct FixtureReference {
     /// Requested fixture name.
     name: String,
 
@@ -104,12 +104,12 @@ pub(crate) struct FixtureReference {
 
 /// A statically understood fixture declaration.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FixtureDefinition {
+pub(super) struct FixtureDefinition {
     /// Stable source identity.
-    id: FixtureId,
+    pub(super) id: FixtureId,
 
     /// Public fixture name after literal decorator renaming.
-    name: String,
+    pub(super) name: String,
 
     /// Python function name.
     defining_name: String,
@@ -118,10 +118,10 @@ pub(crate) struct FixtureDefinition {
     name_range: TextRange,
 
     /// Statically known scope, or `None` for dynamic scope metadata.
-    scope: Option<FixtureScope>,
+    pub(super) scope: Option<FixtureScope>,
 
     /// Statically known autouse value, or `None` for dynamic metadata.
-    auto_use: Option<bool>,
+    pub(super) auto_use: Option<bool>,
 
     /// Fixture dependencies declared as non-variadic parameters.
     dependencies: Vec<FixtureReference>,
@@ -310,6 +310,67 @@ pub(super) fn analyze_modules(
             ))
     });
     (current_definitions, diagnostics)
+}
+
+/// Visible fixture providers plus conservative completion barriers.
+pub(super) struct VisibleFixtures {
+    /// Definitions selected before any dynamic provider barrier.
+    pub(super) definitions: Vec<FixtureDefinition>,
+
+    /// Rejected names that prevent fallback to later providers.
+    pub(super) blocked_names: HashSet<String>,
+
+    /// Whether every provider was statically known, allowing built-in fallback.
+    pub(super) builtins_visible: bool,
+}
+
+/// Returns fixture definitions that can be selected from the current module.
+///
+/// Providers follow runtime lookup order. A rejected definition blocks the same
+/// name from every later provider, including Karva's built-ins.
+pub(super) fn visible_fixtures(
+    current: &CollectedModule,
+    parents: &[&CollectedModule],
+    try_import_fixtures: bool,
+) -> VisibleFixtures {
+    let mut providers = parents
+        .iter()
+        .map(|module| parse_provider(module, try_import_fixtures))
+        .collect::<Vec<_>>();
+    providers.insert(0, parse_provider(current, try_import_fixtures));
+
+    let mut visible = Vec::new();
+    let mut names = HashSet::new();
+    let mut blocked_names = HashSet::new();
+    let mut builtins_visible = true;
+    for provider in providers {
+        for rejected in provider.rejected.keys() {
+            if names.insert(rejected.clone()) {
+                blocked_names.insert(rejected.clone());
+            }
+        }
+        for definition in provider.definitions {
+            if names.insert(definition.name.clone()) {
+                visible.push(definition);
+            }
+        }
+        if provider.unknown {
+            builtins_visible = false;
+            break;
+        }
+    }
+    VisibleFixtures {
+        definitions: visible,
+        blocked_names,
+        builtins_visible,
+    }
+}
+
+/// Returns the built-in fixtures exposed by Karva's runtime.
+pub(super) fn builtin_fixtures() -> impl Iterator<Item = (&'static str, FixtureScope)> {
+    BUILTIN_FIXTURES
+        .iter()
+        .map(|fixture| (fixture.name, fixture.scope))
 }
 
 impl FixtureProvider {
@@ -999,9 +1060,8 @@ mod tests {
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
 
-    use crate::{
-        DiagnosticCode, FixtureResolution, SourceAnalysisSettings, analyze_source, analyze_sources,
-    };
+    use super::FixtureResolution;
+    use crate::{DiagnosticCode, SourceAnalysisSettings, analyze_source, analyze_sources};
 
     fn analyze(source: &str) -> crate::SourceAnalysis {
         analyze_source(

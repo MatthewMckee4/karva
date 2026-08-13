@@ -7,6 +7,11 @@ use lsp_types::PositionEncodingKind;
 
 #[expect(
     clippy::redundant_pub_crate,
+    reason = "server endpoints map positions across a private sibling module"
+)]
+pub(super) use range::position_to_text_size;
+#[expect(
+    clippy::redundant_pub_crate,
     reason = "server endpoints map source ranges across a private sibling module"
 )]
 pub(super) use range::text_range_to_range;

@@ -1,9 +1,25 @@
+use anyhow::Context;
 use lsp_types::{
     ClientCapabilities, GeneralClientCapabilities, PositionEncodingKind, TextDocumentSync,
     TextDocumentSyncKind,
 };
 
 use super::TestServer;
+
+#[test]
+fn unknown_request_receives_method_not_found() -> anyhow::Result<()> {
+    let mut server = TestServer::new(ClientCapabilities::default());
+
+    let response = server.request_raw("karva/unknown", serde_json::Value::Null);
+
+    let error = response
+        .response_result
+        .err()
+        .context("request should fail")?;
+    assert_eq!(error.code, lsp_server::ErrorCode::MethodNotFound as i32);
+    assert_eq!(error.message, "unknown request: karva/unknown");
+    Ok(())
+}
 
 #[test]
 fn initialization_reports_server_info() {
@@ -59,6 +75,7 @@ fn initialization_advertises_document_and_workspace_sync() {
 
     assert_eq!(sync.open_close, Some(true));
     assert_eq!(sync.change, Some(TextDocumentSyncKind::Incremental));
+    assert!(capabilities.completion_provider.is_some());
     assert_eq!(
         capabilities
             .workspace

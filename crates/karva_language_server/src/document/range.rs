@@ -4,7 +4,11 @@ use ruff_text_size::{TextRange, TextSize};
 
 use super::PositionEncoding;
 
-fn position_to_text_size(
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "server endpoints consume position conversion through the document boundary"
+)]
+pub(crate) fn position_to_text_size(
     position: Position,
     text: &str,
     index: &LineIndex,

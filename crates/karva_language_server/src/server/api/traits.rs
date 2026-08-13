@@ -10,8 +10,29 @@ pub(super) trait RequestHandler {
 pub(super) trait SyncRequestHandler: RequestHandler {
     fn run(
         session: &mut Session,
+        client: &Client,
         params: <<Self as RequestHandler>::RequestType as Request>::Params,
     ) -> anyhow::Result<<<Self as RequestHandler>::RequestType as Request>::Result>;
+}
+
+/// A request whose owned snapshot can run without blocking the event loop.
+pub(super) trait BackgroundRequestHandler: RequestHandler {
+    type Snapshot: Send + 'static;
+
+    fn prepare(
+        session: &mut Session,
+        params: &<<Self as RequestHandler>::RequestType as Request>::Params,
+    ) -> anyhow::Result<Self::Snapshot>;
+
+    fn run(
+        snapshot: Self::Snapshot,
+        client: &Client,
+        params: <<Self as RequestHandler>::RequestType as Request>::Params,
+    ) -> anyhow::Result<<<Self as RequestHandler>::RequestType as Request>::Result>;
+
+    fn document_version(_snapshot: &Self::Snapshot) -> Option<(lsp_types::Uri, i32)> {
+        None
+    }
 }
 
 pub(super) trait NotificationHandler {

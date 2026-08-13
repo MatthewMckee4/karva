@@ -24,6 +24,8 @@ use crate::{PositionEncoding, TextDocument};
 use self::index::Index;
 use self::request_queue::RequestQueue;
 
+pub use self::request_queue::RequestCancellationToken;
+
 /// Failure to apply a document or workspace notification.
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -63,6 +65,63 @@ pub(super) struct SourceAnalysisSnapshot {
 
     /// Source text keyed by every analyzed document path.
     pub(super) sources: HashMap<Utf8PathBuf, String>,
+}
+
+/// Owned inputs for source analysis that can move off the event-loop thread.
+#[derive(Debug)]
+pub(super) struct PreparedSourceAnalysis {
+    current: SourceDocument,
+    parent_paths: Vec<Utf8PathBuf>,
+    open_sources: HashMap<Utf8PathBuf, String>,
+    project_root: Utf8PathBuf,
+    settings: SourceAnalysisSettings,
+    document_uri: Uri,
+    document_version: i32,
+}
+
+impl PreparedSourceAnalysis {
+    pub(super) fn source_text(&self) -> &str {
+        self.current.source_text()
+    }
+
+    pub(super) fn document_uri(&self) -> &Uri {
+        &self.document_uri
+    }
+
+    pub(super) fn document_version(&self) -> i32 {
+        self.document_version
+    }
+
+    /// Reads provider files and computes source semantics away from the event loop.
+    pub(super) fn analyze(self) -> Result<Option<SourceAnalysisSnapshot>, SessionError> {
+        let current_path = self.current.path().to_path_buf();
+        let current_source = self.current.source_text().to_owned();
+        let mut sources = HashMap::from([(current_path, current_source)]);
+        let mut parents = Vec::new();
+
+        for path in self.parent_paths {
+            let source_text = if let Some(source_text) = self.open_sources.get(&path) {
+                source_text.clone()
+            } else {
+                if !path.is_file() {
+                    continue;
+                }
+                fs::read_to_string(&path).map_err(|source| SessionError::SourceRead {
+                    path: path.clone(),
+                    source,
+                })?
+            };
+            sources.insert(path.clone(), source_text.clone());
+            parents.push(SourceDocument::new(path, source_text));
+        }
+
+        let Some(analysis) =
+            analyze_source_with_parents(self.current, parents, &self.project_root, &self.settings)
+        else {
+            return Ok(None);
+        };
+        Ok(Some(SourceAnalysisSnapshot { analysis, sources }))
+    }
 }
 
 /// Mutable state owned by the language-server event loop.
@@ -106,6 +165,10 @@ impl Session {
         &mut self.request_queue
     }
 
+    pub(super) fn request_queue(&self) -> &RequestQueue {
+        &self.request_queue
+    }
+
     pub(super) fn position_encoding(&self) -> PositionEncoding {
         self.position_encoding
     }
@@ -145,6 +208,18 @@ impl Session {
         &mut self,
         uri: &Uri,
     ) -> Result<Option<SourceAnalysisSnapshot>, SessionError> {
+        let Some(prepared) = self.prepare_source_analysis(uri)? else {
+            return Ok(None);
+        };
+        prepared.analyze()
+    }
+
+    /// Captures open-document and project state without reading or parsing
+    /// provider source files.
+    pub(super) fn prepare_source_analysis(
+        &mut self,
+        uri: &Uri,
+    ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
         let document = self
             .index
             .document(uri)
@@ -164,8 +239,6 @@ impl Session {
         };
 
         let current = SourceDocument::new(path.clone(), document.contents().to_owned());
-        let mut parents = Vec::new();
-        let mut source_texts = HashMap::from([(path.clone(), document.contents().to_owned())]);
         let parent_directory = path
             .parent()
             .ok_or_else(|| WorkspaceError::MissingParent(path.clone()))?;
@@ -174,28 +247,29 @@ impl Session {
             .filter(|directory| directory.starts_with(&project_root))
             .collect::<Vec<_>>();
         directories.reverse();
+        let parent_paths = directories
+            .into_iter()
+            .map(|directory| directory.join("conftest.py"))
+            .filter(|conftest_path| conftest_path != &path)
+            .collect();
+        let open_sources = self
+            .index
+            .documents()
+            .filter_map(|document| {
+                uri_to_path(document.uri())
+                    .ok()
+                    .map(|path| (path, document.contents().to_owned()))
+            })
+            .collect();
 
-        for directory in directories {
-            let conftest_path = directory.join("conftest.py");
-            if conftest_path == path {
-                continue;
-            }
-            let Some(source_text) = self.source_text_for_path(&conftest_path)? else {
-                continue;
-            };
-            source_texts.insert(conftest_path.clone(), source_text.clone());
-            parents.push(SourceDocument::new(conftest_path, source_text));
-        }
-
-        let Some(analysis) =
-            analyze_source_with_parents(current, parents, &project_root, &settings)
-        else {
-            return Ok(None);
-        };
-
-        Ok(Some(SourceAnalysisSnapshot {
-            analysis,
-            sources: source_texts,
+        Ok(Some(PreparedSourceAnalysis {
+            current,
+            parent_paths,
+            open_sources,
+            project_root,
+            settings,
+            document_uri: uri.clone(),
+            document_version: document.version(),
         }))
     }
 
@@ -216,21 +290,6 @@ impl Session {
 
     pub(super) fn close_document(&mut self, uri: &Uri) -> Result<(), SessionError> {
         self.index.close_document(uri)
-    }
-
-    fn source_text_for_path(&self, path: &Utf8Path) -> Result<Option<String>, SessionError> {
-        if let Some(document) = self.index.document_for_path(path) {
-            return Ok(Some(document.contents().to_owned()));
-        }
-        if !path.is_file() {
-            return Ok(None);
-        }
-        fs::read_to_string(path)
-            .map(Some)
-            .map_err(|source| SessionError::SourceRead {
-                path: path.to_path_buf(),
-                source,
-            })
     }
 
     pub(super) fn open_workspace_folder(
