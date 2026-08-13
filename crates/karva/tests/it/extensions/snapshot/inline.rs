@@ -97,8 +97,8 @@ def test_hello():
     5 |     karva.assert_snapshot("goodbye", inline="hello")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Inline snapshot mismatch for 'test_hello'.
-    1   │ -hello
-      1 │ +goodbye
+    1 │ -hello
+    1 │ +goodbye
     info: Re-run with `--snapshot-update` to accept.
 
     ────────────

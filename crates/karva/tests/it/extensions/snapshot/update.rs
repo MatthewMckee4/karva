@@ -77,8 +77,8 @@ def test_hello():
     5 |     karva.assert_snapshot('goodbye world')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_hello' in snapshots/test__test_hello.snap:
-    1   │ -hello world
-      1 │ +goodbye world
+    1 │ -hello world
+    1 │ +goodbye world
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
@@ -158,15 +158,15 @@ def test_user_data():
     9 |     karva.assert_json_snapshot(result)
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_user_data' in snapshots/test__test_user_data.snap:
-    2 2 │    "id": 1,
-    3 3 │    "name": "Alice",
-    4 4 │    "roles": [
-    5 5 │      "admin",
-    6   │ -    "user"
-      6 │ +    "user",
-      7 │ +    "hr"
-    7 8 │    ]
-    8 9 │  }
+    2 │    "id": 1,
+    3 │    "name": "Alice",
+    4 │    "roles": [
+    5 │      "admin",
+    6 │ -    "user"
+    6 │ +    "user",
+    7 │ +    "hr"
+    8 │    ]
+    9 │  }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────
@@ -341,10 +341,10 @@ def test_second():
     8 |     karva.assert_json_snapshot({"value": 99})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Snapshot mismatch for 'test_second' in snapshots/test__test_second.snap:
-    1 1 │  {
-    2   │ -  "value": 2
-      2 │ +  "value": 99
-    3 3 │  }
+    1 │  {
+    2 │ -  "value": 2
+    2 │ +  "value": 99
+    3 │  }
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────

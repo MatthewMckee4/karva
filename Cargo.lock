@@ -878,6 +878,7 @@ dependencies = [
  "ruff_python_trivia",
  "serde",
  "serde_json",
+ "snapbox",
  "tempfile",
  "toml",
  "tracing",
@@ -1166,7 +1167,6 @@ dependencies = [
  "insta",
  "regex",
  "similar 3.1.1",
- "snapbox",
  "tempfile",
  "terminal_size",
 ]

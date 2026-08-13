@@ -397,7 +397,7 @@ def test_example(broken):
     11 | def broken(established):
        |     ^^^^^^
     info: Fixture ran with arguments:
-    info: `established`: `None`
+      info: `established`: `None`
     info: Fixture failed here
       --> test.py:12:5
        |

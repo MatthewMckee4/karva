@@ -475,8 +475,10 @@ fn assert_snapshot_impl(
             SnapshotMismatchError::new_err(format!("Failed to write pending snapshot: {e}"))
         })?;
 
+        let pending_path = Utf8PathBuf::from(format!("{snap_path}.new"));
+        let display_path = display_relative(&pending_path);
         return Err(SnapshotMismatchError::new_err(format!(
-            "New snapshot for '{snapshot_name}'.\n{SNAPSHOT_UPDATE_HINT}"
+            "New snapshot for '{snapshot_name}' in {display_path}.\n{SNAPSHOT_UPDATE_HINT}"
         )));
     }
 
@@ -551,8 +553,10 @@ fn handle_inline_snapshot(
         SnapshotMismatchError::new_err(format!("Failed to write pending inline snapshot: {e}"))
     })?;
 
+    let pending_path = Utf8PathBuf::from(format!("{snap_path}.new"));
+    let display_path = display_relative(&pending_path);
     Err(SnapshotMismatchError::new_err(format!(
-        "New inline snapshot for '{test_name}'.\n{SNAPSHOT_UPDATE_HINT}"
+        "New inline snapshot for '{test_name}' in {display_path}.\n{SNAPSHOT_UPDATE_HINT}"
     )))
 }
 

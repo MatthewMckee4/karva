@@ -7,6 +7,7 @@ mod cancel;
 mod configuration;
 mod coverage;
 mod coverage_command;
+mod diagnostic_svg;
 mod discovery;
 mod doctest;
 mod durations;

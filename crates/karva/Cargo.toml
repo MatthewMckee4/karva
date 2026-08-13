@@ -51,6 +51,7 @@ insta-cmd = { workspace = true }
 regex = { workspace = true }
 rstest = { workspace = true }
 ruff_python_trivia = { workspace = true }
+snapbox = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

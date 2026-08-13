@@ -65,7 +65,12 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered
 
                 let mut content = String::new();
                 for (emphasized, value) in change.iter_strings_lossy() {
-                    let _ = write!(content, "{}", style_content(&value, &style, emphasized));
+                    if let Some(value) = value.strip_suffix('\n') {
+                        let _ = write!(content, "{}", style_content(value, &style, emphasized));
+                        content.push('\n');
+                    } else {
+                        let _ = write!(content, "{}", style_content(&value, &style, emphasized));
+                    }
                 }
 
                 let colored_marker = style.apply_to_marker(marker);
@@ -207,15 +212,6 @@ mod tests {
             2 │ -b
             ");
         });
-    }
-
-    #[test]
-    fn colored_diagnostic_diff() {
-        colored::control::set_override(true);
-        let actual = format_diff("second\n", "changed\n");
-        colored::control::unset_override();
-
-        snapbox::assert_data_eq!(actual, snapbox::file!["snapshots/diff.term.svg": TermSvg],);
     }
 
     #[test]

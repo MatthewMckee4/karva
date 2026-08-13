@@ -245,7 +245,7 @@ def test_1(sleep_for):
     7 | def test_1(sleep_for):
       |     ^^^^^^
     info: Test ran with arguments:
-    info: `sleep_for`: `2.0`
+      info: `sleep_for`: `2.0`
     info: Test exceeded timeout of 0.3 seconds
 
     ────────────

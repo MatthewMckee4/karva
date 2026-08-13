@@ -791,7 +791,12 @@ fn handle_failed_function_call(
         let value_str = value.bind(py).to_string();
         let truncated_value = truncate_string(&value_str);
         let truncated_name = truncate_string(name);
-        diagnostic.info(format!("`{truncated_name}`: `{truncated_value}`"));
+        let mut argument = SubDiagnostic::new(
+            Severity::Info,
+            format!("`{truncated_name}`: `{truncated_value}`"),
+        );
+        argument.indent(2);
+        diagnostic.sub(argument);
     }
 
     if let Some(Traceback { frames }) = Traceback::from_error_with_source(py, error, source_file) {
@@ -848,9 +853,21 @@ fn handle_failed_function_call(
         if error.is_instance_of::<SnapshotMismatchError>(py)
             && let Some((message, body)) = error_string.split_once('\n')
         {
+            let (body, hint) = if let Some(hint) = body.strip_prefix("info: ") {
+                ("", Some(hint))
+            } else if let Some((body, hint)) = body.rsplit_once("\ninfo: ") {
+                (body, Some(hint))
+            } else {
+                (body, None)
+            };
             let mut mismatch = SubDiagnostic::new(Severity::Info, message);
-            mismatch.body(body);
+            if !body.is_empty() {
+                mismatch.body(body);
+            }
             diagnostic.sub(mismatch);
+            if let Some(hint) = hint {
+                diagnostic.info(hint);
+            }
         } else {
             diagnostic.info(indent_continuation_lines(&error_string));
         }

@@ -1218,9 +1218,9 @@ def test_order(third, second, first):
     14 | def test_order(third, second, first):
        |     ^^^^^^^^^^
     info: Test ran with arguments:
-    info: `third`: `3`
-    info: `second`: `2`
-    info: `first`: `1`
+      info: `third`: `3`
+      info: `second`: `2`
+      info: `first`: `1`
     info: Test failed here
       --> test.py:16:5
        |

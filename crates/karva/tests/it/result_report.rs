@@ -712,7 +712,7 @@ fn writes_related_test_diagnostics() {
     9 | def test_failure(broken_teardown):
       |     ^^^^^^^^^^^^
     info: Test ran with arguments:
-    info: `broken_teardown`: `None`
+      info: `broken_teardown`: `None`
     info: Test failed here
       --> test_related.py:10:5
        |
@@ -758,7 +758,7 @@ fn writes_related_test_diagnostics() {
             "code": "test-failure",
             "severity": "error",
             "message": "Test `test_failure` failed",
-            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^/ninfo: Test ran with arguments:/ninfo: `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n\n"
+            "rendered": "error[test-failure]: Test `test_failure` failed\n --> test_related.py:9:5\n  |/n9 | def test_failure(broken_teardown):\n  |     ^^^^^^^^^^^^/ninfo: Test ran with arguments:\n  info: `broken_teardown`: `None`/ninfo: Test failed here\n  --> test_related.py:10:5\n   |/n10 |     assert False\n   |     ^^^^^^^^^^^^\n\n"
           },
           "related_diagnostics": [
             {

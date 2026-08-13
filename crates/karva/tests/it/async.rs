@@ -591,15 +591,13 @@ async def test_isolated(value):
       |
     9 | async def test_isolated(value):
       |           ^^^^^^^^^^^^^
-      |
     info: Test ran with arguments:
-    info: `value`: `1`
+      info: `value`: `1`
     info: Test failed here
      --> test.py:6:5
       |
     6 |     raise RuntimeError('only for 1')
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      |
     info: Unhandled exception in background task: Task-[N]: RuntimeError: only for 1
 
     ────────────

@@ -103,6 +103,7 @@ pub struct SubDiagnostic {
     message: String,
     annotations: Vec<Annotation>,
     body: Option<String>,
+    indentation: usize,
 }
 
 impl SubDiagnostic {
@@ -112,6 +113,7 @@ impl SubDiagnostic {
             message: message.into(),
             annotations: Vec::new(),
             body: None,
+            indentation: 0,
         }
     }
 
@@ -122,6 +124,11 @@ impl SubDiagnostic {
     /// Add preformatted content displayed below the diagnostic title.
     pub fn body(&mut self, body: impl Into<String>) {
         self.body = Some(body.into());
+    }
+
+    /// Indent every rendered line by `spaces` columns.
+    pub fn indent(&mut self, spaces: usize) {
+        self.indentation = spaces;
     }
 
     pub(super) fn severity(&self) -> Severity {
@@ -138,6 +145,10 @@ impl SubDiagnostic {
 
     pub(super) fn body_text(&self) -> Option<&str> {
         self.body.as_deref()
+    }
+
+    pub(super) fn indentation(&self) -> usize {
+        self.indentation
     }
 }
 
