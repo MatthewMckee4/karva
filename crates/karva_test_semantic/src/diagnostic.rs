@@ -578,7 +578,7 @@ fn fixture_missing_fixtures_diagnostic(
 ) -> Diagnostic {
     let mut diagnostic = missing_fixtures_diagnostic(
         fixture.definition.source_file().clone(),
-        fixture.name.as_str(),
+        fixture.definition.statement().name.as_str(),
         fixture.definition.statement().name.range,
         missing_fixtures,
         FunctionKind::Fixture,

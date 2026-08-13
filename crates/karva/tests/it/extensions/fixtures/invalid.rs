@@ -301,6 +301,48 @@ fn test_fixture_missing_fixtures() {
 }
 
 #[test]
+fn test_aliased_fixture_missing_fixtures_uses_source_name() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.fixture(name="aliased_fixture")
+def source_fixture(missing_fixture):
+    return 1
+
+def test_fixture(aliased_fixture):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_fixture
+
+    failures:
+
+    test::test_fixture:
+
+    error[missing-fixtures]: Fixture `source_fixture` has missing fixtures
+     --> test.py:5:5
+      |
+    5 | def source_fixture(missing_fixture):
+      |     ^^^^^^^^^^^^^^
+      |
+    info: Missing fixtures: `missing_fixture`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn missing_arguments_in_nested_function() {
     let context = TestContext::with_file(
         "test.py",
