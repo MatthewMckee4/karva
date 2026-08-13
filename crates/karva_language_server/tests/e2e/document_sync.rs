@@ -2,16 +2,18 @@ use lsp_types::{
     DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
     DidCloseTextDocumentNotification, DidCloseTextDocumentParams, DidOpenTextDocumentNotification,
     DidOpenTextDocumentParams, LanguageKind, Position, Range, TextDocumentContentChangeEvent,
-    TextDocumentContentChangePartial, TextDocumentIdentifier, TextDocumentItem, Uri,
+    TextDocumentContentChangePartial, TextDocumentIdentifier, TextDocumentItem,
     VersionedTextDocumentIdentifier,
 };
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 #[test]
 fn accepts_incremental_unsaved_document_changes() {
-    let server = TestServer::new(lsp_types::ClientCapabilities::default());
-    let uri = Uri::parse("file:///workspace/test_example.py").expect("test URI should be valid");
+    let workspace = Workspace::new();
+    let mut server =
+        TestServer::with_workspace(lsp_types::ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
             uri: uri.clone(),
@@ -20,6 +22,8 @@ fn accepts_incremental_unsaved_document_changes() {
             text: "def test_😀():\n    pas\n".to_owned(),
         },
     });
+    server.receive_notification::<lsp_types::PublishDiagnosticsNotification>();
+
     server.notify::<DidChangeTextDocumentNotification>(DidChangeTextDocumentParams {
         text_document: VersionedTextDocumentIdentifier {
             text_document_identifier: TextDocumentIdentifier { uri: uri.clone() },
@@ -35,7 +39,10 @@ fn accepts_incremental_unsaved_document_changes() {
             ),
         ],
     });
+    server.receive_notification::<lsp_types::PublishDiagnosticsNotification>();
+
     server.notify::<DidCloseTextDocumentNotification>(DidCloseTextDocumentParams {
         text_document: TextDocumentIdentifier { uri },
     });
+    server.receive_notification::<lsp_types::PublishDiagnosticsNotification>();
 }

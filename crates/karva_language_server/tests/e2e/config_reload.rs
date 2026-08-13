@@ -8,7 +8,7 @@ use super::TestServer;
 
 #[test]
 fn registers_and_accepts_source_file_changes() {
-    let server = TestServer::new(ClientCapabilities {
+    let mut server = TestServer::new(ClientCapabilities {
         workspace: Some(WorkspaceClientCapabilities {
             did_change_watched_files: Some(DidChangeWatchedFilesClientCapabilities {
                 dynamic_registration: Some(true),

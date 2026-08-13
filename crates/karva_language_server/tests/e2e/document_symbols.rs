@@ -1,15 +1,12 @@
-use std::fs;
-
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
     DocumentSymbolClientCapabilities, DocumentSymbolParams, DocumentSymbolRequest, LanguageKind,
     PartialResultParams, PublishDiagnosticsNotification, TextDocumentClientCapabilities,
-    TextDocumentIdentifier, TextDocumentItem, Uri, WorkDoneProgressParams, WorkspaceFolder,
+    TextDocumentIdentifier, TextDocumentItem, Uri, WorkDoneProgressParams,
 };
-use tempfile::TempDir;
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 const SOURCE: &str = concat!(
     "import pytest\n",
@@ -35,7 +32,7 @@ fn returns_hierarchical_symbols_for_unsaved_karva_source() {
     };
     let mut server = TestServer::with_workspace(capabilities, workspace.folder());
     let uri = workspace.uri("test_symbols.py");
-    open(&server, uri.clone());
+    open(&mut server, uri.clone());
 
     let response = server.request::<DocumentSymbolRequest>(params(uri));
 
@@ -47,7 +44,7 @@ fn falls_back_to_flat_symbols_for_legacy_clients() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_symbols.py");
-    open(&server, uri.clone());
+    open(&mut server, uri.clone());
 
     let response = server.request::<DocumentSymbolRequest>(params(uri));
 
@@ -56,7 +53,7 @@ fn falls_back_to_flat_symbols_for_legacy_clients() {
     assert_json_snapshot!(response);
 }
 
-fn open(server: &TestServer, uri: Uri) {
+fn open(server: &mut TestServer, uri: Uri) {
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
             uri,
@@ -92,35 +89,5 @@ fn normalize_uri(value: &mut serde_json::Value, workspace_uri: &str) {
             *value = value.replace(workspace_uri, "file:///project");
         }
         serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
-    }
-}
-
-struct Workspace {
-    directory: TempDir,
-    root_uri: Uri,
-}
-
-impl Workspace {
-    fn new() -> Self {
-        let directory = tempfile::tempdir().expect("temporary workspace should be created");
-        fs::create_dir(directory.path().join(".git")).expect("workspace marker should be created");
-        let root_uri =
-            Uri::from_file_path(directory.path()).expect("workspace URI should be valid");
-        Self {
-            directory,
-            root_uri,
-        }
-    }
-
-    fn folder(&self) -> WorkspaceFolder {
-        WorkspaceFolder {
-            uri: self.root_uri.clone(),
-            name: "project".to_owned(),
-        }
-    }
-
-    fn uri(&self, relative: &str) -> Uri {
-        Uri::from_file_path(self.directory.path().join(relative))
-            .expect("document URI should be valid")
     }
 }
