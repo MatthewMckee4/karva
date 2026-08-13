@@ -1,10 +1,5 @@
 //! Source-only editor analysis for Karva projects.
 
-#![expect(
-    dead_code,
-    reason = "language-server consumers land in later stack layers"
-)]
-
 mod fixture;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -17,22 +12,41 @@ use fixture::FixtureDefinition;
 #[cfg(test)]
 pub(crate) use fixture::FixtureResolution;
 
+/// Owned Python source used as an input to source-only analysis.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceDocument {
+    path: Utf8PathBuf,
+    source_text: String,
+}
+
+impl SourceDocument {
+    /// Creates a source document with its stable filesystem path.
+    pub fn new(path: Utf8PathBuf, source_text: String) -> Self {
+        Self { path, source_text }
+    }
+
+    /// Consumes the document and returns its path and source text.
+    fn into_parts(self) -> (Utf8PathBuf, String) {
+        (self.path, self.source_text)
+    }
+}
+
 /// Settings required to analyze one Python source document.
 #[derive(Clone, Debug)]
-pub(crate) struct SourceAnalysisSettings {
+pub struct SourceAnalysisSettings {
     /// Python grammar version used by the project.
-    python_version: PythonVersion,
+    pub python_version: PythonVersion,
 
     /// Prefix identifying test functions.
-    test_function_prefix: String,
+    pub test_function_prefix: String,
 
     /// Whether runtime discovery may import fixture providers from test modules.
-    try_import_fixtures: bool,
+    pub try_import_fixtures: bool,
 }
 
 /// Stable identifier for a source diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum DiagnosticCode {
+pub enum DiagnosticCode {
     /// Two fixtures in one module resolve to the same public name.
     DuplicateFixture,
 
@@ -51,7 +65,7 @@ pub(crate) enum DiagnosticCode {
 
 impl DiagnosticCode {
     /// Returns the stable protocol code.
-    const fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::DuplicateFixture => "duplicate-fixture",
             Self::InvalidFixture => "invalid-fixture",
@@ -64,43 +78,50 @@ impl DiagnosticCode {
 
 /// A source location independent of editor protocol types.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SourceLocation {
+pub struct SourceLocation {
     /// File containing the location.
-    path: Utf8PathBuf,
+    pub path: Utf8PathBuf,
 
     /// UTF-8 byte range within the file.
-    range: TextRange,
+    pub range: TextRange,
 }
 
 /// Secondary location explaining a diagnostic.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RelatedInformation {
+pub struct RelatedInformation {
     /// Human-readable relationship to the primary diagnostic.
-    message: String,
+    pub message: String,
 
     /// Relevant source location.
-    location: SourceLocation,
+    pub location: SourceLocation,
 }
 
 /// A definite source-only Karva diagnostic.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SourceDiagnostic {
+pub struct SourceDiagnostic {
     /// Stable diagnostic identifier.
-    code: DiagnosticCode,
+    pub code: DiagnosticCode,
 
     /// User-facing explanation.
-    message: String,
+    pub message: String,
 
     /// Primary source location.
-    location: SourceLocation,
+    pub location: SourceLocation,
 
     /// Supporting source locations.
-    related: Vec<RelatedInformation>,
+    pub related: Vec<RelatedInformation>,
 }
 
 /// Parsed source plus Karva-specific semantic facts.
 #[derive(Debug)]
-pub(crate) struct SourceAnalysis {
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "completion and navigation consumers land in later stack layers"
+    )
+)]
+pub struct SourceAnalysis {
     /// Collector output retained for later editor features.
     module: CollectedModule,
 
@@ -108,10 +129,17 @@ pub(crate) struct SourceAnalysis {
     fixtures: Vec<FixtureDefinition>,
 
     /// Definite diagnostics. Unknown dynamic behavior remains silent.
-    diagnostics: Vec<SourceDiagnostic>,
+    pub diagnostics: Vec<SourceDiagnostic>,
 }
 
 /// Analyzes unsaved Python source without importing Python or launching workers.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "completion and navigation consumers land in later stack layers"
+    )
+)]
 pub(crate) fn analyze_source(
     path: &Utf8PathBuf,
     project_root: &Utf8Path,
@@ -134,10 +162,62 @@ pub(crate) fn analyze_source(
     })
 }
 
+/// Analyzes an unsaved source document with fixture providers from ancestor
+/// `conftest.py` documents.
+///
+/// `parents` must be ordered from the project/session root toward the current
+/// package. The returned module is the current document; parent modules are
+/// used to resolve fixture references and retain their source locations.
+pub fn analyze_source_with_parents(
+    current: SourceDocument,
+    parents: impl IntoIterator<Item = SourceDocument>,
+    project_root: &Utf8Path,
+    settings: &SourceAnalysisSettings,
+) -> Option<SourceAnalysis> {
+    let collection_settings = CollectionSettings {
+        python_version: settings.python_version,
+        test_function_prefix: &settings.test_function_prefix,
+        respect_ignore_files: true,
+        collect_fixtures: true,
+        collect_doctests: false,
+    };
+    let (current_path, current_source) = current.into_parts();
+    let current = collect_source(
+        &current_path,
+        project_root,
+        current_source,
+        &collection_settings,
+        &[],
+    )?;
+
+    let parent_modules = parents
+        .into_iter()
+        .filter_map(|parent| {
+            let (path, source_text) = parent.into_parts();
+            collect_source(&path, project_root, source_text, &collection_settings, &[])
+        })
+        .collect::<Vec<_>>();
+    let parent_modules = parent_modules.iter().collect::<Vec<_>>();
+    let (fixtures, diagnostics) =
+        fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
+    Some(SourceAnalysis {
+        module: current,
+        fixtures,
+        diagnostics,
+    })
+}
+
 /// Analyzes a current document against already-collected configuration modules.
 ///
 /// `parents` must be ordered from the project/session root toward the current
 /// package, matching runtime fixture lookup precedence.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "workspace source indexing lands in a later stack layer"
+    )
+)]
 pub(crate) fn analyze_sources(
     current: CollectedModule,
     parents: &[CollectedModule],

@@ -1,6 +1,7 @@
 use lsp_types::{Notification, Request};
 
 use crate::session::Session;
+use crate::session::client::Client;
 
 pub(super) trait RequestHandler {
     type RequestType: Request;
@@ -20,6 +21,7 @@ pub(super) trait NotificationHandler {
 pub(super) trait SyncNotificationHandler: NotificationHandler {
     fn run(
         session: &mut Session,
+        client: &Client,
         params: <<Self as NotificationHandler>::NotificationType as Notification>::Params,
     ) -> anyhow::Result<()>;
 }

@@ -1188,6 +1188,8 @@ dependencies = [
  "camino",
  "crossbeam-channel",
  "gen-lsp-types",
+ "insta",
+ "karva_ide",
  "karva_metadata",
  "karva_project",
  "karva_version",
