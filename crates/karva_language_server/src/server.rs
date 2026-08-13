@@ -10,7 +10,9 @@ use lsp_types::{
 use ruff_python_ast::PythonVersion;
 use serde::Deserialize;
 
-use crate::capabilities::{position_encoding, server_capabilities};
+use crate::capabilities::{
+    position_encoding, server_capabilities, supports_diagnostic_related_information,
+};
 use crate::session::Session;
 use crate::session::client::Client;
 use crate::workspace::Workspaces;
@@ -48,6 +50,8 @@ impl Server {
         } = init_params;
         let position_encoding = position_encoding(&capabilities);
         let register_config_watchers = supports_dynamic_file_watching(&capabilities);
+        let supports_diagnostic_related_information =
+            supports_diagnostic_related_information(&capabilities);
         let capabilities = server_capabilities(position_encoding);
         let workspace_folders = match workspace_folders {
             Some(WorkspaceFolders::WorkspaceFolderList(folders)) => folders,
@@ -74,7 +78,11 @@ impl Server {
         Ok(Self {
             connection,
             register_config_watchers,
-            session: Session::new(position_encoding, workspaces),
+            session: Session::new(
+                position_encoding,
+                supports_diagnostic_related_information,
+                workspaces,
+            ),
         })
     }
 

@@ -1,8 +1,10 @@
 use lsp_types::{DidOpenTextDocumentNotification, DidOpenTextDocumentParams, TextDocumentItem};
 
+use super::super::diagnostics::publish_diagnostics;
 use super::super::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::TextDocument;
 use crate::session::Session;
+use crate::session::client::Client;
 
 pub struct DidOpen;
 
@@ -13,6 +15,7 @@ impl NotificationHandler for DidOpen {
 impl SyncNotificationHandler for DidOpen {
     fn run(
         session: &mut Session,
+        client: &Client,
         DidOpenTextDocumentParams {
             text_document:
                 TextDocumentItem {
@@ -24,10 +27,7 @@ impl SyncNotificationHandler for DidOpen {
         }: DidOpenTextDocumentParams,
     ) -> anyhow::Result<()> {
         let document = TextDocument::new(uri, text, version, language_id);
-        if let Err(error) = session.project_for_uri(document.uri()) {
-            tracing::warn!("failed to resolve Karva project: {error}");
-        }
         session.open_document(document);
-        Ok(())
+        publish_diagnostics(session, client)
     }
 }

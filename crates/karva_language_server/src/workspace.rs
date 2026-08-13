@@ -171,7 +171,7 @@ impl Workspaces {
     }
 }
 
-fn uri_to_path(uri: &Uri) -> Result<Utf8PathBuf, WorkspaceError> {
+pub fn uri_to_path(uri: &Uri) -> Result<Utf8PathBuf, WorkspaceError> {
     let path = uri
         .to_file_path()
         .map_err(|()| WorkspaceError::NotAFileUri(uri.clone()))?;

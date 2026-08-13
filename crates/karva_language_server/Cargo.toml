@@ -22,6 +22,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 camino = { workspace = true }
 crossbeam-channel = { workspace = true }
+karva_ide = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_version = { workspace = true }
@@ -36,6 +37,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+insta = { workspace = true, features = ["json"] }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 

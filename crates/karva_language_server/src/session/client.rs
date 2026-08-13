@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use lsp_server::{Message, RequestId};
-use lsp_types::Request;
+use lsp_types::{Notification, Request};
 
 /// Typed access to messages sent from the server to the editor client.
 #[derive(Clone)]
@@ -20,6 +20,15 @@ impl Client {
             params: serde_json::to_value(params)?,
         };
         self.sender.send(Message::Request(request))?;
+        Ok(())
+    }
+
+    pub fn send_notification<N: Notification>(&self, params: N::Params) -> anyhow::Result<()> {
+        let notification = lsp_server::Notification {
+            method: N::METHOD.as_str().to_owned(),
+            params: serde_json::to_value(params)?,
+        };
+        self.sender.send(Message::Notification(notification))?;
         Ok(())
     }
 }

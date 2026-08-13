@@ -5,6 +5,7 @@ mod text_document;
 
 use lsp_types::PositionEncodingKind;
 
+pub use range::text_range_to_range;
 pub use text_document::{DocumentChangeError, TextDocument};
 
 /// A supported LSP source-position encoding, ordered by server preference.

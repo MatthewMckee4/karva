@@ -3,9 +3,11 @@ use lsp_server::{ErrorCode, Message, Response};
 use lsp_types::{ExitNotification, Notification as _};
 
 use crate::Server;
+use crate::session::client::Client;
 
 impl Server {
     pub(super) fn main_loop(&mut self) -> anyhow::Result<()> {
+        let client = Client::new(self.connection.sender.clone());
         for message in &self.connection.receiver {
             match message {
                 Message::Request(request) => {
@@ -28,7 +30,7 @@ impl Server {
                         return Ok(());
                     }
 
-                    super::api::notification(notification, &mut self.session);
+                    super::api::notification(notification, &mut self.session, &client);
                 }
                 Message::Response(response) => {
                     if !self

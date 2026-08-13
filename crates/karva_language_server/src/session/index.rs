@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use camino::Utf8Path;
 use lsp_types::{TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
 
 use crate::session::SessionError;
@@ -25,6 +26,25 @@ impl Index {
 
     pub fn open_document(&mut self, document: TextDocument) {
         self.documents.insert(document.uri().clone(), document);
+    }
+
+    pub fn document(&self, uri: &Uri) -> Option<&TextDocument> {
+        self.documents.get(uri)
+    }
+
+    pub fn documents(&self) -> impl Iterator<Item = &TextDocument> {
+        self.documents.values()
+    }
+
+    pub fn document_for_path(&self, path: &Utf8Path) -> Option<&TextDocument> {
+        self.documents.values().find(|document| {
+            document
+                .uri()
+                .to_file_path()
+                .ok()
+                .and_then(|path| Utf8Path::from_path(&path).map(Utf8Path::to_path_buf))
+                .is_some_and(|document_path| document_path == path)
+        })
     }
 
     pub fn update_document(

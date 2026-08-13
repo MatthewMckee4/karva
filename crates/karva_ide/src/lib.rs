@@ -11,6 +11,35 @@ pub use fixture::{
     FixtureDefinition, FixtureId, FixtureReference, FixtureResolution, FixtureScope,
 };
 
+/// Owned Python source used as an input to source-only analysis.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceDocument {
+    path: Utf8PathBuf,
+    source_text: String,
+}
+
+impl SourceDocument {
+    /// Creates a source document with its stable filesystem path.
+    pub fn new(path: Utf8PathBuf, source_text: String) -> Self {
+        Self { path, source_text }
+    }
+
+    /// Returns the document's filesystem path.
+    pub fn path(&self) -> &Utf8Path {
+        &self.path
+    }
+
+    /// Returns the complete source text owned by this document.
+    pub fn source_text(&self) -> &str {
+        &self.source_text
+    }
+
+    /// Consumes the document and returns its path and source text.
+    pub fn into_parts(self) -> (Utf8PathBuf, String) {
+        (self.path, self.source_text)
+    }
+}
+
 /// Settings required to analyze one Python source document.
 #[derive(Clone, Debug)]
 pub struct SourceAnalysisSettings {
@@ -123,6 +152,51 @@ pub fn analyze_source(
     let (fixtures, diagnostics) = fixture::analyze(&module, settings.try_import_fixtures);
     Some(SourceAnalysis {
         module,
+        fixtures,
+        diagnostics,
+    })
+}
+
+/// Analyzes an unsaved source document with fixture providers from ancestor
+/// `conftest.py` documents.
+///
+/// `parents` must be ordered from the project/session root toward the current
+/// package. The returned module is the current document; parent modules are
+/// used to resolve fixture references and retain their source locations.
+pub fn analyze_source_with_parents(
+    current: SourceDocument,
+    parents: impl IntoIterator<Item = SourceDocument>,
+    project_root: &Utf8Path,
+    settings: &SourceAnalysisSettings,
+) -> Option<SourceAnalysis> {
+    let collection_settings = CollectionSettings {
+        python_version: settings.python_version,
+        test_function_prefix: &settings.test_function_prefix,
+        respect_ignore_files: true,
+        collect_fixtures: true,
+        collect_doctests: false,
+    };
+    let (current_path, current_source) = current.into_parts();
+    let current = collect_source(
+        &current_path,
+        project_root,
+        current_source,
+        &collection_settings,
+        &[],
+    )?;
+
+    let parent_modules = parents
+        .into_iter()
+        .filter_map(|parent| {
+            let (path, source_text) = parent.into_parts();
+            collect_source(&path, project_root, source_text, &collection_settings, &[])
+        })
+        .collect::<Vec<_>>();
+    let parent_modules = parent_modules.iter().collect::<Vec<_>>();
+    let (fixtures, diagnostics) =
+        fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
+    Some(SourceAnalysis {
+        module: current,
         fixtures,
         diagnostics,
     })

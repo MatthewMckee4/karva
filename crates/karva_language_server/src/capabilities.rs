@@ -20,6 +20,20 @@ pub fn position_encoding(capabilities: &ClientCapabilities) -> PositionEncoding 
         .unwrap_or_default()
 }
 
+/// Returns whether the client accepts secondary diagnostic locations.
+pub fn supports_diagnostic_related_information(capabilities: &ClientCapabilities) -> bool {
+    capabilities
+        .text_document
+        .as_ref()
+        .and_then(|text_document| text_document.publish_diagnostics.as_ref())
+        .and_then(|publish_diagnostics| {
+            publish_diagnostics
+                .diagnostics_capabilities
+                .related_information
+        })
+        .unwrap_or(false)
+}
+
 pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabilities {
     ServerCapabilities {
         position_encoding: Some(position_encoding.into()),
@@ -46,7 +60,10 @@ pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabil
 
 #[cfg(test)]
 mod tests {
-    use lsp_types::{ClientCapabilities, GeneralClientCapabilities, PositionEncodingKind};
+    use lsp_types::{
+        ClientCapabilities, DiagnosticsCapabilities, GeneralClientCapabilities,
+        PositionEncodingKind, PublishDiagnosticsClientCapabilities, TextDocumentClientCapabilities,
+    };
 
     use super::*;
 
@@ -72,5 +89,27 @@ mod tests {
         };
 
         assert_eq!(position_encoding(&capabilities), PositionEncoding::UTF8);
+    }
+
+    #[test]
+    fn resolves_diagnostic_related_information_support() {
+        let capabilities = ClientCapabilities {
+            text_document: Some(TextDocumentClientCapabilities {
+                publish_diagnostics: Some(PublishDiagnosticsClientCapabilities {
+                    diagnostics_capabilities: DiagnosticsCapabilities {
+                        related_information: Some(true),
+                        ..DiagnosticsCapabilities::default()
+                    },
+                    ..PublishDiagnosticsClientCapabilities::default()
+                }),
+                ..TextDocumentClientCapabilities::default()
+            }),
+            ..ClientCapabilities::default()
+        };
+
+        assert!(supports_diagnostic_related_information(&capabilities));
+        assert!(!supports_diagnostic_related_information(
+            &ClientCapabilities::default()
+        ));
     }
 }

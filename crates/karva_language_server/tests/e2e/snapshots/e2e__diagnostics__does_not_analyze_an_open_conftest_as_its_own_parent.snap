@@ -1,0 +1,9 @@
+---
+source: crates/karva_language_server/tests/e2e/diagnostics.rs
+expression: workspace.normalize(diagnostics)
+---
+{
+  "diagnostics": [],
+  "uri": "file:///project/conftest.py",
+  "version": 1
+}
