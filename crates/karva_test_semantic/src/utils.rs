@@ -525,9 +525,9 @@ fn ordered_test_arguments<'a>(
 }
 
 fn has_builtin_display(value: &Bound<'_, PyAny>) -> bool {
-    value.is_exact_instance_of::<PyNone>()
+    value.is_exact_instance_of::<PyInt>()
+        || value.is_exact_instance_of::<PyNone>()
         || value.is_exact_instance_of::<PyBool>()
-        || value.is_exact_instance_of::<PyInt>()
         || value.is_exact_instance_of::<PyFloat>()
         || value.is_exact_instance_of::<PyComplex>()
         || value.is_exact_instance_of::<PyString>()

@@ -50,8 +50,21 @@ struct ScheduledTest {
     /// Worker CLI selector shared with the outbound IPC selection.
     path: Arc<str>,
 
-    /// Stable identity used to exclude completed or crashed work.
-    cache_key: TestCacheKey,
+    /// Shared function identity used to reconstruct a key only after a crash.
+    function_root: Arc<str>,
+
+    /// Stable expansion index for a statically countable parameter case.
+    case_index: Option<usize>,
+}
+
+impl ScheduledTest {
+    /// Materializes the recovery key only on an exceptional worker-crash path.
+    fn cache_key(&self) -> TestCacheKey {
+        self.case_index.map_or_else(
+            || TestCacheKey::function_name(&self.function_root),
+            |index| TestCacheKey::parameter_case_name(&self.function_root, index),
+        )
+    }
 }
 
 impl Partition {
@@ -67,7 +80,8 @@ impl Partition {
     fn add_test(&mut self, test: TestInfo, test_weight: u128) {
         self.tests.push(ScheduledTest {
             path: test.path,
-            cache_key: TestCacheKey::function_name(&test.qualified_name),
+            function_root: test.function_root,
+            case_index: test.case_index,
         });
         self.weight += test_weight;
     }
@@ -80,6 +94,12 @@ impl Partition {
     #[cfg(test)]
     fn test_paths(&self) -> impl ExactSizeIterator<Item = &str> {
         self.tests.iter().map(|test| test.path.as_ref())
+    }
+
+    /// Materializes scheduled keys for collector-to-recovery parity tests.
+    #[cfg(test)]
+    fn cache_keys(&self) -> impl Iterator<Item = TestCacheKey> + '_ {
+        self.tests.iter().map(ScheduledTest::cache_key)
     }
 
     /// Clones shared selector handles for the worker IPC handshake.
@@ -102,9 +122,7 @@ impl Partition {
 
     /// Returns function identities represented by this assignment.
     pub(super) fn function_roots(&self) -> impl Iterator<Item = &str> {
-        self.tests
-            .iter()
-            .map(|test| test.cache_key.test_function_name())
+        self.tests.iter().map(|test| test.function_root.as_ref())
     }
 
     /// Runtime-expanded cases already handled by an earlier worker generation.
@@ -126,7 +144,7 @@ impl Partition {
             let function_roots = self
                 .tests
                 .iter()
-                .map(|test| test.cache_key.test_function_name())
+                .map(|test| test.function_root.as_ref())
                 .collect::<HashSet<_>>();
             let completed_in_partition = completed
                 .iter()
@@ -138,17 +156,18 @@ impl Partition {
             pending.completed_before_unattributed_retry = Some(completed_in_partition);
         }
         for test in &self.tests {
-            let cache_key = &test.cache_key;
+            let cache_key = test.cache_key();
             let completed_function = completed
                 .iter()
-                .any(|completed| completed.test_function_name() == cache_key.test_function_name());
+                .any(|completed| completed.test_function_name() == test.function_root.as_ref());
             let contains_crashed_dynamic_case = crashed.is_some_and(|crashed| {
-                !cache_key.is_parameter_case()
-                    && cache_key.test_function_name() == crashed.test_function_name()
+                crashed.is_parameter_case()
+                    && test.case_index.is_none()
+                    && test.function_root.as_ref() == crashed.test_function_name()
             });
             let contains_completed_dynamic_case = crashed.is_none()
-                && !cache_key.is_parameter_case()
-                && !completed.contains(cache_key)
+                && test.case_index.is_none()
+                && !completed.contains(&cache_key)
                 && completed_function;
             // A function-level selector with case-level progress was expanded
             // at runtime. Retry the active function, or every possibly active
@@ -159,7 +178,7 @@ impl Partition {
                     completed
                         .iter()
                         .filter(|completed| {
-                            completed.test_function_name() == cache_key.test_function_name()
+                            completed.test_function_name() == test.function_root.as_ref()
                         })
                         .cloned(),
                 );
@@ -168,9 +187,9 @@ impl Partition {
                 }
                 continue;
             }
-            if !completed.contains(cache_key)
-                && (!completed_function || cache_key.is_parameter_case())
-                && crashed != Some(cache_key)
+            if !completed.contains(&cache_key)
+                && (!completed_function || test.case_index.is_some())
+                && crashed != Some(&cache_key)
             {
                 pending.tests.push(test.clone());
             }

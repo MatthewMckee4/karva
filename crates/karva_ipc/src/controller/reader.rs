@@ -89,25 +89,18 @@ pub(super) fn read_worker(
                 bail!("Karva worker sent a test selection to its controller")
             }
         };
-        let incoming = match *event {
-            WorkerEvent::TestFinished { cache_key, result } => {
-                checkpoint.complete(worker_id, &cache_key)?;
-                Some(WorkerEvent::TestFinished { cache_key, result })
+        match event.as_ref() {
+            WorkerEvent::TestFinished { cache_key, .. } => {
+                checkpoint.complete(worker_id, cache_key)?;
             }
             WorkerEvent::WorkerFinished => {
                 checkpoint.ensure_idle(worker_id)?;
-                Some(WorkerEvent::WorkerFinished)
             }
-            WorkerEvent::TestSlow => Some(WorkerEvent::TestSlow),
-            WorkerEvent::RunDiagnostic(diagnostic) => Some(WorkerEvent::RunDiagnostic(diagnostic)),
-        };
-        if let Some(event) = incoming
-            && sender
-                .send(Incoming::Event(ControllerEvent {
-                    worker_id,
-                    event: Box::new(event),
-                }))
-                .is_err()
+            WorkerEvent::TestSlow | WorkerEvent::RunDiagnostic(_) => {}
+        }
+        if sender
+            .send(Incoming::Event(ControllerEvent { worker_id, event }))
+            .is_err()
         {
             return Ok(());
         }

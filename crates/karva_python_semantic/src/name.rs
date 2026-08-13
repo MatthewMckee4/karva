@@ -70,6 +70,11 @@ impl TestCacheKey {
         Self(format!("{function}[{index}]"))
     }
 
+    /// Creates a case-level key from an already serialized function identity.
+    pub fn parameter_case_name(function: &str, index: usize) -> Self {
+        Self(format!("{function}[{index}]"))
+    }
+
     /// Returns the qualified function portion without a case index.
     pub fn test_function_name(&self) -> &str {
         let Some((function, suffix)) = self.0.rsplit_once('[') else {
@@ -143,6 +148,13 @@ impl QualifiedTestName {
             parameters: Some(parameters),
             case_index: None,
         }
+    }
+
+    /// Attaches rendered parameters while preserving the existing function and case identity.
+    #[must_use]
+    pub fn with_resolved_parameters(mut self, parameters: String) -> Self {
+        self.parameters = Some(parameters);
+        self
     }
 
     /// Attach a parametrize case index. Used for stable cache/duration keys

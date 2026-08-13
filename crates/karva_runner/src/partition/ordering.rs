@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 use siphasher::sip::SipHasher13;
 
@@ -30,13 +31,13 @@ pub(super) fn seeded_order_key(seed: u64, qualified_name: &str) -> u64 {
 /// Shuffle unmeasured tests while keeping parametrized function cases together.
 fn shuffle_tests_without_durations(test_infos: &mut Vec<TestInfo>) {
     let mut groups: Vec<Vec<TestInfo>> = Vec::new();
-    let mut group_index: HashMap<String, usize> = HashMap::new();
+    let mut group_index: HashMap<Arc<str>, usize> = HashMap::new();
 
     for info in test_infos.drain(..) {
         if let Some(idx) = group_index.get(&info.function_root) {
             groups[*idx].push(info);
         } else {
-            group_index.insert(info.function_root.clone(), groups.len());
+            group_index.insert(Arc::clone(&info.function_root), groups.len());
             groups.push(vec![info]);
         }
     }

@@ -66,8 +66,8 @@ impl<'a> Context<'a> {
     }
 
     /// Whether crash recovery already committed this exact case.
-    pub(super) fn should_resume_skip(&self, cache_key: &TestCacheKey) -> bool {
-        self.resume_skip.contains(cache_key)
+    pub(super) fn should_resume_skip(&self, test_name: &QualifiedTestName) -> bool {
+        !self.resume_skip.is_empty() && self.resume_skip.contains(&test_name.cache_key())
     }
 
     pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {

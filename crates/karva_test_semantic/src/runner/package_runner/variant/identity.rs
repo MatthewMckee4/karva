@@ -50,10 +50,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             return (unresolved, false);
         };
 
-        (
-            QualifiedTestName::with_parameters(self.input.test.name().clone(), parameters)
-                .with_case_index(self.input.identity.case_index),
-            true,
-        )
+        (unresolved.with_resolved_parameters(parameters), true)
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use camino::Utf8PathBuf;
@@ -15,12 +16,22 @@ pub(super) fn test_info_with_duration(
     qualified_name: &str,
     duration: Option<Duration>,
 ) -> TestInfo {
+    let (function_root, case_index) = qualified_name
+        .rsplit_once('[')
+        .and_then(|(function_root, suffix)| {
+            suffix
+                .strip_suffix(']')
+                .and_then(|index| index.parse::<usize>().ok())
+                .map(|index| (function_root, Some(index)))
+        })
+        .unwrap_or((qualified_name, None));
     TestInfo {
-        module_name: "test_module".to_string(),
+        module_name: Arc::from("test_module"),
         qualified_name: qualified_name.to_string(),
         path: qualified_name.into(),
         duration,
-        function_root: qualified_name.to_string(),
+        function_root: Arc::from(function_root),
+        case_index,
     }
 }
 

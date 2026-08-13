@@ -74,7 +74,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         if self
             .package_runner
             .context
-            .should_resume_skip(&unresolved_test_name.cache_key())
+            .should_resume_skip(&unresolved_test_name)
         {
             return true;
         }

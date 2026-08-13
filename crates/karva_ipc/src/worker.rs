@@ -4,7 +4,6 @@
 //! checkpoints that must survive a worker crash flush synchronously; ordinary
 //! events are coalesced for the configured interval.
 
-use std::fmt;
 use std::io::{BufReader, BufWriter, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,10 +12,15 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName};
-use serde::{Serialize, Serializer};
+use karva_diagnostic::TestCaseResult;
+use karva_python_semantic::{QualifiedTestName, TestCacheKey};
+use serde::Serialize;
 
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
+
+mod frames;
+
+use frames::{checkpoint, completion};
 
 /// Cloneable worker-side writer shared with execution reporters.
 #[derive(Clone)]
@@ -44,50 +48,6 @@ struct WorkerConnection {
 
     /// Join handle retained so completion can report a flusher panic.
     flusher: Mutex<Option<JoinHandle<()>>>,
-}
-
-/// Allocation-free checkpoint frame matching [`WireMessage::TestCheckpoint`].
-#[derive(Serialize)]
-enum BorrowedCheckpointFrame<'a> {
-    /// Active test identity borrowed from the execution reporter.
-    #[serde(rename = "C")]
-    TestCheckpoint {
-        /// Rendered parameter list without its function name or parentheses.
-        #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
-        parameters: Option<&'a str>,
-
-        /// Stable function and case identity serialized as one cache key.
-        #[serde(rename = "k")]
-        cache_key: BorrowedTestCacheKey<'a>,
-    },
-}
-
-/// Stable cache identity serialized without constructing an owned string.
-struct BorrowedTestCacheKey<'a> {
-    /// Qualified function portion of the cache key.
-    function_name: &'a QualifiedFunctionName,
-
-    /// Optional terminal parameter-case index.
-    case_index: Option<usize>,
-}
-
-impl fmt::Display for BorrowedTestCacheKey<'_> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.function_name.fmt(formatter)?;
-        if let Some(case_index) = self.case_index {
-            write!(formatter, "[{case_index}]")?;
-        }
-        Ok(())
-    }
-}
-
-impl Serialize for BorrowedTestCacheKey<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.collect_str(self)
-    }
 }
 
 impl WorkerClient {
@@ -136,23 +96,25 @@ impl WorkerClient {
     pub fn send_event(&self, event: WorkerEvent) -> Result<()> {
         let flush = matches!(
             &event,
-            WorkerEvent::TestFinished { result, .. } if result.outcome().is_non_success()
+            WorkerEvent::TestFinished { result, .. }
+                if result.outcome().is_non_success() || result.is_flaky_failure()
         );
         self.write(&WireMessage::Event(Box::new(event)), flush)
     }
 
+    /// Queues one completed result without allocating a temporary wire event.
+    pub fn send_test_finished(
+        &self,
+        cache_key: &TestCacheKey,
+        result: &TestCaseResult,
+    ) -> Result<()> {
+        let flush = result.outcome().is_non_success() || result.is_flaky_failure();
+        self.write(&completion(cache_key, result), flush)
+    }
+
     /// Commits the active test identity before its setup or body can terminate the worker.
     pub fn checkpoint(&self, test_name: &QualifiedTestName) -> Result<()> {
-        self.write(
-            &BorrowedCheckpointFrame::TestCheckpoint {
-                parameters: test_name.parameters(),
-                cache_key: BorrowedTestCacheKey {
-                    function_name: test_name.function_name(),
-                    case_index: test_name.case_index(),
-                },
-            },
-            true,
-        )
+        self.write(&checkpoint(test_name), true)
     }
 
     /// Marks the worker complete and gracefully closes the connection.
@@ -334,41 +296,5 @@ impl Drop for WorkerConnection {
                 eprintln!("Karva worker event flusher panicked during cleanup: {error:?}");
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
-
-    use super::{BorrowedCheckpointFrame, BorrowedTestCacheKey};
-    use crate::protocol::WireMessage;
-
-    #[test]
-    fn borrowed_checkpoint_matches_owned_wire_format() {
-        let test_name = QualifiedTestName::with_parameters(
-            QualifiedFunctionName::new(
-                "test_example".to_string(),
-                ModulePath::new_with_name("test.py", "tests.tést".to_string()),
-            ),
-            "value='é'".to_string(),
-        )
-        .with_case_index(Some(12));
-        let borrowed = BorrowedCheckpointFrame::TestCheckpoint {
-            parameters: test_name.parameters(),
-            cache_key: BorrowedTestCacheKey {
-                function_name: test_name.function_name(),
-                case_index: test_name.case_index(),
-            },
-        };
-        let owned = WireMessage::TestCheckpoint {
-            parameters: test_name.parameters().map(str::to_owned),
-            cache_key: test_name.cache_key(),
-        };
-
-        assert_eq!(
-            serde_json::to_value(borrowed).expect("serialize borrowed checkpoint"),
-            serde_json::to_value(owned).expect("serialize owned checkpoint")
-        );
     }
 }

@@ -58,6 +58,17 @@ fn literal_parametrize_cases_split_across_workers() {
         partitions.iter().map(Partition::test_count).sum::<usize>(),
         6
     );
+    let mut cache_keys = partitions
+        .iter()
+        .flat_map(Partition::cache_keys)
+        .collect::<Vec<_>>();
+    cache_keys.sort();
+    assert_eq!(
+        cache_keys,
+        (0..6)
+            .map(|index| TestCacheKey::function_name(&format!("test_sample::test_value[{index}]")))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

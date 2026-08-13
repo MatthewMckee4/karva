@@ -63,14 +63,21 @@ fn crash_recovery_does_not_repeat_completed_dynamic_functions() {
         Some(&TestCacheKey::function_name("test_module::test_crash")),
     );
 
-    assert_eq!(
-        pending.test_paths().collect::<Vec<_>>(),
-        ["test_module::test_crash"]
+    assert!(pending.is_empty());
+    assert!(pending.resume_skip().is_empty());
+}
+
+#[test]
+fn crash_recovery_does_not_spawn_a_replacement_for_plain_crashed_test() {
+    let mut partition = Partition::new();
+    partition.add_test(test_info("test_module::test_crash"), 1);
+
+    let pending = partition.pending_after_crash(
+        &HashSet::new(),
+        Some(&TestCacheKey::function_name("test_module::test_crash")),
     );
-    assert_eq!(
-        pending.resume_skip(),
-        &[TestCacheKey::function_name("test_module::test_crash")]
-    );
+
+    assert!(pending.is_empty());
 }
 
 #[test]

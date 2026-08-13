@@ -170,17 +170,18 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         };
         let is_async = self.input.test.is_async() && matches!(&async_patch_result, Ok(false));
         let mut snapshot_test_name = name.function_name().to_string();
-        let snapshot_parameters = if self.input.identity.id.is_none() && fixture_names.is_empty() {
-            qualified_test_name.parameters().map(str::to_string)
-        } else {
-            test_parameters(
-                self.py,
-                function_arguments,
-                self.input.test.parameters(),
-                &fixture_names,
-            )
-        };
-        if let Some(parameters) = snapshot_parameters {
+        if self.input.identity.id.is_none() && fixture_names.is_empty() {
+            if let Some(parameters) = qualified_test_name.parameters() {
+                snapshot_test_name.push('(');
+                snapshot_test_name.push_str(parameters);
+                snapshot_test_name.push(')');
+            }
+        } else if let Some(parameters) = test_parameters(
+            self.py,
+            function_arguments,
+            self.input.test.parameters(),
+            &fixture_names,
+        ) {
             snapshot_test_name.push('(');
             snapshot_test_name.push_str(&parameters);
             snapshot_test_name.push(')');
