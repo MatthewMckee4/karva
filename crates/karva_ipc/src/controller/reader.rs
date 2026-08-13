@@ -29,11 +29,16 @@ pub(super) fn read_worker(
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(first) = messages.next() else {
-        bail!("Karva worker connection closed before handshake");
+        // The process supervisor owns diagnostics and recovery when a worker
+        // exits after connecting but before identifying itself.
+        return Ok(());
     };
-    let WireMessage::Hello { run_id, worker_id } =
-        first.context("failed to read Karva worker handshake")?
-    else {
+    let first = match first {
+        Ok(first) => first,
+        Err(error) if error.is_eof() || is_clean_disconnect(&error) => return Ok(()),
+        Err(error) => return Err(error).context("failed to read Karva worker handshake"),
+    };
+    let WireMessage::Hello { run_id, worker_id } = first else {
         bail!("Karva worker sent an event before its handshake");
     };
     if run_id != expected_run_id {
@@ -49,9 +54,6 @@ pub(super) fn read_worker(
         .with_context(|| {
             format!("Karva worker {worker_id} connected without a registered selection")
         })?;
-    if sender.send(Incoming::Connected { worker_id }).is_err() {
-        return Ok(());
-    }
     let mut writer = BufWriter::new(response_stream);
     let selection_result =
         serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))
@@ -65,6 +67,9 @@ pub(super) fn read_worker(
                     .context("failed to send Karva worker selection")
             });
     if selection_result.is_err() {
+        return Ok(());
+    }
+    if sender.send(Incoming::Connected { worker_id }).is_err() {
         return Ok(());
     }
 

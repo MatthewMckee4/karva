@@ -113,6 +113,22 @@ fn controller_can_close_unauthenticated_reader_after_termination() {
 }
 
 #[test]
+fn worker_can_disconnect_before_handshake() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+        .expect("register worker selection");
+    let worker = ControllerStream::connect(&server.endpoint()).expect("connect worker");
+    drop(worker);
+
+    accept_connections(&mut server, 1);
+    server.finish().expect("finish readers");
+
+    assert!(server.try_recv().expect("drain events").is_none());
+    assert!(!server.worker_started(7).expect("read worker state"));
+}
+
+#[test]
 fn rejects_wrong_run_id() {
     let mut server = ControllerServer::bind("expected").expect("bind controller");
     let address = server.endpoint();
