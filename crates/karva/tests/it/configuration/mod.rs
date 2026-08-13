@@ -1366,13 +1366,13 @@ def test_from_cli(): pass
         ),
     ]);
 
-    // CLI path argument should add to config include
+    // CLI path argument should replace config include
     assert_cmd_snapshot!(context.command().arg("cli_dir").arg("--status-level=none"), @"
     success: true
     exit_code: 0
     ----- stdout -----
     ────────────
-         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
     ");
