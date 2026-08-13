@@ -17,6 +17,13 @@ pub(super) struct FixtureCache {
 }
 
 impl FixtureCache {
+    /// Whether one scope owns values whose destruction may execute Python code.
+    pub(super) fn has_values(&self, scope: ScopeKey<'_>) -> bool {
+        self.storage
+            .with(scope, |values| !values.is_empty())
+            .unwrap_or(false)
+    }
+
     /// Returns a new Python reference to a cached fixture value.
     pub(super) fn get(&self, py: Python<'_>, name: &str, scope: ScopeKey<'_>) -> Option<Py<PyAny>> {
         self.storage

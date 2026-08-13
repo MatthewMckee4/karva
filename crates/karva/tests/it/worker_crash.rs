@@ -370,6 +370,71 @@ def test_completed(crash_during_teardown):
 }
 
 #[test]
+fn completed_test_survives_next_module_auto_use_setup_crash() {
+    let context = TestContext::with_files([
+        (
+            "test_a.py",
+            r#"
+from pathlib import Path
+
+
+def test_completed():
+    Path("completed").write_text("a")
+"#,
+        ),
+        (
+            "test_b.py",
+            r#"
+import os
+from pathlib import Path
+
+import karva
+
+
+@karva.fixture(scope="module", auto_use=True)
+def crash_during_setup():
+    crash_marker = Path("crashed")
+    if Path("completed").exists() and not crash_marker.exists():
+        crash_marker.write_text("1")
+        os._exit(32)
+
+
+def test_never_started():
+    pass
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command().args([
+            "--num-workers=1",
+            "--shuffle",
+            "--random-seed=170938",
+        ]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    Random seed: [SEED]
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_completed
+            PASS [TIME] test_b::test_never_started
+
+    diagnostics:
+
+    error[worker-crashed]: Worker 0 terminated with exit code 32
+
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 32 in [TIME]
+    "
+    );
+    assert_eq!(context.read_file("completed"), "a");
+}
+
+#[test]
 fn no_cache_does_not_require_a_writable_cache_directory() {
     let context = TestContext::with_files([
         (".karva_cache", "not a directory"),

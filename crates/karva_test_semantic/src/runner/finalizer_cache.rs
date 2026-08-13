@@ -17,6 +17,13 @@ pub(super) struct FinalizerCache {
 }
 
 impl FinalizerCache {
+    /// Whether one scope owns teardown callbacks that may execute Python code.
+    pub(super) fn has_finalizers(&self, scope: ScopeKey<'_>) -> bool {
+        self.storage
+            .with(scope, |finalizers| !finalizers.is_empty())
+            .unwrap_or(false)
+    }
+
     /// Adds a finalizer to its declared scope's LIFO stack.
     pub(super) fn add_finalizer(&mut self, finalizer: Finalizer) {
         let package_owner = finalizer.package_owner.clone();
