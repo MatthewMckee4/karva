@@ -352,6 +352,10 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             return None;
         }
 
+        if self.module.rejected_fixture_symbol(name).is_some() {
+            return None;
+        }
+
         let mut module_name = value.getattr("__module__").ok()?.extract::<String>().ok()?;
 
         if module_name == "builtins" {
@@ -512,6 +516,16 @@ pub fn discover(
 
     for (index, fixture) in fixtures.into_iter().enumerate() {
         if duplicate_fixture_indices.contains(&index) {
+            let name = fixture.name().function_name().to_owned();
+            let source_file = visitor.module.source_file();
+            let module_path = visitor.module.module_path().clone();
+            visitor.module.add_rejected_fixture(RejectedFixture::new(
+                name.clone(),
+                format!("Fixture `{name}` is defined more than once"),
+                Rc::clone(fixture.stmt_function_def()),
+                source_file,
+                module_path,
+            ));
             continue;
         }
 

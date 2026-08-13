@@ -518,6 +518,51 @@ def test_username(username):
     ");
 }
 
+#[test]
+fn test_nearest_conftest_fixture_shadows_outer_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+
+@karva.fixture
+def database():
+    return "outer"
+"#,
+        ),
+        (
+            "nested/conftest.py",
+            r#"
+import karva
+
+@karva.fixture
+def database(database):
+    return "inner-" + database
+"#,
+        ),
+        (
+            "nested/test_example.py",
+            r#"
+def test_database(database):
+    assert database == "inner-outer"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] nested.test_example::test_database(database='inner-outer')
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest]
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(

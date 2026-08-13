@@ -1,0 +1,17 @@
+---
+source: crates/karva_language_server/tests/e2e/definition.rs
+expression: workspace.normalize(response)
+---
+{
+  "range": {
+    "end": {
+      "character": 12,
+      "line": 3
+    },
+    "start": {
+      "character": 4,
+      "line": 3
+    }
+  },
+  "uri": "file:///project/package/inner/conftest.py"
+}

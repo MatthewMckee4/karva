@@ -183,6 +183,7 @@ impl<'a> FixturePlanCompiler<'a> {
 
         self.parents
             .iter()
+            .rev()
             .find(|package| {
                 package
                     .get_fixture(name)
@@ -375,7 +376,7 @@ fn find_fixture<'a>(
         return None;
     }
 
-    for parent in parents {
+    for parent in parents.iter().rev() {
         if let Some(fixture) = parent.get_fixture(name)
             && current_fixture
                 .is_none_or(|current_fixture| current_fixture.name() != fixture.name())
@@ -402,5 +403,6 @@ fn find_rejected_fixture<'a>(
 
     parents
         .iter()
+        .rev()
         .find_map(|parent| parent.get_rejected_fixture(name))
 }

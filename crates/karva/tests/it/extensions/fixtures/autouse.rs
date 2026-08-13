@@ -450,6 +450,60 @@ def test_second():
     "#);
 }
 
+#[rstest]
+fn test_nearest_conftest_auto_use_fixture_shadows_outer_fixture(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let context = TestContext::new();
+    context.write_file(
+        "conftest.py",
+        &format!(
+            r#"
+import {framework}
+
+@{framework}.fixture({auto_use_kw}=True)
+def selected_fixture():
+    return "outer"
+"#,
+            auto_use_kw = get_auto_use_kw(framework),
+        ),
+    );
+    context.write_file(
+        "nested/conftest.py",
+        &format!(
+            r#"
+import {framework}
+
+@{framework}.fixture({auto_use_kw}=True)
+def selected_fixture():
+    return "inner"
+"#,
+            auto_use_kw = get_auto_use_kw(framework),
+        ),
+    );
+    context.write_file(
+        "nested/test_example.py",
+        r#"
+def test_selected_fixture(selected_fixture):
+    assert selected_fixture == "inner"
+"#,
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] nested.test_example::test_selected_fixture(selected_fixture='inner')
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 /// Mirrors the cibuildwheel scenario exactly: multiple autouse fixtures in a subdirectory
 /// conftest, where one depends on a non-autouse fixture from the parent conftest.
 ///
