@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::net::{Shutdown, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 
 use anyhow::{Context, Result};
@@ -24,7 +24,7 @@ pub(super) struct ControllerReader {
     stream: TcpStream,
 
     /// Worker id populated after the handshake succeeds.
-    worker_id: Arc<AtomicUsize>,
+    worker_id: Arc<OnceLock<usize>>,
 
     /// Number of complete event frames consumed by the reader.
     event_count: Arc<AtomicUsize>,
@@ -50,7 +50,7 @@ impl ControllerReader {
         let shutdown_stream = stream
             .try_clone()
             .context("failed to close Karva worker connection")?;
-        let worker_id = Arc::new(AtomicUsize::new(usize::MAX));
+        let worker_id = Arc::new(OnceLock::new());
         let reader_worker_id = Arc::clone(&worker_id);
         let event_count = Arc::new(AtomicUsize::new(0));
         let reader_event_count = Arc::clone(&event_count);
@@ -73,11 +73,8 @@ impl ControllerReader {
                 .map_err(|_| anyhow::anyhow!("Karva worker checkpoint lock poisoned"));
             if let Err(error) = result.and(publish_result) {
                 sender.send(Incoming::Error(format!("{error:#}"))).ok();
-            } else {
-                let worker_id = reader_worker_id.load(Ordering::Acquire);
-                if worker_id != usize::MAX {
-                    sender.send(Incoming::Disconnected { worker_id }).ok();
-                }
+            } else if let Some(worker_id) = reader_worker_id.get().copied() {
+                sender.send(Incoming::Disconnected { worker_id }).ok();
             }
             shutdown_stream.shutdown(Shutdown::Write).ok();
             shutdown_stream.shutdown(Shutdown::Read).ok();
@@ -93,7 +90,7 @@ impl ControllerReader {
 
     /// Returns whether this reader belongs to a worker id.
     pub(super) fn has_worker_id(&self, worker_id: usize) -> bool {
-        self.worker_id.load(Ordering::Acquire) == worker_id
+        self.worker_id.get().is_some_and(|id| *id == worker_id)
     }
 
     /// Returns the number of complete event frames read by this reader.

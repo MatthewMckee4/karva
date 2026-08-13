@@ -12,10 +12,19 @@ use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
 /// Streams worker lifecycle and results while preserving terminal output.
 pub struct WorkerReporter {
+    /// Terminal-facing status reporter local to the worker process.
     output: TestCaseReporter,
+
+    /// Shared transport for lifecycle and result frames.
     client: WorkerClient,
+
+    /// Project directory used to render portable diagnostic paths.
     cwd: Utf8PathBuf,
+
+    /// Formatting policy applied before results cross the process boundary.
     diagnostic_config: DisplayDiagnosticConfig,
+
+    /// First transport failure retained for worker shutdown.
     send_error: Mutex<Option<String>>,
 }
 

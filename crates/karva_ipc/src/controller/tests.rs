@@ -171,6 +171,31 @@ fn completion_closes_connection_after_terminal_event() {
 }
 
 #[test]
+fn maximum_worker_id_is_not_treated_as_an_unauthenticated_reader() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(usize::MAX, selection(Vec::new()))
+        .expect("register worker selection");
+    let address = server.address().expect("address");
+    let worker = thread::spawn(move || {
+        let (client, _) = WorkerClient::connect(address, "run-id", usize::MAX)
+            .expect("connect maximum-id worker");
+        client.complete().expect("complete worker");
+    });
+
+    accept_connections(&mut server, 1);
+    worker.join().expect("join worker");
+    server.finish().expect("finish readers");
+    let event = server
+        .try_recv()
+        .expect("receive event")
+        .expect("queued event");
+
+    assert_eq!(event.worker_id, usize::MAX);
+    assert!(matches!(*event.event, WorkerEvent::WorkerFinished));
+}
+
+#[test]
 fn transfers_resume_skip_cases() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server

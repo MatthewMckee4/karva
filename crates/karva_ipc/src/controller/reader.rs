@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, ErrorKind, Write};
 use std::net::TcpStream;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::{Context, Result, bail};
 use crossbeam_channel::Sender;
@@ -20,7 +20,7 @@ pub(super) fn read_worker(
     worker_selections: &Mutex<HashMap<usize, WorkerSelection>>,
     checkpoint: &mut CheckpointState,
     sender: &Sender<Incoming>,
-    reader_worker_id: &AtomicUsize,
+    reader_worker_id: &OnceLock<usize>,
     reader_event_count: &AtomicUsize,
 ) -> Result<()> {
     let response_stream = stream
@@ -39,7 +39,9 @@ pub(super) fn read_worker(
     if run_id != expected_run_id {
         bail!("Karva worker connected with run id `{run_id}`, expected `{expected_run_id}`");
     }
-    reader_worker_id.store(worker_id, Ordering::Release);
+    reader_worker_id
+        .set(worker_id)
+        .map_err(|_| anyhow::anyhow!("Karva worker id was already authenticated"))?;
     let selection = worker_selections
         .lock()
         .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
