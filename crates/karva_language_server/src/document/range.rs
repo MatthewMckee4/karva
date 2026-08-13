@@ -4,7 +4,7 @@ use ruff_text_size::{TextRange, TextSize};
 
 use super::PositionEncoding;
 
-fn position_to_text_size(
+pub fn position_to_text_size(
     position: Position,
     text: &str,
     index: &LineIndex,

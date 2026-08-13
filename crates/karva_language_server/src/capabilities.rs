@@ -1,6 +1,6 @@
 use lsp_types::{
-    ClientCapabilities, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
-    WorkspaceFoldersServerCapabilities,
+    ClientCapabilities, CompletionOptions, ServerCapabilities, TextDocumentSyncKind,
+    TextDocumentSyncOptions, WorkspaceFoldersServerCapabilities,
 };
 
 use crate::PositionEncoding;
@@ -47,6 +47,7 @@ pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabil
             }
             .into(),
         ),
+        completion_provider: Some(CompletionOptions::default()),
         workspace: Some(lsp_types::WorkspaceOptions {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                 supported: Some(true),

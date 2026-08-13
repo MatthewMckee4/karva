@@ -300,6 +300,67 @@ pub fn analyze_modules(
     (current_definitions, diagnostics)
 }
 
+/// Visible fixture providers plus conservative completion barriers.
+pub struct VisibleFixtures {
+    /// Definitions selected before any dynamic provider barrier.
+    pub definitions: Vec<FixtureDefinition>,
+
+    /// Rejected names that prevent fallback to later providers.
+    pub blocked_names: HashSet<String>,
+
+    /// Whether every provider was statically known, allowing built-in fallback.
+    pub builtins_visible: bool,
+}
+
+/// Returns fixture definitions that can be selected from the current module.
+///
+/// Providers follow runtime lookup order. A rejected definition blocks the same
+/// name from every later provider, including Karva's built-ins.
+pub fn visible_fixtures(
+    current: &CollectedModule,
+    parents: &[&CollectedModule],
+    try_import_fixtures: bool,
+) -> VisibleFixtures {
+    let mut providers = parents
+        .iter()
+        .map(|module| parse_provider(module, try_import_fixtures))
+        .collect::<Vec<_>>();
+    providers.insert(0, parse_provider(current, try_import_fixtures));
+
+    let mut visible = Vec::new();
+    let mut names = HashSet::new();
+    let mut blocked_names = HashSet::new();
+    let mut builtins_visible = true;
+    for provider in providers {
+        for rejected in provider.rejected.keys() {
+            if names.insert(rejected.clone()) {
+                blocked_names.insert(rejected.clone());
+            }
+        }
+        for definition in provider.definitions {
+            if names.insert(definition.name.clone()) {
+                visible.push(definition);
+            }
+        }
+        if provider.unknown {
+            builtins_visible = false;
+            break;
+        }
+    }
+    VisibleFixtures {
+        definitions: visible,
+        blocked_names,
+        builtins_visible,
+    }
+}
+
+/// Returns the built-in fixtures exposed by Karva's runtime.
+pub fn builtin_fixtures() -> impl Iterator<Item = (&'static str, FixtureScope)> {
+    BUILTIN_FIXTURES
+        .iter()
+        .map(|fixture| (fixture.name, fixture.scope))
+}
+
 impl FixtureProvider {
     fn from_parsed(
         parsed: &[ParsedFixture],

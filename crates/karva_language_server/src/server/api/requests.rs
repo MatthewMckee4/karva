@@ -4,6 +4,10 @@ use super::traits::{RequestHandler, SyncRequestHandler};
 use crate::session::Session;
 use crate::session::client::Client;
 
+mod completion;
+
+pub(super) use completion::Completion;
+
 pub(super) struct Shutdown;
 
 impl RequestHandler for Shutdown {
