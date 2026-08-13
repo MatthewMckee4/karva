@@ -23,7 +23,14 @@ anyhow = { workspace = true }
 karva_version = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
+ruff_source_file = { workspace = true }
+ruff_text_size = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
 
 [lints]
 workspace = true

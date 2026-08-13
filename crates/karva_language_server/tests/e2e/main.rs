@@ -1,5 +1,6 @@
 //! End-to-end language-server tests over an in-memory LSP connection.
 
+mod document_sync;
 mod initialize;
 
 use std::thread::JoinHandle;
