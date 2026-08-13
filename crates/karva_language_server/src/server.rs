@@ -11,7 +11,8 @@ use ruff_python_ast::PythonVersion;
 use serde::Deserialize;
 
 use crate::capabilities::{
-    position_encoding, server_capabilities, supports_diagnostic_related_information,
+    hover_markup_kind, position_encoding, server_capabilities,
+    supports_diagnostic_related_information,
 };
 use crate::session::Session;
 use crate::session::client::Client;
@@ -54,6 +55,7 @@ impl Server {
             ..
         } = init_params;
         let position_encoding = position_encoding(&capabilities);
+        let hover_markup_kind = hover_markup_kind(&capabilities);
         let register_config_watchers = supports_dynamic_file_watching(&capabilities);
         let supports_diagnostic_related_information =
             supports_diagnostic_related_information(&capabilities);
@@ -88,6 +90,7 @@ impl Server {
             register_config_watchers,
             session: Session::new(
                 position_encoding,
+                hover_markup_kind,
                 supports_diagnostic_related_information,
                 workspaces,
             ),
