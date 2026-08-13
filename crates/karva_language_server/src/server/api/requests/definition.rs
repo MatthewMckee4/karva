@@ -8,7 +8,9 @@ use super::super::traits::{BackgroundRequestHandler, RequestHandler};
 use crate::PositionEncoding;
 use crate::document::{position_to_text_size, text_range_to_range};
 use crate::session::client::Client;
-use crate::session::{PreparedSourceAnalysis, RequestCancellationToken, Session};
+use crate::session::{
+    DocumentSnapshotVersion, PreparedSourceAnalysis, RequestCancellationToken, Session,
+};
 
 pub(in crate::server::api) struct Definition;
 
@@ -36,7 +38,7 @@ impl BackgroundRequestHandler for Definition {
         snapshot: Self::Snapshot,
         _client: &Client,
         params: DefinitionParams,
-        _cancellation: &RequestCancellationToken,
+        cancellation: &RequestCancellationToken,
     ) -> anyhow::Result<Option<DefinitionResponse>> {
         let Some(prepared) = snapshot.analysis else {
             return Ok(None);
@@ -49,13 +51,17 @@ impl BackgroundRequestHandler for Definition {
             &index,
             snapshot.position_encoding,
         );
-        let Some(analysis) = prepared.analyze()? else {
+        let Some(analysis) = prepared.analyze(cancellation)? else {
             return Ok(None);
         };
         let Some(target) = fixture_definition(&analysis.analysis, offset) else {
             return Ok(None);
         };
-        let Some(target_source) = analysis.sources.get(&target.path) else {
+        let Some(target_source) = analysis
+            .source_index
+            .module(&target.path)
+            .map(|module| module.source_text.as_str())
+        else {
             tracing::debug!(path = %target.path, "definition source is not available");
             return Ok(None);
         };
@@ -77,11 +83,11 @@ impl BackgroundRequestHandler for Definition {
         )))
     }
 
-    fn document_version(snapshot: &Self::Snapshot) -> Option<(Uri, i32)> {
+    fn document_version(snapshot: &Self::Snapshot) -> Option<DocumentSnapshotVersion> {
         snapshot
             .analysis
             .as_ref()
-            .map(|analysis| (analysis.document_uri().clone(), analysis.document_version()))
+            .map(PreparedSourceAnalysis::response_version)
     }
 }
 

@@ -1,9 +1,9 @@
 use crossbeam_channel::Sender;
 use lsp_server::{ErrorCode, Message, RequestId, Response, ResponseError};
-use lsp_types::{Notification, Request, Uri};
+use lsp_types::{Notification, Request};
 
 use crate::server::{Action, Event, MainLoopSender};
-use crate::session::Session;
+use crate::session::{DocumentSnapshotVersion, Session};
 
 /// Typed access to messages sent from the server to the editor client.
 #[derive(Clone)]
@@ -61,13 +61,11 @@ impl Client {
     pub(crate) fn respond_versioned(
         &self,
         response: Response,
-        uri: Uri,
-        version: i32,
+        version: DocumentSnapshotVersion,
     ) -> anyhow::Result<()> {
         self.main_loop_sender
             .send(Event::Action(Action::SendVersionedResponse {
                 response,
-                uri,
                 version,
             }))?;
         Ok(())

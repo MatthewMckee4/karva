@@ -27,12 +27,14 @@ mod schedule;
 
 pub use main_loop::{Action, Event, MainLoopReceiver, MainLoopSender};
 
+const REGISTER_FILE_WATCHERS_REQUEST_ID: &str = "karva/register-file-watchers";
+
 /// An initialized Karva language server.
 pub struct Server {
     connection: Connection,
     main_loop_receiver: MainLoopReceiver,
     main_loop_sender: MainLoopSender,
-    register_config_watchers: bool,
+    register_file_watchers: bool,
     session: Session,
 }
 
@@ -56,7 +58,7 @@ impl Server {
         } = init_params;
         let position_encoding = position_encoding(&capabilities);
         let hover_markup_kind = hover_markup_kind(&capabilities);
-        let register_config_watchers = supports_dynamic_file_watching(&capabilities);
+        let register_file_watchers = supports_dynamic_file_watching(&capabilities);
         let supports_diagnostic_related_information =
             supports_diagnostic_related_information(&capabilities);
         let capabilities = server_capabilities(position_encoding);
@@ -87,7 +89,7 @@ impl Server {
             connection,
             main_loop_receiver,
             main_loop_sender,
-            register_config_watchers,
+            register_file_watchers,
             session: Session::new(
                 position_encoding,
                 hover_markup_kind,
@@ -99,31 +101,38 @@ impl Server {
 
     /// Handles client messages until the LSP shutdown sequence completes.
     pub fn run(mut self) -> anyhow::Result<()> {
-        self.register_config_watchers()?;
+        self.register_file_watchers()?;
         self.main_loop()
     }
 
-    fn register_config_watchers(&mut self) -> anyhow::Result<()> {
-        if !self.register_config_watchers {
+    fn register_file_watchers(&mut self) -> anyhow::Result<()> {
+        if !self.register_file_watchers {
             return Ok(());
         }
 
-        let id = lsp_server::RequestId::from("karva/register-config-watchers".to_owned());
+        let id = lsp_server::RequestId::from(REGISTER_FILE_WATCHERS_REQUEST_ID.to_owned());
         self.session
             .request_queue_mut()
             .register_outgoing(id.clone());
         let options = DidChangeWatchedFilesRegistrationOptions {
-            watchers: ["**/karva.toml", "**/pyproject.toml"]
-                .into_iter()
-                .map(|pattern| FileSystemWatcher {
-                    glob_pattern: GlobPattern::Pattern(pattern.to_owned()),
-                    kind: None,
-                })
-                .collect(),
+            watchers: [
+                "**/*.py",
+                "**/karva.toml",
+                "**/pyproject.toml",
+                "**/.gitignore",
+                "**/.ignore",
+                "**/.git/info/exclude",
+            ]
+            .into_iter()
+            .map(|pattern| FileSystemWatcher {
+                glob_pattern: GlobPattern::Pattern(pattern.to_owned()),
+                kind: None,
+            })
+            .collect(),
         };
         let params = RegistrationParams {
             registrations: vec![Registration {
-                id: "karva-config-watchers".to_owned(),
+                id: "karva-file-watchers".to_owned(),
                 method: DidChangeWatchedFilesNotification::METHOD
                     .as_str()
                     .to_owned(),
