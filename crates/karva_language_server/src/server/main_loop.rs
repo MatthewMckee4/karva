@@ -7,6 +7,7 @@ use lsp_types::{ExitNotification, Notification as _};
 
 use crate::Server;
 use crate::server::schedule::Scheduler;
+use crate::session::DocumentSnapshotVersion;
 use crate::session::client::Client;
 
 pub type MainLoopSender = Sender<Event>;
@@ -23,8 +24,7 @@ pub enum Action {
 
     SendVersionedResponse {
         response: Response,
-        uri: lsp_types::Uri,
-        version: i32,
+        version: DocumentSnapshotVersion,
     },
 }
 
@@ -76,33 +76,34 @@ impl Server {
                     scheduler.dispatch(task, &mut self.session, client);
                 }
                 NextEvent::Message(Message::Response(response)) => {
+                    let is_file_watcher_registration = response.id
+                        == lsp_server::RequestId::from(
+                            super::REGISTER_FILE_WATCHERS_REQUEST_ID.to_owned(),
+                        );
                     if !self
                         .session
                         .request_queue_mut()
                         .complete_outgoing(&response.id)
                     {
                         tracing::warn!(id = %response.id, "received unexpected response");
+                    } else if is_file_watcher_registration && response.response_result.is_ok() {
+                        self.session.enable_source_index_cache();
+                    } else if is_file_watcher_registration {
+                        tracing::warn!("client rejected dynamic file watcher registration");
                     }
                 }
                 NextEvent::Action(Action::SendResponse(response)) => {
                     self.send_response_if_pending(response)?;
                 }
-                NextEvent::Action(Action::SendVersionedResponse {
-                    response,
-                    uri,
-                    version,
-                }) => {
-                    let response = if self
-                        .session
-                        .document(&uri)
-                        .is_some_and(|document| document.version() == version)
-                    {
+                NextEvent::Action(Action::SendVersionedResponse { response, version }) => {
+                    let response = if self.session.is_document_snapshot_current(&version) {
                         response
                     } else {
                         Response::new_err(
                             response.id,
                             ErrorCode::ContentModified as i32,
-                            "document changed before request completed".to_owned(),
+                            "document or project sources changed before request completed"
+                                .to_owned(),
                         )
                     };
                     self.send_response_if_pending(response)?;

@@ -59,6 +59,7 @@ lsp-server = { version = "0.10.0" }
 lsp-types = { package = "gen-lsp-types", version = "0.10.0", features = ["url"] }
 markdown = { version = "1.0.0" }
 notify-debouncer-mini = { version = "0.7" }
+once_cell = { version = "1.21.3" }
 pretty_assertions = { version = "1.4.1" }
 proc-macro2 = { version = "1.0.106" }
 pyo3 = { version = "0.29.0", features = ["abi3-py310"] }

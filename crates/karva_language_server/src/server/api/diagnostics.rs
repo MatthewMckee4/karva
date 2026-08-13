@@ -41,7 +41,7 @@ pub(super) fn publish_diagnostics(session: &mut Session, client: &Client) -> any
         };
         open_python_paths.insert(path.clone());
 
-        match session.analyze_open_document(&uri) {
+        match session.analyze_open_document_for_diagnostics(&uri) {
             Ok(Some(snapshot)) => {
                 sources.extend(snapshot.sources);
                 for diagnostic in snapshot.analysis.diagnostics {
