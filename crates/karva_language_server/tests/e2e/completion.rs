@@ -1,5 +1,3 @@
-use std::fs;
-
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, CompletionList, CompletionParams, CompletionRequest, CompletionResponse,
@@ -8,12 +6,9 @@ use lsp_types::{
     Position, PublishDiagnosticsNotification, TextDocumentContentChangeEvent,
     TextDocumentContentChangeWholeDocument, TextDocumentIdentifier, TextDocumentItem,
     TextDocumentPositionParams, Uri, VersionedTextDocumentIdentifier, WorkDoneProgressParams,
-    WorkspaceFolder,
 };
-use serde_json::Value;
-use tempfile::TempDir;
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 #[test]
 fn completes_disk_and_builtin_fixtures_in_unsaved_test_parameters() {
@@ -221,7 +216,11 @@ fn refreshes_disk_sources_without_dynamic_file_watching() {
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    open(&server, uri.clone(), "def test_example(provider_): pass\n");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(provider_): pass\n",
+    );
 
     let first =
         server.request::<CompletionRequest>(completion_params(uri.clone(), Position::new(0, 26)));
@@ -249,7 +248,7 @@ fn cancels_a_background_completion_once() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    open(&server, uri.clone(), "def test_example(tmp): pass\n");
+    open(&mut server, uri.clone(), "def test_example(tmp): pass\n");
 
     let request_id = server
         .send_request::<CompletionRequest>(completion_params(uri.clone(), Position::new(0, 20)));
@@ -271,7 +270,7 @@ fn rejects_completion_from_a_stale_document_version() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    open(&server, uri.clone(), "def test_example(tmp): pass\n");
+    open(&mut server, uri.clone(), "def test_example(tmp): pass\n");
 
     let request_id = server
         .send_request::<CompletionRequest>(completion_params(uri.clone(), Position::new(0, 20)));
@@ -289,6 +288,7 @@ fn rejects_completion_from_a_stale_document_version() {
         ],
     });
     let response = server.receive_response(&request_id);
+    server.receive_notification::<PublishDiagnosticsNotification>();
 
     let error = response
         .response_result
@@ -300,7 +300,7 @@ fn rejects_completion_from_a_stale_document_version() {
     assert!(completion.is_some());
 }
 
-fn open(server: &TestServer, uri: Uri, source: &str) {
+fn open(server: &mut TestServer, uri: Uri, source: &str) {
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
             uri,
@@ -319,67 +319,4 @@ fn completion_params(uri: Uri, position: Position) -> CompletionParams {
         PartialResultParams::default(),
         TextDocumentPositionParams::new(TextDocumentIdentifier::new(uri), position),
     )
-}
-
-struct Workspace {
-    directory: TempDir,
-    root_uri: Uri,
-}
-
-impl Workspace {
-    fn new() -> Self {
-        let directory = tempfile::tempdir().expect("temporary workspace should be created");
-        fs::create_dir(directory.path().join(".git")).expect("workspace marker should be created");
-        let root_uri =
-            Uri::from_file_path(directory.path()).expect("workspace URI should be valid");
-        Self {
-            directory,
-            root_uri,
-        }
-    }
-
-    fn folder(&self) -> WorkspaceFolder {
-        WorkspaceFolder {
-            uri: self.root_uri.clone(),
-            name: "project".to_owned(),
-        }
-    }
-
-    fn uri(&self, relative: &str) -> Uri {
-        Uri::from_file_path(self.directory.path().join(relative))
-            .expect("document URI should be valid")
-    }
-
-    fn write(&self, relative: &str, source: &str) {
-        fs::write(self.directory.path().join(relative), source)
-            .expect("workspace source should be written");
-    }
-
-    fn normalize(&self, value: impl serde::Serialize) -> Value {
-        let mut value = serde_json::to_value(value).expect("completion should serialize");
-        let workspace_path = self.directory.path().to_string_lossy();
-        normalize_paths(&mut value, self.root_uri.as_str(), &workspace_path);
-        value
-    }
-}
-
-fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                normalize_paths(value, workspace_uri, workspace_path);
-            }
-        }
-        Value::Object(values) => {
-            for value in values.values_mut() {
-                normalize_paths(value, workspace_uri, workspace_path);
-            }
-        }
-        Value::String(value) => {
-            *value = value
-                .replace(workspace_uri, "file:///project")
-                .replace(workspace_path, "/project");
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
-    }
 }

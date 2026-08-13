@@ -1,16 +1,12 @@
-use std::fs;
-
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
     HoverClientCapabilities, HoverParams, HoverRequest, LanguageKind, MarkupKind, Position,
     PublishDiagnosticsNotification, TextDocumentClientCapabilities, TextDocumentIdentifier,
-    TextDocumentItem, TextDocumentPositionParams, Uri, WorkDoneProgressParams, WorkspaceFolder,
+    TextDocumentItem, TextDocumentPositionParams, Uri, WorkDoneProgressParams,
 };
-use serde_json::Value;
-use tempfile::TempDir;
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 #[test]
 fn hovers_unsaved_fixture_with_metadata_and_dependencies() {
@@ -29,7 +25,7 @@ fn hovers_unsaved_fixture_with_metadata_and_dependencies() {
         "    pass\n\n",
         "def test_example(database): pass\n",
     );
-    open(&server, uri.clone(), source);
+    open(&mut server, uri.clone(), source);
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(7, 19)));
 
@@ -68,7 +64,11 @@ fn hovers_builtin_fixture_with_markdown_preference() {
     };
     let mut server = TestServer::with_workspace(capabilities, workspace.folder());
     let uri = workspace.uri("test_example.py");
-    open(&server, uri.clone(), "def test_example(tmp_path): pass\n");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(tmp_path): pass\n",
+    );
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(0, 20)));
 
@@ -106,7 +106,7 @@ fn hovers_pytest_usefixtures_string() {
         "@pytest.mark.usefixtures(\"database\")\n",
         "def test_example(): pass\n",
     );
-    open(&server, uri.clone(), source);
+    open(&mut server, uri.clone(), source);
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(2, 30)));
 
@@ -143,7 +143,11 @@ fn hovers_nearest_nested_fixture_provider() {
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("package/test_example.py");
-    open(&server, uri.clone(), "def test_example(database): pass\n");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(database): pass\n",
+    );
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(0, 20)));
     let response = workspace.normalize(response);
@@ -166,14 +170,14 @@ fn returns_no_hover_for_dynamic_fixture_provider() {
         "def dynamic(): pass\n\n",
         "def test_example(dynamic): pass\n",
     );
-    open(&server, uri.clone(), source);
+    open(&mut server, uri.clone(), source);
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(6, 19)));
 
     assert_eq!(response, None);
 }
 
-fn open(server: &TestServer, uri: Uri, source: &str) {
+fn open(server: &mut TestServer, uri: Uri, source: &str) {
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
             uri,
@@ -190,70 +194,4 @@ fn hover_params(uri: Uri, position: Position) -> HoverParams {
         WorkDoneProgressParams::default(),
         TextDocumentPositionParams::new(TextDocumentIdentifier::new(uri), position),
     )
-}
-
-struct Workspace {
-    directory: TempDir,
-    root_uri: Uri,
-}
-
-impl Workspace {
-    fn new() -> Self {
-        let directory = tempfile::tempdir().expect("temporary workspace should be created");
-        fs::create_dir(directory.path().join(".git")).expect("workspace marker should be created");
-        let root_uri =
-            Uri::from_file_path(directory.path()).expect("workspace URI should be valid");
-        Self {
-            directory,
-            root_uri,
-        }
-    }
-
-    fn folder(&self) -> WorkspaceFolder {
-        WorkspaceFolder {
-            uri: self.root_uri.clone(),
-            name: "project".to_owned(),
-        }
-    }
-
-    fn uri(&self, relative: &str) -> Uri {
-        Uri::from_file_path(self.directory.path().join(relative))
-            .expect("document URI should be valid")
-    }
-
-    fn write(&self, relative: &str, source: &str) {
-        let path = self.directory.path().join(relative);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("workspace directory should be created");
-        }
-        fs::write(path, source).expect("workspace source should be written");
-    }
-
-    fn normalize(&self, value: impl serde::Serialize) -> Value {
-        let mut value = serde_json::to_value(value).expect("hover should serialize");
-        let workspace_path = self.directory.path().to_string_lossy();
-        normalize_paths(&mut value, self.root_uri.as_str(), &workspace_path);
-        value
-    }
-}
-
-fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                normalize_paths(value, workspace_uri, workspace_path);
-            }
-        }
-        Value::Object(values) => {
-            for value in values.values_mut() {
-                normalize_paths(value, workspace_uri, workspace_path);
-            }
-        }
-        Value::String(value) => {
-            *value = value
-                .replace(workspace_uri, "file:///project")
-                .replace(workspace_path, "/project");
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
-    }
 }
