@@ -1,0 +1,154 @@
+name: Build language server
+
+on:
+  workflow_call:
+
+  pull_request:
+    paths:
+      - .cargo/config.toml
+      - Cargo.lock
+      - Cargo.toml
+      - crates/karva_language_server/**
+      - crates/karva_ide/**
+      - crates/karva_project/**
+      - crates/karva_python_semantic/**
+      - crates/karva_test_semantic/**
+      - crates/karva_static/**
+      - rust-toolchain.toml
+      - .github/workflows/build-language-server.yml
+
+concurrency:
+  group: build-language-server-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  build:
+    name: build language server (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            builder: cargo
+            smoke: true
+          - runner: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            builder: cross
+            smoke: false
+          - runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            builder: cross
+            smoke: false
+          - runner: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            builder: cross
+            smoke: false
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            builder: cross
+            smoke: false
+          - runner: ubuntu-latest
+            target: i686-unknown-linux-musl
+            builder: cross
+            smoke: false
+          - runner: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            builder: cross
+            smoke: false
+          - runner: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            builder: cross
+            smoke: false
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            builder: cargo
+            smoke: true
+          - runner: windows-latest
+            target: i686-pc-windows-msvc
+            builder: cargo
+            smoke: false
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            builder: cargo
+            smoke: true
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            builder: cargo
+            smoke: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cross
+        if: matrix.builder == 'cross'
+        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
+        with:
+          tool: cross
+
+      - name: Build executable
+        shell: bash
+        run: |
+          if [ "${{ matrix.builder }}" = cross ]; then
+            cross build --locked --release --package karva_language_server --target "${{ matrix.target }}"
+          else
+            cargo build --locked --release --package karva_language_server --target "${{ matrix.target }}"
+          fi
+
+      - name: Check native executable
+        if: matrix.smoke
+        shell: bash
+        run: |
+          executable="target/${{ matrix.target }}/release/karva-language-server"
+          if [ "${{ runner.os }}" = Windows ]; then
+            executable="$executable.exe"
+          fi
+          "$executable" --version
+          "$executable" --help
+
+      - name: Package executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="target/${{ matrix.target }}/release/karva-language-server"
+          archive="karva-language-server-${{ matrix.target }}"
+          if [ "${{ runner.os }}" = Windows ]; then
+            source="$source.exe"
+            7z a "${archive}.zip" "$source"
+          else
+            tar -czf "${archive}.tar.gz" -C "$(dirname "$source")" "$(basename "$source")"
+          fi
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${archive}."* > "${archive}.sha256"
+          else
+            shasum -a 256 "${archive}."* > "${archive}.sha256"
+          fi
+
+      - name: Verify package checksum
+        shell: bash
+        run: |
+          if command -v sha256sum >/dev/null; then
+            sha256sum --check "karva-language-server-${{ matrix.target }}.sha256"
+          else
+            shasum -a 256 --check "karva-language-server-${{ matrix.target }}.sha256"
+          fi
+
+      - name: Upload language server
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: language-server-${{ matrix.target }}
+          path: |
+            karva-language-server-${{ matrix.target }}.*
+          if-no-files-found: error
