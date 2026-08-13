@@ -21,6 +21,7 @@ karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_coverage = { workspace = true }
 karva_diagnostic = { workspace = true }
+karva_language_server = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
@@ -48,6 +49,7 @@ directories = { workspace = true }
 dunce = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
 insta-cmd = { workspace = true }
+lsp-server = { workspace = true }
 regex = { workspace = true }
 rstest = { workspace = true }
 ruff_python_trivia = { workspace = true }

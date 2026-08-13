@@ -19,6 +19,7 @@ karva <COMMAND>
 <dt><a href="#karva-coverage"><code>karva coverage</code></a></dt><dd><p>Read and report native Karva coverage data</p></dd>
 <dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
 <dt><a href="#karva-show-config"><code>karva show-config</code></a></dt><dd><p>Print the resolved configuration karva would run with</p></dd>
+<dt><a href="#karva-server"><code>karva server</code></a></dt><dd><p>Run the language server</p></dd>
 <dt><a href="#karva-version"><code>karva version</code></a></dt><dd><p>Display Karva's version</p></dd>
 <dt><a href="#karva-help"><code>karva help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
@@ -677,6 +678,21 @@ karva show-config [OPTIONS]
 </dd><dt id="karva-show-config--profile"><a href="#karva-show-config--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve.</p>
 <p>Defaults to <code>default</code>.</p>
 <p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
+
+## karva server
+
+Run the language server
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva server
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-server--help"><a href="#karva-server--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd></dl>
 
 ## karva generate-shell-completion
 
