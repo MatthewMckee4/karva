@@ -416,7 +416,8 @@ fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str)
                 normalize_paths(&mut value, workspace_uri, workspace_path);
                 values.insert(
                     key.replace(workspace_uri, "file:///project")
-                        .replace(workspace_path, "/project"),
+                        .replace(workspace_path, "/project")
+                        .replace('\\', "/"),
                     value,
                 );
             }
@@ -424,7 +425,8 @@ fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str)
         Value::String(value) => {
             *value = value
                 .replace(workspace_uri, "file:///project")
-                .replace(workspace_path, "/project");
+                .replace(workspace_path, "/project")
+                .replace('\\', "/");
         }
         Value::Null | Value::Bool(_) | Value::Number(_) => {}
     }
