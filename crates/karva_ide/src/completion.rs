@@ -159,7 +159,7 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
                 let Expr::StringLiteral(literal) = argument else {
                     return None;
                 };
-                let interior = string_interior(source, literal.range)?;
+                let interior = crate::fixture::single_string_content_range(literal)?;
                 if interior.contains_inclusive(offset) {
                     return Some(
                         identifier_range(source, offset, interior)
@@ -170,23 +170,6 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
         }
     }
     None
-}
-
-fn string_interior(source: &str, range: TextRange) -> Option<TextRange> {
-    let text = source.get(range.start().to_usize()..range.end().to_usize())?;
-    let quote = text
-        .bytes()
-        .position(|byte| byte == b'\'' || byte == b'"')?;
-    let end_quote = text
-        .bytes()
-        .rposition(|byte| byte == b'\'' || byte == b'"')?;
-    if quote >= end_quote {
-        return None;
-    }
-    Some(TextRange::new(
-        range.start() + size(quote + 1)?,
-        range.start() + size(end_quote)?,
-    ))
 }
 
 fn identifier_range(source: &str, offset: TextSize, boundary: TextRange) -> Option<TextRange> {

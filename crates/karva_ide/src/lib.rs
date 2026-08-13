@@ -4,6 +4,7 @@ mod completion;
 mod definition;
 mod fixture;
 mod hover;
+mod occurrences;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::{CollectedModule, CollectionSettings, collect_source};
@@ -16,6 +17,9 @@ pub use fixture::{
     FixtureDefinition, FixtureId, FixtureReference, FixtureResolution, FixtureScope,
 };
 pub use hover::{FixtureHover, hover_fixture};
+pub use occurrences::{
+    FixtureOccurrence, FixtureOccurrenceKind, fixture_occurrence, fixture_occurrences,
+};
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]
