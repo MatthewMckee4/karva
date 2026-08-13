@@ -7,6 +7,16 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
+class _CustomTagBuilder:
+    @overload
+    def __call__(self, function: Callable[_P, _T], /) -> TestFunction[_P, _T]: ...
+    @overload
+    def __call__(self, *args: object, **kwargs: object) -> Tags: ...
+
+
+def __getattr__(name: str, /) -> _CustomTagBuilder: ...
+
+
 def parametrize(
     arg_names: Sequence[str] | str,
     arg_values: Sequence[Sequence[object]] | Sequence[object],
