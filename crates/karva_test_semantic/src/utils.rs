@@ -461,17 +461,44 @@ pub fn test_parameters(
     parameters: Option<&Parameters>,
     name_only_arguments: &[&str],
 ) -> Option<String> {
-    if kwargs.is_empty() {
+    render_test_parameters(
+        py,
+        kwargs.iter().map(|(name, value)| (name.as_str(), value)),
+        parameters,
+        name_only_arguments,
+    )
+}
+
+/// Renders borrowed Python arguments in signature order without cloning values.
+pub fn render_test_parameters<'a>(
+    py: Python,
+    arguments: impl IntoIterator<Item = (&'a str, &'a Py<PyAny>)>,
+    parameters: Option<&Parameters>,
+    name_only_arguments: &[&str],
+) -> Option<String> {
+    let mut arguments = arguments.into_iter().collect::<Vec<_>>();
+    if arguments.is_empty() {
         return None;
     }
+    arguments.sort_by(|(left, _), (right, _)| {
+        let left_position = parameters
+            .and_then(|parameters| parameters.index(left))
+            .unwrap_or(usize::MAX);
+        let right_position = parameters
+            .and_then(|parameters| parameters.index(right))
+            .unwrap_or(usize::MAX);
+        left_position
+            .cmp(&right_position)
+            .then_with(|| left.cmp(right))
+    });
 
     let mut rendered = String::new();
-    for (index, (key, value)) in kwargs.iter_in_signature_order(parameters).enumerate() {
+    for (index, (key, value)) in arguments.into_iter().enumerate() {
         if index > 0 {
             rendered.push_str(", ");
         }
         let truncated_key = truncate_string(key);
-        if name_only_arguments.contains(&key.as_str()) {
+        if name_only_arguments.contains(&key) {
             let _ = write!(rendered, "{truncated_key}");
         } else if let Ok(value) = value.cast_bound::<PyAny>(py) {
             let trimmed_value = truncated_display_value(value);

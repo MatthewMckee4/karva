@@ -1,35 +1,30 @@
 //! Orchestration and reporting for one concrete test variant.
 
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_coverage::CoveragePhase;
-use karva_diagnostic::{
-    CapturedTestOutput, TestCaseRetry, TestExecutionOutcome, TestExecutionResult,
-};
+use karva_diagnostic::TestExecutionOutcome;
+use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
-use karva_metadata::{FlakyResult, JunitFlakyFailStatus, RunIgnoredMode};
-use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::{FixtureId, FixturePlan, NormalizedFixture};
-use crate::extensions::functions::snapshot::SnapshotContext;
-use crate::extensions::tags::RuntimeTags;
-use crate::extensions::tags::expect_fail::ExpectFailTag;
-use crate::extensions::tags::fail_slow::FailSlowTag;
-use crate::extensions::tags::timeout::TimeoutTag;
 use crate::output_capture::PythonOutputCapture;
-use crate::runner::fixture_arguments::FixtureArguments;
 use crate::runner::test_iterator::TestVariant;
-use crate::utils::{set_attempt_env, set_test_name_env, test_parameters};
+use crate::utils::{set_attempt_env, set_test_name_env};
 
 use super::PackageRunner;
 
 mod attempt;
+mod identity;
+mod input;
+mod reporting;
+mod settings;
 
 use attempt::{PreparedTestAttempt, TestLifecycleAttempt};
+use input::VariantInput;
+use settings::VariantSettings;
 
 impl PackageRunner<'_, '_> {
     /// Runs one concrete parameter and fixture combination.
@@ -52,26 +47,8 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     package_runner: &'runner mut PackageRunner<'context, 'settings>,
     /// Attached Python interpreter used by every attempt.
     py: Python<'py>,
-    /// Discovered test definition shared by every variant.
-    test: &'test crate::discovery::DiscoveredTestFunction,
-    /// Parameter values reused when a retry prepares fresh fixtures.
-    params: HashMap<String, Arc<Py<PyAny>>>,
-    /// User-defined parameter ID used in the displayed test name.
-    id: Option<String>,
-    /// Stable index in the function's full parametrize expansion.
-    case_index: Option<usize>,
-    /// Compiled fixture arena for this test.
-    fixture_plan: Rc<FixturePlan>,
-    /// Fixtures passed as Python keyword arguments.
-    fixture_dependencies: Rc<[FixtureId]>,
-    /// Fixtures run for side effects but omitted from test arguments.
-    use_fixture_dependencies: Rc<[FixtureId]>,
-    /// Function-scoped auto-use fixtures.
-    auto_use_fixtures: Rc<[FixtureId]>,
-    /// Test, parameter, and fixture tags resolved for this variant.
-    tags: RuntimeTags,
-    /// Module path used to build stable snapshot identity.
-    module_path: camino::Utf8PathBuf,
+    /// Variant inputs shared by setup, retries, and reporting.
+    input: VariantInput<'test>,
 }
 
 impl<'runner, 'context, 'settings, 'test, 'py>
@@ -83,32 +60,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         py: Python<'py>,
         variant: TestVariant<'test>,
     ) -> Self {
-        let module_path = variant.module_path().clone();
-        let TestVariant {
-            test,
-            params,
-            id,
-            case_index,
-            fixture_plan,
-            fixture_dependencies,
-            use_fixture_dependencies,
-            auto_use_fixtures,
-            tags,
-        } = variant;
-
         Self {
             package_runner,
             py,
-            test,
-            params,
-            id,
-            case_index,
-            fixture_plan,
-            fixture_dependencies,
-            use_fixture_dependencies,
-            auto_use_fixtures,
-            tags,
-            module_path,
+            input: VariantInput::from_test_variant(variant),
         }
     }
 
@@ -126,34 +81,47 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return result;
         }
 
+        let (initial_test_name, initial_name_is_exact) =
+            self.initial_test_name(unresolved_test_name);
+        // Flush checkpoint before fixture setup; it covers setup and test body.
         self.package_runner
             .context
-            .report_test_started(&unresolved_test_name);
-        let retry_params = self.params.clone();
-        let first_params = std::mem::take(&mut self.params);
+            .report_test_started(&initial_test_name);
+        let retry_params = self.input.params.clone();
+        let first_params = std::mem::take(&mut self.input.params);
         self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
-        let settings = self.settings(&first_attempt.fixtures.function_arguments);
-        self.package_runner
-            .context
-            .report_test_identified(&settings.qualified_test_name);
-        self.resolve_pending_coverage_setup(&settings.qualified_name);
-        let function = self.test.py_function.clone_ref(self.py);
+        let settings = if initial_name_is_exact {
+            self.settings(
+                &first_attempt.fixtures.function_arguments,
+                Some(initial_test_name),
+            )
+        } else {
+            let settings = self.settings(&first_attempt.fixtures.function_arguments, None);
+            if settings.identity.qualified_test_name != initial_test_name {
+                self.package_runner
+                    .context
+                    .report_test_identified(&settings.identity.qualified_test_name);
+            }
+            settings
+        };
+        self.resolve_pending_coverage_setup(&settings.identity.qualified_name);
+        let function = self.input.test.py_function.clone_ref(self.py);
         let test_name_env_result =
-            set_test_name_env(self.py, &settings.qualified_test_name.to_string());
+            set_test_name_env(self.py, &settings.identity.qualified_test_name.to_string());
 
-        tracing::debug!("Running test `{}`", settings.qualified_test_name);
+        tracing::debug!("Running test `{}`", settings.identity.qualified_test_name);
         let mut attempt_number = 1;
         let mut prepared_attempt = Some(first_attempt);
         let mut prior_attempts = Vec::new();
 
         let final_attempt = loop {
             let attempt_env_result =
-                set_attempt_env(self.py, attempt_number, settings.max_attempts);
+                set_attempt_env(self.py, attempt_number, settings.retry.max_attempts);
             let prepared = prepared_attempt
                 .take()
                 .unwrap_or_else(|| self.prepare_retry(retry_params.clone(), &settings));
-            self.set_coverage_context(&settings.qualified_name, CoveragePhase::Run);
+            self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Run);
             let attempt = self.execute_attempt(
                 &settings,
                 &function,
@@ -163,15 +131,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 attempt_number,
             );
 
-            if attempt.retryable && attempt_number < settings.max_attempts {
+            if attempt.retryable && attempt_number < settings.retry.max_attempts {
                 self.package_runner.context.report_test_attempt(
-                    &settings.qualified_test_name,
+                    &settings.identity.qualified_test_name,
                     attempt_number,
                     attempt.lifecycle.outcome.result_kind(),
                     attempt.lifecycle.duration,
                 );
                 prior_attempts.push(attempt.lifecycle);
-                tracing::debug!("Retrying test `{}`", settings.qualified_test_name);
+                tracing::debug!("Retrying test `{}`", settings.identity.qualified_test_name);
                 attempt_number += 1;
             } else {
                 break attempt.lifecycle;
@@ -190,10 +158,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
-            &self.fixture_plan,
-            &self.fixture_dependencies,
-            &self.use_fixture_dependencies,
-            &self.auto_use_fixtures,
+            &self.input.fixtures.plan,
+            &self.input.fixtures.dependencies,
+            &self.input.fixtures.use_dependencies,
+            &self.input.fixtures.auto_use,
             params,
         );
         PreparedTestAttempt {
@@ -209,195 +177,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         params: HashMap<String, Arc<Py<PyAny>>>,
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
-        self.set_coverage_context(&settings.qualified_name, CoveragePhase::Setup);
+        self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Setup);
         self.prepare_attempt(params, self.start_output_capture())
-    }
-
-    /// Derives identity and execution policy after first fixture setup.
-    fn settings(&self, function_arguments: &FixtureArguments) -> VariantSettings {
-        let name = self.test.name();
-        let fixture_names = self
-            .fixture_dependencies
-            .iter()
-            .map(|fixture_id| self.fixture_plan.fixture(*fixture_id).function_name())
-            .collect::<Vec<_>>();
-        let framework_fixture_names = self
-            .fixture_dependencies
-            .iter()
-            .map(|fixture_id| self.fixture_plan.fixture(*fixture_id))
-            .filter(|fixture| fixture.name().module_path().module_name() == "karva._builtins")
-            .map(NormalizedFixture::function_name)
-            .collect::<Vec<_>>();
-        let parameters = if let Some(id) = &self.id {
-            Some(id.clone())
-        } else {
-            test_parameters(
-                self.py,
-                function_arguments,
-                self.test.parameters(),
-                &framework_fixture_names,
-            )
-        };
-        let qualified_test_name = if let Some(parameters) = parameters {
-            QualifiedTestName::with_parameters(name.clone(), parameters)
-        } else {
-            QualifiedTestName::new(name.clone())
-        }
-        .with_case_index(self.case_index);
-        let qualified_name = qualified_test_name.to_string();
-        let tag_names = self.tags.tag_names();
-        let evaluation_context = EvalContext {
-            test_name: &qualified_name,
-            tags: &tag_names,
-        };
-        let fail_slow_budget = self
-            .tags
-            .fail_slow_tag()
-            .map(FailSlowTag::seconds)
-            .and_then(|seconds| Duration::try_from_secs_f64(seconds).ok())
-            .or_else(|| {
-                self.package_runner
-                    .context
-                    .settings()
-                    .fail_slow_for(&evaluation_context)
-            });
-        let slow_timeout = self
-            .package_runner
-            .context
-            .settings()
-            .slow_timeout_for(&evaluation_context);
-        let timeout_seconds = self
-            .tags
-            .timeout_tag()
-            .map(TimeoutTag::seconds)
-            .or_else(|| {
-                self.package_runner
-                    .context
-                    .settings()
-                    .timeout_for(&evaluation_context)
-                    .map(|duration| duration.as_secs_f64())
-            });
-        let max_attempts = self
-            .package_runner
-            .context
-            .settings()
-            .retry_for(&evaluation_context)
-            .saturating_add(1);
-        let flaky_result = self
-            .package_runner
-            .context
-            .settings()
-            .flaky_result_for(&evaluation_context);
-        let junit_flaky_fail_status = self
-            .package_runner
-            .context
-            .settings()
-            .junit_flaky_fail_status_for(&evaluation_context);
-        let expect_fail_tag = self.tags.expect_fail_tag();
-        let async_patch_result = if self.test.is_async() {
-            crate::utils::patch_async_test_function(self.py, &self.test.py_function)
-        } else {
-            Ok(false)
-        };
-        let is_async = self.test.is_async() && matches!(&async_patch_result, Ok(false));
-        let mut snapshot_test_name = name.function_name().to_string();
-        if let Some(parameters) = test_parameters(
-            self.py,
-            function_arguments,
-            self.test.parameters(),
-            &fixture_names,
-        ) {
-            snapshot_test_name.push('(');
-            snapshot_test_name.push_str(&parameters);
-            snapshot_test_name.push(')');
-        }
-        let snapshot_context =
-            SnapshotContext::new(self.module_path.to_string(), snapshot_test_name);
-
-        VariantSettings {
-            qualified_test_name,
-            qualified_name,
-            snapshot_context,
-            expect_fail_tag,
-            async_patch_result,
-            is_async,
-            timeout_seconds,
-            fail_slow_budget,
-            slow_timeout,
-            max_attempts,
-            flaky_result,
-            junit_flaky_fail_status,
-        }
-    }
-
-    /// Registers final outcome after all retries and returns pass/fail status.
-    fn finish(
-        &self,
-        settings: &VariantSettings,
-        prior_attempts: Vec<TestLifecycleAttempt>,
-        final_attempt: TestLifecycleAttempt,
-    ) -> bool {
-        self.clear_coverage_context();
-        let captured_output = combine_captured_output(
-            prior_attempts
-                .iter()
-                .chain(std::iter::once(&final_attempt))
-                .filter_map(|attempt| attempt.captured_output.as_ref()),
-        );
-        let total_duration = prior_attempts
-            .iter()
-            .map(|attempt| attempt.duration)
-            .sum::<Duration>()
-            .saturating_add(final_attempt.duration);
-
-        if !prior_attempts.is_empty() {
-            self.package_runner.context.report_test_attempt(
-                &settings.qualified_test_name,
-                final_attempt.attempt,
-                final_attempt.outcome.result_kind(),
-                final_attempt.duration,
-            );
-        }
-        if settings
-            .slow_timeout
-            .is_some_and(|threshold| total_duration > threshold)
-        {
-            self.package_runner
-                .context
-                .register_slow_test(&settings.qualified_test_name, total_duration);
-        }
-        if prior_attempts.is_empty() {
-            self.package_runner.context.register_test_case_result(
-                &settings.qualified_test_name,
-                final_attempt.outcome,
-                total_duration,
-                captured_output,
-            )
-        } else {
-            let final_attempt_number = final_attempt.attempt;
-            let outcome = final_attempt.outcome.clone();
-            let flaky_failure = matches!(&outcome, TestExecutionOutcome::Passed)
-                && settings.flaky_result == FlakyResult::Fail;
-            let junit_flaky_failure =
-                flaky_failure && settings.junit_flaky_fail_status == JunitFlakyFailStatus::Failure;
-            let mut execution_attempts = prior_attempts
-                .into_iter()
-                .map(TestLifecycleAttempt::into_execution_attempt)
-                .collect::<Vec<_>>();
-            execution_attempts.push(final_attempt.into_execution_attempt());
-            let test_case = TestExecutionResult::retried(
-                &settings.qualified_test_name,
-                outcome,
-                total_duration,
-                TestCaseRetry::new(final_attempt_number, settings.max_attempts)
-                    .with_failure_policy(flaky_failure, junit_flaky_failure),
-                captured_output,
-                execution_attempts,
-            );
-            self.package_runner
-                .context
-                .register_retried_result(&settings.qualified_test_name, test_case)
-        }
     }
 
     /// Returns a registered skip result when filters or skip policy exclude this variant.
@@ -408,7 +189,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
 
         if !filter.is_empty() {
             let display_name = qualified.to_string();
-            let tag_names = self.tags.tag_names();
+            let tag_names = self.input.tags.tag_names();
             let context = EvalContext {
                 test_name: &display_name,
                 tags: &tag_names,
@@ -424,9 +205,9 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         }
 
         let skipped = match run_ignored {
-            RunIgnoredMode::Default => self.tags.should_skip(),
+            RunIgnoredMode::Default => self.input.tags.should_skip(),
             RunIgnoredMode::Only => {
-                let (should_skip, _) = self.tags.should_skip();
+                let (should_skip, _) = self.input.tags.should_skip();
                 (!should_skip, None)
             }
             RunIgnoredMode::All => (false, None),
@@ -440,15 +221,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             Duration::ZERO,
             None,
         ))
-    }
-
-    fn unresolved_test_name(&self) -> QualifiedTestName {
-        if let Some(id) = &self.id {
-            QualifiedTestName::with_parameters(self.test.name().clone(), id.clone())
-        } else {
-            QualifiedTestName::new(self.test.name().clone())
-        }
-        .with_case_index(self.case_index)
     }
 
     /// Starts best-effort Python output capture when terminal output is hidden.
@@ -499,65 +271,4 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             coverage.clear_test_context(self.py);
         }
     }
-}
-
-/// Derived identity and execution policy shared by every retry attempt.
-struct VariantSettings {
-    /// User-visible test name including parameter and fixture identity.
-    qualified_test_name: QualifiedTestName,
-    /// Cached string form used by coverage.
-    qualified_name: String,
-    /// Snapshot identity restored before each attempt.
-    snapshot_context: SnapshotContext,
-    /// Expected-failure tag needed for result classification.
-    expect_fail_tag: Option<ExpectFailTag>,
-    /// Result of patching pytest-style async wrappers.
-    async_patch_result: PyResult<bool>,
-    /// Whether Karva must await the returned coroutine.
-    is_async: bool,
-    /// Per-call timeout in seconds, when configured.
-    timeout_seconds: Option<f64>,
-    /// Full-lifecycle failure budget, when configured.
-    fail_slow_budget: Option<Duration>,
-    /// Total variant duration threshold for slow reporting.
-    slow_timeout: Option<Duration>,
-    /// Total attempts, including the initial call.
-    max_attempts: u32,
-    /// Whether a pass after retry fails the run.
-    flaky_result: FlakyResult,
-    /// How a flaky failure appears in `JUnit`.
-    junit_flaky_fail_status: JunitFlakyFailStatus,
-}
-
-/// Finishes best-effort Python output capture.
-fn finish_output_capture(
-    py: Python<'_>,
-    capture: Option<PythonOutputCapture>,
-) -> Option<CapturedTestOutput> {
-    let capture = capture?;
-
-    match capture.finish(py) {
-        Ok(output) => {
-            let output = CapturedTestOutput::new(output.stdout, output.stderr);
-            (!output.is_empty()).then_some(output)
-        }
-        Err(error) => {
-            tracing::warn!("failed to finish Python output capture: {error}");
-            None
-        }
-    }
-}
-
-/// Combines attempt output for existing terminal and `JUnit` consumers.
-fn combine_captured_output<'a>(
-    outputs: impl Iterator<Item = &'a CapturedTestOutput>,
-) -> Option<CapturedTestOutput> {
-    let mut stdout = String::new();
-    let mut stderr = String::new();
-    for output in outputs {
-        stdout.push_str(output.stdout());
-        stderr.push_str(output.stderr());
-    }
-    let output = CapturedTestOutput::new(stdout, stderr);
-    (!output.is_empty()).then_some(output)
 }

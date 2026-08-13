@@ -160,16 +160,16 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_config,
     );
 
-    let result = karva_test_semantic::run_tests(
-        &cwd,
-        &settings,
+    let result = karva_test_semantic::run_tests(karva_test_semantic::RunRequest {
+        cwd: &cwd,
+        settings: &settings,
         python_version,
-        &reporter,
+        reporter: &reporter,
         test_paths,
-        &resume_skip,
-        coverage.as_ref(),
-        !verbosity.is_default(),
-    );
+        resume_skip: &resume_skip,
+        coverage: coverage.as_ref(),
+        verbose: !verbosity.is_default(),
+    });
     reporter.finish()?;
     drop(reporter);
     for diagnostic in &result {

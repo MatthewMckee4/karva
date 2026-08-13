@@ -10,6 +10,8 @@ use karva_metadata::ProjectSettings;
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use ruff_python_ast::PythonVersion;
 
+use crate::RunRequest;
+
 /// Immutable configuration and reporting services shared by one test run.
 pub struct Context<'a> {
     /// Current working directory.
@@ -34,25 +36,20 @@ pub struct Context<'a> {
 /// Run-level diagnostics retained until execution completes.
 #[derive(Default)]
 pub struct RunState {
+    /// Discovery, fixture, and coverage diagnostics not owned by one test case.
     run_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> Context<'a> {
-    pub(super) fn new(
-        cwd: &'a Utf8Path,
-        settings: &'a ProjectSettings,
-        python_version: PythonVersion,
-        reporter: &'a dyn Reporter,
-        resume_skip: &'a BTreeSet<TestCacheKey>,
-        verbose: bool,
-    ) -> Self {
+    /// Retains borrowed run services while leaving owned test paths on the request.
+    pub(super) fn from_request(request: &RunRequest<'a>) -> Self {
         Self {
-            cwd,
-            settings,
-            python_version,
-            reporter,
-            resume_skip,
-            verbose,
+            cwd: request.cwd,
+            settings: request.settings,
+            python_version: request.python_version,
+            reporter: request.reporter,
+            resume_skip: request.resume_skip,
+            verbose: request.verbose,
         }
     }
 
@@ -83,14 +80,15 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Record the start of a test execution. Forwarded to the reporter
-    /// so cancellation logic can render per-test `SIGINT` lines naming
-    /// the in-flight test.
+    /// Records entry into one test's setup-or-execution lifecycle.
+    ///
+    /// Forwarded before fixture setup so crashes and cancellation can name the
+    /// in-flight test. Fixture-derived parameters may refine the name later.
     pub fn report_test_started(&self, test_case_name: &QualifiedTestName) {
         self.reporter.report_test_started(test_case_name);
     }
 
-    /// Refines the active test name after fixture-derived parameters resolve.
+    /// Refines the active test checkpoint after fixture parameters resolve.
     pub fn report_test_identified(&self, test_case_name: &QualifiedTestName) {
         self.reporter.report_test_identified(test_case_name);
     }
