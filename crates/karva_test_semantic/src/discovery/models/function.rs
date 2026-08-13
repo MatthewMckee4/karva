@@ -98,7 +98,7 @@ impl DiscoveredTestFunction {
         self.definition.name()
     }
 
-    pub(crate) fn source_range(&self) -> TextRange {
+    pub(super) fn source_range(&self) -> TextRange {
         self.definition.source_range()
     }
 

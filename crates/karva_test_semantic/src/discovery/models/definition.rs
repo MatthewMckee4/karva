@@ -64,7 +64,7 @@ enum TestDefinitionKind {
 }
 
 impl TestDefinition {
-    pub(crate) fn function(
+    pub(super) fn function(
         name: QualifiedFunctionName,
         statement: Rc<StmtFunctionDef>,
         source_file: SourceFile,
@@ -76,7 +76,7 @@ impl TestDefinition {
         }
     }
 
-    pub(crate) fn doctest(
+    pub(super) fn doctest(
         name: QualifiedFunctionName,
         range: TextRange,
         source_file: SourceFile,
@@ -96,7 +96,7 @@ impl TestDefinition {
         &self.source_file
     }
 
-    pub(crate) fn source_range(&self) -> TextRange {
+    pub(super) fn source_range(&self) -> TextRange {
         match &self.kind {
             TestDefinitionKind::Function(statement) => statement.range,
             TestDefinitionKind::Doctest { range } => *range,
@@ -112,7 +112,7 @@ impl TestDefinition {
     }
 
     /// Returns syntax available only for regular Python test functions.
-    pub(crate) fn function_statement(&self) -> Option<&StmtFunctionDef> {
+    pub(super) fn function_statement(&self) -> Option<&StmtFunctionDef> {
         match &self.kind {
             TestDefinitionKind::Function(statement) => Some(statement),
             TestDefinitionKind::Doctest { .. } => None,
@@ -124,12 +124,12 @@ impl TestDefinition {
             .map(|statement| statement.parameters.as_ref())
     }
 
-    pub(crate) fn is_async(&self) -> bool {
+    pub(super) fn is_async(&self) -> bool {
         self.function_statement()
             .is_some_and(|statement| statement.is_async)
     }
 
-    pub(crate) fn required_fixtures(&self) -> Vec<String> {
+    pub(super) fn required_fixtures(&self) -> Vec<String> {
         self.parameters().map_or_else(Vec::new, |parameters| {
             parameters
                 .iter_non_variadic_params()

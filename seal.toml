@@ -23,7 +23,7 @@ draft = false
 
 [changelog.section-labels]
 "Bug Fixes" = ["bug"]
-"Test Running" = ["test-running", "retries"]
+"Test Running" = ["test-running", "retries", "doctest"]
 "Discovery" = ["discovery"]
 "Fixtures" = ["extensions/fixtures"]
 "Functions" = ["extensions/functions"]
