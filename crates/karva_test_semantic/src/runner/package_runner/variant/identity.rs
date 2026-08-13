@@ -2,7 +2,7 @@
 
 use karva_python_semantic::QualifiedTestName;
 
-use crate::utils::render_test_parameters;
+use crate::utils::try_render_builtin_test_parameters;
 
 use super::VariantRunner;
 
@@ -39,16 +39,15 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             return (unresolved, true);
         }
 
-        let Some(parameters) = render_test_parameters(
+        let Some(parameters) = try_render_builtin_test_parameters(
             self.py,
             self.input
                 .params
                 .iter()
                 .map(|(name, value)| (name.as_str(), value.as_ref())),
             self.input.test.parameters(),
-            &[],
         ) else {
-            return (unresolved, true);
+            return (unresolved, false);
         };
 
         (

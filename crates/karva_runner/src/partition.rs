@@ -154,11 +154,19 @@ impl Partition {
             pending.completed_before_unattributed_retry = Some(completed_in_partition);
         }
         for (path, cache_key) in self.tests.iter().zip(&self.test_keys) {
+            let completed_function = completed
+                .iter()
+                .any(|completed| completed.test_function_name() == cache_key.test_function_name());
             let contains_crashed_dynamic_case = crashed.is_some_and(|crashed| {
                 !cache_key.is_parameter_case()
                     && cache_key.test_function_name() == crashed.test_function_name()
             });
-            if contains_crashed_dynamic_case {
+            let contains_completed_dynamic_case = !cache_key.is_parameter_case()
+                && !completed.contains(cache_key)
+                && completed_function;
+            // A function-level selector with case-level progress was expanded
+            // at runtime. Retry it and skip the handled cases.
+            if contains_crashed_dynamic_case || contains_completed_dynamic_case {
                 pending.tests.push(path.clone());
                 pending.test_keys.push(cache_key.clone());
                 pending
@@ -177,9 +185,6 @@ impl Partition {
                 }
                 continue;
             }
-            let completed_function = completed
-                .iter()
-                .any(|completed| completed.test_function_name() == cache_key.test_function_name());
             if !completed.contains(cache_key)
                 && (!completed_function || cache_key.is_parameter_case())
                 && crashed != Some(cache_key)
@@ -651,6 +656,22 @@ mod tests {
         let pending = partition.pending_after_crash(&completed, None);
 
         assert_eq!(pending.tests(), &["test_module::test_pending"]);
+    }
+
+    #[test]
+    fn crash_recovery_resumes_partial_dynamic_function_without_an_active_test() {
+        let mut partition = Partition::new();
+        partition.add_test(test_info("test_module::test_dynamic"), 1);
+        let completed =
+            HashSet::from([TestCacheKey::function_name("test_module::test_dynamic[0]")]);
+
+        let pending = partition.pending_after_crash(&completed, None);
+
+        assert_eq!(pending.tests(), &["test_module::test_dynamic"]);
+        assert_eq!(
+            pending.resume_skip(),
+            &[TestCacheKey::function_name("test_module::test_dynamic[0]")]
+        );
     }
 
     #[test]

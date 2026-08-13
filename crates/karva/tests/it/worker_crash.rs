@@ -107,6 +107,55 @@ def test_worker_crash(value):
 }
 
 #[test]
+fn worker_parameter_display_crash_is_attributed_to_active_test() {
+    // The decorator renders once during import. The second render must happen
+    // only after the worker flushes its unresolved lifecycle checkpoint.
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+import karva
+
+
+class Value(int):
+    calls = 0
+
+    def __str__(self):
+        type(self).calls += 1
+        if type(self).calls == 2:
+            os._exit(31)
+        return "value"
+
+
+@karva.tags.parametrize("value", [Value(1)])
+def test_parameter_display_crash(value):
+    pass
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           CRASH [TIME] test::test_parameter_display_crash
+
+    failures:
+
+    test::test_parameter_display_crash:
+
+    error[worker-crashed]: Worker terminated with exit code 31 while running `test::test_parameter_display_crash`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 31 in [TIME]
+    ");
+}
+
+#[test]
 fn worker_exit_does_not_repeat_completed_dynamic_parameter_functions() {
     let context = TestContext::with_file(
         "test.py",

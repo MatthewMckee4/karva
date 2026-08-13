@@ -31,8 +31,30 @@ pub(super) struct EventDispatcher {
     /// Results and diagnostics aggregated across every worker generation.
     results: AggregatedResults,
 
+    /// Synthetic crash results deferred until recovery no longer needs the
+    /// duration map as exact `TestFinished` membership.
+    crashed_tests: Vec<CrashedTest>,
+
     /// Completed case bodies retained for final report formats.
     result_retention: TestResultRetention,
+}
+
+/// Unexpected test termination retained until crash recovery completes.
+struct CrashedTest {
+    /// Last refined display name reported by the worker.
+    name: String,
+
+    /// Stable case identity excluded from committed-result membership.
+    cache_key: TestCacheKey,
+
+    /// Time from the latest start checkpoint until process exit.
+    duration: Duration,
+
+    /// Platform-specific process termination description.
+    termination: String,
+
+    /// Bounded worker stderr included in the final diagnostic.
+    stderr: String,
 }
 
 /// Controller-owned state for one executing test.
@@ -94,6 +116,7 @@ impl EventDispatcher {
             completed_workers: HashSet::new(),
             in_flight: HashMap::new(),
             results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
+            crashed_tests: Vec::new(),
             result_retention,
         }
     }
@@ -183,7 +206,9 @@ impl EventDispatcher {
         self.completed_workers.remove(&worker_id);
     }
 
-    /// Builds crash-recovery membership only when recovery needs it.
+    /// Builds exact `TestFinished` membership only when recovery needs it.
+    ///
+    /// Deferred synthetic crash results are intentionally absent.
     pub(super) fn completed_test_keys(&self) -> HashSet<TestCacheKey> {
         self.results.durations.keys().cloned().collect()
     }
@@ -212,6 +237,7 @@ impl EventDispatcher {
             .register_worker_exit(worker_id, termination, stderr);
     }
 
+    /// Defers one synthetic crash result so it cannot look committed to recovery.
     pub(super) fn register_crashed_test(
         &mut self,
         name: &str,
@@ -220,17 +246,39 @@ impl EventDispatcher {
         termination: &str,
         stderr: &str,
     ) {
-        self.results
-            .register_crashed_test(name, cache_key, duration, termination, stderr);
+        self.crashed_tests.push(CrashedTest {
+            name: name.to_string(),
+            cache_key,
+            duration,
+            termination: termination.to_string(),
+            stderr: stderr.to_string(),
+        });
     }
 
+    /// Counts received failures plus crash results not yet materialized.
     pub(super) fn failure_count(&self) -> u32 {
-        let failures = self.results.stats().failed() + self.results.stats().errors();
+        let failures = self
+            .results
+            .stats()
+            .failed()
+            .saturating_add(self.results.stats().errors())
+            .saturating_add(self.crashed_tests.len());
         u32::try_from(failures).unwrap_or(u32::MAX)
     }
 
+    /// Materializes deferred crash results after recovery has finished.
     pub(super) fn take_results(&mut self) -> AggregatedResults {
-        std::mem::take(&mut self.results)
+        let mut results = std::mem::take(&mut self.results);
+        for crashed in self.crashed_tests.drain(..) {
+            results.register_crashed_test(
+                &crashed.name,
+                crashed.cache_key,
+                crashed.duration,
+                &crashed.termination,
+                &crashed.stderr,
+            );
+        }
+        results
     }
 
     pub(super) fn active_test(&self, worker_id: usize) -> Option<&RunningTest> {
@@ -239,5 +287,35 @@ impl EventDispatcher {
 
     pub(super) fn take_active_test(&mut self, worker_id: usize) -> Option<RunningTest> {
         self.in_flight.remove(&worker_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use karva_python_semantic::TestCacheKey;
+
+    use super::EventDispatcher;
+
+    #[test]
+    fn crashed_test_is_not_committed_until_recovery_finishes() {
+        let cache_key = TestCacheKey::function_name("test_module::test_case[1]");
+        let mut dispatcher = EventDispatcher::default();
+
+        dispatcher.register_crashed_test(
+            "test_module::test_case(value=1)",
+            cache_key.clone(),
+            Duration::from_millis(5),
+            "exit code 17",
+            "worker stderr",
+        );
+
+        assert!(dispatcher.completed_test_keys().is_empty());
+        assert_eq!(dispatcher.failure_count(), 1);
+
+        let results = dispatcher.take_results();
+        assert_eq!(results.stats().errors(), 1);
+        assert_eq!(results.durations[&cache_key], Duration::from_millis(5));
     }
 }
