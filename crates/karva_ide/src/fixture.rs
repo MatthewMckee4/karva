@@ -18,8 +18,8 @@ pub struct FixtureId {
     /// File containing the fixture.
     pub path: Utf8PathBuf,
 
-    /// Range of the fixture definition.
-    range: TextRange,
+    /// Function-name range anchoring the fixture declaration.
+    pub(crate) range: TextRange,
 }
 
 /// Runtime lifetime of a fixture value.
@@ -117,6 +117,19 @@ pub(super) struct FixtureDefinition {
     /// Function-name source range.
     pub(super) name_range: TextRange,
 
+    /// Source range representing the public fixture name.
+    ///
+    /// This is the function name for ordinary fixtures, the string contents
+    /// for a single literal `name=`, or the complete expression for implicit
+    /// string concatenation.
+    pub(super) public_name_range: TextRange,
+
+    /// Range that can be replaced with another public fixture name.
+    ///
+    /// Implicitly concatenated string literals have no syntax-preserving
+    /// single replacement range.
+    pub(super) public_name_edit_range: Option<TextRange>,
+
     /// Source signature of the provider function.
     pub(super) signature: String,
 
@@ -138,6 +151,13 @@ struct ParsedFixture {
     definition: FixtureDefinition,
     public_name_known: bool,
     invalid: Vec<InvalidMetadata>,
+}
+
+/// Source ranges used to locate and safely replace one public fixture name.
+#[derive(Clone, Copy, Debug)]
+struct PublicNameRanges {
+    occurrence: TextRange,
+    edit: Option<TextRange>,
 }
 
 #[derive(Clone, Debug)]
@@ -581,6 +601,16 @@ pub(super) fn is_use_fixtures_reference(module: &CollectedModule, expression: &E
     FixtureBindings::from_statements(&module.module_body).is_use_fixtures_reference(expression)
 }
 
+/// Returns the replaceable contents of a non-concatenated string literal.
+pub(super) fn single_string_content_range(
+    expression: &ruff_python_ast::ExprStringLiteral,
+) -> Option<TextRange> {
+    let [literal] = expression.value.as_slice() else {
+        return None;
+    };
+    Some(literal.content_range())
+}
+
 fn parse_fixture(
     function: &StmtFunctionDef,
     path: &Utf8PathBuf,
@@ -588,6 +618,10 @@ fn parse_fixture(
     source: &str,
 ) -> ParsedFixture {
     let mut public_name = function.name.to_string();
+    let mut public_name_ranges = PublicNameRanges {
+        occurrence: function.name.range,
+        edit: Some(function.name.range),
+    };
     let mut public_name_known = false;
     let mut scope = None;
     let mut auto_use = None;
@@ -610,6 +644,7 @@ fn parse_fixture(
                     function,
                     path,
                     public_name,
+                    public_name_ranges,
                     scope,
                     auto_use,
                     source,
@@ -638,6 +673,11 @@ fn parse_fixture(
                 "name" => match &keyword.value {
                     Expr::StringLiteral(value) => {
                         value.value.to_str().clone_into(&mut public_name);
+                        let edit = single_string_content_range(value);
+                        public_name_ranges = PublicNameRanges {
+                            occurrence: edit.unwrap_or_else(|| value.range()),
+                            edit,
+                        };
                     }
                     Expr::NoneLiteral(_) => {}
                     Expr::NumberLiteral(_) | Expr::BooleanLiteral(_) => {
@@ -686,7 +726,15 @@ fn parse_fixture(
     }
 
     ParsedFixture {
-        definition: fixture_definition(function, path, public_name, scope, auto_use, source),
+        definition: fixture_definition(
+            function,
+            path,
+            public_name,
+            public_name_ranges,
+            scope,
+            auto_use,
+            source,
+        ),
         public_name_known,
         invalid,
     }
@@ -696,6 +744,7 @@ fn fixture_definition(
     function: &StmtFunctionDef,
     path: &Utf8PathBuf,
     name: String,
+    public_name_ranges: PublicNameRanges,
     scope: Option<FixtureScope>,
     auto_use: Option<bool>,
     source: &str,
@@ -703,11 +752,13 @@ fn fixture_definition(
     FixtureDefinition {
         id: FixtureId {
             path: path.clone(),
-            range: function.range,
+            range: function.name.range,
         },
         name,
         defining_name: function.name.to_string(),
         name_range: function.name.range,
+        public_name_range: public_name_ranges.occurrence,
+        public_name_edit_range: public_name_ranges.edit,
         signature: function_signature(function, source),
         docstring: function_docstring(function),
         scope,

@@ -173,7 +173,6 @@ fn use_fixtures_reference(
     function: &StmtFunctionDef,
     offset: TextSize,
 ) -> Option<(String, TextRange)> {
-    let source = &analysis.module.source_text;
     for decorator in &function.decorator_list {
         if !decorator.range().contains_inclusive(offset) {
             continue;
@@ -188,70 +187,14 @@ fn use_fixtures_reference(
             let Expr::StringLiteral(literal) = argument else {
                 return None;
             };
-            let interior = string_interior(source, literal.range())?;
+            let interior = crate::fixture::single_string_content_range(literal)?;
             if !interior.contains_inclusive(offset) {
                 continue;
             }
-            let range = identifier_range(source, offset, interior)?;
-            let name = source
-                .get(range.start().to_usize()..range.end().to_usize())?
-                .to_owned();
-            return Some((name, range));
+            return Some((literal.value.to_str().to_owned(), interior));
         }
     }
     None
-}
-
-fn string_interior(source: &str, range: TextRange) -> Option<TextRange> {
-    let text = source.get(range.start().to_usize()..range.end().to_usize())?;
-    let quote = text
-        .bytes()
-        .position(|byte| byte == b'\'' || byte == b'"')?;
-    let end_quote = text
-        .bytes()
-        .rposition(|byte| byte == b'\'' || byte == b'"')?;
-    if quote >= end_quote {
-        return None;
-    }
-    Some(TextRange::new(
-        size(range.start().to_usize() + quote + 1)?,
-        size(range.start().to_usize() + end_quote)?,
-    ))
-}
-
-fn identifier_range(source: &str, offset: TextSize, boundary: TextRange) -> Option<TextRange> {
-    let offset = offset.to_usize();
-    let start = boundary.start().to_usize();
-    let end = boundary.end().to_usize().min(source.len());
-    if offset < start || offset > end || !source.is_char_boundary(offset) {
-        return None;
-    }
-    let mut token_start = offset;
-    for (index, character) in source.get(start..offset)?.char_indices().rev() {
-        if !is_identifier_character(character) {
-            break;
-        }
-        token_start = start + index;
-    }
-    let mut token_end = offset;
-    for (index, character) in source.get(offset..end)?.char_indices() {
-        if !is_identifier_character(character) {
-            break;
-        }
-        token_end = offset + index + character.len_utf8();
-    }
-    if token_start >= token_end {
-        return None;
-    }
-    Some(TextRange::new(size(token_start)?, size(token_end)?))
-}
-
-fn is_identifier_character(character: char) -> bool {
-    character == '_' || character.is_alphanumeric()
-}
-
-fn size(value: usize) -> Option<TextSize> {
-    u32::try_from(value).ok().map(TextSize::from)
 }
 
 #[cfg(test)]
@@ -283,7 +226,7 @@ mod tests {
     }
 
     fn at(source: &str, marker: &str) -> TextSize {
-        size(source.find(marker).expect("marker exists")).expect("source fits")
+        TextSize::try_from(source.find(marker).expect("marker exists")).expect("source fits")
     }
 
     #[test]
@@ -375,9 +318,26 @@ mod tests {
     }
 
     #[test]
+    fn hovers_escaped_use_fixtures_string() {
+        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.usefixtures(\"data\\x62ase\")\ndef test_example(): pass\n";
+        let result =
+            hover_fixture(&analysis(source), at(source, "x62")).expect("escaped usefixtures hover");
+
+        assert_eq!(result.name, "database");
+        assert_eq!(
+            result.range,
+            TextRange::new(
+                at(source, "data\\x62ase"),
+                at(source, "data\\x62ase") + TextSize::from(11),
+            )
+        );
+    }
+
+    #[test]
     fn hovers_unicode_fixture_name_by_utf8_offset() {
         let source = "from karva import fixture\n@fixture\ndef δεδομενα(): pass\ndef test_example(δεδομενα): pass\n";
-        let offset = at(source, "δεδομενα):") + size("δεδομενα".len()).expect("source fits");
+        let offset =
+            at(source, "δεδομενα):") + TextSize::try_from("δεδομενα".len()).expect("source fits");
         let result = hover_fixture(&analysis(source), offset).expect("unicode hover");
         assert_eq!(result.name, "δεδομενα");
     }
