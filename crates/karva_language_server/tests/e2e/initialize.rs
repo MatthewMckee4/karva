@@ -4,7 +4,20 @@ use lsp_types::{
     TextDocumentSyncKind,
 };
 
-use super::TestServer;
+use super::{TestServer, TestServerBuilder};
+
+#[test]
+fn correlates_responses_without_discarding_other_responses() {
+    let mut server = TestServerBuilder::new().build();
+    let first = server.send_request_raw("karva/first", serde_json::Value::Null);
+    let second = server.send_request_raw("karva/second", serde_json::Value::Null);
+
+    let second_response = server.receive_response(&second);
+    let first_response = server.receive_response(&first);
+
+    assert_eq!(second_response.id, second);
+    assert_eq!(first_response.id, first);
+}
 
 #[test]
 fn unknown_request_receives_method_not_found() -> anyhow::Result<()> {
