@@ -4,8 +4,9 @@
 )]
 
 use lsp_types::{
-    ClientCapabilities, CompletionOptions, MarkupKind, ServerCapabilities, TextDocumentSyncKind,
-    TextDocumentSyncOptions, WorkspaceFoldersServerCapabilities,
+    ClientCapabilities, CompletionOptions, MarkupKind, RenameOptions, ServerCapabilities,
+    TextDocumentSyncKind, TextDocumentSyncOptions, WorkDoneProgressOptions,
+    WorkspaceFoldersServerCapabilities,
 };
 
 use crate::PositionEncoding;
@@ -67,6 +68,9 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
         definition_provider: Some(true.into()),
         hover_provider: Some(true.into()),
         references_provider: Some(true.into()),
+        rename_provider: Some(
+            RenameOptions::new(Some(true), WorkDoneProgressOptions::default()).into(),
+        ),
         workspace: Some(lsp_types::WorkspaceOptions {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                 supported: Some(true),

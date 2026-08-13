@@ -8,6 +8,7 @@ mod document_sync;
 mod hover;
 mod initialize;
 mod references;
+mod rename;
 
 use std::thread::JoinHandle;
 

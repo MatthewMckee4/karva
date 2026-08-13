@@ -20,11 +20,11 @@ use fixture::{FixtureDefinition, FixtureResolution};
 pub use fixture::{FixtureId, FixtureScope};
 pub use hover::{FixtureHover, hover_fixture};
 pub use occurrences::{
-    FixtureOccurrence, FixtureOccurrenceKind, fixture_occurrence, fixture_occurrences,
-    fixture_target,
+    FixtureOccurrence, FixtureOccurrenceKind, FixtureRenameTarget, fixture_occurrence,
+    fixture_occurrences, fixture_rename_target, fixture_target,
 };
 pub use references::{LocatedFixtureOccurrence, fixture_references};
-pub use rename::prepare_fixture_rename;
+pub use rename::{is_valid_fixture_name, prepare_fixture_rename, rename_fixture};
 pub use source_index::WorkspaceSourceIndex;
 
 /// Owned Python source used as an input to source-only analysis.
