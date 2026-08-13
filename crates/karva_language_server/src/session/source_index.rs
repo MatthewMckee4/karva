@@ -28,6 +28,16 @@ use super::RequestCancellationToken;
 
 pub(super) type SourceIndexCache = Arc<OnceCell<Arc<WorkspaceSourceIndex>>>;
 
+/// Files included in one immutable source snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) enum SourceIndexScope {
+    /// Sources selected by Karva's configured test roots.
+    TestSelection,
+
+    /// Every Python source beneath the discovered Karva project root.
+    Project,
+}
+
 /// Owned inputs captured before building a workspace source index.
 #[derive(Debug)]
 pub(super) struct PreparedSourceIndex {
@@ -36,6 +46,7 @@ pub(super) struct PreparedSourceIndex {
     open_sources: BTreeMap<Utf8PathBuf, String>,
     settings: SourceAnalysisSettings,
     respect_ignore_files: bool,
+    scope: SourceIndexScope,
     cache: SourceIndexCache,
 }
 
@@ -55,6 +66,7 @@ impl PreparedSourceIndex {
             open_sources,
             settings,
             respect_ignore_files,
+            SourceIndexScope::TestSelection,
             Arc::default(),
         )
     }
@@ -65,6 +77,7 @@ impl PreparedSourceIndex {
         open_sources: BTreeMap<Utf8PathBuf, String>,
         settings: SourceAnalysisSettings,
         respect_ignore_files: bool,
+        scope: SourceIndexScope,
         cache: SourceIndexCache,
     ) -> Self {
         Self {
@@ -73,6 +86,7 @@ impl PreparedSourceIndex {
             open_sources,
             settings,
             respect_ignore_files,
+            scope,
             cache,
         }
     }
@@ -99,23 +113,26 @@ impl PreparedSourceIndex {
             open_sources,
             settings,
             respect_ignore_files,
+            scope,
             cache: _,
         } = self;
 
         let mut paths = BTreeSet::new();
-        let test_paths = if include_paths.is_empty() {
-            let tests = project_root.join("tests");
-            let default_path = if tests.is_dir() {
-                tests
-            } else {
-                project_root.clone()
-            };
-            vec![TestPath::new(default_path.as_str())]
-        } else {
-            include_paths
+        let test_paths = match scope {
+            SourceIndexScope::Project => vec![TestPath::new(project_root.as_str())],
+            SourceIndexScope::TestSelection if include_paths.is_empty() => {
+                let tests = project_root.join("tests");
+                let default_path = if tests.is_dir() {
+                    tests
+                } else {
+                    project_root.clone()
+                };
+                vec![TestPath::new(default_path.as_str())]
+            }
+            SourceIndexScope::TestSelection => include_paths
                 .iter()
                 .map(|path| TestPath::new(absolute(path, &project_root).as_str()))
-                .collect()
+                .collect(),
         };
         for test_path in test_paths {
             check_cancelled(cancellation)?;
@@ -762,6 +779,7 @@ mod tests {
                 BTreeMap::new(),
                 Fixture::settings(),
                 true,
+                SourceIndexScope::TestSelection,
                 cache,
             )
         };

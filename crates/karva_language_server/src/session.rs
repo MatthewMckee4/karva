@@ -26,7 +26,7 @@ use crate::{PositionEncoding, TextDocument};
 
 use self::index::Index;
 use self::request_queue::RequestQueue;
-use self::source_index::SourceIndexCache;
+use self::source_index::{SourceIndexCache, SourceIndexScope};
 
 pub use self::request_queue::RequestCancellationToken;
 use self::source_index::{PreparedSourceIndex, SourceIndexError};
@@ -154,7 +154,7 @@ pub struct Session {
     workspaces: Workspaces,
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
-    source_indexes: HashMap<Utf8PathBuf, SourceIndexCache>,
+    source_indexes: HashMap<(Utf8PathBuf, SourceIndexScope), SourceIndexCache>,
     source_index_revision: SourceIndexRevision,
 }
 
@@ -310,6 +310,22 @@ impl Session {
         &mut self,
         uri: &Uri,
     ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
+        self.prepare_source_analysis_with_scope(uri, SourceIndexScope::TestSelection)
+    }
+
+    /// Captures source state for a project-wide symbol query.
+    pub(super) fn prepare_project_source_analysis(
+        &mut self,
+        uri: &Uri,
+    ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
+        self.prepare_source_analysis_with_scope(uri, SourceIndexScope::Project)
+    }
+
+    fn prepare_source_analysis_with_scope(
+        &mut self,
+        uri: &Uri,
+        scope: SourceIndexScope,
+    ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
         let document = self
             .index
             .document(uri)
@@ -340,7 +356,7 @@ impl Session {
             .collect::<BTreeMap<_, _>>();
         let source_index_cache = if self.cache_source_indexes {
             self.source_indexes
-                .entry(project_root.clone())
+                .entry((project_root.clone(), scope))
                 .or_default()
                 .clone()
         } else {
@@ -352,6 +368,7 @@ impl Session {
             open_sources,
             settings,
             project.settings().src().respect_ignore_files,
+            scope,
             source_index_cache,
         );
 
@@ -410,11 +427,11 @@ impl Session {
         Arc::ptr_eq(&self.source_index_revision.0, &revision.0)
     }
 
-    pub(crate) fn enable_source_index_cache(&mut self) {
+    pub(super) fn enable_source_index_cache(&mut self) {
         self.cache_source_indexes = true;
     }
 
-    pub(crate) fn is_document_snapshot_current(&self, version: &DocumentSnapshotVersion) -> bool {
+    pub(super) fn is_document_snapshot_current(&self, version: &DocumentSnapshotVersion) -> bool {
         self.document(&version.uri)
             .is_some_and(|document| document.version() == version.document_version)
             && self.is_source_index_revision_current(&version.source_index_revision)
