@@ -161,11 +161,13 @@ impl Partition {
                 !cache_key.is_parameter_case()
                     && cache_key.test_function_name() == crashed.test_function_name()
             });
-            let contains_completed_dynamic_case = !cache_key.is_parameter_case()
+            let contains_completed_dynamic_case = crashed.is_none()
+                && !cache_key.is_parameter_case()
                 && !completed.contains(cache_key)
                 && completed_function;
             // A function-level selector with case-level progress was expanded
-            // at runtime. Retry it and skip the handled cases.
+            // at runtime. Retry the active function, or every possibly active
+            // function after an unattributed crash, and skip handled cases.
             if contains_crashed_dynamic_case || contains_completed_dynamic_case {
                 pending.tests.push(path.clone());
                 pending.test_keys.push(cache_key.clone());

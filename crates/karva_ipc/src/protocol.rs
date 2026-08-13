@@ -12,8 +12,12 @@ pub enum WorkerEvent {
     /// The first checkpoint precedes fixture setup. A later checkpoint may
     /// refine the display name after fixture-derived parameters resolve.
     TestStarted {
-        /// Best identity known at this lifecycle point.
-        name: String,
+        /// Best display identity known when it differs from the stable key.
+        ///
+        /// Plain function names are omitted to avoid sending the same string
+        /// twice; the controller reconstructs them from `cache_key`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
 
         /// Stable case identity used for completion and crash recovery.
         cache_key: TestCacheKey,

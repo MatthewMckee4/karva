@@ -52,24 +52,29 @@ pub(super) struct WorkerSupervisor {
 }
 
 impl WorkerSupervisor {
+    /// Whether any generation still needs process or stream cleanup.
     pub(super) fn has_workers(&self) -> bool {
         !self.workers.is_empty()
     }
 
+    /// Whether a generation delivered its terminal event before disconnecting.
     pub(super) fn worker_completed(&self, worker_id: usize) -> bool {
         self.dispatcher.worker_completed(worker_id)
     }
 
+    /// Returns exact completed-case membership for replacement-worker filtering.
     pub(super) fn completed_test_keys(
         &self,
     ) -> std::collections::HashSet<karva_python_semantic::TestCacheKey> {
         self.dispatcher.completed_test_keys()
     }
 
+    /// Removes a failed generation from the set allowed to send current events.
     pub(super) fn abandon_worker(&mut self, worker_id: usize) {
         self.dispatcher.abandon_worker(worker_id);
     }
 
+    /// Records a run-level diagnostic for an exit with no active test checkpoint.
     pub(super) fn register_worker_exit(
         &mut self,
         worker_id: usize,
@@ -80,6 +85,7 @@ impl WorkerSupervisor {
             .register_worker_exit(worker_id, termination, stderr);
     }
 
+    /// Defers an active-test crash result until recovery no longer reads completion state.
     pub(super) fn register_crashed_test(
         &mut self,
         name: &str,
@@ -92,22 +98,27 @@ impl WorkerSupervisor {
             .register_crashed_test(name, cache_key, duration, termination, stderr);
     }
 
+    /// Counts committed failures and deferred crash results for fail-fast.
     pub(super) fn failure_count(&self) -> u32 {
         self.dispatcher.failure_count()
     }
 
+    /// Joins all IPC readers and dispatches their final complete frames.
     pub(super) fn finish_events(&mut self, server: &mut ControllerServer) -> Result<()> {
         self.dispatcher.finish(server)
     }
 
+    /// Applies every controller event currently available without blocking.
     pub(super) fn dispatch_events(&mut self, server: &mut ControllerServer) -> Result<()> {
         self.dispatcher.dispatch_pending(server)
     }
 
+    /// Takes final aggregation after materializing deferred crash results.
     pub(super) fn take_results(&mut self) -> karva_diagnostic::AggregatedResults {
         self.dispatcher.take_results()
     }
 
+    /// Allocates empty supervision state sized for the selected reporting mode.
     pub(super) fn with_test_capacity(
         test_capacity: usize,
         result_retention: TestResultRetention,
@@ -120,6 +131,7 @@ impl WorkerSupervisor {
 }
 
 impl WorkerSupervisor {
+    /// Registers a child generation with both event dispatch and process supervision.
     pub(super) fn spawn(
         &mut self,
         worker_id: usize,
@@ -219,6 +231,7 @@ impl WorkerSupervisor {
         Ok(crashed)
     }
 
+    /// Reaps children that stop during termination without classifying their exits.
     pub(super) fn reap_during_shutdown(&mut self) {
         self.workers
             .retain_mut(|worker| match worker.child_mut().try_wait() {

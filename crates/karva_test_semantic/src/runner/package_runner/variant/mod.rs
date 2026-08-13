@@ -8,6 +8,7 @@ use karva_coverage::CoveragePhase;
 use karva_diagnostic::TestExecutionOutcome;
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
+use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
 use crate::output_capture::PythonOutputCapture;
@@ -77,7 +78,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         {
             return true;
         }
-        if let Some(result) = self.should_skip() {
+        if let Some(result) = self.should_skip(&unresolved_test_name) {
             return result;
         }
 
@@ -182,10 +183,9 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Returns a registered skip result when filters or skip policy exclude this variant.
-    fn should_skip(&self) -> Option<bool> {
+    fn should_skip(&self, qualified: &QualifiedTestName) -> Option<bool> {
         let filter = &self.package_runner.context.settings().test().filter;
         let run_ignored = self.package_runner.context.settings().test().run_ignored;
-        let qualified = self.unresolved_test_name();
 
         if !filter.is_empty() {
             let display_name = qualified.to_string();
@@ -196,7 +196,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             };
             if !filter.matches(&context) {
                 return Some(self.package_runner.context.register_test_case_result(
-                    &qualified,
+                    qualified,
                     TestExecutionOutcome::Skipped { reason: None },
                     Duration::ZERO,
                     None,
@@ -216,7 +216,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return None;
         };
         Some(self.package_runner.context.register_test_case_result(
-            &qualified,
+            qualified,
             TestExecutionOutcome::Skipped { reason },
             Duration::ZERO,
             None,

@@ -136,6 +136,7 @@ impl EventDispatcher {
             }
             match *message.event {
                 WorkerEvent::TestStarted { name, cache_key } => {
+                    let name = name.unwrap_or_else(|| cache_key.to_string());
                     if let Some(running) = self.in_flight.get_mut(&worker_id) {
                         if running.cache_key.test_function_name() != cache_key.test_function_name()
                         {
@@ -213,10 +214,12 @@ impl EventDispatcher {
         self.results.durations.keys().cloned().collect()
     }
 
+    /// Whether a worker delivered its terminal event exactly once.
     pub(super) fn worker_completed(&self, worker_id: usize) -> bool {
         self.completed_workers.contains(&worker_id)
     }
 
+    /// Returns sorted generations that never delivered their terminal event.
     pub(super) fn missing_workers(&self) -> Vec<usize> {
         let mut missing = self
             .expected_workers
@@ -227,6 +230,7 @@ impl EventDispatcher {
         missing
     }
 
+    /// Adds a run-level diagnostic when no active test checkpoint survived an exit.
     pub(super) fn register_worker_exit(
         &mut self,
         worker_id: usize,
@@ -281,10 +285,12 @@ impl EventDispatcher {
         results
     }
 
+    /// Borrows the latest active-test checkpoint for cancellation reporting.
     pub(super) fn active_test(&self, worker_id: usize) -> Option<&RunningTest> {
         self.in_flight.get(&worker_id)
     }
 
+    /// Removes the latest active checkpoint when ownership moves to crash recovery.
     pub(super) fn take_active_test(&mut self, worker_id: usize) -> Option<RunningTest> {
         self.in_flight.remove(&worker_id)
     }

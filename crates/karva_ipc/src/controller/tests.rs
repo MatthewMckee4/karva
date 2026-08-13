@@ -45,7 +45,7 @@ fn streams_attributed_worker_events() {
         assert_eq!(selection.test_paths, ["mod::test"]);
         client
             .send_event(WorkerEvent::TestStarted {
-                name: "mod::test".to_string(),
+                name: None,
                 cache_key: TestCacheKey::function_name("mod::test"),
             })
             .expect("send event");
@@ -64,7 +64,7 @@ fn streams_attributed_worker_events() {
     assert!(matches!(
         *event.event,
         WorkerEvent::TestStarted { name, cache_key }
-            if name == "mod::test"
+            if name.is_none()
                 && cache_key == TestCacheKey::function_name("mod::test")
     ));
 }

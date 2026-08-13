@@ -96,31 +96,38 @@ struct WorkerLifecycle {
 }
 
 impl Worker {
+    /// Returns the controller identity shared with this generation's IPC stream.
     pub(super) fn id(&self) -> usize {
         self.assignment.id
     }
 
+    /// Returns the operating-system process identifier used for group cleanup.
     pub(super) fn process_id(&self) -> u32 {
         self.process.child.id()
     }
 
+    /// Consumes a failed generation and returns the assignment recovery will trim.
     pub(super) fn take_partition(self) -> Partition {
         self.assignment.partition
     }
 
+    /// Borrows the child while Unix process-group state is inspected.
     #[cfg(unix)]
     pub(super) fn child(&self) -> &Child {
         &self.process.child
     }
 
+    /// Borrows the child for polling, waiting, or termination.
     pub(super) fn child_mut(&mut self) -> &mut Child {
         &mut self.process.child
     }
 
+    /// Whether process exit has already been observed without completing stream drain.
     pub(super) fn has_exit_status(&self) -> bool {
         self.lifecycle.exit_status.is_some()
     }
 
+    /// Returns the process status retained while late IPC frames drain.
     pub(super) fn exit_status(&self) -> Option<ExitStatus> {
         self.lifecycle.exit_status
     }
@@ -132,6 +139,7 @@ impl Worker {
         self.lifecycle.exit_event_count = event_count;
     }
 
+    /// Returns the event count captured at the latest drain progress point.
     pub(super) fn event_count(&self) -> usize {
         self.lifecycle.exit_event_count
     }
@@ -154,6 +162,7 @@ impl Worker {
         self.lifecycle.forced_disconnect = true;
     }
 
+    /// Takes ownership of a spawned process and its assignment before supervision begins.
     pub(super) fn new(id: usize, partition: Partition, resources: WorkerResources) -> Self {
         Self {
             assignment: WorkerAssignment { id, partition },
@@ -170,16 +179,23 @@ impl Worker {
         }
     }
 
+    /// Returns elapsed wall time since the child generation was registered.
     pub(super) fn duration(&self) -> Duration {
         self.process.started_at.elapsed()
     }
 
+    /// Consumes and joins the stdout forwarder after process output is settled.
     pub(super) fn join_output(&mut self) {
         if let Some(output) = self.streams.output.take() {
             output.join(self.assignment.id, !self.lifecycle.forced_disconnect);
         }
     }
 
+    /// Joins stderr forwarding and optionally returns the bounded captured copy.
+    ///
+    /// `read` is false for successful workers, whose diagnostic spool is not
+    /// needed. Forced disconnects append a warning because inherited handles
+    /// may have prevented the forwarder from observing EOF.
     pub(super) fn join_stderr(&mut self, read: bool) -> String {
         if let Some(stderr) = self.streams.stderr.take() {
             stderr.join(self.assignment.id, !self.lifecycle.forced_disconnect);

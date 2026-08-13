@@ -36,6 +36,9 @@ struct WorkerConnection {
     /// First asynchronous flush failure observed by the flusher thread.
     flush_error: Arc<Mutex<Option<String>>>,
 
+    /// Fast-path signal avoiding an error mutex lock for healthy writes.
+    flush_failed: Arc<AtomicBool>,
+
     /// Join handle retained so completion can report a flusher panic.
     flusher: Mutex<Option<JoinHandle<()>>>,
 }
@@ -59,13 +62,15 @@ impl WorkerClient {
         let pending_flush = Arc::new(AtomicBool::new(false));
         let stop = Arc::new(AtomicBool::new(false));
         let flush_error = Arc::new(Mutex::new(None));
-        let flusher = spawn_flusher(&writer, &pending_flush, &stop, &flush_error)?;
+        let flush_failed = Arc::new(AtomicBool::new(false));
+        let flusher = spawn_flusher(&writer, &pending_flush, &stop, &flush_error, &flush_failed)?;
         let client = Self {
             connection: Arc::new(WorkerConnection {
                 writer,
                 pending_flush,
                 stop,
                 flush_error,
+                flush_failed,
                 flusher: Mutex::new(Some(flusher)),
             }),
         };
@@ -163,6 +168,9 @@ impl WorkerClient {
     }
 
     fn check_flush_error(&self) -> Result<()> {
+        if !self.connection.flush_failed.load(Ordering::Acquire) {
+            return Ok(());
+        }
         if let Some(error) = self
             .connection
             .flush_error
@@ -203,11 +211,13 @@ fn spawn_flusher(
     pending_flush: &Arc<AtomicBool>,
     stop: &Arc<AtomicBool>,
     flush_error: &Arc<Mutex<Option<String>>>,
+    flush_failed: &Arc<AtomicBool>,
 ) -> Result<JoinHandle<()>> {
     let writer = Arc::clone(writer);
     let pending_flush = Arc::clone(pending_flush);
     let stop = Arc::clone(stop);
     let flush_error = Arc::clone(flush_error);
+    let flush_failed = Arc::clone(flush_failed);
     thread::Builder::new()
         .name("karva-event-flusher".to_string())
         .spawn(move || {
@@ -221,6 +231,7 @@ fn spawn_flusher(
                     if let Ok(mut flush_error) = flush_error.lock() {
                         *flush_error = Some(error);
                     }
+                    flush_failed.store(true, Ordering::Release);
                     return;
                 }
             }
