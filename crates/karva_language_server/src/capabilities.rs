@@ -59,6 +59,7 @@ pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabil
             .into(),
         ),
         completion_provider: Some(CompletionOptions::default()),
+        definition_provider: Some(true.into()),
         hover_provider: Some(true.into()),
         workspace: Some(lsp_types::WorkspaceOptions {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {

@@ -76,6 +76,7 @@ fn initialization_advertises_document_and_workspace_sync() {
     assert_eq!(sync.open_close, Some(true));
     assert_eq!(sync.change, Some(TextDocumentSyncKind::Incremental));
     assert!(capabilities.completion_provider.is_some());
+    assert!(capabilities.definition_provider.is_some());
     assert!(capabilities.hover_provider.is_some());
     assert_eq!(
         capabilities

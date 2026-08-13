@@ -1,6 +1,7 @@
 //! Source-only editor analysis for Karva projects.
 
 mod completion;
+mod definition;
 mod fixture;
 mod hover;
 
@@ -10,6 +11,7 @@ use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextRange;
 
 pub use completion::{FixtureCompletion, complete_fixtures};
+pub use definition::{FixtureDefinitionTarget, fixture_definition};
 pub use fixture::{
     FixtureDefinition, FixtureId, FixtureReference, FixtureResolution, FixtureScope,
 };
