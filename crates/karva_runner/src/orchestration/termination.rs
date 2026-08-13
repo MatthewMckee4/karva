@@ -79,7 +79,9 @@ impl WorkerSupervisor {
             .iter()
             .filter(|worker| !self.worker_completed(worker.id()))
         {
-            if let Err(error) = process_control::force_kill(worker.child()) {
+            if let Err(error) = process_control::force_kill(worker.child())
+                && error.kind() != std::io::ErrorKind::PermissionDenied
+            {
                 tracing::warn!(target: "karva_runner::orchestration",
                     worker_id = worker.id(),
                     "failed to force-kill worker process group: {error}"
