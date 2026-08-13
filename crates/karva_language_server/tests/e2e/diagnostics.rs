@@ -82,6 +82,50 @@ fn publishes_cross_file_related_information() {
 }
 
 #[test]
+fn publishes_related_information_for_the_nearest_nested_fixture() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    workspace.write(
+        "package/conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    let server = TestServer::with_workspace(capabilities(), workspace.folder());
+    let uri = workspace.uri("package/test_example.py");
+
+    server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri,
+            language_id: LanguageKind::Python,
+            version: 1,
+            text: concat!(
+                "from karva import fixture\n\n",
+                "@fixture(scope=\"session\")\n",
+                "def shared(database): pass\n",
+            )
+            .to_owned(),
+        },
+    });
+    let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
+    let diagnostic = diagnostics
+        .diagnostics
+        .first()
+        .expect("nearest fixture should produce a scope diagnostic");
+    let related = diagnostic
+        .related_information
+        .as_ref()
+        .expect("scope diagnostic should include related information");
+    let database = related
+        .iter()
+        .find(|information| information.message.contains("Fixture `database`"))
+        .expect("scope diagnostic should identify the database fixture");
+
+    assert_eq!(database.location.uri, workspace.uri("package/conftest.py"));
+}
+
+#[test]
 fn does_not_analyze_an_open_conftest_as_its_own_parent() {
     let workspace = Workspace::new();
     let server = TestServer::with_workspace(capabilities(), workspace.folder());
@@ -146,8 +190,11 @@ impl Workspace {
     }
 
     fn write(&self, relative: &str, source: &str) {
-        fs::write(self.directory.path().join(relative), source)
-            .expect("workspace source should be written");
+        let path = self.directory.path().join(relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("workspace directory should be created");
+        }
+        fs::write(path, source).expect("workspace source should be written");
     }
 
     fn normalize(&self, value: impl serde::Serialize) -> Value {

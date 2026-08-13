@@ -164,6 +164,77 @@ def test_ok():
 }
 
 #[test]
+fn test_duplicate_nested_fixture_blocks_valid_outer_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+from pathlib import Path
+
+@karva.fixture
+def config():
+    Path("outer-ran").touch()
+    return {}
+"#,
+        ),
+        (
+            "nested/conftest.py",
+            r#"
+import karva
+
+@karva.fixture(name="config")
+def first():
+    return {}
+
+@karva.fixture(name="config")
+def second():
+    return {}
+"#,
+        ),
+        ("nested/test_example.py", "def test_config(config): pass\n"),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] nested.test_example::test_config
+
+    failures:
+
+    nested.test_example::test_config:
+
+    error[missing-fixtures]: Test `test_config` has missing fixtures
+     --> nested/test_example.py:1:5
+      |
+    1 | def test_config(config): pass
+      |     ^^^^^^^^^^^
+    info: Missing fixtures: `config`
+
+    diagnostics:
+
+    error[duplicate-fixture]: Fixture `config` is defined more than once
+     --> nested/conftest.py:9:5
+      |
+    9 | def second():
+      |     ^^^^^^
+    info: First definition of `config` is here
+     --> nested/conftest.py:5:5
+      |
+    5 | def first():
+      |     ^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("outer-ran").exists());
+}
+
+#[test]
 fn test_missing_fixture() {
     let context = TestContext::with_file(
         "test.py",

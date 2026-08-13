@@ -131,6 +131,30 @@ fn hovers_pytest_usefixtures_string() {
 }
 
 #[test]
+fn hovers_nearest_nested_fixture_provider() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    workspace.write(
+        "package/conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("package/test_example.py");
+    open(&server, uri.clone(), "def test_example(database): pass\n");
+
+    let response = server.request::<HoverRequest>(hover_params(uri, Position::new(0, 20)));
+    let response = workspace.normalize(response);
+
+    assert_eq!(
+        response["contents"]["value"],
+        "def database():\n\nKarva fixture: database\nScope: function\nAutouse: false\nProvider: /project/package/conftest.py"
+    );
+}
+
+#[test]
 fn returns_no_hover_for_dynamic_fixture_provider() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -198,8 +222,11 @@ impl Workspace {
     }
 
     fn write(&self, relative: &str, source: &str) {
-        fs::write(self.directory.path().join(relative), source)
-            .expect("workspace source should be written");
+        let path = self.directory.path().join(relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("workspace directory should be created");
+        }
+        fs::write(path, source).expect("workspace source should be written");
     }
 
     fn normalize(&self, value: impl serde::Serialize) -> Value {
