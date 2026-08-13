@@ -4,6 +4,7 @@ mod completion;
 mod definition;
 mod fixture;
 mod hover;
+mod implementation;
 mod occurrences;
 mod references;
 mod rename;
@@ -21,6 +22,7 @@ pub use fixture::{
     FixtureDefinition, FixtureId, FixtureReference, FixtureResolution, FixtureScope,
 };
 pub use hover::{FixtureHover, hover_fixture};
+pub use implementation::{FixtureImplementationTarget, fixture_implementation};
 pub use occurrences::{
     FixtureOccurrence, FixtureOccurrenceKind, FixtureRenameTarget, fixture_document_highlights,
     fixture_occurrence, fixture_occurrences, fixture_rename_target, fixture_target,

@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use camino::Utf8PathBuf;
 use karva_collector::{CollectedModule, ModuleType};
+use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::{Ranged, TextRange};
 
@@ -111,6 +112,10 @@ pub struct FixtureDefinition {
 
     /// Function-name source range.
     pub name_range: TextRange,
+
+    /// Source range of the provider's first yield expression, or its function
+    /// name when the provider is not a generator.
+    pub implementation_range: TextRange,
 
     /// Source range representing the public fixture name.
     ///
@@ -745,6 +750,7 @@ fn fixture_definition(
         name,
         defining_name: function.name.to_string(),
         name_range: function.name.range,
+        implementation_range: fixture_implementation_range(function),
         public_name_range: public_name_ranges.occurrence,
         public_name_edit_range: public_name_ranges.edit,
         signature: function_signature(function, source),
@@ -760,6 +766,39 @@ fn fixture_definition(
                 resolution: FixtureResolution::Unknown,
             })
             .collect(),
+    }
+}
+
+fn fixture_implementation_range(function: &StmtFunctionDef) -> TextRange {
+    let mut visitor = FixtureImplementationVisitor::default();
+    source_order::walk_body(&mut visitor, &function.body);
+    visitor.implementation_range.unwrap_or(function.name.range)
+}
+
+#[derive(Default)]
+struct FixtureImplementationVisitor {
+    implementation_range: Option<TextRange>,
+}
+
+impl SourceOrderVisitor<'_> for FixtureImplementationVisitor {
+    fn visit_stmt(&mut self, statement: &'_ Stmt) {
+        match statement {
+            Stmt::FunctionDef(_) | Stmt::ClassDef(_) => {}
+            _ => source_order::walk_stmt(self, statement),
+        }
+    }
+
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if self.implementation_range.is_some() {
+            return;
+        }
+        match expression {
+            Expr::Yield(_) | Expr::YieldFrom(_) => {
+                self.implementation_range = Some(expression.range());
+            }
+            Expr::Lambda(_) => {}
+            _ => source_order::walk_expr(self, expression),
+        }
     }
 }
 
