@@ -126,6 +126,37 @@ pub fn fixture_target(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fix
         })
 }
 
+/// Returns fixture highlights in the current document for the provider under `offset`.
+///
+/// Fixture declarations and custom provider function names are writes. Fixture
+/// dependencies, test parameters, and `usefixtures` metadata are reads.
+pub fn fixture_document_highlights(
+    analysis: &SourceAnalysis,
+    offset: TextSize,
+) -> Option<Vec<FixtureOccurrence>> {
+    let fixture = fixture_target(analysis, offset)?;
+    let mut highlights: Vec<_> = fixture_occurrences(analysis)
+        .into_iter()
+        .filter(|occurrence| occurrence.fixture == fixture)
+        .collect();
+
+    if let Some(definition) = analysis
+        .fixtures
+        .iter()
+        .find(|definition| definition.id == fixture)
+        && definition.name_range != definition.public_name_range
+    {
+        highlights.push(FixtureOccurrence {
+            range: definition.name_range,
+            edit_range: None,
+            kind: FixtureOccurrenceKind::Definition,
+            fixture,
+        });
+    }
+    highlights.sort_by_key(|occurrence| occurrence.range.start());
+    Some(highlights)
+}
+
 /// Resolves a rename selection, including custom fixture provider anchors.
 ///
 /// For `@fixture(name="public") def provider`, definition navigation lands on
@@ -319,6 +350,90 @@ mod tests {
             .edit_range
             .expect("custom public name should be editable");
         assert_eq!(&source[edit_range.to_std_range()], "данные");
+    }
+
+    #[test]
+    fn highlights_custom_provider_anchor_and_consumers() {
+        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database): pass\n";
+        let highlights = fixture_document_highlights(&analysis(source), at(source, "provider"))
+            .expect("custom fixture should highlight");
+
+        assert_eq!(
+            highlights
+                .iter()
+                .map(|occurrence| occurrence.kind)
+                .collect::<Vec<_>>(),
+            [
+                FixtureOccurrenceKind::Definition,
+                FixtureOccurrenceKind::Definition,
+                FixtureOccurrenceKind::TestParameter,
+            ]
+        );
+        assert_eq!(
+            highlights[0].range,
+            TextRange::at(at(source, "database"), TextSize::from(8)),
+        );
+        assert_eq!(
+            highlights[1].range,
+            TextRange::at(at(source, "provider"), TextSize::from(8)),
+        );
+    }
+
+    #[test]
+    fn highlights_only_the_selected_nested_provider() {
+        let root_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let nested_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let test_source = "def test_example(database): pass\n";
+        let root = SourceDocument::new(
+            Utf8PathBuf::from("/project/conftest.py"),
+            root_source.to_owned(),
+        );
+        let nested = SourceDocument::new(
+            Utf8PathBuf::from("/project/pkg/conftest.py"),
+            nested_source.to_owned(),
+        );
+        let test = SourceDocument::new(
+            Utf8PathBuf::from("/project/pkg/test_example.py"),
+            test_source.to_owned(),
+        );
+        let settings = SourceAnalysisSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test".to_owned(),
+            try_import_fixtures: false,
+        };
+        let analysis =
+            analyze_source_with_parents(test, [root, nested], Utf8Path::new("/project"), &settings)
+                .expect("test source should analyze");
+
+        let highlights = fixture_document_highlights(&analysis, at(test_source, "database"))
+            .expect("nested fixture should highlight");
+        assert_eq!(highlights.len(), 1);
+        assert_eq!(highlights[0].kind, FixtureOccurrenceKind::TestParameter);
+    }
+
+    #[test]
+    fn highlights_inherited_fixture_consumers_without_local_definition() {
+        let root = SourceDocument::new(
+            Utf8PathBuf::from("/project/conftest.py"),
+            "from karva import fixture\n@fixture\ndef database(): pass\n".to_owned(),
+        );
+        let test = SourceDocument::new(
+            Utf8PathBuf::from("/project/test_example.py"),
+            "def test_example(database): pass\n".to_owned(),
+        );
+        let settings = SourceAnalysisSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test".to_owned(),
+            try_import_fixtures: false,
+        };
+        let analysis =
+            analyze_source_with_parents(test, [root], Utf8Path::new("/project"), &settings)
+                .expect("test source should analyze");
+
+        let highlights = fixture_document_highlights(&analysis, TextSize::from(20))
+            .expect("inherited fixture should highlight");
+        assert_eq!(highlights.len(), 1);
+        assert_eq!(highlights[0].kind, FixtureOccurrenceKind::TestParameter);
     }
 
     #[test]

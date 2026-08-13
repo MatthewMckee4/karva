@@ -78,6 +78,7 @@ fn initialization_advertises_document_and_workspace_sync() {
     assert!(capabilities.completion_provider.is_some());
     assert!(capabilities.definition_provider.is_some());
     assert!(capabilities.hover_provider.is_some());
+    assert!(capabilities.document_highlight_provider.is_some());
     assert!(capabilities.references_provider.is_some());
     assert!(matches!(
         capabilities.rename_provider,
