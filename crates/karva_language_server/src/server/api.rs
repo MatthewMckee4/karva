@@ -5,7 +5,8 @@ use lsp_types::{
     CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
     DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
     DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, HoverRequest,
-    LspNotificationMethod, LspRequestMethod, Notification as _, Request as _, ShutdownRequest,
+    LspNotificationMethod, LspRequestMethod, Notification as _, ReferencesRequest, Request as _,
+    ShutdownRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -25,6 +26,7 @@ pub(super) fn request(request: Request) -> Task {
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
         HoverRequest::METHOD => background_request_task::<requests::Hover>(request),
+        ReferencesRequest::METHOD => background_request_task::<requests::References>(request),
         method => Task::immediate(Response::new_err(
             request.id,
             ErrorCode::MethodNotFound as i32,

@@ -5,6 +5,7 @@ mod definition;
 mod fixture;
 mod hover;
 mod occurrences;
+mod references;
 mod source_index;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -17,6 +18,11 @@ pub use definition::{FixtureDefinitionTarget, fixture_definition};
 use fixture::{FixtureDefinition, FixtureResolution};
 pub use fixture::{FixtureId, FixtureScope};
 pub use hover::{FixtureHover, hover_fixture};
+pub use occurrences::{
+    FixtureOccurrence, FixtureOccurrenceKind, fixture_occurrence, fixture_occurrences,
+    fixture_target,
+};
+pub use references::{LocatedFixtureOccurrence, fixture_references};
 pub use source_index::WorkspaceSourceIndex;
 
 /// Owned Python source used as an input to source-only analysis.

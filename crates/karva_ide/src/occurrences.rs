@@ -1,11 +1,3 @@
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "language-server occurrence consumers land in a later stack layer"
-    )
-)]
-
 use ruff_python_ast::{Expr, StmtFunctionDef};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
@@ -13,7 +5,7 @@ use crate::{FixtureId, FixtureResolution, SourceAnalysis};
 
 /// The source construct containing a fixture occurrence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FixtureOccurrenceKind {
+pub enum FixtureOccurrenceKind {
     /// A fixture provider declaration.
     Definition,
 
@@ -29,25 +21,25 @@ enum FixtureOccurrenceKind {
 
 /// A source occurrence resolved to one fixture provider.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct FixtureOccurrence {
+pub struct FixtureOccurrence {
     /// The occurrence's source range.
-    range: TextRange,
+    pub range: TextRange,
 
     /// Range that can be replaced with another fixture name.
     ///
     /// This is `None` when implicit string concatenation prevents a safe
     /// single edit.
-    edit_range: Option<TextRange>,
+    pub edit_range: Option<TextRange>,
 
     /// The kind of source construct containing the occurrence.
-    kind: FixtureOccurrenceKind,
+    pub kind: FixtureOccurrenceKind,
 
     /// The fixture provider selected by static analysis.
-    fixture: FixtureId,
+    pub fixture: FixtureId,
 }
 
 /// Enumerates statically resolved fixture occurrences in the current source.
-fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
+pub fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
     let mut occurrences = Vec::new();
 
     occurrences.extend(
@@ -99,13 +91,29 @@ fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
 }
 
 /// Returns the resolved fixture occurrence containing `offset`, if any.
-fn fixture_occurrence(
+pub fn fixture_occurrence(
     analysis: &SourceAnalysis,
     offset: TextSize,
 ) -> Option<FixtureOccurrence> {
     fixture_occurrences(analysis)
         .into_iter()
         .find(|occurrence| occurrence.range.contains_inclusive(offset))
+}
+
+/// Resolves the fixture symbol under `offset` to its provider identity.
+///
+/// Custom public fixture names remain addressable from both the decorator
+/// string and the provider function name used by definition navigation.
+pub fn fixture_target(analysis: &SourceAnalysis, offset: TextSize) -> Option<FixtureId> {
+    fixture_occurrence(analysis, offset)
+        .map(|occurrence| occurrence.fixture)
+        .or_else(|| {
+            analysis
+                .fixtures
+                .iter()
+                .find(|definition| definition.name_range.contains_inclusive(offset))
+                .map(|definition| definition.id.clone())
+        })
 }
 
 fn resolve_source_fixture(analysis: &SourceAnalysis, name: &str) -> Option<FixtureId> {
@@ -247,6 +255,10 @@ mod tests {
             )
         );
         assert!(fixture_occurrence(&analysis(source), at(source, "provider")).is_none());
+        assert_eq!(
+            fixture_target(&analysis(source), at(source, "provider")).map(|fixture| fixture.path),
+            Some("/project/test_example.py".into())
+        );
     }
 
     #[test]

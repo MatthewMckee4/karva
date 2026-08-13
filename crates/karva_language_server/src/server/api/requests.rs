@@ -7,10 +7,12 @@ use crate::session::client::Client;
 mod completion;
 mod definition;
 mod hover;
+mod references;
 
 pub(super) use completion::Completion;
 pub(super) use definition::Definition;
 pub(super) use hover::Hover;
+pub(super) use references::References;
 
 pub(super) struct Shutdown;
 
