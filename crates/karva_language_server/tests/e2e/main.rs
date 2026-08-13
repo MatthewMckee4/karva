@@ -19,6 +19,7 @@ mod rename;
 
 use std::collections::{HashMap, VecDeque};
 use std::fs;
+use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -38,6 +39,7 @@ use karva_language_server::{ConnectionInitializer, Server};
 // Receipt: the full focused suite's slowest test took 70 ms on 2026-08-13. These tripwires leave
 // more than one order of magnitude for slower CI while still making a stalled server fail quickly.
 const RECEIVE_TIMEOUT: Duration = Duration::from_secs(10);
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Errors reported when no matching server message arrives.
 #[derive(Debug, thiserror::Error)]
@@ -302,6 +304,30 @@ impl TestServer {
         }
     }
 
+    fn assert_no_pending_messages(&self) {
+        assert!(
+            self.responses.is_empty(),
+            "language server left unclaimed responses: {:?}",
+            self.responses.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            self.requests.is_empty(),
+            "language server left unclaimed requests: {:?}",
+            self.requests
+                .iter()
+                .map(|request| request.method.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            self.notifications.is_empty(),
+            "language server left unclaimed notifications: {:?}",
+            self.notifications
+                .iter()
+                .map(|notification| notification.method.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
     pub(crate) fn respond<R: Request>(&self, id: RequestId, result: R::Result) {
         self.send(Message::Response(Response::new_ok(id, result)));
     }
@@ -309,17 +335,62 @@ impl TestServer {
 
 impl Drop for TestServer {
     fn drop(&mut self) {
-        self.request::<ShutdownRequest>(());
-        self.notify::<ExitNotification>(());
-        drop(self.connection.take());
+        if std::thread::panicking() {
+            self.connection.take();
+            return;
+        }
 
-        let result = self
-            .server_thread
-            .take()
-            .expect("server thread should exist")
-            .join()
-            .expect("server thread should not panic");
-        result.expect("server should complete the shutdown sequence");
+        let shutdown_result = if self.server_thread.is_some() {
+            let id = self.send_request::<ShutdownRequest>(());
+            let result = self.try_receive_response(&id, None).map(|_| ());
+            if result.is_ok() {
+                self.notify::<ExitNotification>(());
+            }
+            result
+        } else {
+            Ok(())
+        };
+
+        let server_messages = self.connection.take().map(|connection| {
+            drop(connection.sender);
+            connection.receiver
+        });
+        let Some(server_thread) = self.server_thread.take() else {
+            if let Some(receiver) = server_messages {
+                while let Ok(message) = receiver.try_recv() {
+                    self.queue_message(message);
+                }
+            }
+            self.assert_no_pending_messages();
+            return;
+        };
+        let (join_sender, join_receiver) = mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let result = server_thread.join();
+            let _ = join_sender.send(result);
+        });
+        match join_receiver.recv_timeout(SHUTDOWN_TIMEOUT) {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => panic!("language server shutdown failed: {error}"),
+            Ok(Err(_)) => panic!("language server thread panicked during shutdown"),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                panic!("language server did not shut down within {SHUTDOWN_TIMEOUT:?}")
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("shutdown waiter disconnected before joining server thread")
+            }
+        }
+
+        if let Some(receiver) = server_messages {
+            while let Ok(message) = receiver.try_recv() {
+                self.queue_message(message);
+            }
+        }
+        self.assert_no_pending_messages();
+
+        if let Err(error) = shutdown_result {
+            panic!("language server shutdown request failed: {error:#}");
+        }
     }
 }
 
