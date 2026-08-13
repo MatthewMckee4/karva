@@ -87,9 +87,11 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered
                         "{styled_old} {styled_new} │ {colored_marker}{content}",
                     );
                 } else {
-                    let line_num =
-                        format_line_num(change.new_index().or(change.old_index()), num_width);
-                    let styled_line_num = style.apply_to_line_number(line_num);
+                    let line_num = format_line_num(
+                        change.new_index().or_else(|| change.old_index()),
+                        num_width,
+                    );
+                    let styled_line_num = style.apply_to_line_number(&line_num);
                     let _ = write!(output, "{styled_line_num} │ {colored_marker}{content}");
                 }
 
@@ -230,7 +232,7 @@ impl Style {
     }
 
     /// Style a compact line number to match the change style.
-    fn apply_to_line_number(&self, line_num: String) -> String {
+    fn apply_to_line_number(&self, line_num: &str) -> String {
         match self {
             Self::Delete => line_num.cyan().dimmed().to_string(),
             Self::Insert => line_num.cyan().dimmed().bold().to_string(),
