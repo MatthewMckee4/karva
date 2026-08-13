@@ -125,9 +125,9 @@ fn format_line_num(num: Option<usize>, width: usize) -> String {
 /// Apply color and emphasis to a diff content fragment based on the change style.
 fn style_content(value: &str, style: &Style, emphasized: bool) -> String {
     match (style, emphasized) {
-        (Style::Delete, true) => value.red().underline().to_string(),
+        (Style::Delete, true) => value.red().to_string().underline().to_string(),
         (Style::Delete, false) => value.red().to_string(),
-        (Style::Insert, true) => value.green().underline().to_string(),
+        (Style::Insert, true) => value.green().to_string().underline().to_string(),
         (Style::Insert, false) => value.green().to_string(),
         (Style::Equal, true) => value.to_string(),
         (Style::Equal, false) => value.dimmed().to_string(),
@@ -207,6 +207,15 @@ mod tests {
             2 │ -b
             ");
         });
+    }
+
+    #[test]
+    fn colored_diagnostic_diff() {
+        colored::control::set_override(true);
+        let actual = format_diff("second\n", "changed\n");
+        colored::control::unset_override();
+
+        snapbox::assert_data_eq!(actual, snapbox::file!["snapshots/diff.term.svg": TermSvg],);
     }
 
     #[test]

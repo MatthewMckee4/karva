@@ -23,6 +23,7 @@ terminal_size = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["filters"] }
+snapbox = { workspace = true }
 
 [lints]
 workspace = true

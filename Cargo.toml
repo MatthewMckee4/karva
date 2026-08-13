@@ -76,6 +76,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.150" }
 similar = { version = "3.1", features = ["inline"] }
 siphasher = { version = "1.0.2" }
+snapbox = { version = "1.0.0", features = ["term-svg"] }
 syn = { version = "3.0.3" }
 tempfile = "3.25"
 terminal_size = { version = "0.4" }
