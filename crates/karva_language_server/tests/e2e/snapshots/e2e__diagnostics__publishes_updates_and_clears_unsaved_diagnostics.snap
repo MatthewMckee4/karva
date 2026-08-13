@@ -1,0 +1,38 @@
+---
+source: crates/karva_language_server/tests/e2e/diagnostics.rs
+expression: "workspace.normalize([opened, changed, closed])"
+---
+[
+  {
+    "diagnostics": [
+      {
+        "code": "missing-fixture",
+        "message": "Test `test_example` requires missing fixture `database`",
+        "range": {
+          "end": {
+            "character": 25,
+            "line": 0
+          },
+          "start": {
+            "character": 17,
+            "line": 0
+          }
+        },
+        "relatedInformation": [],
+        "severity": 1,
+        "source": "karva"
+      }
+    ],
+    "uri": "file:///project/test_example.py",
+    "version": 1
+  },
+  {
+    "diagnostics": [],
+    "uri": "file:///project/test_example.py",
+    "version": 2
+  },
+  {
+    "diagnostics": [],
+    "uri": "file:///project/test_example.py"
+  }
+]

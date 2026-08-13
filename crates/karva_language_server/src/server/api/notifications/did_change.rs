@@ -3,8 +3,10 @@ use lsp_types::{
     VersionedTextDocumentIdentifier,
 };
 
+use super::super::diagnostics::publish_diagnostics;
 use super::super::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::session::Session;
+use crate::session::client::Client;
 
 pub(in crate::server::api) struct DidChange;
 
@@ -15,6 +17,7 @@ impl NotificationHandler for DidChange {
 impl SyncNotificationHandler for DidChange {
     fn run(
         session: &mut Session,
+        client: &Client,
         DidChangeTextDocumentParams {
             text_document:
                 VersionedTextDocumentIdentifier {
@@ -25,6 +28,6 @@ impl SyncNotificationHandler for DidChange {
         }: DidChangeTextDocumentParams,
     ) -> anyhow::Result<()> {
         session.update_document(&uri, content_changes, version)?;
-        Ok(())
+        publish_diagnostics(session, client)
     }
 }

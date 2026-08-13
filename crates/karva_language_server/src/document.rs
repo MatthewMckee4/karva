@@ -7,6 +7,11 @@ use lsp_types::PositionEncodingKind;
 
 #[expect(
     clippy::redundant_pub_crate,
+    reason = "server endpoints map source ranges across a private sibling module"
+)]
+pub(super) use range::text_range_to_range;
+#[expect(
+    clippy::redundant_pub_crate,
     reason = "session consumes this error across a private sibling module"
 )]
 pub(super) use text_document::DocumentChangeError;
