@@ -6,6 +6,7 @@ mod fixture;
 mod hover;
 mod occurrences;
 mod references;
+mod rename;
 mod source_index;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -24,6 +25,7 @@ pub use occurrences::{
     fixture_target,
 };
 pub use references::{LocatedFixtureOccurrence, fixture_references};
+pub use rename::prepare_fixture_rename;
 pub use source_index::WorkspaceSourceIndex;
 
 /// Owned Python source used as an input to source-only analysis.
