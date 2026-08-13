@@ -7,12 +7,16 @@ use crate::session::client::Client;
 mod completion;
 mod definition;
 mod hover;
+mod prepare_rename;
 mod references;
+mod rename;
 
 pub(super) use completion::Completion;
 pub(super) use definition::Definition;
 pub(super) use hover::Hover;
+pub(super) use prepare_rename::PrepareRename;
 pub(super) use references::References;
+pub(super) use rename::Rename;
 
 pub(super) struct Shutdown;
 

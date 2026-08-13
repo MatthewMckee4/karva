@@ -1,0 +1,94 @@
+---
+source: crates/karva_language_server/tests/e2e/rename.rs
+expression: "workspace.normalize((prepared, provider_prepared, edit))"
+---
+[
+  {
+    "placeholder": "database",
+    "range": {
+      "end": {
+        "character": 25,
+        "line": 3
+      },
+      "start": {
+        "character": 17,
+        "line": 3
+      }
+    }
+  },
+  {
+    "placeholder": "database",
+    "range": {
+      "end": {
+        "character": 12,
+        "line": 2
+      },
+      "start": {
+        "character": 4,
+        "line": 2
+      }
+    }
+  },
+  {
+    "changes": {
+      "file:///project/conftest.py": [
+        {
+          "newText": "данные",
+          "range": {
+            "end": {
+              "character": 26,
+              "line": 1
+            },
+            "start": {
+              "character": 15,
+              "line": 1
+            }
+          }
+        }
+      ],
+      "file:///project/tests/test_example.py": [
+        {
+          "newText": "данные",
+          "range": {
+            "end": {
+              "character": 37,
+              "line": 2
+            },
+            "start": {
+              "character": 26,
+              "line": 2
+            }
+          }
+        },
+        {
+          "newText": "данные",
+          "range": {
+            "end": {
+              "character": 25,
+              "line": 3
+            },
+            "start": {
+              "character": 17,
+              "line": 3
+            }
+          }
+        }
+      ],
+      "file:///project/tests/test_other.py": [
+        {
+          "newText": "данные",
+          "range": {
+            "end": {
+              "character": 23,
+              "line": 0
+            },
+            "start": {
+              "character": 15,
+              "line": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+]

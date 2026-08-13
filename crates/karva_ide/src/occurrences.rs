@@ -43,6 +43,16 @@ pub struct FixtureOccurrence {
     pub(super) fixture: FixtureId,
 }
 
+/// Fixture selected for rename plus its public-name placeholder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FixtureRenameTarget {
+    /// Resolved fixture selection under the cursor.
+    pub occurrence: FixtureOccurrence,
+
+    /// Public fixture name shown by rename-capable clients.
+    pub placeholder: String,
+}
+
 /// Enumerates statically resolved fixture occurrences in the current source.
 pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
     let mut occurrences = Vec::new();
@@ -119,6 +129,47 @@ pub fn fixture_target(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fix
                 .find(|definition| definition.name_range.contains_inclusive(offset))
                 .map(|definition| definition.id.clone())
         })
+}
+
+/// Resolves a rename selection, including custom fixture provider anchors.
+///
+/// For `@fixture(name="public") def provider`, definition navigation lands on
+/// `provider`. Rename still edits only the public decorator name and its
+/// references, while the placeholder tells the client which name is changing.
+pub fn fixture_rename_target(
+    analysis: &SourceAnalysis,
+    offset: TextSize,
+) -> Option<FixtureRenameTarget> {
+    if let Some(occurrence) = fixture_occurrence(analysis, offset) {
+        let placeholder = fixture_name(analysis, &occurrence.fixture)?;
+        return Some(FixtureRenameTarget {
+            occurrence,
+            placeholder,
+        });
+    }
+
+    let definition = analysis
+        .fixtures
+        .iter()
+        .find(|definition| definition.name_range.contains_inclusive(offset))?;
+    Some(FixtureRenameTarget {
+        occurrence: FixtureOccurrence {
+            range: definition.name_range,
+            edit_range: definition.public_name_edit_range,
+            kind: FixtureOccurrenceKind::Definition,
+            fixture: definition.id.clone(),
+        },
+        placeholder: definition.name.clone(),
+    })
+}
+
+fn fixture_name(analysis: &SourceAnalysis, fixture: &FixtureId) -> Option<String> {
+    analysis
+        .fixtures
+        .iter()
+        .chain(&analysis.visible_fixtures)
+        .find(|definition| &definition.id == fixture)
+        .map(|definition| definition.name.clone())
 }
 
 fn resolve_source_fixture(analysis: &SourceAnalysis, name: &str) -> Option<FixtureId> {
@@ -264,6 +315,15 @@ mod tests {
             fixture_target(&analysis(source), at(source, "provider")).map(|fixture| fixture.path),
             Some("/project/test_example.py".into())
         );
+        let rename = fixture_rename_target(&analysis(source), at(source, "provider"))
+            .expect("custom provider should be a rename target");
+        assert_eq!(rename.placeholder, "данные");
+        assert_eq!(&source[rename.occurrence.range.to_std_range()], "provider");
+        let edit_range = rename
+            .occurrence
+            .edit_range
+            .expect("custom public name should be editable");
+        assert_eq!(&source[edit_range.to_std_range()], "данные");
     }
 
     #[test]

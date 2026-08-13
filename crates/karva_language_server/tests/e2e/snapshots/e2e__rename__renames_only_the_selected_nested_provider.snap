@@ -1,0 +1,38 @@
+---
+source: crates/karva_language_server/tests/e2e/rename.rs
+expression: workspace.normalize(edit)
+---
+{
+  "changes": {
+    "file:///project/tests/pkg/conftest.py": [
+      {
+        "newText": "nested_database",
+        "range": {
+          "end": {
+            "character": 12,
+            "line": 2
+          },
+          "start": {
+            "character": 4,
+            "line": 2
+          }
+        }
+      }
+    ],
+    "file:///project/tests/pkg/test_nested.py": [
+      {
+        "newText": "nested_database",
+        "range": {
+          "end": {
+            "character": 24,
+            "line": 0
+          },
+          "start": {
+            "character": 16,
+            "line": 0
+          }
+        }
+      }
+    ]
+  }
+}
