@@ -1190,7 +1190,6 @@ dependencies = [
  "gen-lsp-types",
  "karva_metadata",
  "karva_project",
- "karva_python_semantic",
  "karva_version",
  "lsp-server",
  "rstest",

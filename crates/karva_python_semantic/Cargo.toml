@@ -10,9 +10,13 @@ repository.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = []
+python-runtime = ["dep:pyo3"]
+
 [dependencies]
 camino = { workspace = true }
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, optional = true }
 ruff_python_ast = { workspace = true }
 serde = { workspace = true }
 
