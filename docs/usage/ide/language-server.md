@@ -13,7 +13,7 @@ executable, place it on `PATH`, and verify the installation:
 
 ```console
 $ karva-language-server --version
-karva 0.0.1-alpha.11
+karva <installed-version>
 ```
 
 Release archives include a `.sha256` file. Verify it before installing the

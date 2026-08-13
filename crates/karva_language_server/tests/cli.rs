@@ -1,43 +1,57 @@
+use insta_cmd::assert_cmd_snapshot;
 use std::process::Command;
 
 fn executable() -> Command {
     Command::new(env!("CARGO_BIN_EXE_karva-language-server"))
 }
 
+fn bind_snapshot_settings() -> insta::internals::SettingsBindDropGuard {
+    let mut settings = insta::Settings::clone_current();
+    settings.add_filter(r"karva \S+", "karva [VERSION]");
+    settings.bind_to_scope()
+}
+
 #[test]
 fn version_is_available_without_starting_lsp_transport() {
-    let output = executable()
-        .arg("--version")
-        .output()
-        .expect("language-server executable should run");
+    let _settings = bind_snapshot_settings();
+    assert_cmd_snapshot!(executable().arg("--version"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    karva [VERSION]
 
-    assert!(output.status.success());
-    assert_eq!(
-        output.stdout,
-        format!("karva {}\n", karva_version::version()).as_bytes()
-    );
-    assert!(output.stderr.is_empty());
+    ----- stderr -----
+    ");
 }
 
 #[test]
 fn help_is_available_without_starting_lsp_transport() {
-    let output = executable()
-        .arg("--help")
-        .output()
-        .expect("language-server executable should run");
+    let _settings = bind_snapshot_settings();
+    assert_cmd_snapshot!(executable().arg("--help"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    Karva language server
 
-    assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("Usage: karva-language-server"));
-    assert!(output.stderr.is_empty());
+    Usage: karva-language-server [OPTIONS]
+
+    Options:
+      -V, --version  Print the server version
+      -h, --help     Print this help message
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
 fn unexpected_arguments_fail_before_starting_lsp_transport() {
-    let output = executable()
-        .arg("--unexpected")
-        .output()
-        .expect("language-server executable should run");
+    let _settings = bind_snapshot_settings();
+    assert_cmd_snapshot!(executable().arg("--unexpected"), @r"
+    success: false
+    exit_code: 1
+    ----- stdout -----
 
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("unexpected argument"));
+    ----- stderr -----
+    Error: unexpected argument `--unexpected`; the language server communicates over stdio
+    ");
 }
