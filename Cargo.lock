@@ -1176,6 +1176,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "crossbeam-channel",
  "gen-lsp-types",
  "karva_metadata",
  "karva_project",
