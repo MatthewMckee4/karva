@@ -146,8 +146,8 @@ where
             if cancellation.is_cancelled() {
                 return;
             }
-            let send_result = if let Some((uri, version)) = document_version {
-                client.respond_versioned(response, uri, version)
+            let send_result = if let Some(version) = document_version {
+                client.respond_versioned(response, version)
             } else {
                 client.respond(response)
             };

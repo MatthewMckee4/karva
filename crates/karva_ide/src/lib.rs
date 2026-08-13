@@ -5,6 +5,7 @@ mod definition;
 mod fixture;
 mod hover;
 mod occurrences;
+mod source_index;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::{CollectedModule, CollectionSettings, collect_source};
@@ -20,6 +21,7 @@ pub use hover::{FixtureHover, hover_fixture};
 pub use occurrences::{
     FixtureOccurrence, FixtureOccurrenceKind, fixture_occurrence, fixture_occurrences,
 };
+pub use source_index::WorkspaceSourceIndex;
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -238,10 +240,18 @@ pub fn analyze_sources(
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
     let parent_modules = parents.iter().collect::<Vec<_>>();
+    analyze_collected_source(current, &parent_modules, settings)
+}
+
+pub(crate) fn analyze_collected_source(
+    current: CollectedModule,
+    parents: &[&CollectedModule],
+    settings: &SourceAnalysisSettings,
+) -> SourceAnalysis {
     let (fixtures, diagnostics) =
-        fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
+        fixture::analyze_modules(&current, parents, settings.try_import_fixtures);
     let visible_fixtures =
-        fixture::visible_fixtures(&current, &parent_modules, settings.try_import_fixtures);
+        fixture::visible_fixtures(&current, parents, settings.try_import_fixtures);
     SourceAnalysis {
         module: current,
         fixtures,

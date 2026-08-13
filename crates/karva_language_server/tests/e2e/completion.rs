@@ -2,12 +2,13 @@ use std::fs;
 
 use insta::assert_json_snapshot;
 use lsp_types::{
-    ClientCapabilities, CompletionParams, CompletionRequest, DidChangeTextDocumentNotification,
-    DidChangeTextDocumentParams, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
-    LanguageKind, PartialResultParams, Position, PublishDiagnosticsNotification,
-    TextDocumentContentChangeEvent, TextDocumentContentChangeWholeDocument, TextDocumentIdentifier,
-    TextDocumentItem, TextDocumentPositionParams, Uri, VersionedTextDocumentIdentifier,
-    WorkDoneProgressParams, WorkspaceFolder,
+    ClientCapabilities, CompletionList, CompletionParams, CompletionRequest, CompletionResponse,
+    DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
+    DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind, PartialResultParams,
+    Position, PublishDiagnosticsNotification, TextDocumentContentChangeEvent,
+    TextDocumentContentChangeWholeDocument, TextDocumentIdentifier, TextDocumentItem,
+    TextDocumentPositionParams, Uri, VersionedTextDocumentIdentifier, WorkDoneProgressParams,
+    WorkspaceFolder,
 };
 use serde_json::Value;
 use tempfile::TempDir;
@@ -209,6 +210,38 @@ fn returns_no_completion_outside_fixture_context() {
         server.request::<CompletionRequest>(completion_params(uri, Position::new(0, 14)));
 
     assert_eq!(response, None);
+}
+
+#[test]
+fn refreshes_disk_sources_without_dynamic_file_watching() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n@fixture\ndef provider_before(): pass\n",
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
+    open(&server, uri.clone(), "def test_example(provider_): pass\n");
+
+    let first =
+        server.request::<CompletionRequest>(completion_params(uri.clone(), Position::new(0, 26)));
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n@fixture\ndef provider_after(): pass\n",
+    );
+    let second = server.request::<CompletionRequest>(completion_params(uri, Position::new(0, 26)));
+
+    assert!(matches!(
+        first,
+        Some(CompletionResponse::CompletionList(CompletionList { items, .. }))
+            if items.iter().any(|item| item.label == "provider_before")
+    ));
+    assert!(matches!(
+        second,
+        Some(CompletionResponse::CompletionList(CompletionList { items, .. }))
+            if items.iter().any(|item| item.label == "provider_after")
+                && items.iter().all(|item| item.label != "provider_before")
+    ));
 }
 
 #[test]
