@@ -3,10 +3,8 @@ use lsp_types::{
     WorkspaceFoldersChangeEvent,
 };
 
-use super::super::diagnostics::publish_diagnostics;
-use super::super::traits::{NotificationHandler, SyncNotificationHandler};
+use super::super::traits::{DiagnosticNotificationHandler, NotificationHandler};
 use crate::session::Session;
-use crate::session::client::Client;
 
 pub struct DidChangeWorkspaceFolders;
 
@@ -14,10 +12,9 @@ impl NotificationHandler for DidChangeWorkspaceFolders {
     type NotificationType = DidChangeWorkspaceFoldersNotification;
 }
 
-impl SyncNotificationHandler for DidChangeWorkspaceFolders {
+impl DiagnosticNotificationHandler for DidChangeWorkspaceFolders {
     fn run(
         session: &mut Session,
-        client: &Client,
         DidChangeWorkspaceFoldersParams {
             event: WorkspaceFoldersChangeEvent { added, removed },
         }: DidChangeWorkspaceFoldersParams,
@@ -28,6 +25,6 @@ impl SyncNotificationHandler for DidChangeWorkspaceFolders {
         for folder in removed {
             session.close_workspace_folder(&folder.uri)?;
         }
-        publish_diagnostics(session, client)
+        Ok(())
     }
 }

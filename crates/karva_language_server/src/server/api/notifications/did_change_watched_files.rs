@@ -1,9 +1,7 @@
 use lsp_types::{DidChangeWatchedFilesNotification, DidChangeWatchedFilesParams};
 
-use super::super::diagnostics::publish_diagnostics;
-use super::super::traits::{NotificationHandler, SyncNotificationHandler};
+use super::super::traits::{DiagnosticNotificationHandler, NotificationHandler};
 use crate::session::Session;
-use crate::session::client::Client;
 
 pub struct DidChangeWatchedFiles;
 
@@ -11,15 +9,14 @@ impl NotificationHandler for DidChangeWatchedFiles {
     type NotificationType = DidChangeWatchedFilesNotification;
 }
 
-impl SyncNotificationHandler for DidChangeWatchedFiles {
+impl DiagnosticNotificationHandler for DidChangeWatchedFiles {
     fn run(
         session: &mut Session,
-        client: &Client,
         DidChangeWatchedFilesParams { changes }: DidChangeWatchedFilesParams,
     ) -> anyhow::Result<()> {
         for change in changes {
             session.configuration_changed(&change.uri)?;
         }
-        publish_diagnostics(session, client)
+        Ok(())
     }
 }

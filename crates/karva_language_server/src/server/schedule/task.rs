@@ -8,6 +8,9 @@ type BackgroundFunctionBuilder = Box<dyn FnOnce(&mut Session) -> BackgroundFunct
 /// Selects worker priority for background work.
 #[derive(Clone, Copy, Debug, Default)]
 pub(in crate::server) enum BackgroundSchedule {
+    /// Run only newest queued task on a dedicated worker.
+    Latest,
+
     /// Run on regular-priority workers.
     #[default]
     Worker,

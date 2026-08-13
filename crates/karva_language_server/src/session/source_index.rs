@@ -26,6 +26,9 @@ pub(super) type SourceIndexCache = Arc<OnceCell<Arc<WorkspaceSourceIndex>>>;
 /// Files included in one immutable source snapshot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum SourceIndexScope {
+    /// Open Python documents and their ancestor configuration modules.
+    OpenDocuments,
+
     /// Sources selected by Karva's configured test roots.
     TestSelection,
 
@@ -114,6 +117,7 @@ impl PreparedSourceIndex {
 
         let mut paths = BTreeSet::new();
         let test_paths = match scope {
+            SourceIndexScope::OpenDocuments => Vec::new(),
             SourceIndexScope::Project => vec![TestPath::new(project_root.as_str())],
             SourceIndexScope::TestSelection if include_paths.is_empty() => {
                 let tests = project_root.join("tests");
@@ -512,6 +516,23 @@ mod tests {
             .build(&RequestCancellationToken::default())
             .expect("build source index")
         }
+
+        fn build_open_documents(
+            &self,
+            open_sources: BTreeMap<Utf8PathBuf, String>,
+        ) -> Arc<WorkspaceSourceIndex> {
+            PreparedSourceIndex::with_cache(
+                self.root.clone(),
+                Vec::new(),
+                open_sources,
+                Self::settings(),
+                true,
+                SourceIndexScope::OpenDocuments,
+                SourceIndexCache::default(),
+            )
+            .build(&RequestCancellationToken::default())
+            .expect("build open-document source index")
+        }
     }
 
     #[test]
@@ -602,6 +623,25 @@ mod tests {
                 .map(|module| module.source_text.as_str()),
             Some("def test_unsaved(): pass\n")
         );
+    }
+
+    #[test]
+    fn open_document_scope_reads_only_open_sources_and_ancestor_conftests() {
+        let fixture = Fixture::new();
+        let conftest = fixture.write(
+            "conftest.py",
+            "from karva import fixture\n@fixture\ndef database(): pass\n",
+        );
+        let open = fixture.write("tests/unit/test_open.py", "def test_open(database): pass\n");
+        let unrelated = fixture.write("tests/test_unrelated.py", "def test_unrelated(): pass\n");
+        let index = fixture.build_open_documents(BTreeMap::from([(
+            open.clone(),
+            "def test_changed(database): pass\n".to_owned(),
+        )]));
+
+        assert!(index.module(&open).is_some());
+        assert!(index.module(&conftest).is_some());
+        assert!(index.module(&unrelated).is_none());
     }
 
     #[test]

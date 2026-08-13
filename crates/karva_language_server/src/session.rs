@@ -6,17 +6,13 @@ mod request_queue;
 mod source_index;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
 use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use karva_ide::{
-    SourceAnalysis, SourceAnalysisSettings, SourceDocument, WorkspaceSourceIndex,
-    analyze_source_with_parents,
-};
+use karva_ide::{SourceAnalysis, SourceAnalysisSettings, SourceDiagnostic, WorkspaceSourceIndex};
 use lsp_types::{LanguageKind, MarkupKind, TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
 
-use crate::workspace::{WorkspaceError, Workspaces, uri_to_path};
+use crate::workspace::{PreparedProjectDiscovery, WorkspaceError, Workspaces, uri_to_path};
 use crate::{PositionEncoding, TextDocument};
 
 use self::index::Index;
@@ -78,14 +74,157 @@ pub struct SourceAnalysisSnapshot {
     pub source_index: Arc<WorkspaceSourceIndex>,
 }
 
-/// Lightweight analysis used by synchronous diagnostics until diagnostic
-/// scheduling moves off the event loop.
-pub struct DiagnosticAnalysisSnapshot {
-    /// Analysis for the current open document.
-    pub analysis: SourceAnalysis,
+/// Owned source analysis captured before diagnostic work runs on a worker.
+#[derive(Debug)]
+pub struct PreparedDiagnostics {
+    documents: Vec<PreparedDiagnosticDocument>,
+    open_sources: BTreeMap<Utf8PathBuf, String>,
+    open_python_paths: HashSet<Utf8PathBuf>,
+    source_index_revision: SourceIndexRevision,
+    cancellation: RequestCancellationToken,
+}
 
-    /// Source text keyed by each analyzed path.
-    pub sources: HashMap<Utf8PathBuf, String>,
+#[derive(Debug)]
+struct PreparedDiagnosticDocument {
+    path: Utf8PathBuf,
+    project: PreparedProjectDiscovery,
+}
+
+impl PreparedDiagnostics {
+    /// Computes diagnostics without reading files or parsing on the event loop.
+    pub fn analyze(self) -> Option<DiagnosticAnalysis> {
+        let Self {
+            documents,
+            open_sources,
+            open_python_paths,
+            source_index_revision,
+            cancellation,
+        } = self;
+        if cancellation.is_cancelled() {
+            return None;
+        }
+        let mut projects = BTreeMap::<Utf8PathBuf, (PreparedSourceIndex, Vec<Utf8PathBuf>)>::new();
+        let mut diagnostics_by_path = BTreeMap::<Utf8PathBuf, Vec<SourceDiagnostic>>::new();
+        let mut errors_by_path = BTreeMap::<Utf8PathBuf, Vec<String>>::new();
+        let mut sources = HashMap::<Utf8PathBuf, String>::new();
+
+        for document in documents {
+            if cancellation.is_cancelled() {
+                return None;
+            }
+            let project = match document.project.discover() {
+                Ok(project) => project,
+                Err(error) => {
+                    errors_by_path
+                        .entry(document.path)
+                        .or_default()
+                        .push(error.to_string());
+                    continue;
+                }
+            };
+            if cancellation.is_cancelled() {
+                return None;
+            }
+            let project_root = project.cwd().clone();
+            let project_sources = open_sources
+                .iter()
+                .filter(|(path, _)| path.starts_with(&project_root))
+                .map(|(path, source)| (path.clone(), source.clone()))
+                .collect();
+            let prepared_index = PreparedSourceIndex::with_cache(
+                project_root.clone(),
+                Vec::new(),
+                project_sources,
+                SourceAnalysisSettings {
+                    python_version: project.metadata().python_version(),
+                    test_function_prefix: project.settings().test().test_function_prefix.clone(),
+                    try_import_fixtures: project.settings().test().try_import_fixtures,
+                },
+                project.settings().src().respect_ignore_files,
+                SourceIndexScope::OpenDocuments,
+                SourceIndexCache::default(),
+            );
+            projects
+                .entry(project_root)
+                .or_insert_with(|| (prepared_index, Vec::new()))
+                .1
+                .push(document.path);
+        }
+
+        for (prepared_index, paths) in projects.into_values() {
+            if cancellation.is_cancelled() {
+                return None;
+            }
+            let index = match prepared_index.build(&cancellation) {
+                Ok(index) => index,
+                Err(error) => {
+                    if cancellation.is_cancelled() {
+                        return None;
+                    }
+                    for path in paths {
+                        errors_by_path
+                            .entry(path)
+                            .or_default()
+                            .push(error.to_string());
+                    }
+                    continue;
+                }
+            };
+            for current_path in paths {
+                if cancellation.is_cancelled() {
+                    return None;
+                }
+                let Some(analysis) = index.analyze(&current_path) else {
+                    continue;
+                };
+                if cancellation.is_cancelled() {
+                    return None;
+                }
+                for diagnostic in analysis.diagnostics {
+                    if cancellation.is_cancelled() {
+                        return None;
+                    }
+                    let source_paths = std::iter::once(&diagnostic.location.path).chain(
+                        diagnostic
+                            .related
+                            .iter()
+                            .map(|related| &related.location.path),
+                    );
+                    for path in source_paths {
+                        if let Some(module) = index.module(path) {
+                            sources
+                                .entry(path.clone())
+                                .or_insert_with(|| module.source_text.clone());
+                        }
+                    }
+                    diagnostics_by_path
+                        .entry(diagnostic.location.path.clone())
+                        .or_default()
+                        .push(diagnostic);
+                }
+            }
+        }
+
+        Some(DiagnosticAnalysis {
+            open_python_paths,
+            diagnostics_by_path,
+            errors_by_path,
+            sources,
+            source_index_revision,
+            cancellation,
+        })
+    }
+}
+
+/// Raw diagnostic analysis awaiting background protocol conversion.
+#[derive(Debug)]
+pub struct DiagnosticAnalysis {
+    pub(crate) open_python_paths: HashSet<Utf8PathBuf>,
+    pub(crate) diagnostics_by_path: BTreeMap<Utf8PathBuf, Vec<SourceDiagnostic>>,
+    pub(crate) errors_by_path: BTreeMap<Utf8PathBuf, Vec<String>>,
+    pub(crate) sources: HashMap<Utf8PathBuf, String>,
+    pub(crate) source_index_revision: SourceIndexRevision,
+    pub(crate) cancellation: RequestCancellationToken,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -158,6 +297,7 @@ pub struct Session {
     cache_source_indexes: bool,
     source_indexes: HashMap<(Utf8PathBuf, SourceIndexScope), SourceIndexCache>,
     source_index_revision: SourceIndexRevision,
+    diagnostic_cancellation: RequestCancellationToken,
 }
 
 impl Session {
@@ -185,6 +325,7 @@ impl Session {
             cache_source_indexes: false,
             source_indexes: HashMap::new(),
             source_index_revision: SourceIndexRevision::default(),
+            diagnostic_cancellation: RequestCancellationToken::default(),
         }
     }
 
@@ -194,6 +335,7 @@ impl Session {
 
     pub fn request_shutdown(&mut self) {
         self.shutdown_requested = true;
+        self.diagnostic_cancellation.cancel();
     }
 
     pub fn request_queue_mut(&mut self) -> &mut RequestQueue {
@@ -234,74 +376,38 @@ impl Session {
         std::mem::replace(&mut self.published_diagnostic_paths, paths)
     }
 
-    /// Analyzes one open document against ancestor fixture providers without
-    /// walking unrelated workspace files.
-    pub fn analyze_open_document_for_diagnostics(
-        &mut self,
-        uri: &Uri,
-    ) -> Result<Option<DiagnosticAnalysisSnapshot>, SessionError> {
-        let document = self
-            .index
-            .document(uri)
-            .cloned()
-            .ok_or_else(|| SessionError::DocumentNotOpen(uri.clone()))?;
-        if document.language_id() != &LanguageKind::Python {
-            return Ok(None);
-        }
-
-        let path = uri_to_path(uri)?;
-        let project = self.workspaces.project_for_uri(uri)?;
-        let project_root = project.cwd().clone();
-        let settings = SourceAnalysisSettings {
-            python_version: project.metadata().python_version(),
-            test_function_prefix: project.settings().test().test_function_prefix.clone(),
-            try_import_fixtures: project.settings().test().try_import_fixtures,
-        };
-        let current = SourceDocument::new(path.clone(), document.contents().to_owned());
-        let parent_directory = path
-            .parent()
-            .ok_or_else(|| WorkspaceError::MissingParent(path.clone()))?;
-        let mut directories = parent_directory
-            .ancestors()
-            .filter(|directory| directory.starts_with(&project_root))
-            .collect::<Vec<_>>();
-        directories.reverse();
-        let parent_paths = directories
-            .into_iter()
-            .map(|directory| directory.join("conftest.py"))
-            .filter(|conftest_path| conftest_path != &path);
-        let open_sources = self
-            .index
-            .documents()
-            .filter_map(|open_document| {
-                uri_to_path(open_document.uri())
-                    .ok()
-                    .map(|open_path| (open_path, open_document.contents().to_owned()))
-            })
-            .collect::<HashMap<_, _>>();
-        let mut sources = HashMap::from([(path.clone(), document.contents().to_owned())]);
-        let mut parents = Vec::new();
-        for parent_path in parent_paths {
-            let source_text = if let Some(source_text) = open_sources.get(&parent_path) {
-                source_text.clone()
-            } else {
-                if !parent_path.is_file() {
-                    continue;
-                }
-                fs::read_to_string(&parent_path).map_err(|source| SourceIndexError::ReadSource {
-                    path: parent_path.clone(),
-                    source,
-                })?
+    /// Captures all open Python documents for one latest-only diagnostic job.
+    pub fn prepare_diagnostics(&mut self) -> PreparedDiagnostics {
+        self.diagnostic_cancellation.cancel();
+        let cancellation = RequestCancellationToken::default();
+        self.diagnostic_cancellation = cancellation.clone();
+        let mut documents = Vec::new();
+        let mut open_sources = BTreeMap::new();
+        let mut open_python_paths = HashSet::new();
+        let uris = self.open_document_uris().cloned().collect::<Vec<_>>();
+        for uri in uris {
+            let Some(document) = self.document(&uri) else {
+                continue;
             };
-            sources.insert(parent_path.clone(), source_text.clone());
-            parents.push(SourceDocument::new(parent_path, source_text));
+            if document.language_id() != &LanguageKind::Python {
+                continue;
+            }
+            let Ok(path) = uri_to_path(&uri) else {
+                continue;
+            };
+            open_python_paths.insert(path.clone());
+            open_sources.insert(path.clone(), document.contents().to_owned());
+            if let Ok(project) = self.workspaces.prepare_project_discovery(&uri) {
+                documents.push(PreparedDiagnosticDocument { path, project });
+            }
         }
-        let Some(analysis) =
-            analyze_source_with_parents(current, parents, &project_root, &settings)
-        else {
-            return Ok(None);
-        };
-        Ok(Some(DiagnosticAnalysisSnapshot { analysis, sources }))
+        PreparedDiagnostics {
+            documents,
+            open_sources,
+            open_python_paths,
+            source_index_revision: self.source_index_revision.clone(),
+            cancellation,
+        }
     }
 
     pub fn open_document(&mut self, document: TextDocument) {
@@ -452,5 +558,73 @@ impl Session {
     fn invalidate_source_indexes(&mut self) {
         self.source_indexes.clear();
         self.source_index_revision = SourceIndexRevision::default();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ruff_python_ast::PythonVersion;
+
+    use super::Session;
+    use crate::workspace::Workspaces;
+    use crate::{PositionEncoding, TextDocument};
+
+    #[test]
+    fn shutdown_cancels_prepared_diagnostics() -> anyhow::Result<()> {
+        let mut session = Session::new(
+            PositionEncoding::UTF16,
+            lsp_types::MarkupKind::PlainText,
+            false,
+            false,
+            Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
+        );
+        let diagnostics = session.prepare_diagnostics();
+
+        session.request_shutdown();
+
+        assert!(diagnostics.cancellation.is_cancelled());
+        assert!(diagnostics.analyze().is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn newer_diagnostics_cancel_and_stale_the_previous_generation() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        std::fs::create_dir(temporary.path().join(".git"))?;
+        let uri = lsp_types::Uri::from_file_path(temporary.path().join("test_example.py"))
+            .map_err(|()| anyhow::anyhow!("temporary document path should produce a URI"))?;
+        let mut session = Session::new(
+            PositionEncoding::UTF16,
+            lsp_types::MarkupKind::PlainText,
+            false,
+            false,
+            Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
+        );
+        session.open_document(TextDocument::new(
+            uri.clone(),
+            "def test_example(missing): pass\n".to_owned(),
+            1,
+            lsp_types::LanguageKind::Python,
+        ));
+        let previous = session.prepare_diagnostics();
+        let previous_revision = previous.source_index_revision.clone();
+
+        session.update_document(
+            &uri,
+            vec![
+                lsp_types::TextDocumentContentChangeEvent::TextDocumentContentChangeWholeDocument(
+                    lsp_types::TextDocumentContentChangeWholeDocument {
+                        text: "def test_example(): pass\n".to_owned(),
+                    },
+                ),
+            ],
+            2,
+        )?;
+        let current = session.prepare_diagnostics();
+
+        assert!(previous.cancellation.is_cancelled());
+        assert!(!session.is_source_index_revision_current(&previous_revision));
+        assert!(!current.cancellation.is_cancelled());
+        Ok(())
     }
 }

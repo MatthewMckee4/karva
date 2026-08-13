@@ -11,57 +11,36 @@ use lsp_types::{
 use ruff_source_file::LineIndex;
 
 use crate::document::text_range_to_range;
-use crate::session::Session;
 use crate::session::client::Client;
-use crate::workspace::uri_to_path;
+use crate::session::{DiagnosticAnalysis, PreparedDiagnostics, Session, SourceIndexRevision};
 
-/// Reanalyzes every open Python document and replaces all diagnostics previously
-/// published by Karva.
-pub(super) fn publish_diagnostics(session: &mut Session, client: &Client) -> anyhow::Result<()> {
-    let document_uris = session.open_document_uris().cloned().collect::<Vec<_>>();
-    let mut diagnostics_by_path = BTreeMap::<Utf8PathBuf, Vec<SourceDiagnostic>>::new();
-    let mut errors_by_path = BTreeMap::<Utf8PathBuf, Vec<String>>::new();
-    let mut open_python_paths = HashSet::new();
-    let mut sources = HashMap::<Utf8PathBuf, String>::new();
+/// Fully converted diagnostics awaiting stale-result validation on the event loop.
+#[derive(Debug)]
+pub struct DiagnosticPublication {
+    current_paths: HashSet<Utf8PathBuf>,
+    diagnostics_by_path: BTreeMap<Utf8PathBuf, Vec<Diagnostic>>,
+    pub(crate) source_index_revision: SourceIndexRevision,
+}
 
-    for uri in document_uris {
-        let Some(document) = session.document(&uri) else {
-            continue;
-        };
-        if document.language_id() != &lsp_types::LanguageKind::Python {
-            continue;
-        }
-
-        let path = match uri_to_path(&uri) {
-            Ok(path) => path,
-            Err(error) => {
-                tracing::warn!(%error, "cannot publish diagnostics for document");
-                continue;
-            }
-        };
-        open_python_paths.insert(path.clone());
-
-        match session.analyze_open_document_for_diagnostics(&uri) {
-            Ok(Some(snapshot)) => {
-                sources.extend(snapshot.sources);
-                for diagnostic in snapshot.analysis.diagnostics {
-                    diagnostics_by_path
-                        .entry(diagnostic.location.path.clone())
-                        .or_default()
-                        .push(diagnostic);
-                }
-            }
-            Ok(None) => {}
-            Err(error) => {
-                errors_by_path
-                    .entry(path)
-                    .or_default()
-                    .push(error.to_string());
-            }
-        }
-    }
+/// Reads, analyzes, sorts, and converts diagnostics on the latest-only worker.
+pub(super) fn compute_diagnostics(
+    prepared: PreparedDiagnostics,
+    position_encoding: crate::PositionEncoding,
+    supports_related_information: bool,
+) -> Option<DiagnosticPublication> {
+    let DiagnosticAnalysis {
+        open_python_paths,
+        mut diagnostics_by_path,
+        mut errors_by_path,
+        sources,
+        source_index_revision,
+        cancellation,
+    } = prepared.analyze()?;
 
     for diagnostics in diagnostics_by_path.values_mut() {
+        if cancellation.is_cancelled() {
+            return None;
+        }
         diagnostics.sort_by(|left, right| {
             left.location
                 .range
@@ -74,9 +53,62 @@ pub(super) fn publish_diagnostics(session: &mut Session, client: &Client) -> any
         diagnostics.dedup();
     }
 
+    let mut line_indexes = HashMap::new();
+    for (path, source) in &sources {
+        if cancellation.is_cancelled() {
+            return None;
+        }
+        line_indexes.insert(path.clone(), LineIndex::from_source_text(source));
+    }
+    let mut converted = BTreeMap::new();
+    for (path, diagnostics) in diagnostics_by_path {
+        if cancellation.is_cancelled() {
+            return None;
+        }
+        let mut lsp_diagnostics = Vec::with_capacity(diagnostics.len());
+        for diagnostic in diagnostics {
+            if cancellation.is_cancelled() {
+                return None;
+            }
+            if let Some(diagnostic) = source_diagnostic_to_lsp(
+                diagnostic,
+                &sources,
+                &line_indexes,
+                position_encoding,
+                supports_related_information,
+            ) {
+                lsp_diagnostics.push(diagnostic);
+            }
+        }
+        converted.insert(path, lsp_diagnostics);
+    }
+    for (path, errors) in &mut errors_by_path {
+        converted
+            .entry(path.clone())
+            .or_insert_with(Vec::new)
+            .extend(errors.drain(..).map(configuration_diagnostic));
+    }
+
     let mut current_paths = open_python_paths;
-    current_paths.extend(diagnostics_by_path.keys().cloned());
-    current_paths.extend(errors_by_path.keys().cloned());
+    current_paths.extend(converted.keys().cloned());
+    Some(DiagnosticPublication {
+        current_paths,
+        diagnostics_by_path: converted,
+        source_index_revision,
+    })
+}
+
+/// Publishes completed diagnostics after the main loop validates their revision.
+pub(in crate::server) fn publish_diagnostics(
+    session: &mut Session,
+    client: &Client,
+    publication: DiagnosticPublication,
+) -> anyhow::Result<()> {
+    let DiagnosticPublication {
+        current_paths,
+        mut diagnostics_by_path,
+        source_index_revision: _,
+    } = publication;
     let previous_paths = session.replace_published_diagnostic_paths(current_paths.clone());
     let mut paths_to_publish = current_paths;
     paths_to_publish.extend(previous_paths);
@@ -89,26 +121,7 @@ pub(super) fn publish_diagnostics(session: &mut Session, client: &Client) -> any
             continue;
         };
         let version = session.document(&uri).map(crate::TextDocument::version);
-        let diagnostics = diagnostics_by_path
-            .remove(&path)
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|diagnostic| {
-                source_diagnostic_to_lsp(
-                    session,
-                    diagnostic,
-                    &sources,
-                    session.supports_diagnostic_related_information(),
-                )
-            })
-            .chain(
-                errors_by_path
-                    .remove(&path)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(configuration_diagnostic),
-            )
-            .collect();
+        let diagnostics = diagnostics_by_path.remove(&path).unwrap_or_default();
 
         client.send_notification::<PublishDiagnosticsNotification>(
             PublishDiagnosticsParams::new(uri, version, diagnostics),
@@ -119,28 +132,29 @@ pub(super) fn publish_diagnostics(session: &mut Session, client: &Client) -> any
 }
 
 fn source_diagnostic_to_lsp(
-    session: &Session,
     diagnostic: SourceDiagnostic,
     sources: &HashMap<Utf8PathBuf, String>,
+    line_indexes: &HashMap<Utf8PathBuf, LineIndex>,
+    position_encoding: crate::PositionEncoding,
     supports_related_information: bool,
 ) -> Option<Diagnostic> {
-    let source_text = sources.get(&diagnostic.location.path)?;
     let range = source_location_to_range(
         &diagnostic.location,
-        source_text,
-        session.position_encoding(),
+        sources,
+        line_indexes,
+        position_encoding,
     )?;
     let related_information = supports_related_information.then(|| {
         diagnostic
             .related
             .into_iter()
             .filter_map(|related| {
-                let source_text = sources.get(&related.location.path)?;
-                let uri = path_to_uri(session, &related.location.path)?;
+                let uri = Uri::from_file_path(related.location.path.as_std_path()).ok()?;
                 let range = source_location_to_range(
                     &related.location,
-                    source_text,
-                    session.position_encoding(),
+                    sources,
+                    line_indexes,
+                    position_encoding,
                 )?;
                 Some(DiagnosticRelatedInformation::new(
                     Location::new(uri, range),
@@ -165,11 +179,13 @@ fn source_diagnostic_to_lsp(
 
 fn source_location_to_range(
     location: &SourceLocation,
-    source_text: &str,
+    sources: &HashMap<Utf8PathBuf, String>,
+    line_indexes: &HashMap<Utf8PathBuf, LineIndex>,
     encoding: crate::PositionEncoding,
 ) -> Option<Range> {
-    let index = LineIndex::from_source_text(source_text);
-    text_range_to_range(location.range, source_text, &index, encoding)
+    let source_text = sources.get(&location.path)?;
+    let line_index = line_indexes.get(&location.path)?;
+    text_range_to_range(location.range, source_text, line_index, encoding)
 }
 
 fn configuration_diagnostic(message: String) -> Diagnostic {

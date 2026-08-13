@@ -1,10 +1,8 @@
 use lsp_types::{DidOpenTextDocumentNotification, DidOpenTextDocumentParams, TextDocumentItem};
 
-use super::super::diagnostics::publish_diagnostics;
-use super::super::traits::{NotificationHandler, SyncNotificationHandler};
+use super::super::traits::{DiagnosticNotificationHandler, NotificationHandler};
 use crate::TextDocument;
 use crate::session::Session;
-use crate::session::client::Client;
 
 pub struct DidOpen;
 
@@ -12,10 +10,9 @@ impl NotificationHandler for DidOpen {
     type NotificationType = DidOpenTextDocumentNotification;
 }
 
-impl SyncNotificationHandler for DidOpen {
+impl DiagnosticNotificationHandler for DidOpen {
     fn run(
         session: &mut Session,
-        client: &Client,
         DidOpenTextDocumentParams {
             text_document:
                 TextDocumentItem {
@@ -28,6 +25,6 @@ impl SyncNotificationHandler for DidOpen {
     ) -> anyhow::Result<()> {
         let document = TextDocument::new(uri, text, version, language_id);
         session.open_document(document);
-        publish_diagnostics(session, client)
+        Ok(())
     }
 }
