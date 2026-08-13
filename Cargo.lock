@@ -1175,13 +1175,21 @@ name = "karva_language_server"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "camino",
+ "crossbeam-channel",
  "gen-lsp-types",
+ "karva_metadata",
+ "karva_project",
+ "karva_python_semantic",
  "karva_version",
  "lsp-server",
  "rstest",
+ "ruff_python_ast",
  "ruff_source_file",
  "ruff_text_size",
+ "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

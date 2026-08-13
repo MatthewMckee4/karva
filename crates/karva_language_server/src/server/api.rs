@@ -1,8 +1,9 @@
 use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
-    DidChangeTextDocumentNotification, DidChangeWorkspaceFoldersNotification,
-    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, LspNotificationMethod,
-    LspRequestMethod, Notification as _, Request as _, ShutdownRequest,
+    DidChangeTextDocumentNotification, DidChangeWatchedFilesNotification,
+    DidChangeWorkspaceFoldersNotification, DidCloseTextDocumentNotification,
+    DidOpenTextDocumentNotification, LspNotificationMethod, LspRequestMethod, Notification as _,
+    Request as _, ShutdownRequest,
 };
 
 use crate::session::Session;
@@ -37,6 +38,9 @@ pub(super) fn notification(notification: Notification, session: &mut Session) {
         }
         DidChangeWorkspaceFoldersNotification::METHOD => {
             run_notification::<notifications::DidChangeWorkspaceFolders>(notification, session)
+        }
+        DidChangeWatchedFilesNotification::METHOD => {
+            run_notification::<notifications::DidChangeWatchedFiles>(notification, session)
         }
         method => {
             tracing::debug!("ignoring unsupported notification {method}");

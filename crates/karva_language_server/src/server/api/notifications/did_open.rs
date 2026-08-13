@@ -23,7 +23,11 @@ impl SyncNotificationHandler for DidOpen {
                 },
         }: DidOpenTextDocumentParams,
     ) -> anyhow::Result<()> {
-        session.open_document(TextDocument::new(uri, text, version, language_id));
+        let document = TextDocument::new(uri, text, version, language_id);
+        if let Err(error) = session.project_for_uri(document.uri()) {
+            tracing::warn!("failed to resolve Karva project: {error}");
+        }
+        session.open_document(document);
         Ok(())
     }
 }
