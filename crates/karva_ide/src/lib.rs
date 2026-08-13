@@ -2,6 +2,7 @@
 
 mod completion;
 mod fixture;
+mod hover;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::{CollectedModule, CollectionSettings, collect_source};
@@ -9,8 +10,10 @@ use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextRange;
 
 pub use completion::{FixtureCompletion, complete_fixtures};
+pub use fixture::{FixtureId, FixtureScope};
+pub use hover::{FixtureHover, hover_fixture};
 
-use fixture::{FixtureDefinition, FixtureId, FixtureScope};
+use fixture::{FixtureDefinition, FixtureResolution};
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,13 +127,6 @@ pub struct SourceDiagnostic {
 
 /// Parsed source plus Karva-specific semantic facts.
 #[derive(Debug)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "completion and navigation consumers land in later stack layers"
-    )
-)]
 pub struct SourceAnalysis {
     /// Collector output retained for later editor features.
     module: CollectedModule,

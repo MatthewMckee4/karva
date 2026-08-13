@@ -4,7 +4,7 @@
 )]
 
 use lsp_types::{
-    ClientCapabilities, CompletionOptions, ServerCapabilities, TextDocumentSyncKind,
+    ClientCapabilities, CompletionOptions, MarkupKind, ServerCapabilities, TextDocumentSyncKind,
     TextDocumentSyncOptions, WorkspaceFoldersServerCapabilities,
 };
 
@@ -23,6 +23,17 @@ pub(super) fn position_encoding(capabilities: &ClientCapabilities) -> PositionEn
                 .max()
         })
         .unwrap_or_default()
+}
+
+/// Chooses the client's preferred hover representation.
+pub(super) fn hover_markup_kind(capabilities: &ClientCapabilities) -> MarkupKind {
+    capabilities
+        .text_document
+        .as_ref()
+        .and_then(|text_document| text_document.hover.as_ref())
+        .and_then(|hover| hover.content_format.as_ref())
+        .and_then(|formats| formats.first().copied())
+        .unwrap_or(MarkupKind::PlainText)
 }
 
 /// Returns whether the client accepts secondary diagnostic locations.
@@ -53,6 +64,7 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
             .into(),
         ),
         completion_provider: Some(CompletionOptions::default()),
+        hover_provider: Some(true.into()),
         workspace: Some(lsp_types::WorkspaceOptions {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                 supported: Some(true),
@@ -68,7 +80,8 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
 mod tests {
     use lsp_types::{
         ClientCapabilities, DiagnosticsCapabilities, GeneralClientCapabilities,
-        PositionEncodingKind, PublishDiagnosticsClientCapabilities, TextDocumentClientCapabilities,
+        HoverClientCapabilities, PositionEncodingKind, PublishDiagnosticsClientCapabilities,
+        TextDocumentClientCapabilities,
     };
 
     use super::*;
@@ -117,5 +130,25 @@ mod tests {
         assert!(!supports_diagnostic_related_information(
             &ClientCapabilities::default()
         ));
+    }
+
+    #[test]
+    fn chooses_preferred_hover_markup() {
+        let capabilities = ClientCapabilities {
+            text_document: Some(TextDocumentClientCapabilities {
+                hover: Some(HoverClientCapabilities {
+                    content_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                    ..HoverClientCapabilities::default()
+                }),
+                ..TextDocumentClientCapabilities::default()
+            }),
+            ..ClientCapabilities::default()
+        };
+
+        assert_eq!(hover_markup_kind(&capabilities), MarkupKind::Markdown);
+        assert_eq!(
+            hover_markup_kind(&ClientCapabilities::default()),
+            MarkupKind::PlainText
+        );
     }
 }

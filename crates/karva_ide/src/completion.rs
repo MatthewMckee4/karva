@@ -139,7 +139,7 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
             let Expr::Call(call) = &decorator.expression else {
                 continue;
             };
-            if !is_use_fixtures_reference(&call.func) {
+            if !crate::fixture::is_use_fixtures_reference(&analysis.module, &call.func) {
                 continue;
             }
             for argument in &call.arguments.args {
@@ -157,27 +157,6 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
         }
     }
     None
-}
-
-fn is_use_fixtures_reference(expression: &Expr) -> bool {
-    let Expr::Attribute(attribute) = expression else {
-        return false;
-    };
-    match attribute.attr.as_str() {
-        "use_fixtures" => matches!(
-            attribute.value.as_ref(),
-            Expr::Attribute(namespace)
-                if namespace.attr.as_str() == "tags"
-                    && matches!(namespace.value.as_ref(), Expr::Name(name) if name.id == "karva")
-        ),
-        "usefixtures" => matches!(
-            attribute.value.as_ref(),
-            Expr::Attribute(namespace)
-                if namespace.attr.as_str() == "mark"
-                    && matches!(namespace.value.as_ref(), Expr::Name(name) if name.id == "pytest")
-        ),
-        _ => false,
-    }
 }
 
 fn string_interior(source: &str, range: TextRange) -> Option<TextRange> {
@@ -413,6 +392,20 @@ mod tests {
         let source = "def helper(dat): pass\n";
         assert!(
             complete_fixtures(&analysis(source), at(source, "dat") + TextSize::from(2)).is_none()
+        );
+    }
+
+    #[test]
+    fn shadowed_pytest_name_is_not_a_usefixtures_context() {
+        let source = "import other as pytest\nfrom karva import fixture\n\n@fixture\ndef database(): pass\n\n@pytest.mark.usefixtures(\"dat\")\ndef test_example(): pass\n";
+        let marker = source.find("\"dat\"").expect("decorator argument") + 1;
+
+        assert!(
+            complete_fixtures(
+                &analysis(source),
+                size(marker).expect("source fits") + TextSize::from(2)
+            )
+            .is_none()
         );
     }
 }
