@@ -59,22 +59,14 @@ fn render(
         color,
     );
     for diagnostic in diagnostic.sub_diagnostics() {
-        let message = render_message(
+        rendered.push_str(&render_message(
             diagnostic.severity(),
             None,
             diagnostic.message(),
             diagnostic.annotations(),
             cwd,
             color,
-        );
-        if diagnostic.indentation() == 0 {
-            rendered.push_str(&message);
-        } else {
-            for line in message.split_inclusive('\n') {
-                rendered.push_str(&" ".repeat(diagnostic.indentation()));
-                rendered.push_str(line);
-            }
-        }
+        ));
         if let Some(body) = diagnostic.body_text() {
             rendered.push_str(body);
             if !body.ends_with('\n') {

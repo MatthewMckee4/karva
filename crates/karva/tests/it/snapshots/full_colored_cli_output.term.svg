@@ -1,9 +1,10 @@
-<svg width="902px" height="1388px" xmlns="http://www.w3.org/2000/svg">
+<svg width="827px" height="1442px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { fill: #000000 }
     .fg-blue { fill: #0000AA }
     .fg-bright-blue { fill: #5555FF }
+    .fg-bright-green { fill: #55FF55 }
     .fg-bright-red { fill: #FF5555 }
     .fg-cyan { fill: #00AAAA }
     .fg-green { fill: #00AA00 }
@@ -14,8 +15,6 @@
       line-height: 18px;
     }
     .bold { font-weight: bold; }
-    .underline { text-decoration-line: underline; }
-    .dimmed { opacity: 0.4; }
     tspan {
       font: 14px SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
       white-space: pre;
@@ -68,11 +67,11 @@
 </tspan>
     <tspan x="10px" y="388px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Test ran with arguments:</tspan>
 </tspan>
-    <tspan x="10px" y="406px"><tspan>  </tspan><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: `third`: `3`</tspan>
+    <tspan x="10px" y="406px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">:   `third`: `3`</tspan>
 </tspan>
-    <tspan x="10px" y="424px"><tspan>  </tspan><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: `second`: `2`</tspan>
+    <tspan x="10px" y="424px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">:   `second`: `2`</tspan>
 </tspan>
-    <tspan x="10px" y="442px"><tspan>  </tspan><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: `first`: `1`</tspan>
+    <tspan x="10px" y="442px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">:   `first`: `1`</tspan>
 </tspan>
     <tspan x="10px" y="460px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Test failed here</tspan>
 </tspan>
@@ -158,25 +157,31 @@
 </tspan>
     <tspan x="10px" y="1198px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-blue bold">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="1216px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Snapshot mismatch for 'test_snapshot_failure' in snapshots/test_output__test_snapshot_failure.snap:</tspan>
+    <tspan x="10px" y="1216px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Snapshot mismatch for 'test_snapshot_failure'.</tspan>
 </tspan>
-    <tspan x="10px" y="1234px"><tspan class="fg-cyan dimmed">1</tspan><tspan> │ </tspan><tspan class="fg-red">-</tspan><tspan class="fg-red underline">original</tspan>
+    <tspan x="10px" y="1234px"><tspan> </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>snapshots/test_output__test_snapshot_failure.snap:4:1</tspan>
 </tspan>
-    <tspan x="10px" y="1252px"><tspan class="fg-cyan bold dimmed">1</tspan><tspan> │ </tspan><tspan class="fg-green">+</tspan><tspan class="fg-green underline">changed</tspan>
+    <tspan x="10px" y="1252px"><tspan>  </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="1270px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.</tspan>
+    <tspan x="10px" y="1270px"><tspan class="fg-bright-blue bold">4</tspan><tspan> </tspan><tspan class="fg-bright-red">- original</tspan>
 </tspan>
-    <tspan x="10px" y="1288px">
+    <tspan x="10px" y="1288px"><tspan class="fg-bright-blue bold">4</tspan><tspan> </tspan><tspan class="fg-bright-green">+ changed</tspan>
 </tspan>
-    <tspan x="10px" y="1306px"><tspan>────────────</tspan>
+    <tspan x="10px" y="1306px"><tspan>  </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="1324px"><tspan class="fg-red bold">     Summary</tspan><tspan> [TIME] 6 tests run: </tspan><tspan class="fg-green bold">1 passed</tspan><tspan>, </tspan><tspan class="fg-red bold">3 failed</tspan><tspan>, </tspan><tspan class="fg-red bold">1 error</tspan><tspan>, </tspan><tspan class="fg-yellow bold">1 skipped</tspan>
+    <tspan x="10px" y="1324px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.</tspan>
 </tspan>
     <tspan x="10px" y="1342px">
 </tspan>
-    <tspan x="10px" y="1360px"><tspan>----- stderr -----</tspan>
+    <tspan x="10px" y="1360px"><tspan>────────────</tspan>
 </tspan>
-    <tspan x="10px" y="1378px">
+    <tspan x="10px" y="1378px"><tspan class="fg-red bold">     Summary</tspan><tspan> [TIME] 6 tests run: </tspan><tspan class="fg-green bold">1 passed</tspan><tspan>, </tspan><tspan class="fg-red bold">3 failed</tspan><tspan>, </tspan><tspan class="fg-red bold">1 error</tspan><tspan>, </tspan><tspan class="fg-yellow bold">1 skipped</tspan>
+</tspan>
+    <tspan x="10px" y="1396px">
+</tspan>
+    <tspan x="10px" y="1414px"><tspan>----- stderr -----</tspan>
+</tspan>
+    <tspan x="10px" y="1432px">
 </tspan>
   </text>
 

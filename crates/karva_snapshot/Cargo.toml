@@ -12,6 +12,7 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+annotate-snippets = { workspace = true }
 camino = { workspace = true }
 colored = { workspace = true }
 console = { workspace = true }

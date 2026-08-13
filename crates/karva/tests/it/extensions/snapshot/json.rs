@@ -455,11 +455,12 @@ def test_json():
       |
     5 |     karva.assert_json_snapshot({"key": "changed"})
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Snapshot mismatch for 'test_json' in snapshots/test__test_json.snap:
-    1 │  {
-    2 │ -  "key": "original"
-    2 │ +  "key": "changed"
-    3 │  }
+    info: Snapshot mismatch for 'test_json'.
+     --> snapshots/test__test_json.snap:5:11
+      |
+    5 -   "key": "original"
+    5 +   "key": "changed"
+      |
     info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
 
     ────────────

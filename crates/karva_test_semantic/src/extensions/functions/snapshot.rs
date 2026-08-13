@@ -5,7 +5,7 @@ use std::process;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_snapshot::cmd::{CommandOutput, format_cmd_output};
-use karva_snapshot::diff::format_diff;
+use karva_snapshot::diff::{format_diff, format_diff_with_path};
 use karva_snapshot::filters::{SnapshotFilter, apply_filters};
 use karva_snapshot::format::{SnapshotFile, SnapshotMetadata};
 use karva_snapshot::storage::{
@@ -458,10 +458,10 @@ fn assert_snapshot_impl(
             SnapshotMismatchError::new_err(format!("Failed to write pending snapshot: {e}"))
         })?;
 
-        let diff = format_diff(&existing.content, serialized);
         let display_path = display_relative(&snap_path);
+        let diff = format_diff_with_path(&existing.content, serialized, &display_path);
         return Err(SnapshotMismatchError::new_err(format!(
-            "Snapshot mismatch for '{snapshot_name}' in {display_path}:\n{diff}{SNAPSHOT_UPDATE_HINT}"
+            "Snapshot mismatch for '{snapshot_name}'.\n{diff}{SNAPSHOT_UPDATE_HINT}"
         )));
     }
 

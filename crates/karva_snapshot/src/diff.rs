@@ -2,8 +2,12 @@ use std::borrow::Cow;
 use std::fmt::Write;
 use std::io;
 
+use annotate_snippets::{Group, Level, Patch, Renderer, Snippet};
 use colored::Colorize;
-use similar::{Algorithm, ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, DiffTag, TextDiff};
+
+/// Snapshot content follows the opening delimiter, metadata line, and closing delimiter.
+const SNAPSHOT_CONTENT_LINE: usize = 4;
 
 /// Append a trailing newline if the input is non-empty and doesn't already end
 /// with one. `diff_lines` keeps each line's terminator as part of the line,
@@ -108,6 +112,67 @@ pub fn format_diff(old: &str, new: &str) -> String {
     let mut output = String::new();
     render_diff(&mut output, old, new, 40, false);
     output
+}
+
+/// Format a diagnostic diff with a source-style snapshot origin.
+pub fn format_diff_with_path(old: &str, new: &str, path: &str) -> String {
+    let old = ensure_trailing_newline(old);
+    let new = ensure_trailing_newline(new);
+    let diff = TextDiff::configure()
+        .algorithm(Algorithm::Patience)
+        .diff_lines(&old, &new);
+    let mut old_offsets = Vec::with_capacity(diff.old_len() + 1);
+    old_offsets.push(0);
+    for index in 0..diff.old_len() {
+        old_offsets.push(old_offsets[index] + diff.old_slice(index).map_or(0, str::len));
+    }
+    let mut new_offsets = Vec::with_capacity(diff.new_len() + 1);
+    new_offsets.push(0);
+    for index in 0..diff.new_len() {
+        new_offsets.push(new_offsets[index] + diff.new_slice(index).map_or(0, str::len));
+    }
+
+    let mut snippet = Snippet::source(old.as_ref())
+        .line_start(SNAPSHOT_CONTENT_LINE)
+        .path(path);
+    for op in diff.ops() {
+        if op.tag() == DiffTag::Equal {
+            continue;
+        }
+        let old_range = op.old_range();
+        let new_range = op.new_range();
+        let old_start = old_offsets[old_range.start];
+        let old_end = old_offsets[old_range.end];
+        let new_start = new_offsets[new_range.start];
+        let new_end = new_offsets[new_range.end];
+        let old_chunk = &old[old_start..old_end];
+        let new_chunk = &new[new_start..new_end];
+        let prefix = old_chunk
+            .chars()
+            .zip(new_chunk.chars())
+            .take_while(|(old, new)| old == new)
+            .map(|(character, _)| character.len_utf8())
+            .sum::<usize>();
+        let suffix = old_chunk[prefix..]
+            .chars()
+            .rev()
+            .zip(new_chunk[prefix..].chars().rev())
+            .take_while(|(old, new)| old == new)
+            .map(|(character, _)| character.len_utf8())
+            .sum::<usize>();
+        snippet = snippet.patch(Patch::new(
+            old_start + prefix..old_end - suffix,
+            &new[new_start + prefix..new_end - suffix],
+        ));
+    }
+
+    let report = [Group::with_level(Level::INFO).element(snippet)];
+    let renderer = if colored::control::SHOULD_COLORIZE.should_colorize() {
+        Renderer::styled()
+    } else {
+        Renderer::plain()
+    };
+    format!("{}\n", renderer.render(&report))
 }
 
 /// Write a diff to the given output stream, adapting borders to terminal width.

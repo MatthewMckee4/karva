@@ -1160,6 +1160,7 @@ dependencies = [
 name = "karva_snapshot"
 version = "0.0.0"
 dependencies = [
+ "annotate-snippets",
  "camino",
  "colored",
  "console",

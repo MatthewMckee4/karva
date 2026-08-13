@@ -791,11 +791,10 @@ fn handle_failed_function_call(
         let value_str = value.bind(py).to_string();
         let truncated_value = truncate_string(&value_str);
         let truncated_name = truncate_string(name);
-        let mut argument = SubDiagnostic::new(
+        let argument = SubDiagnostic::new(
             Severity::Info,
-            format!("`{truncated_name}`: `{truncated_value}`"),
+            format!("  `{truncated_name}`: `{truncated_value}`"),
         );
-        argument.indent(2);
         diagnostic.sub(argument);
     }
 
