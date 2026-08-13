@@ -20,7 +20,7 @@ impl SyncNotificationHandler for DidChangeWorkspaceFolders {
         }: DidChangeWorkspaceFoldersParams,
     ) -> anyhow::Result<()> {
         for folder in added {
-            session.open_workspace_folder(folder);
+            session.open_workspace_folder(folder)?;
         }
         for folder in removed {
             session.close_workspace_folder(&folder.uri)?;
