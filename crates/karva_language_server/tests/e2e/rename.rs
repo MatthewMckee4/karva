@@ -1,16 +1,12 @@
-use std::fs;
-
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind,
     Position, PrepareRenameParams, PrepareRenameRequest, PublishDiagnosticsNotification,
     RenameParams, RenameRequest, TextDocumentIdentifier, TextDocumentItem,
-    TextDocumentPositionParams, Uri, WorkDoneProgressParams, WorkspaceFolder,
+    TextDocumentPositionParams, Uri, WorkDoneProgressParams,
 };
-use serde_json::Value;
-use tempfile::TempDir;
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 #[test]
 fn prepares_and_renames_fixture_occurrences_across_files() {
@@ -21,10 +17,10 @@ fn prepares_and_renames_fixture_occurrences_across_files() {
     workspace.write("tests/test_other.py", "def test_other(database): pass\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let provider_uri = workspace.uri("conftest.py");
-    open(&server, provider_uri.clone(), provider_source);
+    open(&mut server, provider_uri.clone(), provider_source);
     let uri = workspace.uri("tests/test_example.py");
     open(
-        &server,
+        &mut server,
         uri.clone(),
         "import pytest\n\n@pytest.mark.usefixtures(\"data\\x62ase\")\ndef test_example(database): pass\n",
     );
@@ -36,6 +32,7 @@ fn prepares_and_renames_fixture_occurrences_across_files() {
         .request::<PrepareRenameRequest>(prepare_params(provider_uri.clone(), Position::new(2, 6)));
     let provider_edit =
         server.request::<RenameRequest>(rename_params(provider_uri, Position::new(2, 6), "данные"));
+    server.receive_notification::<PublishDiagnosticsNotification>();
 
     assert_eq!(provider_edit, edit);
     assert_json_snapshot!(workspace.normalize((prepared, provider_prepared, edit)));
@@ -55,7 +52,11 @@ fn renames_only_the_selected_nested_provider() {
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/pkg/test_nested.py");
-    open(&server, uri.clone(), "def test_nested(database): pass\n");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_nested(database): pass\n",
+    );
 
     let edit = server.request::<RenameRequest>(rename_params(
         uri,
@@ -75,7 +76,11 @@ fn rejects_partial_and_invalid_fixture_renames() {
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    open(&server, uri.clone(), "def test_example(database): pass\n");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(database): pass\n",
+    );
     let position = Position::new(0, 20);
 
     let prepared = server.request::<PrepareRenameRequest>(prepare_params(uri.clone(), position));
@@ -109,7 +114,11 @@ fn rejects_name_that_would_select_a_nested_provider() {
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/pkg/test_nested.py");
-    open(&server, uri.clone(), "def test_nested(database): pass\n");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_nested(database): pass\n",
+    );
 
     let edit =
         server.request::<RenameRequest>(rename_params(uri, Position::new(0, 20), "replacement"));
@@ -117,7 +126,7 @@ fn rejects_name_that_would_select_a_nested_provider() {
     assert_eq!(edit, None);
 }
 
-fn open(server: &TestServer, uri: Uri, source: &str) {
+fn open(server: &mut TestServer, uri: Uri, source: &str) {
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
             uri,
@@ -142,81 +151,4 @@ fn rename_params(uri: Uri, position: Position, new_name: &str) -> RenameParams {
         WorkDoneProgressParams::default(),
         TextDocumentPositionParams::new(TextDocumentIdentifier::new(uri), position),
     )
-}
-
-struct Workspace {
-    directory: TempDir,
-    root_uri: Uri,
-}
-
-impl Workspace {
-    fn new() -> Self {
-        let directory = tempfile::tempdir().expect("temporary workspace should be created");
-        fs::create_dir(directory.path().join(".git")).expect("workspace marker should be created");
-        let root_uri =
-            Uri::from_file_path(directory.path()).expect("workspace URI should be valid");
-        Self {
-            directory,
-            root_uri,
-        }
-    }
-
-    fn folder(&self) -> WorkspaceFolder {
-        WorkspaceFolder {
-            uri: self.root_uri.clone(),
-            name: "project".to_owned(),
-        }
-    }
-
-    fn uri(&self, relative: &str) -> Uri {
-        Uri::from_file_path(self.directory.path().join(relative))
-            .expect("document URI should be valid")
-    }
-
-    fn write(&self, relative: &str, source: &str) {
-        let path = self.directory.path().join(relative);
-        fs::create_dir_all(
-            path.parent()
-                .expect("workspace source should have a parent"),
-        )
-        .expect("workspace source parent should be created");
-        fs::write(path, source).expect("workspace source should be written");
-    }
-
-    fn normalize(&self, value: impl serde::Serialize) -> Value {
-        let mut value = serde_json::to_value(value).expect("rename should serialize");
-        normalize_paths(
-            &mut value,
-            self.root_uri.as_str(),
-            &self.directory.path().to_string_lossy(),
-        );
-        value
-    }
-}
-
-fn normalize_paths(value: &mut Value, workspace_uri: &str, workspace_path: &str) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                normalize_paths(value, workspace_uri, workspace_path);
-            }
-        }
-        Value::Object(values) => {
-            let original = std::mem::take(values);
-            for (key, mut value) in original {
-                normalize_paths(&mut value, workspace_uri, workspace_path);
-                values.insert(
-                    key.replace(workspace_uri, "file:///project")
-                        .replace(workspace_path, "/project"),
-                    value,
-                );
-            }
-        }
-        Value::String(value) => {
-            *value = value
-                .replace(workspace_uri, "file:///project")
-                .replace(workspace_path, "/project");
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
-    }
 }
