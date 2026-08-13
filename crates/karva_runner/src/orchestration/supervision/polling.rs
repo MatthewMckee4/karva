@@ -1,5 +1,6 @@
 //! Process reaping and completion polling for [`super::WorkerSupervisor`].
 
+use std::process::ExitStatus;
 use std::time::Instant;
 
 use anyhow::Result;
@@ -12,6 +13,7 @@ use super::super::dispatcher::CrashedWorker;
 use super::super::output::termination_description;
 #[cfg(unix)]
 use super::super::process_control;
+use super::super::worker::Worker;
 use super::super::{CANCELLATION_EVENT_SETTLE, WORKER_POLL_INTERVAL};
 use super::WorkerSupervisor;
 
@@ -45,7 +47,7 @@ impl WorkerSupervisor {
                 #[cfg(unix)]
                 if process_control::has_exited(worker.child())? {
                     if !server.worker_disconnected(worker.id())
-                        && let Err(error) = process_control::force_kill(worker.process_id())
+                        && let Err(error) = process_control::force_kill(worker.child())
                         && error.kind() != std::io::ErrorKind::PermissionDenied
                     {
                         tracing::warn!(target: "karva_runner::orchestration",
@@ -125,8 +127,9 @@ impl WorkerSupervisor {
 
     /// Reaps children that stop during termination without classifying their exits.
     pub(in crate::orchestration) fn reap_during_shutdown(&mut self) {
+        let dispatcher = &self.dispatcher;
         self.workers
-            .retain_mut(|worker| match worker.child_mut().try_wait() {
+            .retain_mut(|worker| match shutdown_status(worker, dispatcher.worker_completed(worker.id())) {
                 Ok(Some(_)) => {
                     worker.mark_forced_disconnect();
                     worker.join_output();
@@ -136,7 +139,7 @@ impl WorkerSupervisor {
                 Ok(None) => true,
                 Err(error) => {
                     tracing::error!(target: "karva_runner::orchestration", "Error waiting on worker {}: {}", worker.id(), error);
-                    false
+                    true
                 }
             });
     }
@@ -208,5 +211,39 @@ impl WorkerSupervisor {
 
             std::thread::sleep(WORKER_POLL_INTERVAL);
         }
+    }
+}
+
+/// Observes one child during graceful shutdown without exposing a recycled
+/// Unix process-group id.
+///
+/// Incomplete Unix workers remain unreaped until either they are force-killed
+/// at the grace deadline or their leader exits. Once a leader exits, any group
+/// members that ignored the earlier graceful signal are killed before `wait`
+/// releases the numeric group id. Completed workers will never be signalled by
+/// shutdown and can therefore use the ordinary reaping path.
+fn shutdown_status(worker: &mut Worker, completed: bool) -> std::io::Result<Option<ExitStatus>> {
+    #[cfg(unix)]
+    {
+        if completed {
+            return worker.child_mut().try_wait();
+        }
+        if !process_control::has_exited(worker.child())? {
+            return Ok(None);
+        }
+        if let Err(error) = process_control::force_kill(worker.child())
+            && error.kind() != std::io::ErrorKind::PermissionDenied
+        {
+            tracing::warn!(target: "karva_runner::orchestration",
+                worker_id = worker.id(),
+                "failed to clean up worker process group after graceful exit: {error}"
+            );
+        }
+        worker.child_mut().wait().map(Some)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = completed;
+        worker.child_mut().try_wait()
     }
 }

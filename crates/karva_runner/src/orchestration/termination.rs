@@ -14,16 +14,6 @@ use super::supervision::WorkerSupervisor;
 use super::worker::Worker;
 use super::{CANCELLATION_EVENT_SETTLE, WORKER_POLL_INTERVAL};
 
-/// Stable identifiers retained after a child process has been reaped.
-#[derive(Debug, Clone, Copy)]
-struct WorkerProcessId {
-    /// Controller worker identifier used in diagnostics.
-    worker_id: usize,
-
-    /// Operating-system process identifier used for group cleanup.
-    process_id: u32,
-}
-
 /// Snapshot of one worker's current test taken after process termination.
 struct InFlightTest {
     /// Worker that owns this snapshot.
@@ -51,15 +41,6 @@ impl WorkerSupervisor {
         if !self.has_workers() {
             return;
         }
-        let processes: Vec<_> = self
-            .workers()
-            .iter()
-            .filter(|worker| !self.worker_completed(worker.id()))
-            .map(|worker| WorkerProcessId {
-                worker_id: worker.id(),
-                process_id: worker.process_id(),
-            })
-            .collect();
         let (workers, dispatcher) = self.worker_state();
         for worker in workers {
             if dispatcher.worker_completed(worker.id()) {
@@ -80,11 +61,7 @@ impl WorkerSupervisor {
         let deadline = Instant::now() + grace_period;
         loop {
             self.reap_during_shutdown();
-            if !self.has_workers()
-                && !processes
-                    .iter()
-                    .any(|process| process_control::is_running(process.process_id))
-            {
+            if !self.has_workers() {
                 return;
             }
             if grace_period.is_zero() || Instant::now() >= deadline {
@@ -93,10 +70,18 @@ impl WorkerSupervisor {
             std::thread::sleep(WORKER_POLL_INTERVAL);
         }
 
-        for process in &processes {
-            if let Err(error) = process_control::force_kill(process.process_id) {
+        // Signal every retained Unix group before reaping any leader. An
+        // unreaped leader reserves its process-group id, so no signal can
+        // target a group recycled after an earlier `wait` in this pass.
+        #[cfg(unix)]
+        for worker in self
+            .workers()
+            .iter()
+            .filter(|worker| !self.worker_completed(worker.id()))
+        {
+            if let Err(error) = process_control::force_kill(worker.child()) {
                 tracing::warn!(target: "karva_runner::orchestration",
-                    worker_id = process.worker_id,
+                    worker_id = worker.id(),
                     "failed to force-kill worker process group: {error}"
                 );
             }
@@ -216,7 +201,7 @@ impl Drop for WorkerSupervisor {
     fn drop(&mut self) {
         for worker in self.workers_mut() {
             if !worker.has_exit_status()
-                && let Err(error) = process_control::force_kill(worker.process_id())
+                && let Err(error) = process_control::force_kill(worker.child())
             {
                 tracing::warn!(target: "karva_runner::orchestration",
                     worker_id = worker.id(),

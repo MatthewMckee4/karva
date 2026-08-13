@@ -118,18 +118,12 @@ impl Worker {
         self.assignment.id
     }
 
-    /// Returns the operating-system process identifier used for group cleanup.
-    pub(super) fn process_id(&self) -> u32 {
-        self.process.child.id()
-    }
-
     /// Consumes a failed generation and returns the assignment recovery will trim.
     pub(super) fn take_partition(self) -> Partition {
         self.assignment.partition
     }
 
-    /// Borrows the child while Unix process-group state is inspected.
-    #[cfg(unix)]
+    /// Borrows the child while process state is inspected or its group is signalled.
     pub(super) fn child(&self) -> &Child {
         &self.process.child
     }

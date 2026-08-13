@@ -17,8 +17,12 @@ mod unix {
         signal_process_group(child.id(), libc::SIGTERM)
     }
 
-    pub fn force_kill(process_id: u32) -> io::Result<()> {
-        signal_process_group(process_id, libc::SIGKILL)
+    /// Kills the worker's process group while the caller retains its leader.
+    ///
+    /// Callers must not reap `child` before this call. Keeping the leader
+    /// waitable prevents its process-group id from being recycled.
+    pub fn force_kill(child: &Child) -> io::Result<()> {
+        signal_process_group(child.id(), libc::SIGKILL)
     }
 
     /// Observes worker exit without reaping its process-group leader.
@@ -30,20 +34,26 @@ mod unix {
                 format!("process id {} cannot be represented as id_t", child.id()),
             )
         })?;
-        #[expect(
-            unsafe_code,
-            reason = "observing Unix child exit without reaping requires libc::waitid"
-        )]
-        let result = unsafe {
-            libc::waitid(
-                libc::P_PID,
-                process_id,
-                info.as_mut_ptr(),
-                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-            )
-        };
-        if result != 0 {
-            return Err(io::Error::last_os_error());
+        loop {
+            #[expect(
+                unsafe_code,
+                reason = "observing Unix child exit without reaping requires libc::waitid"
+            )]
+            let result = unsafe {
+                libc::waitid(
+                    libc::P_PID,
+                    process_id,
+                    info.as_mut_ptr(),
+                    libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+                )
+            };
+            if result == 0 {
+                break;
+            }
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                return Err(error);
+            }
         }
         #[expect(unsafe_code, reason = "successful libc::waitid initializes siginfo_t")]
         let info = unsafe { info.assume_init() };
@@ -53,18 +63,6 @@ mod unix {
         )]
         let process_id = unsafe { info.si_pid() };
         Ok(process_id != 0)
-    }
-
-    pub fn is_running(process_id: u32) -> bool {
-        let Ok(process_group_id) = process_group_id(process_id) else {
-            return false;
-        };
-        #[expect(
-            unsafe_code,
-            reason = "checking Unix process groups requires libc::kill"
-        )]
-        let result = unsafe { libc::kill(-process_group_id, 0) };
-        result == 0
     }
 
     fn signal_process_group(process_id: u32, signal: libc::c_int) -> io::Result<()> {
@@ -112,17 +110,12 @@ mod windows {
 
     /// Process-group cleanup is Unix-only; callers kill the retained child
     /// handle separately on this platform.
-    pub fn force_kill(_process_id: u32) -> io::Result<()> {
+    pub fn force_kill(_child: &Child) -> io::Result<()> {
         Ok(())
     }
 
     pub fn force_kill_child(child: &mut Child) -> io::Result<()> {
         child.kill()
-    }
-
-    /// Descendant process-group probing is unavailable without Unix groups.
-    pub fn is_running(_process_id: u32) -> bool {
-        false
     }
 }
 

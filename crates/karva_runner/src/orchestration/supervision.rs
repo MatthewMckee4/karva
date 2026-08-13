@@ -53,6 +53,7 @@ impl WorkerSupervisor {
     }
 
     /// Whether a generation delivered its terminal event before disconnecting.
+    #[cfg(unix)]
     pub(super) fn worker_completed(&self, worker_id: usize) -> bool {
         self.dispatcher.worker_completed(worker_id)
     }
