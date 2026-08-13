@@ -1,7 +1,6 @@
 //! Controller integration tests: handshake, event intake, and disconnect behavior.
 
 use std::io::{BufRead as _, BufReader, ErrorKind, Read as _, Write as _};
-use std::net::{Shutdown, TcpStream};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -10,6 +9,7 @@ use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName
 use rstest::rstest;
 
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
+use crate::transport::ControllerStream;
 use crate::worker::WorkerClient;
 
 use super::{ControllerServer, is_clean_disconnect};
@@ -38,10 +38,10 @@ fn retains_attributed_worker_checkpoint_after_disconnect() {
     server
         .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
         let (client, selection) =
-            WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
         assert_eq!(
             selection
                 .test_paths
@@ -81,9 +81,9 @@ fn controller_can_close_stream_retained_after_worker_exit() {
     server
         .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
-        WorkerClient::connect(address, "run-id", 7)
+        WorkerClient::connect(&address, "run-id", 7)
             .expect("connect worker")
             .0
     });
@@ -103,8 +103,8 @@ fn controller_can_close_stream_retained_after_worker_exit() {
 #[test]
 fn controller_can_close_unauthenticated_reader_after_termination() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
-    let retained_connection = TcpStream::connect(server.address().expect("address"))
-        .expect("connect unauthenticated client");
+    let retained_connection =
+        ControllerStream::connect(&server.endpoint()).expect("connect unauthenticated client");
     accept_connections(&mut server, 1);
 
     server.disconnect_readers().expect("disconnect readers");
@@ -115,9 +115,9 @@ fn controller_can_close_unauthenticated_reader_after_termination() {
 #[test]
 fn rejects_wrong_run_id() {
     let mut server = ControllerServer::bind("expected").expect("bind controller");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
-        let error = WorkerClient::connect(address, "wrong", 0)
+        let error = WorkerClient::connect(&address, "wrong", 0)
             .err()
             .expect("wrong run id should close connection");
         assert!(error.to_string().contains("before sending test paths"));
@@ -150,10 +150,10 @@ fn completion_closes_connection_after_terminal_event() {
     server
         .register_worker_selection(7, selection(Vec::new()))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
         let (client, selection) =
-            WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
         assert!(selection.test_paths.is_empty());
         client.complete().expect("complete worker");
     });
@@ -176,9 +176,9 @@ fn maximum_worker_id_is_not_treated_as_an_unauthenticated_reader() {
     server
         .register_worker_selection(usize::MAX, selection(Vec::new()))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
-        let (client, _) = WorkerClient::connect(address, "run-id", usize::MAX)
+        let (client, _) = WorkerClient::connect(&address, "run-id", usize::MAX)
             .expect("connect maximum-id worker");
         client.complete().expect("complete worker");
     });
@@ -207,10 +207,10 @@ fn transfers_resume_skip_cases() {
             },
         )
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
         let (client, selection) =
-            WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
         assert_eq!(
             selection.resume_skip,
             [TestCacheKey::function_name("mod::test[1]")]
@@ -229,9 +229,9 @@ fn truncated_terminal_event_is_a_worker_disconnect() {
     server
         .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
-        let mut stream = TcpStream::connect(address).expect("connect worker");
+        let mut stream = ControllerStream::connect(&address).expect("connect worker");
         serde_json::to_writer(
             &mut stream,
             &WireMessage::Hello {
@@ -251,9 +251,7 @@ fn truncated_terminal_event_is_a_worker_disconnect() {
 
         stream.write_all(br#"{"C""#).expect("write truncated event");
         stream.flush().expect("flush truncated event");
-        stream
-            .shutdown(Shutdown::Write)
-            .expect("close worker write stream");
+        stream.shutdown().expect("close worker write stream");
         let mut drain = Vec::new();
         stream
             .read_to_end(&mut drain)
@@ -280,10 +278,10 @@ fn transfers_large_worker_selection(#[values(50_000, 1_000_000)] path_count: usi
     server
         .register_worker_selection(0, selection(test_paths))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let worker = thread::spawn(move || {
         let (client, selection) =
-            WorkerClient::connect(address, "run-id", 0).expect("connect worker");
+            WorkerClient::connect(&address, "run-id", 0).expect("connect worker");
         let test_paths = selection.test_paths;
         assert_eq!(test_paths.len(), path_count);
         assert_eq!(
@@ -309,11 +307,11 @@ fn buffered_event_reaches_controller_before_worker_completes() {
     server
         .register_worker_selection(7, selection(Vec::new()))
         .expect("register worker selection");
-    let address = server.address().expect("address");
+    let address = server.endpoint();
     let (event_received, wait_for_event) = mpsc::channel();
     let worker = thread::spawn(move || {
         let (client, selection) =
-            WorkerClient::connect(address, "run-id", 7).expect("connect worker");
+            WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
         assert!(selection.test_paths.is_empty());
         client
             .send_event(WorkerEvent::TestSlow)

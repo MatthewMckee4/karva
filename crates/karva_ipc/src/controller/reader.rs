@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, ErrorKind, Write};
-use std::net::TcpStream;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -12,10 +11,11 @@ use crossbeam_channel::Sender;
 use super::checkpoint::CheckpointState;
 use super::{ControllerEvent, Incoming};
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
+use crate::transport::ControllerStream;
 
 /// Authenticates one stream, transfers its selection, then decodes its events.
 pub(super) fn read_worker(
-    stream: TcpStream,
+    stream: ControllerStream,
     expected_run_id: &str,
     worker_selections: &Mutex<HashMap<usize, WorkerSelection>>,
     checkpoint: &mut CheckpointState,

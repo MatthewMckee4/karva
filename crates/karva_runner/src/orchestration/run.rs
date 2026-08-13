@@ -133,7 +133,7 @@ pub fn run_parallel_tests(
     let spawn = WorkerSpawn {
         project,
         artifacts: &artifacts,
-        controller_address: controller.address()?,
+        controller_endpoint: controller.endpoint(),
         run_hash: &run_hash,
         args,
         num_workers,

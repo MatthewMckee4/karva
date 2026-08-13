@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::net::SocketAddr;
 use std::{ffi::OsString, io};
 
 use anyhow::Context as _;
@@ -10,7 +9,7 @@ use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
 use karva_diagnostic::{
     DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
 };
-use karva_ipc::{WorkerClient, WorkerEvent};
+use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerEvent};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
@@ -28,8 +27,8 @@ use crate::reporter::WorkerReporter;
 #[command(name = "karva_worker", about = "Karva test worker")]
 struct Args {
     /// Controller endpoint used for runtime events and final results.
-    #[arg(long)]
-    controller_address: SocketAddr,
+    #[arg(long = "controller-address")]
+    controller_endpoint: OsString,
 
     /// Unique identifier correlating events for this test run.
     #[arg(long)]
@@ -142,8 +141,10 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_format,
         colored::control::SHOULD_COLORIZE.should_colorize(),
     );
+    let controller_endpoint =
+        ControllerEndpoint::from_argument(&args.controller_endpoint).map_err(anyhow::Error::msg)?;
     let (client, selection) =
-        WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
+        WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
     let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
     let test_paths: Vec<Result<TestPath, TestPathError>> = selection
         .test_paths

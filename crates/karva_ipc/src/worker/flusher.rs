@@ -1,13 +1,14 @@
 //! Periodic delivery for worker events buffered between synchronous flushes.
 
 use std::io::{BufWriter, Write};
-use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+
+use crate::transport::ControllerStream;
 
 // Receipt: PR 1268 at 5a8d65a was 39.6% slower than main 7c270fa on the
 // 16,807-case parametrized CI workload. Checkpoints flush before fixture setup
@@ -41,7 +42,7 @@ struct FlusherSignals {
 
 impl EventFlusher {
     /// Starts one low-frequency flusher for a worker connection.
-    pub(super) fn spawn(writer: &Arc<Mutex<BufWriter<TcpStream>>>) -> Result<Self> {
+    pub(super) fn spawn(writer: &Arc<Mutex<BufWriter<ControllerStream>>>) -> Result<Self> {
         let writer = Arc::clone(writer);
         let signals = Arc::new(FlusherSignals {
             pending: AtomicBool::new(false),
@@ -102,7 +103,7 @@ impl EventFlusher {
 }
 
 /// Flushes pending bytes until connection shutdown or the first error.
-fn run(writer: &Mutex<BufWriter<TcpStream>>, signals: &FlusherSignals) {
+fn run(writer: &Mutex<BufWriter<ControllerStream>>, signals: &FlusherSignals) {
     while !signals.stop.load(Ordering::Acquire) {
         thread::park_timeout(EVENT_FLUSH_INTERVAL);
         if signals.stop.load(Ordering::Acquire) {
@@ -123,7 +124,7 @@ fn run(writer: &Mutex<BufWriter<TcpStream>>, signals: &FlusherSignals) {
 /// The pending flag clears only while holding the writer lock. A later writer
 /// must acquire the same lock before setting it again.
 fn flush_pending(
-    writer: &Mutex<BufWriter<TcpStream>>,
+    writer: &Mutex<BufWriter<ControllerStream>>,
     signals: &FlusherSignals,
 ) -> Result<(), String> {
     if !signals.pending.load(Ordering::Acquire) {

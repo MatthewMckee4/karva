@@ -1181,6 +1181,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

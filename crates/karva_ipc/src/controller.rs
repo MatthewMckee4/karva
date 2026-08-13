@@ -15,6 +15,7 @@ use anyhow::Result;
 use crossbeam_channel::{Receiver, TryRecvError, unbounded};
 
 use crate::protocol::{WorkerEvent, WorkerSelection};
+use crate::transport::ControllerEndpoint;
 pub use checkpoint::WorkerCheckpoint;
 use connections::ControllerConnections;
 #[cfg(test)]
@@ -103,7 +104,7 @@ impl ControllerEvents {
 }
 
 impl ControllerServer {
-    /// Binds an operating-system-selected loopback port for one test run.
+    /// Binds an operating-system-selected local endpoint for one test run.
     pub fn bind(run_id: &str) -> Result<Self> {
         let (events, sender) = ControllerEvents::new();
         Ok(Self {
@@ -125,9 +126,9 @@ impl ControllerServer {
             .register_worker_selection(worker_id, selection)
     }
 
-    /// Returns address passed to newly spawned workers.
-    pub fn address(&self) -> Result<std::net::SocketAddr> {
-        self.connections.address()
+    /// Returns the local endpoint passed to newly spawned workers.
+    pub fn endpoint(&self) -> ControllerEndpoint {
+        self.connections.endpoint()
     }
 
     /// Accepts every connection already queued by the operating system.

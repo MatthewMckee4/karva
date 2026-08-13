@@ -8,7 +8,6 @@ mod connection_reader;
 
 use std::collections::HashMap;
 use std::io::ErrorKind;
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -16,6 +15,7 @@ use crossbeam_channel::Sender;
 
 use super::Incoming;
 use crate::protocol::WorkerSelection;
+use crate::transport::{ControllerEndpoint, ControllerListener};
 use connection_reader::ControllerReader;
 
 /// Operating-system resources and connection state for one controller run.
@@ -26,7 +26,7 @@ use connection_reader::ControllerReader;
 /// accepted reader threads are joined rather than detached.
 pub(super) struct ControllerConnections {
     /// Non-blocking listener used to accept worker connections.
-    listener: TcpListener,
+    listener: ControllerListener,
 
     /// Run identifier required in every worker handshake.
     run_id: String,
@@ -42,13 +42,10 @@ pub(super) struct ControllerConnections {
 }
 
 impl ControllerConnections {
-    /// Binds an operating-system-selected loopback port for one test run.
+    /// Binds an operating-system-selected local endpoint for one test run.
     pub(super) fn bind(run_id: &str, sender: Sender<Incoming>) -> Result<Self> {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-            .context("failed to bind Karva controller listener")?;
-        listener
-            .set_nonblocking(true)
-            .context("failed to configure Karva controller listener")?;
+        let listener = ControllerListener::bind()?;
+        listener.set_nonblocking(true)?;
         Ok(Self {
             listener,
             run_id: run_id.to_string(),
@@ -75,18 +72,16 @@ impl ControllerConnections {
         Ok(())
     }
 
-    /// Returns the address passed to newly spawned workers.
-    pub(super) fn address(&self) -> Result<SocketAddr> {
-        self.listener
-            .local_addr()
-            .context("failed to read Karva controller listener address")
+    /// Returns the endpoint passed to newly spawned workers.
+    pub(super) fn endpoint(&self) -> ControllerEndpoint {
+        self.listener.endpoint()
     }
 
     /// Accepts all worker connections currently queued by the operating system.
     pub(super) fn accept_pending(&mut self) -> Result<()> {
         loop {
             match self.listener.accept() {
-                Ok((stream, _)) => self.readers.push(ControllerReader::spawn(
+                Ok(stream) => self.readers.push(ControllerReader::spawn(
                     stream,
                     self.run_id.clone(),
                     self.sender.clone(),

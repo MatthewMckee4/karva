@@ -7,8 +7,10 @@
 
 mod controller;
 mod protocol;
+mod transport;
 mod worker;
 
 pub use controller::{ControllerEvent, ControllerServer, WorkerCheckpoint};
 pub use protocol::{WorkerEvent, WorkerSelection};
+pub use transport::ControllerEndpoint;
 pub use worker::WorkerClient;

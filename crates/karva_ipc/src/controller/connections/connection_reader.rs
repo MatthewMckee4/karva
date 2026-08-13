@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::io::ErrorKind;
-use std::net::{Shutdown, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
@@ -14,6 +13,7 @@ use super::super::Incoming;
 use super::super::checkpoint::{CheckpointState, WorkerCheckpoint};
 use super::super::reader::read_worker;
 use crate::protocol::WorkerSelection;
+use crate::transport::ControllerStream;
 
 /// Reader thread and shared progress state for one worker connection.
 pub(super) struct ControllerReader {
@@ -21,7 +21,7 @@ pub(super) struct ControllerReader {
     handle: Option<JoinHandle<()>>,
 
     /// Controller clone used to interrupt an escaped descendant's socket.
-    stream: TcpStream,
+    stream: ControllerStream,
 
     /// Worker id populated after the handshake succeeds.
     worker_id: Arc<OnceLock<usize>>,
@@ -36,20 +36,14 @@ pub(super) struct ControllerReader {
 impl ControllerReader {
     /// Starts a reader for one accepted socket and retains its control handles.
     pub(super) fn spawn(
-        stream: TcpStream,
+        stream: ControllerStream,
         run_id: String,
         sender: Sender<Incoming>,
         worker_selections: Arc<Mutex<HashMap<usize, WorkerSelection>>>,
     ) -> Result<Self> {
-        stream
-            .set_nonblocking(false)
-            .context("failed to configure Karva worker connection")?;
-        let control_stream = stream
-            .try_clone()
-            .context("failed to control Karva worker connection")?;
-        let shutdown_stream = stream
-            .try_clone()
-            .context("failed to close Karva worker connection")?;
+        stream.set_nonblocking(false)?;
+        let control_stream = stream.try_clone()?;
+        let shutdown_stream = stream.try_clone()?;
         let worker_id = Arc::new(OnceLock::new());
         let reader_worker_id = Arc::clone(&worker_id);
         let event_count = Arc::new(AtomicUsize::new(0));
@@ -76,8 +70,7 @@ impl ControllerReader {
             } else if let Some(worker_id) = reader_worker_id.get().copied() {
                 sender.send(Incoming::Disconnected { worker_id }).ok();
             }
-            shutdown_stream.shutdown(Shutdown::Write).ok();
-            shutdown_stream.shutdown(Shutdown::Read).ok();
+            shutdown_stream.shutdown().ok();
         });
         Ok(Self {
             handle: Some(handle),
@@ -124,9 +117,9 @@ impl ControllerReader {
 }
 
 /// Interrupts one reader thread, tolerating a stream already closed by its peer.
-fn shutdown_reader(stream: &TcpStream) -> Result<()> {
+fn shutdown_reader(stream: &ControllerStream) -> Result<()> {
     stream
-        .shutdown(Shutdown::Both)
+        .shutdown()
         .or_else(|error| {
             if error.kind() == ErrorKind::NotConnected {
                 Ok(())

@@ -19,6 +19,9 @@ crossbeam-channel = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+tempfile = { workspace = true }
+
 [dev-dependencies]
 rstest = { workspace = true }
 

@@ -5,7 +5,6 @@
 //! events are coalesced for the configured interval.
 
 use std::io::{BufReader, BufWriter, Write};
-use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result, bail};
@@ -14,6 +13,7 @@ use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 use serde::Serialize;
 
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
+use crate::transport::{ControllerEndpoint, ControllerStream};
 
 mod flusher;
 mod frames;
@@ -31,7 +31,7 @@ pub struct WorkerClient {
 /// Serialized transport and its periodic delivery worker.
 struct WorkerConnection {
     /// Buffered event stream protected against concurrent reporters.
-    writer: Arc<Mutex<BufWriter<TcpStream>>>,
+    writer: Arc<Mutex<BufWriter<ControllerStream>>>,
 
     /// Background delivery for events buffered between synchronous flushes.
     flusher: EventFlusher,
@@ -40,18 +40,13 @@ struct WorkerConnection {
 impl WorkerClient {
     /// Connects to the controller and receives this worker's owned test selection.
     pub fn connect(
-        address: SocketAddr,
+        endpoint: &ControllerEndpoint,
         run_id: &str,
         worker_id: usize,
     ) -> Result<(Self, WorkerSelection)> {
-        let stream = TcpStream::connect(address)
-            .with_context(|| format!("failed to connect to Karva controller at {address}"))?;
-        stream
-            .set_nodelay(true)
-            .context("failed to configure Karva controller connection")?;
-        let reader = stream
-            .try_clone()
-            .context("failed to read Karva controller connection")?;
+        let stream = ControllerStream::connect(endpoint)?;
+        stream.set_nodelay(true)?;
+        let reader = stream.try_clone()?;
         let writer = Arc::new(Mutex::new(BufWriter::new(stream)));
         let flusher = EventFlusher::spawn(&writer)?;
         let client = Self {
@@ -104,7 +99,7 @@ impl WorkerClient {
         self.check_flush_error()?;
         self.lock_writer()?
             .get_ref()
-            .shutdown(Shutdown::Both)
+            .shutdown()
             .context("failed to close Karva controller connection")
     }
 
@@ -142,7 +137,7 @@ impl WorkerClient {
         self.connection.flusher.check_error()
     }
 
-    fn lock_writer(&self) -> Result<std::sync::MutexGuard<'_, BufWriter<TcpStream>>> {
+    fn lock_writer(&self) -> Result<std::sync::MutexGuard<'_, BufWriter<ControllerStream>>> {
         self.connection
             .writer
             .lock()
@@ -151,7 +146,7 @@ impl WorkerClient {
 }
 
 /// Reads the controller's single startup response after worker authentication.
-fn read_test_selection(stream: TcpStream) -> Result<WorkerSelection> {
+fn read_test_selection(stream: ControllerStream) -> Result<WorkerSelection> {
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(message) = messages.next() else {
