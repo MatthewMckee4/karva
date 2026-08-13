@@ -9,11 +9,17 @@ on:
       - Cargo.lock
       - Cargo.toml
       - crates/karva_language_server/**
+      - crates/karva_collector/**
+      - crates/karva_combine/**
       - crates/karva_ide/**
+      - crates/karva_logging/**
+      - crates/karva_macros/**
+      - crates/karva_metadata/**
       - crates/karva_project/**
       - crates/karva_python_semantic/**
       - crates/karva_test_semantic/**
       - crates/karva_static/**
+      - crates/karva_version/**
       - rust-toolchain.toml
       - .github/workflows/build-language-server.yml
 

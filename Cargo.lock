@@ -1191,6 +1191,7 @@ dependencies = [
  "gen-lsp-types",
  "ignore",
  "insta",
+ "insta-cmd",
  "karva_collector",
  "karva_ide",
  "karva_metadata",
