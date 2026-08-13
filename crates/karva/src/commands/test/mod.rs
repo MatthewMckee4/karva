@@ -76,6 +76,10 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     project_metadata
         .apply_overrides(&project_options_overrides)
         .map_err(|err| anyhow::anyhow!("{err}"))?;
+    if !sub_command.paths.is_empty() {
+        project_metadata.options.src.get_or_insert_default().include =
+            Some(sub_command.paths.clone());
+    }
 
     let project = Project::from_metadata(project_metadata);
 

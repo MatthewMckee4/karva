@@ -127,6 +127,98 @@ def test_in_other(): pass
 }
 
 #[test]
+fn explicit_test_path_overrides_configured_src_include() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.src]
+include = ["src", "tests"]
+"#,
+        ),
+        (
+            "src/test_src.py",
+            r"
+def test_in_src(): pass
+",
+        ),
+        (
+            "tests/test_tests.py",
+            r"
+def test_in_tests(): pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .arg("tests/test_tests.py::test_in_tests"),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] tests.test_tests::test_in_tests
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn explicit_test_paths_preserve_multiple_selectors() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.src]
+include = ["configured"]
+"#,
+        ),
+        (
+            "configured/test_configured.py",
+            r"
+def test_configured(): pass
+",
+        ),
+        (
+            "selected/test_first.py",
+            r"
+def test_first(): pass
+",
+        ),
+        (
+            "selected/test_second.py",
+            r"
+def test_second(): pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().args([
+            "selected/test_first.py::test_first",
+            "selected/test_second.py::test_second",
+        ]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] selected.test_first::test_first
+            PASS [TIME] selected.test_second::test_second
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
 fn test_defaults_to_tests_directory_when_present() {
     let context = TestContext::with_files([
         (
