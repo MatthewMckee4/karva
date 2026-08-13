@@ -22,10 +22,15 @@ pub use self::connection::ConnectionInitializer;
 mod api;
 mod connection;
 mod main_loop;
+mod schedule;
+
+pub use main_loop::{Action, Event, MainLoopReceiver, MainLoopSender};
 
 /// An initialized Karva language server.
 pub struct Server {
     connection: Connection,
+    main_loop_receiver: MainLoopReceiver,
+    main_loop_sender: MainLoopSender,
     register_config_watchers: bool,
     session: Session,
 }
@@ -74,9 +79,12 @@ impl Server {
             crate::SERVER_NAME,
             karva_version::version(),
         )?;
+        let (main_loop_sender, main_loop_receiver) = crossbeam_channel::unbounded();
 
         Ok(Self {
             connection,
+            main_loop_receiver,
+            main_loop_sender,
             register_config_watchers,
             session: Session::new(
                 position_encoding,
@@ -119,7 +127,11 @@ impl Server {
                 register_options: Some(serde_json::to_value(options)?),
             }],
         };
-        Client::new(self.connection.sender.clone()).send_request::<RegistrationRequest>(id, params)
+        Client::new(
+            self.main_loop_sender.clone(),
+            self.connection.sender.clone(),
+        )
+        .send_request::<RegistrationRequest>(id, params)
     }
 }
 

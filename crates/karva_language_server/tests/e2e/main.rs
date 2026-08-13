@@ -76,6 +76,17 @@ impl TestServer {
         serde_json::from_value(value).expect("response should match the request result type")
     }
 
+    fn request_raw(&mut self, method: &str, params: serde_json::Value) -> Response {
+        let id = RequestId::from(self.next_request_id);
+        self.next_request_id += 1;
+        self.send(Message::Request(lsp_server::Request {
+            id: id.clone(),
+            method: method.to_owned(),
+            params,
+        }));
+        self.receive_response(&id)
+    }
+
     fn notify<N: Notification>(&self, params: N::Params) {
         self.send(Message::Notification(lsp_server::Notification::new(
             N::METHOD.as_str().to_owned(),
