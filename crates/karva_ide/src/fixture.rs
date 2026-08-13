@@ -115,7 +115,7 @@ pub(super) struct FixtureDefinition {
     defining_name: String,
 
     /// Function-name source range.
-    name_range: TextRange,
+    pub(super) name_range: TextRange,
 
     /// Source signature of the provider function.
     pub(super) signature: String,

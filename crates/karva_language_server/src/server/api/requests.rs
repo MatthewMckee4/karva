@@ -5,9 +5,11 @@ use crate::session::Session;
 use crate::session::client::Client;
 
 mod completion;
+mod definition;
 mod hover;
 
 pub(super) use completion::Completion;
+pub(super) use definition::Definition;
 pub(super) use hover::Hover;
 
 pub(super) struct Shutdown;
