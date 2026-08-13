@@ -20,15 +20,16 @@ impl Server {
                     };
                     self.connection.sender.send(Message::Response(response))?;
                 }
-                Message::Notification(notification)
-                    if notification.method == ExitNotification::METHOD.as_str() =>
-                {
-                    if !self.session.is_shutdown_requested() {
-                        bail!("received exit notification before shutdown request");
+                Message::Notification(notification) => {
+                    if notification.method == ExitNotification::METHOD.as_str() {
+                        if !self.session.is_shutdown_requested() {
+                            bail!("received exit notification before shutdown request");
+                        }
+                        return Ok(());
                     }
-                    return Ok(());
+
+                    super::api::notification(notification, &mut self.session);
                 }
-                Message::Notification(_) => {}
                 Message::Response(response) => {
                     bail!("received unexpected response with ID {}", response.id);
                 }

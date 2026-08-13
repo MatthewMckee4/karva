@@ -5,8 +5,11 @@ use anyhow::Context;
 pub use server::{ConnectionInitializer, Server};
 
 mod capabilities;
+mod document;
 mod server;
 mod session;
+
+pub use document::{PositionEncoding, TextDocument};
 
 const SERVER_NAME: &str = "karva";
 

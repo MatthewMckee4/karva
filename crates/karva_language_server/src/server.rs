@@ -1,7 +1,7 @@
 //! Scheduling, I/O, and API endpoints.
 
 use lsp_server::Connection;
-use lsp_types::InitializeParams;
+use lsp_types::{InitializeParams, WorkspaceFolders, WorkspaceFoldersInitializeParams};
 
 use crate::capabilities::{position_encoding, server_capabilities};
 use crate::session::Session;
@@ -22,8 +22,18 @@ impl Server {
     /// Completes the LSP initialization handshake.
     pub fn new(connection: ConnectionInitializer) -> anyhow::Result<Self> {
         let (id, init_params) = connection.initialize_start()?;
-        let InitializeParams { capabilities, .. } = init_params;
-        let capabilities = server_capabilities(position_encoding(&capabilities));
+        let InitializeParams {
+            capabilities,
+            workspace_folders_initialize_params:
+                WorkspaceFoldersInitializeParams { workspace_folders },
+            ..
+        } = init_params;
+        let position_encoding = position_encoding(&capabilities);
+        let capabilities = server_capabilities(position_encoding);
+        let workspace_folders = match workspace_folders {
+            Some(WorkspaceFolders::WorkspaceFolderList(folders)) => folders,
+            Some(WorkspaceFolders::Null) | None => Vec::new(),
+        };
         let connection = connection.initialize_finish(
             id,
             &capabilities,
@@ -33,7 +43,7 @@ impl Server {
 
         Ok(Self {
             connection,
-            session: Session::default(),
+            session: Session::new(position_encoding, workspace_folders),
         })
     }
 
