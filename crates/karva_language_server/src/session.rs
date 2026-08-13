@@ -19,6 +19,8 @@ use crate::{PositionEncoding, TextDocument};
 use self::index::Index;
 use self::request_queue::RequestQueue;
 
+pub use self::request_queue::RequestCancellationToken;
+
 /// Failure to apply a document or workspace notification.
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -99,6 +101,10 @@ impl Session {
 
     pub fn request_queue_mut(&mut self) -> &mut RequestQueue {
         &mut self.request_queue
+    }
+
+    pub fn request_queue(&self) -> &RequestQueue {
+        &self.request_queue
     }
 
     pub fn position_encoding(&self) -> PositionEncoding {
