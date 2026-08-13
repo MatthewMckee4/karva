@@ -25,20 +25,17 @@ pub struct TextDocument {
     uri: Uri,
     contents: String,
     version: i32,
+    language_id: LanguageKind,
 }
 
 impl TextDocument {
     /// Creates an open document from an LSP `didOpen` notification.
-    pub(crate) fn new(
-        uri: Uri,
-        contents: String,
-        version: i32,
-        _language_id: LanguageKind,
-    ) -> Self {
+    pub(crate) fn new(uri: Uri, contents: String, version: i32, language_id: LanguageKind) -> Self {
         Self {
             uri,
             contents,
             version,
+            language_id,
         }
     }
 
@@ -48,15 +45,18 @@ impl TextDocument {
     }
 
     /// Returns the latest editor contents, including unsaved changes.
-    #[cfg(test)]
-    fn contents(&self) -> &str {
+    pub(crate) fn contents(&self) -> &str {
         &self.contents
     }
 
     /// Returns the client-managed document version.
-    #[cfg(test)]
-    fn version(&self) -> i32 {
+    pub(crate) fn version(&self) -> i32 {
         self.version
+    }
+
+    /// Returns the language identifier supplied by the client.
+    pub(crate) fn language_id(&self) -> &LanguageKind {
+        &self.language_id
     }
 
     /// Applies changes sequentially using positions from the negotiated encoding.

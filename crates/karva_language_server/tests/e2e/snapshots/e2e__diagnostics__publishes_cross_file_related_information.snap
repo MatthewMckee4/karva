@@ -1,0 +1,60 @@
+---
+source: crates/karva_language_server/tests/e2e/diagnostics.rs
+expression: workspace.normalize(diagnostics)
+---
+{
+  "diagnostics": [
+    {
+      "code": "fixture-scope-mismatch",
+      "message": "Fixture `shared` with `session` scope cannot depend on fixture `database` with `function` scope",
+      "range": {
+        "end": {
+          "character": 19,
+          "line": 3
+        },
+        "start": {
+          "character": 11,
+          "line": 3
+        }
+      },
+      "relatedInformation": [
+        {
+          "location": {
+            "range": {
+              "end": {
+                "character": 10,
+                "line": 3
+              },
+              "start": {
+                "character": 4,
+                "line": 3
+              }
+            },
+            "uri": "file:///project/test_example.py"
+          },
+          "message": "Fixture `shared` has `session` scope"
+        },
+        {
+          "location": {
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 3
+              },
+              "start": {
+                "character": 4,
+                "line": 3
+              }
+            },
+            "uri": "file:///project/conftest.py"
+          },
+          "message": "Fixture `database` has `function` scope"
+        }
+      ],
+      "severity": 1,
+      "source": "karva"
+    }
+  ],
+  "uri": "file:///project/test_example.py",
+  "version": 1
+}

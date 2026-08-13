@@ -7,7 +7,9 @@ use lsp_types::{
 };
 
 use crate::session::Session;
+use crate::session::client::Client;
 
+mod diagnostics;
 mod notifications;
 mod requests;
 mod traits;
@@ -25,22 +27,22 @@ pub(super) fn request(request: Request, session: &mut Session) -> Response {
     }
 }
 
-pub(super) fn notification(notification: Notification, session: &mut Session) {
+pub(super) fn notification(notification: Notification, session: &mut Session, client: &Client) {
     let result = match LspNotificationMethod::from(notification.method.as_str()) {
         DidOpenTextDocumentNotification::METHOD => {
-            run_notification::<notifications::DidOpen>(notification, session)
+            run_notification::<notifications::DidOpen>(notification, session, client)
         }
         DidChangeTextDocumentNotification::METHOD => {
-            run_notification::<notifications::DidChange>(notification, session)
+            run_notification::<notifications::DidChange>(notification, session, client)
         }
         DidCloseTextDocumentNotification::METHOD => {
-            run_notification::<notifications::DidClose>(notification, session)
+            run_notification::<notifications::DidClose>(notification, session, client)
         }
-        DidChangeWorkspaceFoldersNotification::METHOD => {
-            run_notification::<notifications::DidChangeWorkspaceFolders>(notification, session)
-        }
+        DidChangeWorkspaceFoldersNotification::METHOD => run_notification::<
+            notifications::DidChangeWorkspaceFolders,
+        >(notification, session, client),
         DidChangeWatchedFilesNotification::METHOD => {
-            run_notification::<notifications::DidChangeWatchedFiles>(notification, session)
+            run_notification::<notifications::DidChangeWatchedFiles>(notification, session, client)
         }
         method => {
             tracing::debug!("ignoring unsupported notification {method}");
@@ -74,10 +76,14 @@ where
     }
 }
 
-fn run_notification<H>(notification: Notification, session: &mut Session) -> anyhow::Result<()>
+fn run_notification<H>(
+    notification: Notification,
+    session: &mut Session,
+    client: &Client,
+) -> anyhow::Result<()>
 where
     H: SyncNotificationHandler,
 {
     let params = serde_json::from_value(notification.params)?;
-    H::run(session, params)
+    H::run(session, client, params)
 }
