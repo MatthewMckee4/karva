@@ -54,6 +54,8 @@ insta-cmd = { version = "0.7.0" }
 itertools = { version = "0.15.0" }
 lcov = { version = "0.8.2" }
 libc = { version = "0.2.178" }
+lsp-server = { version = "0.10.0" }
+lsp-types = { package = "gen-lsp-types", version = "0.10.0", features = ["url"] }
 markdown = { version = "1.0.0" }
 notify-debouncer-mini = { version = "0.7" }
 pretty_assertions = { version = "1.4.1" }
