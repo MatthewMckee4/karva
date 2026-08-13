@@ -54,6 +54,9 @@ nav = [
             { "Expect Fail" = "usage/tags/expect_fail.md"},
             { "Timeout" = "usage/tags/timeout.md"},
         ]},
+        { "Editor integrations" = [
+            { "Language server" = "usage/ide/language-server.md"},
+        ]},
         { "Project Non-Goals" = "usage/non-goals.md"},
     ]},
     { "Configuration" = [
