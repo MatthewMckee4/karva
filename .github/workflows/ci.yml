@@ -162,6 +162,9 @@ jobs:
         with:
           workspaces: editors/zed
 
+      - name: "Install Rust toolchain"
+        run: rustup component add clippy rustfmt
+
       - name: "Install WebAssembly target"
         run: rustup target add wasm32-wasip2
 
