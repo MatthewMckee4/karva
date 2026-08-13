@@ -148,7 +148,7 @@ jobs:
               cd "$(dirname "$source")"
               7z a "${archive_path}.zip" "$package_name"
             )
-            test "$(7z l -slt "${archive_path}.zip" | awk -F' = ' '$1 == "Path" { path = $2 } END { print path }')" = "$package_name"
+            test "$(7z l -slt "${archive_path}.zip" | tr -d '\r' | awk -F' = ' '$1 == "Path" { path = $2 } END { print path }')" = "$package_name"
           else
             tar -czf "${archive}.tar.gz" -C "$(dirname "$source")" "$package_name"
             test "$(tar -tzf "${archive}.tar.gz")" = "$package_name"
