@@ -21,6 +21,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 camino = { workspace = true }
+crossbeam-channel = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_python_semantic = { workspace = true }

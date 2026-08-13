@@ -155,6 +155,20 @@ impl Workspaces {
         self.roots.retain(|workspace| workspace.root != root);
         Ok(())
     }
+
+    pub(super) fn configuration_changed(&mut self, uri: &Uri) -> Result<(), WorkspaceError> {
+        let path = uri_to_path(uri)?;
+        if !matches!(path.file_name(), Some("karva.toml" | "pyproject.toml")) {
+            return Ok(());
+        }
+
+        for workspace in &mut self.roots {
+            if path.starts_with(&workspace.root) {
+                workspace.projects.clear();
+            }
+        }
+        Ok(())
+    }
 }
 
 fn uri_to_path(uri: &Uri) -> Result<Utf8PathBuf, WorkspaceError> {
@@ -360,5 +374,40 @@ mod tests {
         assert_eq!(prefix(&first_project), "first_");
         assert_eq!(prefix(&second_project), "second_");
         assert!(!Arc::ptr_eq(&first_project, &second_project));
+    }
+
+    #[test]
+    fn configuration_change_invalidates_cached_project() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let root = root(&temp_dir);
+        let config = root.join("karva.toml");
+        fs::write(
+            &config,
+            "[profile.default.test]\ntest-function-prefix = \"before_\"\n",
+        )
+        .expect("write initial configuration");
+        let mut workspaces =
+            Workspaces::new(vec![folder(&root, "root")], PythonVersion::PY311, None)
+                .expect("create workspaces");
+        let document = file_uri(&root.join("test_example.py"));
+        let before = workspaces
+            .project_for_uri(&document)
+            .expect("discover initial project");
+        fs::write(
+            &config,
+            "[profile.default.test]\ntest-function-prefix = \"after_\"\n",
+        )
+        .expect("write updated configuration");
+
+        workspaces
+            .configuration_changed(&file_uri(&config))
+            .expect("invalidate project");
+        let after = workspaces
+            .project_for_uri(&document)
+            .expect("rediscover project");
+
+        assert_eq!(prefix(&before), "before_");
+        assert_eq!(prefix(&after), "after_");
+        assert!(!Arc::ptr_eq(&before, &after));
     }
 }

@@ -31,7 +31,13 @@ impl Server {
                     super::api::notification(notification, &mut self.session);
                 }
                 Message::Response(response) => {
-                    bail!("received unexpected response with ID {}", response.id);
+                    if !self
+                        .session
+                        .request_queue_mut()
+                        .complete_outgoing(&response.id)
+                    {
+                        tracing::warn!("received unexpected response with ID {}", response.id);
+                    }
                 }
             }
         }
