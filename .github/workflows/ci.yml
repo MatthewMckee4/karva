@@ -144,6 +144,37 @@ jobs:
       - name: "Lint Rust"
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+  zed-extension:
+    name: "Zed extension"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    needs: determine_changes
+    if: ${{ (needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main') }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: editors/zed
+
+      - name: "Install Rust toolchain"
+        run: rustup component add clippy rustfmt
+
+      - name: "Install WebAssembly target"
+        run: rustup target add wasm32-wasip2
+
+      - name: "Check Zed extension"
+        run: |
+          cargo fmt --manifest-path editors/zed/Cargo.toml --all --check
+          cargo test --manifest-path editors/zed/Cargo.toml --locked
+          cargo clippy --manifest-path editors/zed/Cargo.toml --all-targets --locked -- -D warnings
+          cargo build --manifest-path editors/zed/Cargo.toml --locked --target wasm32-wasip2
+
   cargo-hawk:
     name: "cargo hawk"
 
