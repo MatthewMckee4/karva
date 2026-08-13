@@ -40,23 +40,23 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered
     } else {
         max_line.to_string().len()
     };
-    let gutter_width = 2 * num_width + 2;
+    let gutter_width = if bordered {
+        2 * num_width + 2
+    } else {
+        num_width + 1
+    };
     let content_width = width.saturating_sub(gutter_width + 1);
-    let separator_pad = gutter_width.saturating_sub(4);
     if bordered {
         let _ = writeln!(output, "{:─<gutter_width$}┬{:─<content_width$}", "", "");
     }
 
     for (group_idx, group) in ops.iter().enumerate() {
         if group_idx > 0 {
-            let _ = writeln!(output, "{:separator_pad$}┈┈┈┈┼{:┈<content_width$}", "", "");
+            let _ = writeln!(output, "{:┈<gutter_width$}┼{:┈<content_width$}", "", "");
         }
 
         for op in group {
             for change in diff.iter_inline_changes(op) {
-                let old_num = format_line_num(change.old_index(), num_width);
-                let new_num = format_line_num(change.new_index(), num_width);
-
                 let (marker, style) = match change.tag() {
                     ChangeTag::Delete => ("-", Style::Delete),
                     ChangeTag::Insert => ("+", Style::Insert),
@@ -69,12 +69,20 @@ fn render_diff(output: &mut String, old: &str, new: &str, width: usize, bordered
                 }
 
                 let colored_marker = style.apply_to_marker(marker);
-                let (styled_old, styled_new) = style.apply_to_line_numbers(old_num, new_num);
-
-                let _ = write!(
-                    output,
-                    "{styled_old} {styled_new} │ {colored_marker}{content}",
-                );
+                if bordered {
+                    let old_num = format_line_num(change.old_index(), num_width);
+                    let new_num = format_line_num(change.new_index(), num_width);
+                    let (styled_old, styled_new) = style.apply_to_line_numbers(old_num, new_num);
+                    let _ = write!(
+                        output,
+                        "{styled_old} {styled_new} │ {colored_marker}{content}",
+                    );
+                } else {
+                    let line_num =
+                        format_line_num(change.new_index().or(change.old_index()), num_width);
+                    let styled_line_num = style.apply_to_line_number(line_num);
+                    let _ = write!(output, "{styled_line_num} │ {colored_marker}{content}");
+                }
 
                 if change.missing_newline() {
                     let _ = writeln!(output);
@@ -150,6 +158,15 @@ impl Style {
             Self::Equal => (old_num.dimmed().to_string(), new_num.dimmed().to_string()),
         }
     }
+
+    /// Style a compact line number to match the change style.
+    fn apply_to_line_number(&self, line_num: String) -> String {
+        match self {
+            Self::Delete => line_num.cyan().dimmed().to_string(),
+            Self::Insert => line_num.cyan().dimmed().bold().to_string(),
+            Self::Equal => line_num.dimmed().to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -176,8 +193,8 @@ mod tests {
     fn addition() {
         settings().bind(|| {
             insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @"
-            1 1 │  a
-              2 │ +b
+            1 │  a
+            2 │ +b
             ");
         });
     }
@@ -186,8 +203,8 @@ mod tests {
     fn deletion() {
         settings().bind(|| {
             insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @"
-            1 1 │  a
-            2   │ -b
+            1 │  a
+            2 │ -b
             ");
         });
     }
@@ -206,19 +223,19 @@ mod tests {
         }
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(&lines_old, &lines_new), @"
-             1    │ -line 1
-                1 │ +CHANGED 1
-             2  2 │  line 2
-             3  3 │  line 3
-             4  4 │  line 4
-             5  5 │  line 5
-              ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            16 16 │  line 16
-            17 17 │  line 17
-            18 18 │  line 18
-            19 19 │  line 19
-            20    │ -line 20
-               20 │ +CHANGED 20
+             1 │ -line 1
+             1 │ +CHANGED 1
+             2 │  line 2
+             3 │  line 3
+             4 │  line 4
+             5 │  line 5
+            ┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            16 │  line 16
+            17 │  line 17
+            18 │  line 18
+            19 │  line 19
+            20 │ -line 20
+            20 │ +CHANGED 20
             ");
         });
     }
@@ -237,41 +254,41 @@ mod tests {
         }
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(&old, &new), @"
-                 1        │ -line 1
-                        1 │ +CHANGED 1
-                 2      2 │  line 2
-                 3      3 │  line 3
-                 4      4 │  line 4
-                 5      5 │  line 5
-                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-               996    996 │  line 996
-               997    997 │  line 997
-               998    998 │  line 998
-               999    999 │  line 999
-              1000        │ -line 1000
-                     1000 │ +CHANGED 1000
-              1001   1001 │  line 1001
-              1002   1002 │  line 1002
-              1003   1003 │  line 1003
-              1004   1004 │  line 1004
-                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-              9996   9996 │  line 9996
-              9997   9997 │  line 9997
-              9998   9998 │  line 9998
-              9999   9999 │  line 9999
-             10000        │ -line 10000
-                    10000 │ +CHANGED 10000
-             10001  10001 │  line 10001
-             10002  10002 │  line 10002
-             10003  10003 │  line 10003
-             10004  10004 │  line 10004
-                      ┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-             99996  99996 │  line 99996
-             99997  99997 │  line 99997
-             99998  99998 │  line 99998
-             99999  99999 │  line 99999
-            100000        │ -line 100000
-                   100000 │ +CHANGED 100000
+                 1 │ -line 1
+                 1 │ +CHANGED 1
+                 2 │  line 2
+                 3 │  line 3
+                 4 │  line 4
+                 5 │  line 5
+            ┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+               996 │  line 996
+               997 │  line 997
+               998 │  line 998
+               999 │  line 999
+              1000 │ -line 1000
+              1000 │ +CHANGED 1000
+              1001 │  line 1001
+              1002 │  line 1002
+              1003 │  line 1003
+              1004 │  line 1004
+            ┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+              9996 │  line 9996
+              9997 │  line 9997
+              9998 │  line 9998
+              9999 │  line 9999
+             10000 │ -line 10000
+             10000 │ +CHANGED 10000
+             10001 │  line 10001
+             10002 │  line 10002
+             10003 │  line 10003
+             10004 │  line 10004
+            ┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+             99996 │  line 99996
+             99997 │  line 99997
+             99998 │  line 99998
+             99999 │  line 99999
+            100000 │ -line 100000
+            100000 │ +CHANGED 100000
             ");
         });
     }
@@ -292,13 +309,13 @@ mod tests {
         let new = "{\n  \"roles\": [\n    \"user\",\n    \"hr\"\n  ]\n}";
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(old, new), @r#"
-            1 1 │  {
-            2 2 │    "roles": [
-            3   │ -    "user"
-              3 │ +    "user",
-              4 │ +    "hr"
-            4 5 │    ]
-            5 6 │  }
+            1 │  {
+            2 │    "roles": [
+            3 │ -    "user"
+            3 │ +    "user",
+            4 │ +    "hr"
+            5 │    ]
+            6 │  }
             "#);
         });
     }
