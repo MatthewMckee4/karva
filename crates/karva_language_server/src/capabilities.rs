@@ -1,33 +1,52 @@
-use lsp_types::{ClientCapabilities, PositionEncodingKind, ServerCapabilities};
+use lsp_types::{
+    ClientCapabilities, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
+    WorkspaceFoldersServerCapabilities,
+};
+
+use crate::PositionEncoding;
 
 /// Chooses the most efficient position encoding supported by the client.
-pub fn position_encoding(capabilities: &ClientCapabilities) -> PositionEncodingKind {
+pub fn position_encoding(capabilities: &ClientCapabilities) -> PositionEncoding {
     capabilities
         .general
         .as_ref()
         .and_then(|general| general.position_encodings.as_ref())
         .and_then(|encodings| {
-            [
-                PositionEncodingKind::UTF8,
-                PositionEncodingKind::UTF32,
-                PositionEncodingKind::UTF16,
-            ]
-            .into_iter()
-            .find(|preferred| encodings.contains(preferred))
+            encodings
+                .iter()
+                .filter_map(|encoding| PositionEncoding::try_from(encoding).ok())
+                .max()
         })
-        .unwrap_or(PositionEncodingKind::UTF16)
+        .unwrap_or_default()
 }
 
-pub fn server_capabilities(position_encoding: PositionEncodingKind) -> ServerCapabilities {
+pub fn server_capabilities(position_encoding: PositionEncoding) -> ServerCapabilities {
     ServerCapabilities {
-        position_encoding: Some(position_encoding),
+        position_encoding: Some(position_encoding.into()),
+        text_document_sync: Some(
+            TextDocumentSyncOptions {
+                open_close: Some(true),
+                change: Some(TextDocumentSyncKind::Incremental),
+                will_save: Some(false),
+                will_save_wait_until: Some(false),
+                save: None,
+            }
+            .into(),
+        ),
+        workspace: Some(lsp_types::WorkspaceOptions {
+            workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+                supported: Some(true),
+                change_notifications: Some(true.into()),
+            }),
+            ..lsp_types::WorkspaceOptions::default()
+        }),
         ..ServerCapabilities::default()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use lsp_types::{ClientCapabilities, GeneralClientCapabilities};
+    use lsp_types::{ClientCapabilities, GeneralClientCapabilities, PositionEncodingKind};
 
     use super::*;
 
@@ -35,7 +54,7 @@ mod tests {
     fn defaults_to_utf16() {
         assert_eq!(
             position_encoding(&ClientCapabilities::default()),
-            PositionEncodingKind::UTF16
+            PositionEncoding::UTF16
         );
     }
 
@@ -52,6 +71,6 @@ mod tests {
             ..ClientCapabilities::default()
         };
 
-        assert_eq!(position_encoding(&capabilities), PositionEncodingKind::UTF8);
+        assert_eq!(position_encoding(&capabilities), PositionEncoding::UTF8);
     }
 }

@@ -1,12 +1,17 @@
-use lsp_server::{ErrorCode, Request, Response};
-use lsp_types::{LspRequestMethod, Request as _, ShutdownRequest};
+use lsp_server::{ErrorCode, Notification, Request, Response};
+use lsp_types::{
+    DidChangeTextDocumentNotification, DidChangeWorkspaceFoldersNotification,
+    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, LspNotificationMethod,
+    LspRequestMethod, Notification as _, Request as _, ShutdownRequest,
+};
 
 use crate::session::Session;
 
+mod notifications;
 mod requests;
 mod traits;
 
-use self::traits::SyncRequestHandler;
+use self::traits::{SyncNotificationHandler, SyncRequestHandler};
 
 pub(super) fn request(request: Request, session: &mut Session) -> Response {
     match LspRequestMethod::from(request.method.as_str()) {
@@ -16,6 +21,31 @@ pub(super) fn request(request: Request, session: &mut Session) -> Response {
             ErrorCode::MethodNotFound as i32,
             format!("unknown request: {method}"),
         ),
+    }
+}
+
+pub(super) fn notification(notification: Notification, session: &mut Session) {
+    let result = match LspNotificationMethod::from(notification.method.as_str()) {
+        DidOpenTextDocumentNotification::METHOD => {
+            run_notification::<notifications::DidOpen>(notification, session)
+        }
+        DidChangeTextDocumentNotification::METHOD => {
+            run_notification::<notifications::DidChange>(notification, session)
+        }
+        DidCloseTextDocumentNotification::METHOD => {
+            run_notification::<notifications::DidClose>(notification, session)
+        }
+        DidChangeWorkspaceFoldersNotification::METHOD => {
+            run_notification::<notifications::DidChangeWorkspaceFolders>(notification, session)
+        }
+        method => {
+            tracing::debug!("ignoring unsupported notification {method}");
+            return;
+        }
+    };
+
+    if let Err(error) = result {
+        tracing::warn!("failed to handle notification: {error}");
     }
 }
 
@@ -38,4 +68,12 @@ where
         },
         Err(error) => Response::new_err(id, ErrorCode::InternalError as i32, error.to_string()),
     }
+}
+
+fn run_notification<H>(notification: Notification, session: &mut Session) -> anyhow::Result<()>
+where
+    H: SyncNotificationHandler,
+{
+    let params = serde_json::from_value(notification.params)?;
+    H::run(session, params)
 }

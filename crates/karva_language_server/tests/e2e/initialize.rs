@@ -1,4 +1,7 @@
-use lsp_types::{ClientCapabilities, GeneralClientCapabilities, PositionEncodingKind};
+use lsp_types::{
+    ClientCapabilities, GeneralClientCapabilities, PositionEncodingKind, TextDocumentSync,
+    TextDocumentSyncKind,
+};
 
 use super::TestServer;
 
@@ -43,5 +46,25 @@ fn initialization_negotiates_utf8() {
             .capabilities
             .position_encoding,
         Some(PositionEncodingKind::UTF8)
+    );
+}
+
+#[test]
+fn initialization_advertises_document_and_workspace_sync() {
+    let server = TestServer::new(ClientCapabilities::default());
+    let capabilities = &server.initialization_result().capabilities;
+    let Some(TextDocumentSync::Options(sync)) = capabilities.text_document_sync else {
+        panic!("expected text document sync options");
+    };
+
+    assert_eq!(sync.open_close, Some(true));
+    assert_eq!(sync.change, Some(TextDocumentSyncKind::Incremental));
+    assert_eq!(
+        capabilities
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.workspace_folders.as_ref())
+            .and_then(|folders| folders.supported),
+        Some(true)
     );
 }

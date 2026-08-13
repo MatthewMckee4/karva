@@ -1178,7 +1178,12 @@ dependencies = [
  "gen-lsp-types",
  "karva_version",
  "lsp-server",
+ "rstest",
+ "ruff_source_file",
+ "ruff_text_size",
  "serde_json",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
