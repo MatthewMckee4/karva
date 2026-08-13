@@ -2,6 +2,7 @@ use crossbeam_channel::Sender;
 use lsp_server::{ErrorCode, Message, RequestId, Response, ResponseError};
 use lsp_types::{Notification, Request};
 
+use crate::server::DiagnosticPublication;
 use crate::server::{Action, Event, MainLoopSender};
 use crate::session::{DocumentSnapshotVersion, Session};
 
@@ -68,6 +69,16 @@ impl Client {
                 response,
                 version,
             }))?;
+        Ok(())
+    }
+
+    /// Queues completed diagnostics for revision validation on the main loop.
+    pub(crate) fn publish_diagnostics(
+        &self,
+        publication: DiagnosticPublication,
+    ) -> anyhow::Result<()> {
+        self.main_loop_sender
+            .send(Event::Action(Action::PublishDiagnostics(publication)))?;
         Ok(())
     }
 

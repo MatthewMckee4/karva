@@ -25,6 +25,7 @@ mod connection;
 mod main_loop;
 mod schedule;
 
+pub use api::diagnostics::DiagnosticPublication;
 pub use main_loop::{Action, Event, MainLoopReceiver, MainLoopSender};
 
 const REGISTER_FILE_WATCHERS_REQUEST_ID: &str = "karva/register-file-watchers";

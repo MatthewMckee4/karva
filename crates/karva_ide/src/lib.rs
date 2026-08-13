@@ -39,9 +39,13 @@ pub struct SourceDocument {
     source_text: String,
 }
 
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "used by source-analysis unit-test helpers")
+)]
 impl SourceDocument {
     /// Creates a source document with its stable filesystem path.
-    pub fn new(path: Utf8PathBuf, source_text: String) -> Self {
+    fn new(path: Utf8PathBuf, source_text: String) -> Self {
         Self { path, source_text }
     }
 
@@ -192,7 +196,11 @@ pub(crate) fn analyze_source(
 /// `parents` must be ordered from the project/session root toward the current
 /// package. The returned module is the current document; parent modules are
 /// used to resolve fixture references and retain their source locations.
-pub fn analyze_source_with_parents(
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "used by source-analysis unit-test helpers")
+)]
+pub(crate) fn analyze_source_with_parents(
     current: SourceDocument,
     parents: impl IntoIterator<Item = SourceDocument>,
     project_root: &Utf8Path,

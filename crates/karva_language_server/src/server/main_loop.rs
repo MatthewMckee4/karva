@@ -26,6 +26,8 @@ pub enum Action {
         response: Response,
         version: DocumentSnapshotVersion,
     },
+
+    PublishDiagnostics(super::api::diagnostics::DiagnosticPublication),
 }
 
 enum NextEvent {
@@ -35,7 +37,7 @@ enum NextEvent {
 
 impl Server {
     pub(super) fn main_loop(&mut self) -> anyhow::Result<()> {
-        let mut scheduler = Scheduler::new(std::thread::available_parallelism()?);
+        let mut scheduler = Scheduler::new(std::thread::available_parallelism()?)?;
 
         loop {
             let Some(event) = self.next_event()? else {
@@ -107,6 +109,18 @@ impl Server {
                         )
                     };
                     self.send_response_if_pending(response)?;
+                }
+                NextEvent::Action(Action::PublishDiagnostics(publication)) => {
+                    if self
+                        .session
+                        .is_source_index_revision_current(&publication.source_index_revision)
+                    {
+                        super::api::diagnostics::publish_diagnostics(
+                            &mut self.session,
+                            &client,
+                            publication,
+                        )?;
+                    }
                 }
             }
         }

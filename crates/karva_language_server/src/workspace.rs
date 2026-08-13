@@ -4,9 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use karva_metadata::{
-    Options, ProjectMetadata, ProjectMetadataError, ProjectOptionsOverrides, UnknownProfile,
-};
+use karva_metadata::{ProjectMetadataError, UnknownProfile};
 use karva_project::Project;
 use lsp_types::{Uri, WorkspaceFolder};
 use ruff_python_ast::PythonVersion;
@@ -55,31 +53,12 @@ impl Workspace {
         python_version: PythonVersion,
         profile: Option<&str>,
     ) -> Result<Arc<Project>, WorkspaceError> {
-        let directory = path
-            .parent()
-            .ok_or_else(|| WorkspaceError::MissingParent(path.to_path_buf()))?;
-        let mut metadata = ProjectMetadata::discover(directory, python_version)?;
-        if metadata.root() == directory
-            && !directory.join("karva.toml").exists()
-            && !directory.join("pyproject.toml").exists()
-        {
-            let fallback_root = directory
-                .ancestors()
-                .take_while(|ancestor| ancestor.starts_with(&self.root))
-                .find(|ancestor| ancestor.join(".git").exists())
-                .unwrap_or(&self.root);
-            metadata = ProjectMetadata::discover(fallback_root, python_version)?;
-        }
-        let root = metadata.root().clone();
+        let project = crate::discover_project(path, &self.root, python_version, profile)?;
+        let root = project.cwd().clone();
         if let Some(project) = self.projects.get(&root) {
             return Ok(Arc::clone(project));
         }
-
-        metadata.apply_overrides(
-            &ProjectOptionsOverrides::new(None, Options::default())
-                .with_profile(profile.map(str::to_owned)),
-        )?;
-        let project = Arc::new(Project::from_metadata(metadata));
+        let project = Arc::new(project);
         self.projects.insert(root, Arc::clone(&project));
         Ok(project)
     }
@@ -137,6 +116,28 @@ impl Workspaces {
             workspace.project_for_path(&path, self.python_version, self.profile.as_deref())?;
         self.roots.push(workspace);
         Ok(project)
+    }
+
+    /// Captures project-discovery inputs without reading the filesystem.
+    pub(super) fn prepare_project_discovery(
+        &self,
+        uri: &Uri,
+    ) -> Result<crate::PreparedProjectDiscovery, WorkspaceError> {
+        let path = uri_to_path(uri)?;
+        let workspace_root = self
+            .roots
+            .iter()
+            .filter(|workspace| path.starts_with(&workspace.root))
+            .max_by_key(|workspace| workspace.root.components().count())
+            .map(|workspace| workspace.root.clone())
+            .or_else(|| path.parent().map(Utf8Path::to_path_buf))
+            .ok_or_else(|| WorkspaceError::MissingParent(path.clone()))?;
+        Ok(crate::PreparedProjectDiscovery {
+            path,
+            workspace_root,
+            python_version: self.python_version,
+            profile: self.profile.clone(),
+        })
     }
 
     pub(super) fn open_folder(&mut self, folder: WorkspaceFolder) -> Result<(), WorkspaceError> {
