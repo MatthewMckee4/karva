@@ -73,6 +73,13 @@ impl DiscoveredModule {
             .find(|fixture| fixture.name() == name)
     }
 
+    /// Finds a rejected fixture by its defining Python symbol rather than its public name.
+    pub(crate) fn rejected_fixture_symbol(&self, name: &str) -> Option<&RejectedFixture> {
+        self.rejected_fixtures
+            .iter()
+            .find(|fixture| fixture.statement().name.as_str() == name)
+    }
+
     pub(crate) fn add_rejected_fixture(&mut self, fixture: RejectedFixture) {
         self.rejected_fixtures.push(fixture);
     }

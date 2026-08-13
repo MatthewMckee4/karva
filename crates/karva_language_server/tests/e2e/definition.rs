@@ -81,7 +81,7 @@ fn goes_to_unsaved_nested_ancestor_override() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef root_only(): pass\n",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
     );
     workspace.write(
         "package/conftest.py",
@@ -163,6 +163,31 @@ fn resolves_nested_package_fixture_shadowing() {
       "uri": "file:///project/package/conftest.py"
     }
     "#);
+}
+
+#[test]
+fn resolves_nearest_fixture_across_multiple_nested_conftests() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    workspace.write(
+        "package/conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    workspace.write(
+        "package/inner/conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("package/inner/test_example.py");
+    open(&server, uri.clone(), "def test_example(database): pass\n");
+
+    let response =
+        server.request::<DefinitionRequest>(definition_params(uri, Position::new(0, 20)));
+
+    assert_json_snapshot!(workspace.normalize(response));
 }
 
 #[test]

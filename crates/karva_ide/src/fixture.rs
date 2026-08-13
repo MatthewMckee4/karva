@@ -263,6 +263,7 @@ pub fn analyze_modules(
 ) -> (Vec<FixtureDefinition>, Vec<SourceDiagnostic>) {
     let mut providers = parents
         .iter()
+        .rev()
         .map(|module| parse_provider(module, try_import_fixtures))
         .collect::<Vec<_>>();
     let current_provider = parse_provider(current, try_import_fixtures);
@@ -365,6 +366,7 @@ pub fn visible_fixtures(
 ) -> VisibleFixtures {
     let mut providers = parents
         .iter()
+        .rev()
         .map(|module| parse_provider(module, try_import_fixtures))
         .collect::<Vec<_>>();
     providers.insert(0, parse_provider(current, try_import_fixtures));
@@ -1367,6 +1369,29 @@ mod tests {
         let dependency = &analysis.fixtures[0].dependencies[0].resolution;
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/conftest.py")
+        );
+    }
+
+    #[test]
+    fn same_name_fixture_uses_nearest_parent_across_multiple_levels() {
+        let root = module(
+            "/project/conftest.py",
+            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        );
+        let nearest = module(
+            "/project/pkg/conftest.py",
+            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        );
+        let current = module(
+            "/project/pkg/test_example.py",
+            "from karva import fixture\n\n@fixture\ndef database(database): pass\n\ndef test_example(database): pass\n",
+        );
+        let analysis = analyze_sources(current, &[root, nearest], &settings());
+
+        assert!(analysis.diagnostics.is_empty());
+        let dependency = &analysis.fixtures[0].dependencies[0].resolution;
+        assert!(
+            matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/pkg/conftest.py")
         );
     }
 
