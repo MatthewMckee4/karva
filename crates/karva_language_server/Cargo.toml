@@ -20,17 +20,24 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+camino = { workspace = true }
+karva_metadata = { workspace = true }
+karva_project = { workspace = true }
+karva_python_semantic = { workspace = true }
 karva_version = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
+ruff_python_ast = { workspace = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

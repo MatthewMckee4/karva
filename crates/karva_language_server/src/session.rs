@@ -2,8 +2,12 @@
 
 mod index;
 
+use std::sync::Arc;
+
+use karva_project::Project;
 use lsp_types::{TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
 
+use crate::workspace::{WorkspaceError, Workspaces};
 use crate::{PositionEncoding, TextDocument};
 
 use self::index::Index;
@@ -22,6 +26,10 @@ pub enum SessionError {
     /// The document change violated its version contract.
     #[error(transparent)]
     DocumentChange(#[from] crate::document::DocumentChangeError),
+
+    /// Project discovery or configuration resolution failed.
+    #[error(transparent)]
+    Workspace(#[from] WorkspaceError),
 }
 
 /// Mutable state owned by the language-server event loop.
@@ -30,17 +38,16 @@ pub struct Session {
     index: Index,
     position_encoding: PositionEncoding,
     shutdown_requested: bool,
+    workspaces: Workspaces,
 }
 
 impl Session {
-    pub fn new(
-        position_encoding: PositionEncoding,
-        workspace_folders: impl IntoIterator<Item = WorkspaceFolder>,
-    ) -> Self {
+    pub fn new(position_encoding: PositionEncoding, workspaces: Workspaces) -> Self {
         Self {
-            index: Index::new(workspace_folders),
+            index: Index::new(workspaces.folders().cloned()),
             position_encoding,
             shutdown_requested: false,
+            workspaces,
         }
     }
 
@@ -54,6 +61,10 @@ impl Session {
 
     pub fn open_document(&mut self, document: TextDocument) {
         self.index.open_document(document);
+    }
+
+    pub fn project_for_uri(&mut self, uri: &Uri) -> Result<Arc<Project>, SessionError> {
+        Ok(self.workspaces.project_for_uri(uri)?)
     }
 
     pub fn update_document(
@@ -70,11 +81,14 @@ impl Session {
         self.index.close_document(uri)
     }
 
-    pub fn open_workspace_folder(&mut self, folder: WorkspaceFolder) {
+    pub fn open_workspace_folder(&mut self, folder: WorkspaceFolder) -> Result<(), SessionError> {
+        self.workspaces.open_folder(folder.clone())?;
         self.index.open_workspace_folder(folder);
+        Ok(())
     }
 
     pub fn close_workspace_folder(&mut self, uri: &Uri) -> Result<(), SessionError> {
+        self.workspaces.close_folder(uri)?;
         self.index.close_workspace_folder(uri)
     }
 }
