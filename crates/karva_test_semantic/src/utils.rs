@@ -458,7 +458,7 @@ pub fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> PyResul
 pub fn test_parameters(
     py: Python,
     kwargs: &FixtureArguments,
-    parameters: &Parameters,
+    parameters: Option<&Parameters>,
     name_only_arguments: &[&str],
 ) -> Option<String> {
     if kwargs.is_empty() {

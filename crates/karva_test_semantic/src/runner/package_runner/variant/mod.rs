@@ -224,7 +224,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             test_parameters(
                 self.py,
                 function_arguments,
-                &self.test.statement().parameters,
+                self.test.parameters(),
                 &framework_fixture_names,
             )
         };
@@ -284,17 +284,17 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .settings()
             .junit_flaky_fail_status_for(&evaluation_context);
         let expect_fail_tag = self.tags.expect_fail_tag();
-        let async_patch_result = if self.test.statement().is_async {
+        let async_patch_result = if self.test.is_async() {
             crate::utils::patch_async_test_function(self.py, &self.test.py_function)
         } else {
             Ok(false)
         };
-        let is_async = self.test.statement().is_async && matches!(&async_patch_result, Ok(false));
+        let is_async = self.test.is_async() && matches!(&async_patch_result, Ok(false));
         let mut snapshot_test_name = name.function_name().to_string();
         if let Some(parameters) = test_parameters(
             self.py,
             function_arguments,
-            &self.test.statement().parameters,
+            self.test.parameters(),
             &fixture_names,
         ) {
             snapshot_test_name.push('(');

@@ -89,6 +89,6 @@ impl DiscoveredModule {
 
     pub(super) fn shrink(&mut self) {
         self.test_functions
-            .sort_by_key(|function| function.statement().range.start());
+            .sort_by_key(|function| function.source_range().start());
     }
 }

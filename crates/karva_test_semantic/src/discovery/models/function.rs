@@ -3,22 +3,22 @@ use std::rc::Rc;
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
-use ruff_python_ast::StmtFunctionDef;
+use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::SourceFile;
+use ruff_text_size::TextRange;
 
 use crate::discovery::DiscoveredModule;
-use crate::discovery::models::definition::FunctionDefinition;
+use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::tags::Tags;
 
-/// Represents a single test function discovered from Python source code.
+/// Represents a single executable test discovered from Python source code.
 ///
 /// Contains all the information needed to execute a test, including the
-/// function's qualified name, AST representation, Python callable, and
-/// any associated decorator tags.
+/// test's qualified name, source definition, Python callable, and tags.
 #[derive(Debug)]
 pub struct DiscoveredTestFunction {
-    /// Immutable source identity and syntax.
-    definition: Rc<FunctionDefinition>,
+    /// Immutable source identity and test-kind-specific syntax.
+    definition: Rc<TestDefinition>,
 
     /// Reference to the actual Python callable object.
     pub(crate) py_function: Py<PyAny>,
@@ -33,7 +33,7 @@ pub struct DiscoveredTestFunction {
 }
 
 impl DiscoveredTestFunction {
-    pub(crate) fn new(
+    pub(crate) fn new_function(
         py: Python<'_>,
         module: &DiscoveredModule,
         py_module: &Bound<'_, PyModule>,
@@ -48,14 +48,14 @@ impl DiscoveredTestFunction {
 
         let mut tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
         if let Ok(marks) = py_module.getattr("pytestmark") {
-            let module_tags =
-                Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
-                    .unwrap_or_default();
-            tags.extend(&module_tags);
+            tags.extend(
+                &Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
+                    .unwrap_or_default(),
+            );
         }
 
         Ok(Self {
-            definition: Rc::new(FunctionDefinition::new(
+            definition: Rc::new(TestDefinition::function(
                 name,
                 stmt_function_def,
                 module.source_file(),
@@ -66,7 +66,31 @@ impl DiscoveredTestFunction {
         })
     }
 
-    pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
+    pub(crate) fn new_doctest(
+        py: Python<'_>,
+        module: &DiscoveredModule,
+        py_module: &Bound<'_, PyModule>,
+        name: String,
+        range: TextRange,
+        py_function: Py<PyAny>,
+    ) -> PyResult<Self> {
+        let name = QualifiedFunctionName::new(name, module.module_path().clone());
+        let tags = if let Ok(marks) = py_module.getattr("pytestmark") {
+            Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
+                .unwrap_or_default()
+        } else {
+            Tags::default()
+        };
+
+        Ok(Self {
+            definition: Rc::new(TestDefinition::doctest(name, range, module.source_file())),
+            py_function,
+            tags,
+            case_filter: None,
+        })
+    }
+
+    pub(crate) fn definition(&self) -> &Rc<TestDefinition> {
         &self.definition
     }
 
@@ -74,8 +98,28 @@ impl DiscoveredTestFunction {
         self.definition.name()
     }
 
-    pub(crate) fn statement(&self) -> &StmtFunctionDef {
-        self.definition.statement()
+    pub(super) fn source_range(&self) -> TextRange {
+        self.definition.source_range()
+    }
+
+    pub(crate) fn diagnostic_range(&self) -> TextRange {
+        self.definition.diagnostic_range()
+    }
+
+    pub(crate) fn function_statement(&self) -> Option<&StmtFunctionDef> {
+        self.definition.function_statement()
+    }
+
+    pub(crate) fn parameters(&self) -> Option<&Parameters> {
+        self.definition.parameters()
+    }
+
+    pub(crate) fn is_async(&self) -> bool {
+        self.definition.is_async()
+    }
+
+    pub(crate) fn required_fixtures(&self) -> Vec<String> {
+        self.definition.required_fixtures()
     }
 
     pub(crate) fn source_file(&self) -> &SourceFile {

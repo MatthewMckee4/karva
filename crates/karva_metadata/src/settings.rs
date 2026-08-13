@@ -783,6 +783,10 @@ fn is_false(value: &bool) -> bool {
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "resolved settings mirror independent boolean configuration switches"
+)]
 /// Resolved test selection, retry, timeout, and failure settings.
 pub struct TestSettings {
     /// Prefix identifying Python test functions during syntax collection.
@@ -798,6 +802,9 @@ pub struct TestSettings {
 
     /// Whether collection imports modules to discover fixtures dynamically.
     pub try_import_fixtures: bool,
+
+    /// Whether module, class, function, and method docstrings are collected as tests.
+    pub doctest_modules: bool,
 
     /// Additional attempts permitted after first failure.
     pub retry: u32,

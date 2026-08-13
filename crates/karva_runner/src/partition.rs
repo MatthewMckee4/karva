@@ -407,6 +407,20 @@ fn collect_test_paths_recursive(
                 });
             }
         }
+
+        for doctest in &module.doctests {
+            let module_name = module.path.module_name();
+            let module_path = module.path.path();
+            let function_name = doctest.name.as_str();
+            let qualified_name = format!("{module_name}::{function_name}");
+            test_infos.push(TestInfo {
+                module_name: module_name.to_string(),
+                duration: previous_durations.get(qualified_name.as_str()).copied(),
+                path: format!("{module_path}::{function_name}"),
+                function_root: qualified_name.clone(),
+                qualified_name,
+            });
+        }
     }
 
     for subpackage in package.packages.values() {
@@ -419,11 +433,16 @@ pub fn scheduled_test_count(package: &karva_collector::CollectedPackage) -> usiz
     let direct = package
         .modules
         .values()
-        .flat_map(|module| &module.test_function_defs)
-        .map(|test| {
-            karva_collector::count_parametrize_cases(test)
-                .unwrap_or(1)
-                .max(1)
+        .map(|module| {
+            module
+                .test_function_defs
+                .iter()
+                .map(|test| {
+                    karva_collector::count_parametrize_cases(test)
+                        .unwrap_or(1)
+                        .max(1)
+                })
+                .fold(module.doctests.len(), usize::saturating_add)
         })
         .fold(0usize, usize::saturating_add);
     package
@@ -772,6 +791,7 @@ mod tests {
             test_function_prefix: "test_",
             respect_ignore_files: true,
             collect_fixtures: false,
+            collect_doctests: false,
         };
         let mut package = CollectedPackage::new(root);
         let mut test_paths = HashMap::new();

@@ -39,6 +39,7 @@ nav = [
         ]},
         { "Writing Tests" = [
             { "Basics" = "usage/writing-tests/tests.md"},
+            { "Doctests" = "usage/writing-tests/doctests.md"},
             { "Snapshots" = "usage/writing-tests/snapshots.md"},
             { "Coverage" = "usage/writing-tests/coverage.md"},
             { "Other Functions" = "usage/writing-tests/functions.md"},

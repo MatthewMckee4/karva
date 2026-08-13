@@ -24,6 +24,7 @@ fn show_config_default_profile() {
     test-function-prefix = "test"
     strict-tags = false
     try-import-fixtures = false
+    doctest-modules = false
     retry = 0
     shuffle = false
     flaky-result = "pass"

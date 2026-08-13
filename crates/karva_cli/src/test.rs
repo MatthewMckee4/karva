@@ -57,6 +57,10 @@ pub struct SubTestCommand {
     #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
     pub try_import_fixtures: Option<bool>,
 
+    /// Collect examples from module, class, function, and method docstrings.
+    #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
+    pub doctest_modules: Option<bool>,
+
     /// Filter tests using a filterset expression.
     ///
     /// Predicates: `test(<matcher>)` matches the fully qualified test name;
@@ -535,6 +539,7 @@ impl SubTestCommand {
                 fail_fast,
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,
+                doctest_modules: self.doctest_modules,
                 retry: self.retry,
                 shuffle: None,
                 random_seed: None,
@@ -691,6 +696,7 @@ mod tests {
             "karva-test",
             "--no-ignore=false",
             "--try-import-fixtures=false",
+            "--doctest-modules=false",
             "--fail-fast=false",
             "--snapshot-update=false",
             "--show-output=false",
@@ -701,6 +707,7 @@ mod tests {
 
         assert_eq!(command.sub_command.no_ignore, Some(false));
         assert_eq!(command.sub_command.try_import_fixtures, Some(false));
+        assert_eq!(command.sub_command.doctest_modules, Some(false));
         assert_eq!(command.sub_command.fail_fast, Some(false));
         assert_eq!(command.sub_command.snapshot_update, Some(false));
         assert_eq!(command.sub_command.show_output, Some(false));
@@ -715,6 +722,7 @@ mod tests {
             "karva-test",
             "--no-ignore",
             "--try-import-fixtures",
+            "--doctest-modules",
             "--fail-fast",
             "--snapshot-update",
             "--show-output",
@@ -725,6 +733,7 @@ mod tests {
 
         assert_eq!(command.sub_command.no_ignore, Some(true));
         assert_eq!(command.sub_command.try_import_fixtures, Some(true));
+        assert_eq!(command.sub_command.doctest_modules, Some(true));
         assert_eq!(command.sub_command.fail_fast, Some(true));
         assert_eq!(command.sub_command.snapshot_update, Some(true));
         assert_eq!(command.sub_command.show_output, Some(true));

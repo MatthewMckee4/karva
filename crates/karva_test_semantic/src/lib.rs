@@ -4,6 +4,7 @@ pub(crate) mod collection;
 mod context;
 pub(crate) mod diagnostic;
 pub(crate) mod discovery;
+mod doctest;
 pub(crate) mod extensions;
 mod output_capture;
 mod py_attach;

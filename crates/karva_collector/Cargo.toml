@@ -17,6 +17,7 @@ camino = { workspace = true }
 fs-err = { workspace = true }
 ruff_python_ast = { workspace = true }
 ruff_python_parser = { workspace = true }
+ruff_text_size = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

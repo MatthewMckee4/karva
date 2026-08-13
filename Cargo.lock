@@ -919,6 +919,7 @@ dependencies = [
  "karva_python_semantic",
  "ruff_python_ast",
  "ruff_python_parser",
+ "ruff_text_size",
  "tempfile",
  "thiserror",
 ]

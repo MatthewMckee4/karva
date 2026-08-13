@@ -8,6 +8,7 @@ mod configuration;
 mod coverage;
 mod coverage_command;
 mod discovery;
+mod doctest;
 mod durations;
 mod extensions;
 mod filterset;

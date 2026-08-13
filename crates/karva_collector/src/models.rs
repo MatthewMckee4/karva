@@ -3,8 +3,32 @@ use std::collections::HashMap;
 use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
 use ruff_python_ast::{Stmt, StmtFunctionDef};
+use ruff_text_size::TextRange;
 
-/// A collected module containing raw AST function definitions.
+/// The Python object whose docstring defines a doctest case.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DoctestTarget {
+    /// The containing Python module.
+    Module,
+
+    /// A module member, named relative to the containing module.
+    Object(String),
+}
+
+/// One docstring containing examples scheduled as a single doctest case.
+#[derive(Debug, Clone)]
+pub struct CollectedDoctest {
+    /// Python object that owns the docstring.
+    pub target: DoctestTarget,
+
+    /// Stable test selector.
+    pub name: String,
+
+    /// First executable prompt, or the docstring when no prompt range is available.
+    pub range: TextRange,
+}
+
+/// A collected module containing raw AST definitions and doctest metadata.
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
 pub struct CollectedModule {
@@ -23,6 +47,9 @@ pub struct CollectedModule {
     /// Test function definitions (functions starting with test prefix)
     pub test_function_defs: Vec<StmtFunctionDef>,
 
+    /// Docstrings containing doctest examples.
+    pub doctests: Vec<CollectedDoctest>,
+
     /// Fixture function definitions (functions with fixture decorators)
     pub fixture_function_defs: Vec<StmtFunctionDef>,
 }
@@ -40,12 +67,17 @@ impl CollectedModule {
             source_text,
             module_body,
             test_function_defs: Vec::new(),
+            doctests: Vec::new(),
             fixture_function_defs: Vec::new(),
         }
     }
 
     pub(super) fn add_test_function_def(&mut self, function_def: StmtFunctionDef) {
         self.test_function_defs.push(function_def);
+    }
+
+    pub(super) fn add_doctest(&mut self, doctest: CollectedDoctest) {
+        self.doctests.push(doctest);
     }
 
     pub(super) fn add_fixture_function_def(&mut self, function_def: StmtFunctionDef) {
@@ -62,7 +94,9 @@ impl CollectedModule {
     }
 
     fn is_empty(&self) -> bool {
-        self.test_function_defs.is_empty() && self.fixture_function_defs.is_empty()
+        self.test_function_defs.is_empty()
+            && self.doctests.is_empty()
+            && self.fixture_function_defs.is_empty()
     }
 }
 
@@ -215,7 +249,7 @@ impl CollectedPackage {
         let module_tests: usize = self
             .modules
             .values()
-            .map(|m| m.test_function_defs.len())
+            .map(|m| m.test_function_defs.len() + m.doctests.len())
             .sum();
         let package_tests: usize = self.packages.values().map(Self::test_count).sum();
         module_tests + package_tests
@@ -242,6 +276,15 @@ impl CollectedModule {
     fn update(&mut self, module: Self) {
         if self.path == module.path {
             add_new_definitions(&mut self.test_function_defs, module.test_function_defs);
+            for doctest in module.doctests {
+                if !self
+                    .doctests
+                    .iter()
+                    .any(|existing| existing.target == doctest.target)
+                {
+                    self.doctests.push(doctest);
+                }
+            }
             add_new_definitions(
                 &mut self.fixture_function_defs,
                 module.fixture_function_defs,

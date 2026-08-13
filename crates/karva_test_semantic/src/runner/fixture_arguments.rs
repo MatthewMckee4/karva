@@ -30,14 +30,20 @@ impl FixtureArguments {
     }
 
     /// Iterates arguments by Python signature position, then name.
+    ///
+    /// Without a function signature, arguments are ordered by name.
     pub fn iter_in_signature_order<'a>(
         &'a self,
-        parameters: &Parameters,
+        parameters: Option<&Parameters>,
     ) -> impl Iterator<Item = (&'a String, &'a Py<PyAny>)> {
         let mut arguments = self.iter().collect::<Vec<_>>();
         arguments.sort_by(|(left, _), (right, _)| {
-            let left_position = parameters.index(left).unwrap_or(usize::MAX);
-            let right_position = parameters.index(right).unwrap_or(usize::MAX);
+            let left_position = parameters
+                .and_then(|parameters| parameters.index(left))
+                .unwrap_or(usize::MAX);
+            let right_position = parameters
+                .and_then(|parameters| parameters.index(right))
+                .unwrap_or(usize::MAX);
             left_position
                 .cmp(&right_position)
                 .then_with(|| left.cmp(right))
