@@ -1,0 +1,40 @@
+---
+source: crates/karva_language_server/tests/e2e/document_symbols.rs
+expression: response
+---
+[
+  {
+    "kind": 12,
+    "location": {
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 4
+        },
+        "start": {
+          "character": 0,
+          "line": 3
+        }
+      },
+      "uri": "file:///project/test_symbols.py"
+    },
+    "name": "данные"
+  },
+  {
+    "kind": 12,
+    "location": {
+      "range": {
+        "end": {
+          "character": 29,
+          "line": 7
+        },
+        "start": {
+          "character": 0,
+          "line": 6
+        }
+      },
+      "uri": "file:///project/test_symbols.py"
+    },
+    "name": "test_example"
+  }
+]

@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use crate::capabilities::{
     hover_markup_kind, position_encoding, server_capabilities,
-    supports_diagnostic_related_information,
+    supports_diagnostic_related_information, supports_hierarchical_document_symbols,
 };
 use crate::session::Session;
 use crate::session::client::Client;
@@ -61,6 +61,8 @@ impl Server {
         let register_file_watchers = supports_dynamic_file_watching(&capabilities);
         let supports_diagnostic_related_information =
             supports_diagnostic_related_information(&capabilities);
+        let supports_hierarchical_document_symbols =
+            supports_hierarchical_document_symbols(&capabilities);
         let capabilities = server_capabilities(position_encoding);
         let workspace_folders = match workspace_folders {
             Some(WorkspaceFolders::WorkspaceFolderList(folders)) => folders,
@@ -94,6 +96,7 @@ impl Server {
                 position_encoding,
                 hover_markup_kind,
                 supports_diagnostic_related_information,
+                supports_hierarchical_document_symbols,
                 workspaces,
             ),
         })

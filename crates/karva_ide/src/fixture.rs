@@ -19,7 +19,7 @@ pub struct FixtureId {
     pub path: Utf8PathBuf,
 
     /// Function-name range anchoring the fixture declaration.
-    range: TextRange,
+    pub(super) range: TextRange,
 }
 
 /// Runtime lifetime of a fixture value.
