@@ -111,18 +111,22 @@ impl ControllerConnections {
             .map_or(0, ControllerReader::event_count)
     }
 
-    /// Removes a disconnected generation's final checkpoint for recovery.
+    /// Removes a disconnected generation and returns its final checkpoint.
     pub(super) fn take_worker_checkpoint(
-        &self,
+        &mut self,
         worker_id: usize,
     ) -> Result<Option<super::checkpoint::WorkerCheckpoint>> {
-        let Some(reader) = self
+        let Some(position) = self
             .readers
             .iter()
-            .find(|reader| reader.has_worker_id(worker_id))
+            .position(|reader| reader.has_worker_id(worker_id))
         else {
             return Ok(None);
         };
+        let mut reader = self.readers.swap_remove(position);
+        if reader.finish() {
+            anyhow::bail!("Karva worker {worker_id} connection reader panicked");
+        }
         reader.take_checkpoint(worker_id)
     }
 

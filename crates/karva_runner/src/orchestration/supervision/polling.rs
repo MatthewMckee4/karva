@@ -95,6 +95,7 @@ impl WorkerSupervisor {
                         }
                     }
                     worker.join_output();
+                    let active = server.take_worker_checkpoint(worker.id())?;
                     if completed {
                         worker.join_stderr(false);
                         tracing::info!(target: "karva_runner::orchestration",
@@ -111,7 +112,6 @@ impl WorkerSupervisor {
                             termination_description(status),
                             format_duration(duration),
                         );
-                        let active = server.take_worker_checkpoint(worker.id())?;
                         let checkpoint = match connection_close {
                             WorkerConnectionClose::Complete => CrashCheckpoint::Complete(active),
                             WorkerConnectionClose::Forced => CrashCheckpoint::DrainLimited(active),

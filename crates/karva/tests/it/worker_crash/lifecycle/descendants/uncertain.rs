@@ -1,7 +1,6 @@
 //! Recovery when an escaped descendant forces a bounded controller disconnect.
 
 use insta::assert_snapshot;
-use insta_cmd::assert_cmd_snapshot;
 
 use super::{run_with_descendant, snapshot_output, terminate_escaped_descendant};
 use crate::common::TestContext;
@@ -12,7 +11,8 @@ fn worker_exit_reports_incomplete_output_from_escaped_descendant() {
         "test.py",
         r#"
 import os
-import time
+from pathlib import Path
+import signal
 
 
 def test_crash_with_escaped_child():
@@ -20,18 +20,19 @@ def test_crash_with_escaped_child():
     if os.fork() == 0:
         os.close(ready_read)
         os.setsid()
+        signal.alarm(30)
+        Path("descendant_pid").write_text(str(os.getpid()))
         os.write(ready_write, b"1")
-        time.sleep(0.2)
-        os.write(1, b"late stdout\n")
-        os.write(2, b"late stderr\n")
-        os._exit(0)
+        signal.pause()
     os.close(ready_write)
     os.read(ready_read, 1)
     os._exit(30)
 "#,
     );
+    let output = run_with_descendant(&context);
+    terminate_escaped_descendant(&context);
 
-    assert_cmd_snapshot!(context.command(), @"
+    assert_snapshot!(snapshot_output(&output), @"
     success: false
     exit_code: 1
     ----- stdout -----

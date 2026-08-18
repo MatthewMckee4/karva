@@ -72,6 +72,7 @@ fn retains_attributed_worker_checkpoint_after_disconnect() {
         checkpoint.cache_key,
         TestCacheKey::function_name("mod::test")
     );
+    assert_eq!(server.reader_count(), 0);
 }
 
 #[test]
@@ -108,6 +109,7 @@ fn closing_worker_connection_publishes_its_active_checkpoint() {
 
     assert_eq!(close, WorkerConnectionClose::Forced);
     assert_eq!(checkpoint.name, "mod::test");
+    assert_eq!(server.reader_count(), 0);
     drop(retained_connection);
 }
 
@@ -149,6 +151,7 @@ fn closing_finished_reader_does_not_mark_queued_disconnect_as_forced() {
 
     assert_eq!(close, WorkerConnectionClose::Complete);
     assert_eq!(checkpoint.name, "mod::test");
+    assert_eq!(server.reader_count(), 0);
 }
 
 #[test]

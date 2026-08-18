@@ -21,7 +21,10 @@ pub(super) struct ControllerReader {
     handle: Option<JoinHandle<()>>,
 
     /// Controller clone used to interrupt an escaped descendant's socket.
-    stream: ControllerStream,
+    ///
+    /// Dropped as soon as the reader joins so replacement generations do not
+    /// retain one file descriptor each until the whole run finishes.
+    stream: Option<ControllerStream>,
 
     /// Worker id populated after the handshake succeeds.
     worker_id: Arc<OnceLock<usize>>,
@@ -74,7 +77,7 @@ impl ControllerReader {
         });
         Ok(Self {
             handle: Some(handle),
-            stream: control_stream,
+            stream: Some(control_stream),
             worker_id,
             event_count,
             checkpoint,
@@ -105,7 +108,7 @@ impl ControllerReader {
 
     /// Interrupts this reader, tolerating a stream already closed by its peer.
     pub(super) fn disconnect(&self) -> Result<()> {
-        shutdown_reader(&self.stream)
+        self.stream.as_ref().map_or(Ok(()), shutdown_reader)
     }
 
     /// Whether this reader reached its terminal state without interruption.
@@ -115,9 +118,12 @@ impl ControllerReader {
 
     /// Joins this reader thread and reports a panic without losing the join.
     pub(super) fn finish(&mut self) -> bool {
-        self.handle
+        let panicked = self
+            .handle
             .take()
-            .is_some_and(|handle| handle.join().is_err())
+            .is_some_and(|handle| handle.join().is_err());
+        self.stream.take();
+        panicked
     }
 }
 

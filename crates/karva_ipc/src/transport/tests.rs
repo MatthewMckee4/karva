@@ -1,5 +1,6 @@
 //! Local transport endpoint and lifetime tests.
 
+#[cfg(unix)]
 use std::ffi::{OsStr, OsString};
 #[cfg(unix)]
 use std::os::unix::ffi::OsStringExt;

@@ -169,12 +169,15 @@ impl ControllerServer {
         self.connections.worker_event_count(worker_id)
     }
 
-    /// Removes a disconnected generation's final checkpoint for recovery.
+    /// Removes a disconnected generation and returns its final checkpoint.
     ///
     /// Call only after [`Self::worker_disconnected`] returns true,
     /// [`Self::close_worker_connection`] joins this reader, or [`Self::finish`]
     /// joins every reader. Each condition guarantees checkpoint publication.
-    pub fn take_worker_checkpoint(&self, worker_id: usize) -> Result<Option<WorkerCheckpoint>> {
+    ///
+    /// Removing the reader releases its connection state and any remaining
+    /// operating-system resources before a replacement generation starts.
+    pub fn take_worker_checkpoint(&mut self, worker_id: usize) -> Result<Option<WorkerCheckpoint>> {
         self.connections.take_worker_checkpoint(worker_id)
     }
 
