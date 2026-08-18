@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.0.1-alpha.12
+
+### Bug Fixes
+
+- Fix tmpdir legacy path compatibility ([#1344](https://github.com/MatthewMckee4/karva/pull/1344))
+- Fail tests with unhandled asyncio task exceptions ([#1274](https://github.com/MatthewMckee4/karva/pull/1274))
+- Fix custom tag stub typing ([#1338](https://github.com/MatthewMckee4/karva/pull/1338))
+
+### Configuration
+
+- Support globs in source includes ([#1348](https://github.com/MatthewMckee4/karva/pull/1348))
+
+### Diagnostics
+
+- Improve diagnostic readability ([#1267](https://github.com/MatthewMckee4/karva/pull/1267))
+
+### Test Running
+
+- Add opt-in Python doctest support ([#1275](https://github.com/MatthewMckee4/karva/pull/1275))
+- Remove command-length limits for large test selections ([#1265](https://github.com/MatthewMckee4/karva/pull/1265))
+
+### Contributors
+
+- [@BitWeaverDev](https://github.com/BitWeaverDev)
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.11
 
 ### Bug Fixes
@@ -56,7 +82,6 @@
 
 ### Test Running
 
-- Support opt-in Python docstring doctests ([#1275](https://github.com/MatthewMckee4/karva/pull/1275))
 - Reuse the last generated random seed ([#1215](https://github.com/MatthewMckee4/karva/pull/1215))
 - Add seeded randomized test ordering ([#1194](https://github.com/MatthewMckee4/karva/pull/1194))
 
