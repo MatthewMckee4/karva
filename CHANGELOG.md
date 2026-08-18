@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.0.1-alpha.12
+
+### Bug Fixes
+
+- Fix tmpdir legacy path compatibility ([#1344](https://github.com/MatthewMckee4/karva/pull/1344))
+- Resolve nearest fixtures by provider identity ([#1312](https://github.com/MatthewMckee4/karva/pull/1312))
+- Fix custom tag stub typing ([#1338](https://github.com/MatthewMckee4/karva/pull/1338))
+
+### Configuration
+
+- Support globs in source includes ([#1348](https://github.com/MatthewMckee4/karva/pull/1348))
+
+### Diagnostics
+
+- Improve diagnostic readability ([#1267](https://github.com/MatthewMckee4/karva/pull/1267))
+
+### Test Running
+
+- Add opt-in Python doctest support ([#1275](https://github.com/MatthewMckee4/karva/pull/1275))
+
+### Contributors
+
+- [@BitWeaverDev](https://github.com/BitWeaverDev)
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.11
 
 ### Bug Fixes
