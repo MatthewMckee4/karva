@@ -10,7 +10,8 @@ use karva_ipc::ControllerServer;
 use karva_logging::Printer;
 use karva_metadata::MaxFail;
 
-use super::dispatcher::CrashedWorker;
+use super::CANCELLATION_EVENT_SETTLE;
+use super::dispatcher::{CrashCheckpoint, CrashedWorker};
 use super::output::{print_crashed_test, termination_description};
 use super::supervision::WorkerSupervisor;
 use crate::partition::{CompletedTestIndex, Partition, UnattributedCrashRecovery};
@@ -62,20 +63,23 @@ pub(super) fn recover_crashed_workers(
     let completed_index = CompletedTestIndex::new(&completed_test_keys);
     let mut pending_recovery = Vec::with_capacity(crashed_workers.len());
 
-    for mut crashed_worker in crashed_workers {
+    for crashed_worker in crashed_workers {
         worker_manager.abandon_worker(crashed_worker.id);
-        let Some(active) = crashed_worker.active.take() else {
-            pending_recovery.push(PendingCrashRecovery::Unattributed(crashed_worker));
-            continue;
-        };
-        let pending = recover_active_test(
-            worker_manager,
-            &crashed_worker,
-            active,
-            &completed_index,
-            printer,
-        );
-        pending_recovery.push(PendingCrashRecovery::Active(pending));
+        match &crashed_worker.checkpoint {
+            CrashCheckpoint::Complete(Some(active)) => {
+                let pending = recover_active_test(
+                    worker_manager,
+                    &crashed_worker,
+                    active.clone(),
+                    &completed_index,
+                    printer,
+                );
+                pending_recovery.push(PendingCrashRecovery::Active(pending));
+            }
+            CrashCheckpoint::Complete(None) | CrashCheckpoint::DrainLimited(_) => {
+                pending_recovery.push(PendingCrashRecovery::Unattributed(crashed_worker));
+            }
+        }
     }
 
     let failures = worker_manager.failure_count();
@@ -139,10 +143,18 @@ fn recover_unattributed_exit(
     completed_tests: &CompletedTestIndex<'_>,
     failure_limit_reached: bool,
 ) -> Option<Partition> {
-    let stage = if crashed_worker.controller_authenticated {
-        WorkerExitStage::OutsideActiveTest
-    } else {
-        WorkerExitStage::BeforeControllerAuthentication
+    let (stage, checkpoint_drain_limited) = match &crashed_worker.checkpoint {
+        CrashCheckpoint::DrainLimited(active) => (
+            WorkerExitStage::ControllerEventDrainLimit {
+                limit: CANCELLATION_EVENT_SETTLE,
+                last_checkpoint: active.as_ref().map(|active| active.name.clone()),
+            },
+            true,
+        ),
+        CrashCheckpoint::Complete(_) if crashed_worker.controller_authenticated => {
+            (WorkerExitStage::OutsideActiveTest, false)
+        }
+        CrashCheckpoint::Complete(_) => (WorkerExitStage::BeforeControllerAuthentication, false),
     };
     let (recovery, pending) = match crashed_worker
         .partition
@@ -153,7 +165,15 @@ fn recover_unattributed_exit(
             completed_results,
         } => {
             let pending_selections = pending.test_count();
-            if failure_limit_reached {
+            if checkpoint_drain_limited {
+                (
+                    WorkerExitRecovery::Indeterminate {
+                        completed_results,
+                        pending_selections,
+                    },
+                    None,
+                )
+            } else if failure_limit_reached {
                 (
                     WorkerExitRecovery::FailureLimit {
                         completed_results,

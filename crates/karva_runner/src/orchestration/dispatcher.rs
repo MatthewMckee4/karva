@@ -69,11 +69,24 @@ pub(super) struct CrashedWorker {
     /// Bounded stderr diagnostic captured from the worker.
     pub(super) stderr: String,
 
-    /// Test active when process exited, if any.
-    pub(super) active: Option<WorkerCheckpoint>,
+    /// Final checkpoint plus whether forced reader shutdown could have lost a frame.
+    pub(super) checkpoint: CrashCheckpoint,
 
     /// Whether the process authenticated its controller connection before exit.
     pub(super) controller_authenticated: bool,
+}
+
+/// Active-test state recovered from one failed worker connection.
+#[derive(Debug)]
+pub(super) enum CrashCheckpoint {
+    /// The reader reached EOF before recovery inspected its final state.
+    Complete(Option<WorkerCheckpoint>),
+
+    /// The reader was force-closed before its final state could be trusted.
+    ///
+    /// The last decoded checkpoint is diagnostic context only; later frames
+    /// may have completed it or started another test.
+    DrainLimited(Option<WorkerCheckpoint>),
 }
 
 impl EventDispatcher {

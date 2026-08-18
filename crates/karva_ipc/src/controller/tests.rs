@@ -12,7 +12,7 @@ use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
 use crate::transport::ControllerStream;
 use crate::worker::WorkerClient;
 
-use super::{ControllerServer, is_clean_disconnect};
+use super::{ControllerServer, WorkerConnectionClose, is_clean_disconnect};
 
 // Receipt: two seconds is 200 background flush intervals and remains a
 // practical deadlock tripwire on loaded CI runners.
@@ -74,30 +74,81 @@ fn retains_attributed_worker_checkpoint_after_disconnect() {
     );
 }
 
-#[cfg(unix)]
 #[test]
-fn controller_can_close_stream_retained_after_worker_exit() {
+fn closing_worker_connection_publishes_its_active_checkpoint() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server
         .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
         .expect("register worker selection");
     let address = server.endpoint();
     let worker = thread::spawn(move || {
-        WorkerClient::connect(&address, "run-id", 7)
-            .expect("connect worker")
-            .0
+        let (client, _) = WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
+        let test_name = QualifiedTestName::new(QualifiedFunctionName::new(
+            "test".to_string(),
+            ModulePath::new_with_name("mod.py", "mod".to_string()),
+        ));
+        client.checkpoint(&test_name).expect("send checkpoint");
+        client
     });
 
     accept_connections(&mut server, 1);
     let retained_connection = worker.join().expect("join worker");
-    while !server.worker_started(7).expect("read worker state") {
+    while server.worker_event_count(7) == 0 {
         server.try_recv().expect("receive handshake");
         thread::yield_now();
     }
 
-    server.disconnect_readers().expect("disconnect readers");
-    server.finish().expect("finish readers");
+    let close = server
+        .close_worker_connection(7)
+        .expect("close worker connection");
+    let checkpoint = server
+        .take_worker_checkpoint(7)
+        .expect("read checkpoint")
+        .expect("active checkpoint");
+
+    assert_eq!(close, WorkerConnectionClose::Forced);
+    assert_eq!(checkpoint.name, "mod::test");
     drop(retained_connection);
+}
+
+#[test]
+fn closing_finished_reader_does_not_mark_queued_disconnect_as_forced() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+        .expect("register worker selection");
+    let address = server.endpoint();
+    let worker = thread::spawn(move || {
+        let (client, _) = WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
+        let test_name = QualifiedTestName::new(QualifiedFunctionName::new(
+            "test".to_string(),
+            ModulePath::new_with_name("mod.py", "mod".to_string()),
+        ));
+        client.checkpoint(&test_name).expect("send checkpoint");
+    });
+
+    accept_connections(&mut server, 1);
+    worker.join().expect("join worker");
+    let deadline = Instant::now() + BUFFERED_EVENT_TIMEOUT;
+    while !server.worker_reader_finished(7) {
+        assert!(
+            Instant::now() < deadline,
+            "worker reader did not finish after peer disconnect"
+        );
+        thread::yield_now();
+    }
+    assert!(!server.worker_disconnected(7));
+
+    let close = server
+        .close_worker_connection(7)
+        .expect("close worker connection");
+    let checkpoint = server
+        .take_worker_checkpoint(7)
+        .expect("read checkpoint")
+        .expect("active checkpoint");
+
+    assert_eq!(close, WorkerConnectionClose::Complete);
+    assert_eq!(checkpoint.name, "mod::test");
 }
 
 #[test]

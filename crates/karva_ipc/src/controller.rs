@@ -45,6 +45,16 @@ pub struct ControllerEvent {
     pub event: Box<WorkerEvent>,
 }
 
+/// How a targeted worker reader reached its terminal state.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkerConnectionClose {
+    /// No interrupting shutdown was needed because the reader had finished or was absent.
+    Complete,
+
+    /// The controller interrupted a reader still held open past its drain limit.
+    Forced,
+}
+
 /// Controller-side event loop and worker lifecycle state.
 pub struct ControllerServer {
     /// Listener, selections, readers, and stream shutdown state.
@@ -161,15 +171,21 @@ impl ControllerServer {
 
     /// Removes a disconnected generation's final checkpoint for recovery.
     ///
-    /// Call only after [`Self::worker_disconnected`] returns true or
-    /// [`Self::finish`] has joined the reader, which guarantees publication.
+    /// Call only after [`Self::worker_disconnected`] returns true,
+    /// [`Self::close_worker_connection`] joins this reader, or [`Self::finish`]
+    /// joins every reader. Each condition guarantees checkpoint publication.
     pub fn take_worker_checkpoint(&self, worker_id: usize) -> Result<Option<WorkerCheckpoint>> {
         self.connections.take_worker_checkpoint(worker_id)
     }
 
-    /// Closes one authenticated worker stream retained by an escaped descendant.
-    pub fn disconnect_worker(&self, worker_id: usize) -> Result<()> {
-        self.connections.disconnect_worker(worker_id)
+    /// Closes and joins one authenticated worker reader.
+    ///
+    /// This publishes every frame decoded before closure and the reader's final
+    /// active checkpoint before returning, without waiting for unrelated readers.
+    /// The return value distinguishes a reader that had already stopped from
+    /// one interrupted by this call.
+    pub fn close_worker_connection(&mut self, worker_id: usize) -> Result<WorkerConnectionClose> {
+        self.connections.close_worker_connection(worker_id)
     }
 
     /// Closes every accepted reader after controller-driven worker termination.
@@ -190,6 +206,12 @@ impl ControllerServer {
     #[cfg(test)]
     fn reader_count(&self) -> usize {
         self.connections.reader_count()
+    }
+
+    /// Whether one authenticated reader thread has already stopped.
+    #[cfg(test)]
+    fn worker_reader_finished(&self, worker_id: usize) -> bool {
+        self.connections.worker_reader_finished(worker_id)
     }
 }
 

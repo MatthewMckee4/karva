@@ -6,6 +6,8 @@ use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
 
+mod uncertain;
+
 #[test]
 fn worker_exit_kills_descendants_holding_controller_streams() {
     let context = TestContext::with_file(
@@ -174,56 +176,6 @@ def test_pass_with_escaped_child():
 
     ----- stderr -----
     WARN worker output drain limit reached; final output may be incomplete worker_id=0 limit_ms=50
-    "###);
-}
-
-#[test]
-fn worker_exit_reports_incomplete_output_from_escaped_descendant() {
-    let context = TestContext::with_file(
-        "test.py",
-        r#"
-import os
-import time
-
-
-def test_crash_with_escaped_child():
-    ready_read, ready_write = os.pipe()
-    if os.fork() == 0:
-        os.close(ready_read)
-        os.setsid()
-        os.write(ready_write, b"1")
-        time.sleep(0.2)
-        os.write(1, b"late stdout\n")
-        os.write(2, b"late stderr\n")
-        os._exit(0)
-    os.close(ready_write)
-    os.read(ready_read, 1)
-    os._exit(30)
-"#,
-    );
-
-    assert_cmd_snapshot!(context.command(), @r###"
-    success: false
-    exit_code: 1
-    ----- stdout -----
-        Starting 1 test across 1 worker
-           CRASH [TIME] test::test_crash_with_escaped_child
-
-    failures:
-
-    test::test_crash_with_escaped_child:
-
-    error[worker-crashed]: Worker terminated with exit code 30 while running `test::test_crash_with_escaped_child`
-
-    Worker stderr:
-    [Karva stopped draining worker output after the 50 ms limit; final output and results may be incomplete]
-
-    ────────────
-         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
-
-    ----- stderr -----
-    WARN worker output drain limit reached; final output and results may be incomplete worker_id=0 limit_ms=50
-    ERROR Worker 0 failed with exit code 30 in [TIME]
     "###);
 }
 

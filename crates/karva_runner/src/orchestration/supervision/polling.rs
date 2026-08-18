@@ -5,11 +5,11 @@ use std::time::Instant;
 
 use anyhow::Result;
 use crossbeam_channel::{Receiver, TryRecvError};
-use karva_ipc::ControllerServer;
+use karva_ipc::{ControllerServer, WorkerConnectionClose};
 use karva_logging::time::format_duration;
 use karva_metadata::MaxFail;
 
-use super::super::dispatcher::CrashedWorker;
+use super::super::dispatcher::{CrashCheckpoint, CrashedWorker};
 use super::super::output::termination_description;
 #[cfg(unix)]
 use super::super::process_control;
@@ -37,7 +37,7 @@ pub(in crate::orchestration) enum WaitOutcome {
 }
 
 impl WorkerSupervisor {
-    fn reap_finished(&mut self, server: &ControllerServer) -> Result<Vec<CrashedWorker>> {
+    fn reap_finished(&mut self, server: &mut ControllerServer) -> Result<Vec<CrashedWorker>> {
         let mut running = Vec::new();
         let mut crashed = Vec::new();
         for mut worker in self.workers.drain(..) {
@@ -56,11 +56,11 @@ impl WorkerSupervisor {
                         worker.observe_exit(status, server.worker_event_count(worker.id()));
                     }
                     let controller_authenticated = server.worker_started(worker.id())?;
-                    let completed =
-                        status.success() && self.dispatcher.worker_completed(worker.id());
                     let controller_connected =
                         controller_authenticated && !server.worker_disconnected(worker.id());
-                    if controller_connected || !worker.output_drained() {
+                    let output_or_events_pending = controller_connected || !worker.output_drained();
+                    let mut connection_close = WorkerConnectionClose::Complete;
+                    if output_or_events_pending {
                         if controller_connected {
                             let event_count = server.worker_event_count(worker.id());
                             if event_count != worker.event_count() {
@@ -72,9 +72,14 @@ impl WorkerSupervisor {
                             continue;
                         }
                         if controller_connected {
-                            server.disconnect_worker(worker.id())?;
+                            connection_close = server.close_worker_connection(worker.id())?;
+                            self.dispatcher.dispatch_pending(server)?;
                         }
                         worker.mark_forced_disconnect();
+                    }
+                    let completed =
+                        status.success() && self.dispatcher.worker_completed(worker.id());
+                    if output_or_events_pending {
                         if completed {
                             tracing::warn!(target: "karva_runner::orchestration",
                                 worker_id = worker.id(),
@@ -107,12 +112,16 @@ impl WorkerSupervisor {
                             format_duration(duration),
                         );
                         let active = server.take_worker_checkpoint(worker.id())?;
+                        let checkpoint = match connection_close {
+                            WorkerConnectionClose::Complete => CrashCheckpoint::Complete(active),
+                            WorkerConnectionClose::Forced => CrashCheckpoint::DrainLimited(active),
+                        };
                         crashed.push(CrashedWorker {
                             id: worker.id(),
                             partition: worker.take_partition(),
                             status,
                             stderr,
-                            active,
+                            checkpoint,
                             controller_authenticated,
                         });
                     }

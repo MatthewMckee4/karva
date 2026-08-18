@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
 
-use super::Incoming;
+use super::{Incoming, WorkerConnectionClose};
 use crate::protocol::WorkerSelection;
 use crate::transport::{ControllerEndpoint, ControllerListener};
 use connection_reader::ControllerReader;
@@ -126,16 +126,31 @@ impl ControllerConnections {
         reader.take_checkpoint(worker_id)
     }
 
-    /// Closes one authenticated worker stream retained by an escaped descendant.
-    pub(super) fn disconnect_worker(&self, worker_id: usize) -> Result<()> {
+    /// Closes and joins one authenticated worker reader.
+    ///
+    /// Joining guarantees that its final decoded checkpoint state is published
+    /// before crash recovery inspects it. Other worker readers remain active.
+    pub(super) fn close_worker_connection(
+        &mut self,
+        worker_id: usize,
+    ) -> Result<WorkerConnectionClose> {
         let Some(reader) = self
             .readers
-            .iter()
+            .iter_mut()
             .find(|reader| reader.has_worker_id(worker_id))
         else {
-            return Ok(());
+            return Ok(WorkerConnectionClose::Complete);
         };
-        reader.disconnect()
+        let (close, disconnect_result) = if reader.is_finished() {
+            (WorkerConnectionClose::Complete, Ok(()))
+        } else {
+            (WorkerConnectionClose::Forced, reader.disconnect())
+        };
+        if reader.finish() {
+            anyhow::bail!("Karva worker {worker_id} connection reader panicked");
+        }
+        disconnect_result?;
+        Ok(close)
     }
 
     /// Closes every accepted reader after controller-driven worker termination.
@@ -173,6 +188,15 @@ impl ControllerConnections {
     #[cfg(test)]
     pub(super) fn reader_count(&self) -> usize {
         self.readers.len()
+    }
+
+    /// Whether one authenticated reader thread has already stopped.
+    #[cfg(test)]
+    pub(super) fn worker_reader_finished(&self, worker_id: usize) -> bool {
+        self.readers
+            .iter()
+            .find(|reader| reader.has_worker_id(worker_id))
+            .is_some_and(ControllerReader::is_finished)
     }
 }
 

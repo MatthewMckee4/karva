@@ -108,6 +108,11 @@ impl ControllerReader {
         shutdown_reader(&self.stream)
     }
 
+    /// Whether this reader reached its terminal state without interruption.
+    pub(super) fn is_finished(&self) -> bool {
+        self.handle.as_ref().is_none_or(JoinHandle::is_finished)
+    }
+
     /// Joins this reader thread and reports a panic without losing the join.
     pub(super) fn finish(&mut self) -> bool {
         self.handle

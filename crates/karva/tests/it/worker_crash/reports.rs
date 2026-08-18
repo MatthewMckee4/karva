@@ -4,6 +4,9 @@ use regex::Regex;
 
 use crate::common::TestContext;
 
+#[cfg(unix)]
+mod forced_drain;
+
 fn normalize_junit_xml(xml: &str) -> String {
     Regex::new(r#"time="[0-9.]+""#)
         .expect("valid time regex")
