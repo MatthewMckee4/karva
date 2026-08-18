@@ -7,7 +7,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use karva_metadata::{ProjectMetadata, ProjectSettings};
 
-use crate::path::{TestPath, TestPathError, absolute};
+use crate::path::{TestPath, TestPathError, absolute, resolve_test_paths};
 
 /// Find the karva wheel in the target/wheels directory.
 ///
@@ -107,9 +107,9 @@ impl Project {
             .src()
             .include_paths
             .iter()
-            .map(|path| {
+            .flat_map(|path| {
                 let path = absolute(path, self.cwd());
-                TestPath::new(path.as_str())
+                resolve_test_paths(path.as_str())
             })
             .collect()
     }

@@ -15,6 +15,7 @@ license = { workspace = true }
 anyhow = { workspace = true }
 camino = { workspace = true }
 fs-err = { workspace = true }
+glob = { workspace = true }
 karva_metadata = { workspace = true }
 karva_python_semantic = { workspace = true }
 thiserror = { workspace = true }

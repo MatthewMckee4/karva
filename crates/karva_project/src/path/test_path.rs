@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use glob::MatchOptions;
 use karva_python_semantic::is_python_file;
 use thiserror::Error;
 
@@ -149,6 +150,75 @@ impl TestPath {
     }
 }
 
+/// Resolves one path or shell-style glob into concrete test selections.
+///
+/// Existing paths always remain literal. Globs use `*`, `?`, `[]`, and recursive
+/// `**` matching without allowing `*` to cross a path separator.
+pub fn resolve_test_paths(value: &str) -> Vec<Result<TestPath, TestPathError>> {
+    let literal = TestPath::new(value);
+    if literal.is_ok() || value.contains("::") || !value.contains(['*', '?', '[']) {
+        return vec![literal];
+    }
+
+    let options = MatchOptions {
+        case_sensitive: true,
+        require_literal_separator: true,
+        require_literal_leading_dot: true,
+    };
+    let entries = match glob::glob_with(value, options) {
+        Ok(entries) => entries,
+        Err(error) => {
+            return vec![Err(TestPathError::InvalidGlob {
+                pattern: value.to_string(),
+                error: error.to_string(),
+            })];
+        }
+    };
+
+    let mut paths = Vec::new();
+    for entry in entries {
+        let path = match entry {
+            Ok(path) => match Utf8PathBuf::from_path_buf(path) {
+                Ok(path) => path,
+                Err(path) => return vec![Err(TestPathError::NonUtf8GlobMatch(path))],
+            },
+            Err(error) => {
+                return vec![Err(TestPathError::GlobWalk {
+                    path: error.path().to_path_buf(),
+                    error: error.error().to_string(),
+                })];
+            }
+        };
+        let test_path = match TestPath::new(path.as_str()) {
+            Ok(test_path) => test_path,
+            Err(error) => return vec![Err(error)],
+        };
+
+        if let TestPath::Directory(directory) = &test_path {
+            paths.retain(|existing| match existing {
+                TestPath::Directory(path) | TestPath::File(path) => !path.starts_with(directory),
+                TestPath::Function(function) => !function.path.starts_with(directory),
+            });
+        }
+        if paths.iter().any(|existing| match existing {
+            TestPath::Directory(directory) => match &test_path {
+                TestPath::Directory(path) | TestPath::File(path) => path.starts_with(directory),
+                TestPath::Function(function) => function.path.starts_with(directory),
+            },
+            TestPath::File(_) | TestPath::Function(_) => false,
+        }) {
+            continue;
+        }
+        paths.push(test_path);
+    }
+
+    if paths.is_empty() {
+        vec![literal]
+    } else {
+        paths.into_iter().map(Ok).collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 /// Reason a user-provided test path could not become a valid selection.
 pub enum TestPathError {
@@ -162,6 +232,15 @@ pub enum TestPathError {
     MissingFunctionName(Utf8PathBuf),
     #[error("function selector `{0}` has a malformed parametrize index")]
     MalformedCaseIndex(String),
+    #[error("glob `{pattern}` is invalid: {error}")]
+    InvalidGlob { pattern: String, error: String },
+    #[error("glob matched a non-UTF-8 path: `{0:?}`")]
+    NonUtf8GlobMatch(std::path::PathBuf),
+    #[error("could not read glob match `{path:?}`: {error}")]
+    GlobWalk {
+        path: std::path::PathBuf,
+        error: String,
+    },
 }
 
 #[cfg(test)]

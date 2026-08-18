@@ -627,7 +627,7 @@
       "type": "object",
       "properties": {
         "include": {
-          "description": "A list of files and directories to check.\nIncluding a file or directory will make it so that it (and its contents)\nare tested.\nWhen unset, Karva checks the `tests` directory if it exists, otherwise\nit checks the project root.\n\n- `tests` matches a directory named `tests`\n- `tests/test.py` matches a file named `test.py` in the `tests` directory",
+          "description": "A list of files, directories, and shell-style glob patterns to check.\nIncluding a file or directory will make it so that it (and its contents)\nare tested. Glob patterns are relative to the project root and support\n`*`, `?`, `[]`, and recursive `**` matching.\nWhen unset, Karva checks the `tests` directory if it exists, otherwise\nit checks the project root.\n\n- `tests` matches a directory named `tests`\n- `tests/test.py` matches a file named `test.py` in the `tests` directory\n- `tests/**/test_*.py` matches test files below the `tests` directory",
           "type": [
             "array",
             "null"
