@@ -43,9 +43,13 @@ import pathlib
 
 def test_tmpdir(tmpdir):
     assert isinstance(tmpdir, pathlib.Path)
-    f = tmpdir / 'hello.txt'
-    f.write_text('world')
-    assert f.read_text() == 'world'
+    f = tmpdir.join('hello.txt')
+    f.write('world')
+    assert f.strpath == str(f)
+    assert f.read() == 'world'
+    binary = tmpdir.join('hello.bin')
+    binary.write_binary(b'world')
+    assert binary.read_binary() == b'world'
         ",
     );
 
