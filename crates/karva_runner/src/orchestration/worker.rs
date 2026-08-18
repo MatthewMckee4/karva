@@ -105,7 +105,7 @@ struct WorkerLifecycle {
     /// Time when exit was first observed.
     exit_observed: Option<Instant>,
 
-    /// Number of IPC events observed at exit.
+    /// Latest IPC event count observed while draining after exit.
     exit_event_count: usize,
 
     /// Whether the controller stopped waiting for late output/events.
@@ -150,18 +150,17 @@ impl Worker {
         self.lifecycle.exit_event_count = event_count;
     }
 
-    /// Returns the event count captured at the latest drain progress point.
+    /// Returns the latest event count observed after process exit.
     pub(super) fn event_count(&self) -> usize {
         self.lifecycle.exit_event_count
     }
 
-    /// Extends the drain window after late IPC progress from an exited worker.
+    /// Records late IPC progress without extending the absolute drain limit.
     pub(super) fn note_event_count(&mut self, event_count: usize) {
         self.lifecycle.exit_event_count = event_count;
-        self.lifecycle.exit_observed = Some(Instant::now());
     }
 
-    /// Returns whether an exited worker has made no IPC progress for one drain window.
+    /// Returns whether the absolute post-exit drain window has elapsed.
     pub(super) fn drain_limit_reached(&self) -> bool {
         self.lifecycle
             .exit_observed

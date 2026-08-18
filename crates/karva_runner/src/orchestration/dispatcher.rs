@@ -116,7 +116,11 @@ impl EventDispatcher {
     /// Applies every queued worker event to controller-owned run state.
     pub(super) fn dispatch_pending(&mut self, server: &mut ControllerServer) -> Result<()> {
         server.accept_pending()?;
-        while let Some(message) = server.try_recv()? {
+        let queued_messages = server.queued_message_count();
+        for _ in 0..queued_messages {
+            let Some(message) = server.try_recv()? else {
+                break;
+            };
             let worker_id = message.worker_id;
             if !self.expected_workers.contains(&worker_id) {
                 anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");

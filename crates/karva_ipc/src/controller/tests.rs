@@ -1,7 +1,7 @@
 //! Controller integration tests: handshake, event intake, and disconnect behavior.
 
 use std::io::{BufRead as _, BufReader, ErrorKind, Read as _, Write as _};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -114,6 +114,66 @@ fn closing_worker_connection_publishes_its_active_checkpoint() {
 }
 
 #[test]
+fn closing_worker_connection_interrupts_a_blocked_selection_write() {
+    // Receipt: one million selectors is the existing selection stress case and
+    // exceeds local socket buffers by orders of magnitude.
+    let path: Arc<str> = "mod::test".into();
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(
+            7,
+            WorkerSelection {
+                test_paths: vec![path; 1_000_000],
+                resume_skip: Vec::new(),
+            },
+        )
+        .expect("register worker selection");
+    let mut worker = ControllerStream::connect(&server.endpoint()).expect("connect worker");
+    serde_json::to_writer(
+        &mut worker,
+        &WireMessage::Hello {
+            run_id: "run-id".to_string(),
+            worker_id: 7,
+        },
+    )
+    .expect("write handshake");
+    worker.write_all(b"\n").expect("frame handshake");
+    worker.flush().expect("flush handshake");
+    accept_connections(&mut server, 1);
+    let deadline = Instant::now() + BUFFERED_EVENT_TIMEOUT;
+    while !server.worker_started(7).expect("read worker state") {
+        assert!(
+            Instant::now() < deadline,
+            "worker did not begin its selection handshake"
+        );
+        thread::yield_now();
+    }
+
+    let (close_result, wait_for_close) = mpsc::channel();
+    let closer = thread::spawn(move || {
+        close_result
+            .send(server.close_worker_connection(7))
+            .expect("report connection close");
+    });
+    let result = match wait_for_close.recv_timeout(BUFFERED_EVENT_TIMEOUT) {
+        Ok(result) => result,
+        Err(error) => {
+            let shutdown = worker.shutdown();
+            closer.join().expect("join connection close");
+            panic!(
+                "controller did not interrupt a blocked selection write: {error} (client shutdown: {shutdown:?})"
+            );
+        }
+    };
+
+    assert_eq!(
+        result.expect("close worker connection"),
+        WorkerConnectionClose::Forced
+    );
+    closer.join().expect("join connection close");
+}
+
+#[test]
 fn closing_finished_reader_does_not_mark_queued_disconnect_as_forced() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server
@@ -155,14 +215,30 @@ fn closing_finished_reader_does_not_mark_queued_disconnect_as_forced() {
 }
 
 #[test]
-fn controller_can_close_unauthenticated_reader_after_termination() {
+fn controller_finish_closes_unauthenticated_reader() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     let retained_connection =
         ControllerStream::connect(&server.endpoint()).expect("connect unauthenticated client");
     accept_connections(&mut server, 1);
 
-    server.disconnect_readers().expect("disconnect readers");
-    server.finish().expect("finish readers");
+    let (finish_result, wait_for_finish) = mpsc::channel();
+    let finisher = thread::spawn(move || {
+        finish_result
+            .send(server.finish())
+            .expect("report controller finish");
+    });
+    let result = match wait_for_finish.recv_timeout(BUFFERED_EVENT_TIMEOUT) {
+        Ok(result) => result,
+        Err(error) => {
+            let shutdown = retained_connection.shutdown();
+            finisher.join().expect("join controller finish");
+            panic!(
+                "controller finish did not stop its unauthenticated reader: {error} (client shutdown: {shutdown:?})"
+            );
+        }
+    };
+    result.expect("finish readers");
+    finisher.join().expect("join controller finish");
     drop(retained_connection);
 }
 
@@ -222,6 +298,28 @@ fn worker_can_disconnect_before_handshake() {
     drop(worker);
 
     accept_connections(&mut server, 1);
+    server.finish().expect("finish readers");
+
+    assert!(server.try_recv().expect("drain events").is_none());
+    assert!(!server.worker_started(7).expect("read worker state"));
+}
+
+#[test]
+fn retired_startup_selection_rejects_a_late_handshake_cleanly() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+        .expect("register worker selection");
+    server
+        .retire_worker_startup(7)
+        .expect("retire worker startup");
+    let address = server.endpoint();
+    let worker = thread::spawn(move || {
+        assert!(WorkerClient::connect(&address, "run-id", 7).is_err());
+    });
+
+    accept_connections(&mut server, 1);
+    worker.join().expect("join worker");
     server.finish().expect("finish readers");
 
     assert!(server.try_recv().expect("drain events").is_none());

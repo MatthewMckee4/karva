@@ -111,6 +111,11 @@ impl ControllerEvents {
             }
         }
     }
+
+    /// Snapshots queued notifications so one dispatch pass has finite work.
+    fn queued_message_count(&self) -> usize {
+        self.receiver.len()
+    }
 }
 
 impl ControllerServer {
@@ -151,6 +156,15 @@ impl ControllerServer {
         self.events.try_recv()
     }
 
+    /// Snapshots notifications ready for the next non-blocking dispatch pass.
+    ///
+    /// Readers may enqueue more notifications after this returns. Keeping the
+    /// snapshot fixed prevents an inherited connection that writes forever
+    /// from starving process reaping and its forced-disconnect deadline.
+    pub fn queued_message_count(&self) -> usize {
+        self.events.queued_message_count()
+    }
+
     /// Whether the worker's event stream reached EOF after every queued event.
     pub fn worker_disconnected(&self, worker_id: usize) -> bool {
         self.events.disconnected_workers.contains(&worker_id)
@@ -161,7 +175,18 @@ impl ControllerServer {
         if self.events.workers.contains(&worker_id) {
             return Ok(true);
         }
-        Ok(!self.connections.selection_pending(worker_id)?)
+        Ok(!self.connections.startup_registration_pending(worker_id)?)
+    }
+
+    /// Retires an exited generation that had not completed authentication.
+    ///
+    /// The large pending selection is released immediately. If its reader won
+    /// the handshake race, targeted closure also prevents checkpoint cleanup
+    /// from joining a connection retained by an escaped descendant.
+    pub fn retire_worker_startup(&mut self, worker_id: usize) -> Result<()> {
+        self.connections.retire_worker_selection(worker_id)?;
+        self.connections.close_worker_connection(worker_id)?;
+        Ok(())
     }
 
     /// Number of complete event frames read from one authenticated worker.

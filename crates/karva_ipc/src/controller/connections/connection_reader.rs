@@ -13,7 +13,7 @@ use crossbeam_channel::Sender;
 use super::super::Incoming;
 use super::super::checkpoint::{CheckpointState, WorkerCheckpoint};
 use super::super::reader::{InterruptibleReader, read_worker};
-use crate::protocol::WorkerSelection;
+use super::RegisteredWorkerSelection;
 use crate::transport::ControllerStream;
 
 /// Reader thread and shared progress state for one worker connection.
@@ -46,7 +46,7 @@ impl ControllerReader {
         stream: ControllerStream,
         run_id: String,
         sender: Sender<Incoming>,
-        worker_selections: Arc<Mutex<HashMap<usize, WorkerSelection>>>,
+        worker_selections: Arc<Mutex<HashMap<usize, RegisteredWorkerSelection>>>,
     ) -> Result<Self> {
         stream.set_nonblocking(false)?;
         stream.set_read_timeout(Some(READER_INTERRUPT_POLL_INTERVAL))?;
@@ -95,6 +95,11 @@ impl ControllerReader {
     /// Returns whether this reader belongs to a worker id.
     pub(super) fn has_worker_id(&self, worker_id: usize) -> bool {
         self.worker_id.get().is_some_and(|id| *id == worker_id)
+    }
+
+    /// Whether this reader completed enough of the handshake to name its worker.
+    pub(super) fn is_authenticated(&self) -> bool {
+        self.worker_id.get().is_some()
     }
 
     /// Returns the number of complete event frames read by this reader.

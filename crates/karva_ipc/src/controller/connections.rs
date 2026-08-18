@@ -18,6 +18,18 @@ use crate::protocol::WorkerSelection;
 use crate::transport::{ControllerEndpoint, ControllerListener};
 use connection_reader::ControllerReader;
 
+/// Selection ownership while a worker connection races process exit.
+pub(super) enum RegisteredWorkerSelection {
+    /// Selection waiting for a valid worker handshake.
+    Pending(WorkerSelection),
+
+    /// Startup generation abandoned before authentication completed.
+    ///
+    /// The tombstone lets a late handshake close cleanly without retaining the
+    /// potentially large selection payload.
+    Retired,
+}
+
 /// Operating-system resources and connection state for one controller run.
 ///
 /// Keeping listener setup, selection ownership, reader threads, and shutdown
@@ -37,8 +49,8 @@ pub(super) struct ControllerConnections {
     /// Reader threads and control streams retained until run shutdown.
     readers: Vec<ControllerReader>,
 
-    /// Selections waiting for their authenticated worker connection.
-    worker_selections: Arc<Mutex<HashMap<usize, WorkerSelection>>>,
+    /// Pending selection payloads and payload-free retired startup tombstones.
+    worker_selections: Arc<Mutex<HashMap<usize, RegisteredWorkerSelection>>>,
 }
 
 impl ControllerConnections {
@@ -65,7 +77,7 @@ impl ControllerConnections {
             .worker_selections
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
-            .insert(worker_id, selection);
+            .insert(worker_id, RegisteredWorkerSelection::Pending(selection));
         if previous.is_some() {
             anyhow::bail!("Karva worker {worker_id} selection registered more than once");
         }
@@ -95,12 +107,26 @@ impl ControllerConnections {
         }
     }
 
-    /// Returns whether a worker still has a selection waiting for its handshake.
-    pub(super) fn selection_pending(&self, worker_id: usize) -> Result<bool> {
+    /// Returns whether a worker still has an unconsumed startup registration.
+    pub(super) fn startup_registration_pending(&self, worker_id: usize) -> Result<bool> {
         self.worker_selections
             .lock()
             .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))
             .map(|selections| selections.contains_key(&worker_id))
+    }
+
+    /// Drops a startup generation's payload while preserving a late-handshake tombstone.
+    pub(super) fn retire_worker_selection(&self, worker_id: usize) -> Result<()> {
+        let mut selections = self
+            .worker_selections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?;
+        if let Some(selection @ RegisteredWorkerSelection::Pending(_)) =
+            selections.get_mut(&worker_id)
+        {
+            *selection = RegisteredWorkerSelection::Retired;
+        }
+        Ok(())
     }
 
     /// Number of complete event frames read from one authenticated worker.
@@ -173,9 +199,32 @@ impl ControllerConnections {
         Ok(())
     }
 
+    /// Interrupts accepted connections that never completed their handshake.
+    ///
+    /// Final cleanup cannot associate these readers with an exited worker by
+    /// id. They are safe to stop once every supervised process has exited, and
+    /// doing so prevents an escaped descendant from retaining an unidentified
+    /// connection indefinitely.
+    fn disconnect_unauthenticated_readers(&self) -> Result<()> {
+        let mut first_error = None;
+        for reader in &self.readers {
+            if !reader.is_authenticated()
+                && let Err(error) = reader.disconnect()
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
+        }
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// Joins every accepted reader after worker processes have exited.
     pub(super) fn finish(&mut self) -> Result<()> {
         self.accept_pending()?;
+        let disconnect_result = self.disconnect_unauthenticated_readers();
         let mut reader_panicked = false;
         for reader in &mut self.readers {
             if reader.finish() {
@@ -185,7 +234,7 @@ impl ControllerConnections {
         if reader_panicked {
             anyhow::bail!("Karva worker connection reader panicked");
         }
-        Ok(())
+        disconnect_result
     }
 
     /// Number of accepted readers, used by connection lifecycle tests.

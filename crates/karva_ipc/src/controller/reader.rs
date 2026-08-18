@@ -9,15 +9,16 @@ use anyhow::{Context, Result, bail};
 use crossbeam_channel::Sender;
 
 use super::checkpoint::CheckpointState;
+use super::connections::RegisteredWorkerSelection;
 use super::{ControllerEvent, Incoming};
-use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
+use crate::protocol::{WireMessage, WorkerEvent};
 use crate::transport::ControllerStream;
 
 /// Authenticates one stream, transfers its selection, then decodes its events.
 pub(super) fn read_worker(
     reader: InterruptibleReader<'_, ControllerStream>,
     expected_run_id: &str,
-    worker_selections: &Mutex<HashMap<usize, WorkerSelection>>,
+    worker_selections: &Mutex<HashMap<usize, RegisteredWorkerSelection>>,
     checkpoint: &mut CheckpointState,
     sender: &Sender<Incoming>,
     reader_worker_id: &OnceLock<usize>,
@@ -48,13 +49,26 @@ pub(super) fn read_worker(
     reader_worker_id
         .set(worker_id)
         .map_err(|_| anyhow::anyhow!("Karva worker id was already authenticated"))?;
-    let selection = worker_selections
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?
-        .remove(&worker_id)
-        .with_context(|| {
-            format!("Karva worker {worker_id} connected without a registered selection")
-        })?;
+    let selection = {
+        let mut registrations = worker_selections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Karva worker selection lock poisoned"))?;
+        if matches!(
+            registrations.get(&worker_id),
+            Some(RegisteredWorkerSelection::Retired)
+        ) {
+            return Ok(());
+        }
+        match registrations.remove(&worker_id) {
+            Some(RegisteredWorkerSelection::Pending(selection)) => selection,
+            Some(RegisteredWorkerSelection::Retired) => return Ok(()),
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Karva worker {worker_id} connected without a registered selection"
+                ));
+            }
+        }
+    };
     let mut writer = BufWriter::new(response_stream);
     let selection_result =
         serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))

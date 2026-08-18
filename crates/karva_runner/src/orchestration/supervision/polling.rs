@@ -56,6 +56,9 @@ impl WorkerSupervisor {
                         worker.observe_exit(status, server.worker_event_count(worker.id()));
                     }
                     let controller_authenticated = server.worker_started(worker.id())?;
+                    if !controller_authenticated {
+                        server.retire_worker_startup(worker.id())?;
+                    }
                     let controller_connected =
                         controller_authenticated && !server.worker_disconnected(worker.id());
                     let output_or_events_pending = controller_connected || !worker.output_drained();
