@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::time::Duration;
 
+use camino::Utf8PathBuf;
 use karva_cli::PartitionSelection;
+use karva_project::path::TestPath;
 use karva_python_semantic::TestCacheKey;
 use siphasher::sip::SipHasher13;
 
@@ -19,6 +21,73 @@ pub enum TestOrdering {
     Stable,
 }
 
+/// Explicit function-case selectors supplied to one test invocation.
+#[derive(Debug, Default)]
+pub struct CaseSelection {
+    /// Function selectors keyed by their resolved file and name. `None` means
+    /// that all cases are selected for that function.
+    functions: HashMap<(Utf8PathBuf, String), Option<Vec<usize>>>,
+
+    /// Files or directories selected without a function suffix. These make
+    /// every case under the path eligible, even when a second selector names a
+    /// single case in the same tree.
+    unrestricted_paths: Vec<Utf8PathBuf>,
+}
+
+impl CaseSelection {
+    /// Builds case selection from the resolved command-line test paths.
+    pub(super) fn from_test_paths(test_paths: &[TestPath]) -> Self {
+        let mut selection = Self::default();
+
+        for test_path in test_paths {
+            match test_path {
+                TestPath::Directory(path) | TestPath::File(path) => {
+                    selection.unrestricted_paths.push(path.clone());
+                }
+                TestPath::Function(function) => {
+                    let key = (function.path.clone(), function.function_name.clone());
+                    match selection.functions.get_mut(&key) {
+                        Some(None) => {}
+                        Some(existing @ Some(_)) if function.parametrize_index.is_none() => {
+                            *existing = None;
+                        }
+                        Some(Some(indices)) => {
+                            if let Some(index) = function.parametrize_index
+                                && !indices.contains(&index)
+                            {
+                                indices.push(index);
+                            }
+                        }
+                        None => {
+                            selection
+                                .functions
+                                .insert(key, function.parametrize_index.map(|index| vec![index]));
+                        }
+                    }
+                }
+            }
+        }
+
+        selection
+    }
+
+    fn is_unrestricted_path(&self, path: &str) -> bool {
+        let path = Utf8PathBuf::from(path);
+        self.unrestricted_paths
+            .iter()
+            .any(|root| path == *root || path.starts_with(root))
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.functions.is_empty() && self.unrestricted_paths.is_empty()
+    }
+
+    fn function_cases(&self, path: &str, function: &str) -> Option<&Option<Vec<usize>>> {
+        self.functions
+            .get(&(Utf8PathBuf::from(path), function.to_string()))
+    }
+}
+
 /// Test metadata needed to filter, group, weight, and dispatch one test.
 #[derive(Debug, Clone)]
 struct TestInfo {
@@ -33,6 +102,11 @@ struct TestInfo {
 
     /// Wall-clock runtime from the previous run, when cached.
     duration: Option<Duration>,
+
+    /// Statically known number of parameter cases. `Some(0)` distinguishes
+    /// an empty static parameter set from a dynamically generated one.
+    case_count: Option<usize>,
+
     /// Qualified name without any `[idx]` suffix. Cases of the same
     /// parametrized function share this key so they can be shuffled and
     /// reasoned about as a single unit.
@@ -158,8 +232,33 @@ pub fn partition_collected_tests(
     partition_selection: Option<PartitionSelection>,
     test_ordering: TestOrdering,
 ) -> Vec<Partition> {
+    partition_collected_tests_with_case_selection(
+        package,
+        num_workers,
+        previous_durations,
+        last_failed,
+        partition_selection,
+        test_ordering,
+        None,
+    )
+}
+
+/// Partitions collected tests while respecting explicit parameter-case selectors.
+pub fn partition_collected_tests_with_case_selection(
+    package: &karva_collector::CollectedPackage,
+    num_workers: usize,
+    previous_durations: &HashMap<TestCacheKey, Duration>,
+    last_failed: &HashSet<TestCacheKey>,
+    partition_selection: Option<PartitionSelection>,
+    test_ordering: TestOrdering,
+    case_selection: Option<&CaseSelection>,
+) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
+
+    if let Some(case_selection) = case_selection {
+        retain_selected_cases(&mut test_infos, case_selection);
+    }
 
     if !last_failed.is_empty() {
         test_infos.retain(|info| {
@@ -248,6 +347,70 @@ pub fn partition_collected_tests(
     }
 
     partitions
+}
+
+fn retain_selected_cases(test_infos: &mut Vec<TestInfo>, selection: &CaseSelection) {
+    let mut selected = Vec::with_capacity(test_infos.len());
+
+    for test in test_infos.drain(..) {
+        let Some((path, function)) = test.path.rsplit_once("::") else {
+            selected.push(test);
+            continue;
+        };
+
+        if selection.is_unrestricted_path(path) {
+            selected.push(test);
+            continue;
+        }
+
+        let function = function
+            .split_once('[')
+            .map_or(function, |(function, _)| function);
+        let Some(case_indices) = selection.function_cases(path, function) else {
+            selected.push(test);
+            continue;
+        };
+
+        let Some(case_indices) = case_indices else {
+            selected.push(test);
+            continue;
+        };
+
+        let Some(case_index) = test
+            .qualified_name
+            .rsplit_once('[')
+            .and_then(|(_, index)| index.strip_suffix(']'))
+            .and_then(|index| index.parse::<usize>().ok())
+        else {
+            if test.case_count.is_some() {
+                continue;
+            }
+
+            let duration = test.duration.and_then(|duration| {
+                u32::try_from(case_indices.len())
+                    .ok()
+                    .and_then(|count| duration.checked_div(count))
+            });
+            for &case_index in case_indices {
+                let mut test = test.clone();
+                test.duration = duration;
+                test.path.push('[');
+                test.path.push_str(&case_index.to_string());
+                test.path.push(']');
+                test.qualified_name.push('[');
+                test.qualified_name.push_str(&case_index.to_string());
+                test.qualified_name.push(']');
+                selected.push(test);
+            }
+            continue;
+        };
+
+        if case_indices.contains(&case_index) {
+            selected.push(test);
+        }
+    }
+
+    *test_infos = selected;
 }
 
 /// Assigns each shuffled test from its stable random key, independent of sibling tests.
@@ -393,6 +556,7 @@ fn collect_test_paths_recursive(
                         qualified_name,
                         path: format!("{module_path}::{function_name}[{idx}]"),
                         duration,
+                        case_count: Some(case_count),
                         function_root: function_root.clone(),
                     });
                 }
@@ -403,6 +567,7 @@ fn collect_test_paths_recursive(
                     qualified_name: function_root.clone(),
                     path: format!("{module_path}::{function_name}"),
                     duration,
+                    case_count,
                     function_root,
                 });
             }
@@ -416,6 +581,7 @@ fn collect_test_paths_recursive(
             test_infos.push(TestInfo {
                 module_name: module_name.to_string(),
                 duration: previous_durations.get(qualified_name.as_str()).copied(),
+                case_count: None,
                 path: format!("{module_path}::{function_name}"),
                 function_root: qualified_name.clone(),
                 qualified_name,
@@ -470,6 +636,7 @@ mod tests {
             qualified_name: qualified_name.to_string(),
             path: qualified_name.to_string(),
             duration,
+            case_count: None,
             function_root: qualified_name.to_string(),
         }
     }
@@ -685,6 +852,139 @@ mod tests {
                 .sum::<usize>(),
             6
         );
+    }
+
+    #[test]
+    fn explicit_parametrize_case_selector_schedules_only_that_case() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', [0, 1, 2, 3])\n\
+             def test_value(value): pass\n",
+        );
+        let selector = TestPath::new(&format!("{test_path}::test_value[2]"))
+            .expect("case selector should parse");
+        let case_selection = CaseSelection::from_test_paths(&[selector]);
+
+        let partitions = partition_collected_tests_with_case_selection(
+            &package,
+            1,
+            &HashMap::new(),
+            &HashSet::new(),
+            None,
+            TestOrdering::Stable,
+            Some(&case_selection),
+        );
+
+        assert_eq!(
+            partitions[0].tests(),
+            &[format!("{test_path}::test_value[2]")]
+        );
+    }
+
+    #[test]
+    fn explicit_parametrize_case_selector_ignores_out_of_range_case() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', [0, 1])\n\
+             def test_value(value): pass\n",
+        );
+        let selector = TestPath::new(&format!("{test_path}::test_value[2]"))
+            .expect("case selector should parse");
+        let case_selection = CaseSelection::from_test_paths(&[selector]);
+
+        let partitions = partition_collected_tests_with_case_selection(
+            &package,
+            1,
+            &HashMap::new(),
+            &HashSet::new(),
+            None,
+            TestOrdering::Stable,
+            Some(&case_selection),
+        );
+
+        assert!(partitions[0].tests().is_empty());
+    }
+
+    #[test]
+    fn explicit_parametrize_case_selector_ignores_empty_static_cases() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', [])\n\
+             def test_value(value): pass\n",
+        );
+        let selector = TestPath::new(&format!("{test_path}::test_value[0]"))
+            .expect("case selector should parse");
+        let case_selection = CaseSelection::from_test_paths(&[selector]);
+
+        let partitions = partition_collected_tests_with_case_selection(
+            &package,
+            1,
+            &HashMap::new(),
+            &HashSet::new(),
+            None,
+            TestOrdering::Stable,
+            Some(&case_selection),
+        );
+
+        assert!(partitions[0].tests().is_empty());
+    }
+
+    #[test]
+    fn explicit_parametrize_case_selectors_union_exact_cases() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', [0, 1, 2, 3])\n\
+             def test_value(value): pass\n",
+        );
+        let selectors = [1, 3].map(|index| {
+            TestPath::new(&format!("{test_path}::test_value[{index}]"))
+                .expect("case selector should parse")
+        });
+        let case_selection = CaseSelection::from_test_paths(&selectors);
+
+        let partitions = partition_collected_tests_with_case_selection(
+            &package,
+            1,
+            &HashMap::new(),
+            &HashSet::new(),
+            None,
+            TestOrdering::Stable,
+            Some(&case_selection),
+        );
+
+        assert_eq!(
+            partitions[0].tests(),
+            &[
+                format!("{test_path}::test_value[1]"),
+                format!("{test_path}::test_value[3]"),
+            ]
+        );
+    }
+
+    #[test]
+    fn dynamic_parametrize_case_selectors_split_cached_duration() {
+        let (_temp_dir, test_path, package) = collected_package(
+            "@karva.tags.parametrize('value', range(4))\n\
+             def test_value(value): pass\n",
+        );
+        let selectors = [1, 3].map(|index| {
+            TestPath::new(&format!("{test_path}::test_value[{index}]"))
+                .expect("case selector should parse")
+        });
+        let case_selection = CaseSelection::from_test_paths(&selectors);
+        let durations = HashMap::from([(
+            TestCacheKey::function_name("test_sample::test_value"),
+            Duration::from_millis(40),
+        )]);
+
+        let partitions = partition_collected_tests_with_case_selection(
+            &package,
+            1,
+            &durations,
+            &HashSet::new(),
+            None,
+            TestOrdering::Stable,
+            Some(&case_selection),
+        );
+
+        assert_eq!(partitions[0].tests().len(), 2);
+        assert_eq!(partitions[0].weight(), 40_000);
     }
 
     #[test]

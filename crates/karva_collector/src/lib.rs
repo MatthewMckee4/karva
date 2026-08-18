@@ -142,7 +142,8 @@ pub fn collect_source(
     Some(collected_module)
 }
 
-fn collect_doctests(module_body: &[Stmt], source_text: &str) -> Vec<CollectedDoctest> {
+/// Collects executable examples from module and object docstrings in source order.
+pub fn collect_doctests(module_body: &[Stmt], source_text: &str) -> Vec<CollectedDoctest> {
     let mut doctests = Vec::new();
     collect_body_doctest(
         module_body,

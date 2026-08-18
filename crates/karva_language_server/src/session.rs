@@ -243,6 +243,9 @@ enum HierarchicalDocumentSymbols {
 pub(super) struct PreparedSourceAnalysis {
     current_path: Utf8PathBuf,
     current_source: String,
+    doctest_modules: bool,
+    project_root: Utf8PathBuf,
+    profile: Option<String>,
     source_index: PreparedSourceIndex,
     document_uri: Uri,
     document_version: i32,
@@ -250,6 +253,22 @@ pub(super) struct PreparedSourceAnalysis {
 }
 
 impl PreparedSourceAnalysis {
+    pub(super) fn current_path(&self) -> &Utf8Path {
+        &self.current_path
+    }
+
+    pub(super) fn doctest_modules(&self) -> bool {
+        self.doctest_modules
+    }
+
+    pub(super) fn project_root(&self) -> &Utf8Path {
+        &self.project_root
+    }
+
+    pub(super) fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
+    }
+
     pub(super) fn source_text(&self) -> &str {
         &self.current_source
     }
@@ -439,6 +458,14 @@ impl Session {
         self.prepare_source_analysis_with_scope(uri, SourceIndexScope::TestSelection)
     }
 
+    /// Captures only open documents and ancestor configuration for a local source query.
+    pub(super) fn prepare_open_document_source_analysis(
+        &mut self,
+        uri: &Uri,
+    ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
+        self.prepare_source_analysis_with_scope(uri, SourceIndexScope::OpenDocuments)
+    }
+
     /// Captures source state for a project-wide symbol query.
     pub(super) fn prepare_project_source_analysis(
         &mut self,
@@ -462,8 +489,10 @@ impl Session {
         }
 
         let path = uri_to_path(uri)?;
+        let profile = self.workspaces.profile().map(str::to_owned);
         let project = self.workspaces.project_for_uri(uri)?;
         let project_root = project.cwd().clone();
+        let doctest_modules = project.settings().test().doctest_modules;
         let settings = SourceAnalysisSettings {
             python_version: project.metadata().python_version(),
             test_function_prefix: project.settings().test().test_function_prefix.clone(),
@@ -489,7 +518,7 @@ impl Session {
             SourceIndexCache::default()
         };
         let source_index = PreparedSourceIndex::with_cache(
-            project_root,
+            project_root.clone(),
             project.settings().src().include_paths.clone(),
             open_sources,
             settings,
@@ -501,6 +530,9 @@ impl Session {
         Ok(Some(PreparedSourceAnalysis {
             current_path: path,
             current_source: document.contents().to_owned(),
+            doctest_modules,
+            project_root,
+            profile,
             source_index,
             document_uri: uri.clone(),
             document_version: document.version(),

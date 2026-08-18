@@ -95,6 +95,10 @@ impl Workspaces {
         self.folders.iter()
     }
 
+    pub(super) fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
+    }
+
     pub(super) fn project_for_uri(&mut self, uri: &Uri) -> Result<Arc<Project>, WorkspaceError> {
         let path = uri_to_path(uri)?;
         let workspace = self

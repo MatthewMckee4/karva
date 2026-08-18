@@ -22,11 +22,15 @@ use karva_logging::Printer;
 use karva_logging::time::{format_duration, format_duration_bracketed};
 use karva_metadata::MaxFail;
 use karva_project::Project;
+use karva_project::path::TestPath;
 use karva_python_semantic::TestCacheKey;
 
 use crate::binary::find_karva_worker_binary;
 use crate::collection::ParallelCollector;
-use crate::partition::{Partition, TestOrdering, partition_collected_tests, scheduled_test_count};
+use crate::partition::{
+    CaseSelection, Partition, TestOrdering, partition_collected_tests,
+    partition_collected_tests_with_case_selection, scheduled_test_count,
+};
 use crate::worker_args::{WorkerSpawn, worker_command};
 
 /// Width that result labels (`PASS`, `FAIL`, `SIGINT`) are right-padded to so
@@ -644,14 +648,18 @@ fn spawn_workers(
     Ok(worker_manager)
 }
 
-/// Collect tests from the project without executing them.
-pub fn collect_tests(project: &Project) -> Result<CollectedPackage> {
-    let mut test_paths = Vec::new();
+fn resolve_test_paths(project: &Project) -> Result<Vec<TestPath>> {
+    project
+        .test_paths()
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
 
-    for path in project.test_paths() {
-        test_paths.push(path?);
-    }
-
+fn collect_tests_from_paths(
+    project: &Project,
+    test_paths: Vec<TestPath>,
+) -> Result<CollectedPackage> {
     tracing::debug!(path_count = test_paths.len(), "Found test paths");
 
     let collection_settings = CollectionSettings {
@@ -716,7 +724,9 @@ pub fn run_parallel_tests(
         .run_timeout
         .map(|timeout| Instant::now() + timeout);
 
-    let collected = collect_tests(project)?;
+    let test_paths = resolve_test_paths(project)?;
+    let case_selection = CaseSelection::from_test_paths(&test_paths);
+    let collected = collect_tests_from_paths(project, test_paths)?;
 
     let total_tests = scheduled_test_count(&collected);
     let max_useful_workers = total_tests.div_ceil(MIN_TESTS_PER_WORKER).max(1);
@@ -746,14 +756,26 @@ pub fn run_parallel_tests(
 
     let last_failed_set = last_failed_set(&cache_dir, config.last_failed);
 
-    let partitions = partition_collected_tests(
-        &collected,
-        num_workers,
-        &previous_durations,
-        &last_failed_set,
-        config.partition,
-        config.test_ordering,
-    );
+    let partitions = if case_selection.is_empty() {
+        partition_collected_tests(
+            &collected,
+            num_workers,
+            &previous_durations,
+            &last_failed_set,
+            config.partition,
+            config.test_ordering,
+        )
+    } else {
+        partition_collected_tests_with_case_selection(
+            &collected,
+            num_workers,
+            &previous_durations,
+            &last_failed_set,
+            config.partition,
+            config.test_ordering,
+            Some(&case_selection),
+        )
+    };
     let scheduled_cases: usize = partitions
         .iter()
         .map(|partition| partition.tests().len())

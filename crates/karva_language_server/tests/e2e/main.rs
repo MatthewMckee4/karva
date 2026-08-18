@@ -16,6 +16,7 @@ mod implementation;
 mod initialize;
 mod references;
 mod rename;
+mod runnables;
 
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -417,6 +418,11 @@ impl TestServerBuilder {
 
     pub(crate) fn with_workspace(mut self, folder: WorkspaceFolder) -> Self {
         self.workspace_folders.push(folder);
+        self
+    }
+
+    pub(crate) fn with_initialization_options(mut self, options: Value) -> Self {
+        self.initialize_params.initialization_options = Some(options);
         self
     }
 
