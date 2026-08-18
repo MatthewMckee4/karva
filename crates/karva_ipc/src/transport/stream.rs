@@ -4,6 +4,7 @@ use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
@@ -74,6 +75,30 @@ impl ControllerStream {
             Self::Unix(stream) => stream
                 .set_nonblocking(nonblocking)
                 .context("failed to configure Unix worker connection"),
+        }
+    }
+
+    /// Bounds a blocking read so controller-driven cancellation can be observed.
+    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<()> {
+        match self {
+            Self::Tcp(stream) => stream
+                .set_read_timeout(timeout)
+                .context("failed to configure Karva worker connection read timeout"),
+            #[cfg(unix)]
+            Self::Unix(stream) => {
+                let result = stream.set_read_timeout(timeout);
+                // Darwin returns EINVAL when the peer reaches EOF between
+                // accept and timeout setup. That stream cannot block, so the
+                // timeout is no longer needed.
+                #[cfg(target_os = "macos")]
+                if result
+                    .as_ref()
+                    .is_err_and(|error| error.kind() == io::ErrorKind::InvalidInput)
+                {
+                    return Ok(());
+                }
+                result.context("failed to configure Unix worker connection read timeout")
+            }
         }
     }
 

@@ -2,16 +2,17 @@
 
 use std::collections::HashMap;
 use std::io::ErrorKind;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
 
 use super::super::Incoming;
 use super::super::checkpoint::{CheckpointState, WorkerCheckpoint};
-use super::super::reader::read_worker;
+use super::super::reader::{InterruptibleReader, read_worker};
 use crate::protocol::WorkerSelection;
 use crate::transport::ControllerStream;
 
@@ -34,6 +35,9 @@ pub(super) struct ControllerReader {
 
     /// Final active checkpoint published before disconnection is announced.
     checkpoint: Arc<Mutex<Option<WorkerCheckpoint>>>,
+
+    /// Controller-driven cancellation checked by the interruptible reader.
+    interrupted: Arc<AtomicBool>,
 }
 
 impl ControllerReader {
@@ -45,6 +49,7 @@ impl ControllerReader {
         worker_selections: Arc<Mutex<HashMap<usize, WorkerSelection>>>,
     ) -> Result<Self> {
         stream.set_nonblocking(false)?;
+        stream.set_read_timeout(Some(READER_INTERRUPT_POLL_INTERVAL))?;
         let control_stream = stream.try_clone()?;
         let shutdown_stream = stream.try_clone()?;
         let worker_id = Arc::new(OnceLock::new());
@@ -53,10 +58,12 @@ impl ControllerReader {
         let reader_event_count = Arc::clone(&event_count);
         let checkpoint = Arc::new(Mutex::new(None));
         let published_checkpoint = Arc::clone(&checkpoint);
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let reader_interrupted = Arc::clone(&interrupted);
         let handle = thread::spawn(move || {
             let mut checkpoint = CheckpointState::default();
             let result = read_worker(
-                stream,
+                InterruptibleReader::new(stream, &reader_interrupted),
                 &run_id,
                 &worker_selections,
                 &mut checkpoint,
@@ -81,6 +88,7 @@ impl ControllerReader {
             worker_id,
             event_count,
             checkpoint,
+            interrupted,
         })
     }
 
@@ -108,6 +116,7 @@ impl ControllerReader {
 
     /// Interrupts this reader, tolerating a stream already closed by its peer.
     pub(super) fn disconnect(&self) -> Result<()> {
+        self.interrupted.store(true, Ordering::Release);
         self.stream.as_ref().map_or(Ok(()), shutdown_reader)
     }
 
@@ -117,6 +126,9 @@ impl ControllerReader {
     }
 
     /// Joins this reader thread and reports a panic without losing the join.
+    ///
+    /// Interrupted readers wake no later than one read-timeout interval even
+    /// when the operating system does not unblock their active read on shutdown.
     pub(super) fn finish(&mut self) -> bool {
         let panicked = self
             .handle
@@ -126,6 +138,11 @@ impl ControllerReader {
         panicked
     }
 }
+
+// Receipt: forced cleanup already grants five 10 ms supervisor polls for late
+// events. Matching that 50 ms window bounds an ignored socket shutdown to one
+// additional drain window while waking an idle reader at most 20 times/second.
+const READER_INTERRUPT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Interrupts one reader thread, tolerating a stream already closed by its peer.
 fn shutdown_reader(stream: &ControllerStream) -> Result<()> {
