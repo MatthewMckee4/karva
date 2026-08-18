@@ -5,7 +5,7 @@
 ### Bug Fixes
 
 - Fix tmpdir legacy path compatibility ([#1344](https://github.com/MatthewMckee4/karva/pull/1344))
-- Resolve nearest fixtures by provider identity ([#1312](https://github.com/MatthewMckee4/karva/pull/1312))
+- Fail tests with unhandled asyncio task exceptions ([#1274](https://github.com/MatthewMckee4/karva/pull/1274))
 - Fix custom tag stub typing ([#1338](https://github.com/MatthewMckee4/karva/pull/1338))
 
 ### Configuration
@@ -19,6 +19,7 @@
 ### Test Running
 
 - Add opt-in Python doctest support ([#1275](https://github.com/MatthewMckee4/karva/pull/1275))
+- Remove command-length limits for large test selections ([#1265](https://github.com/MatthewMckee4/karva/pull/1265))
 
 ### Contributors
 
@@ -81,7 +82,6 @@
 
 ### Test Running
 
-- Support opt-in Python docstring doctests ([#1275](https://github.com/MatthewMckee4/karva/pull/1275))
 - Reuse the last generated random seed ([#1215](https://github.com/MatthewMckee4/karva/pull/1215))
 - Add seeded randomized test ordering ([#1194](https://github.com/MatthewMckee4/karva/pull/1194))
 
