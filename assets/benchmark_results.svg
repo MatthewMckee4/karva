@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="512.401pt" height="193.225875pt" viewBox="0 0 512.401 193.225875" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-08-01T22:46:11.745354</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 193.225875
+L 512.401 193.225875
+L 512.401 0
+L 0 0
+L 0 193.225875
+z
+" style="fill: none; opacity: 0"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 95.665 145.728
+L 458.545 145.728
+L 458.545 7.2
+L 95.665 7.2
+L 95.665 145.728
+z
+" style="fill: none"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 95.665 139.431273
+L 441.265 139.431273
+L 441.265 115.882537
+L 95.665 115.882537
+z
+" clip-path="url(#pee93903b64)" style="fill: #5a7863"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 95.665 88.238368
+L 322.441573 88.238368
+L 322.441573 64.689632
+L 95.665 64.689632
+z
+" clip-path="url(#pee93903b64)" style="fill: #90ab8b"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 95.665 37.045463
+L 105.41077 37.045463
+L 105.41077 13.496727
+L 95.665 13.496727
+z
+" clip-path="url(#pee93903b64)" style="fill: #ebf4dd"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <defs>
+       <path id="m3d14f7c74e" d="M 0 0
+L 0 3.5
+" style="stroke: #b9c9b5; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#m3d14f7c74e" x="95.665" y="145.728" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_1">
+      <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: middle; fill: #b9c9b5" x="95.665" y="159.565891" transform="rotate(-0 95.665 159.565891)">0.00s</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2">
+      <g>
+       <use xlink:href="#m3d14f7c74e" x="182.814675" y="145.728" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_2">
+      <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: middle; fill: #b9c9b5" x="182.814675" y="159.565891" transform="rotate(-0 182.814675 159.565891)">23.25s</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3">
+      <g>
+       <use xlink:href="#m3d14f7c74e" x="269.964349" y="145.728" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_3">
+      <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: middle; fill: #b9c9b5" x="269.964349" y="159.565891" transform="rotate(-0 269.964349 159.565891)">46.50s</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_4">
+      <g>
+       <use xlink:href="#m3d14f7c74e" x="357.114024" y="145.728" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: middle; fill: #b9c9b5" x="357.114024" y="159.565891" transform="rotate(-0 357.114024 159.565891)">69.75s</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_5">
+      <g>
+       <use xlink:href="#m3d14f7c74e" x="444.263698" y="145.728" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: middle; fill: #b9c9b5" x="444.263698" y="159.565891" transform="rotate(-0 444.263698 159.565891)">93.00s</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_6">
+      <defs>
+       <path id="m4d3afe15ef" d="M 0 0
+L -3.5 0
+" style="stroke: #b9c9b5; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#m4d3afe15ef" x="95.665" y="127.656905" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_6">
+      <text style="font-weight: 700; font-size: 12px; font-family: Manrope, system-ui, sans-serif; text-anchor: end; fill: #ebf4dd" x="88.665" y="132.215498" transform="rotate(-0 88.665 132.215498)">pytest</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_7">
+      <g>
+       <use xlink:href="#m4d3afe15ef" x="95.665" y="76.464" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_7">
+      <text style="font-weight: 700; font-size: 12px; font-family: Manrope, system-ui, sans-serif; text-anchor: end; fill: #ebf4dd" x="88.665" y="81.023062" transform="rotate(-0 88.665 81.023062)">pytest-xdist</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_8">
+      <g>
+       <use xlink:href="#m4d3afe15ef" x="95.665" y="25.271095" style="fill: #b9c9b5; stroke: #b9c9b5; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_8">
+      <text style="font-weight: 700; font-size: 12px; font-family: Manrope, system-ui, sans-serif; text-anchor: end; fill: #ebf4dd" x="88.665" y="29.830158" transform="rotate(-0 88.665 29.830158)">karva</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_6">
+    <path d="M 95.665 145.728
+L 458.545 145.728
+" style="fill: none; stroke: #b9c9b5; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: start; fill: #ebf4dd" x="444.721" y="129.994795" transform="rotate(-0 444.721 129.994795)">92.20s</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: start; fill: #ebf4dd" x="325.897573" y="78.801891" transform="rotate(-0 325.897573 78.801891)">60.50s</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 9px; font-family: Manrope, system-ui, sans-serif; text-anchor: start; fill: #ebf4dd" x="108.86677" y="27.608986" transform="rotate(-0 108.86677 27.608986)">2.60s</text>
+   </g>
+  </g>
+  <g id="text_12">
+   <text style="font-size: 8px; font-family: Manrope, system-ui, sans-serif; text-anchor: end; fill: #b9c9b5" x="505.201" y="184.104" transform="rotate(-0 505.201 184.104)">Workload: ~250,000 tests · Machine: 14 cores</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pee93903b64">
+   <rect x="95.665" y="7.2" width="362.88" height="138.528"/>
+  </clipPath>
+ </defs>
+</svg>
