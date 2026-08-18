@@ -56,6 +56,11 @@ impl WorkerStderrForwarder {
             }
         }
     }
+
+    /// Whether the worker stderr pipe reached EOF and forwarding stopped.
+    pub(super) fn is_finished(&self) -> bool {
+        self.handle.is_finished()
+    }
 }
 
 impl WorkerOutputForwarder {
@@ -81,6 +86,11 @@ impl WorkerOutputForwarder {
                 tracing::warn!(target: "karva_runner::orchestration", worker_id, ?err, "worker stdout forwarder panicked");
             }
         }
+    }
+
+    /// Whether the worker stdout pipe reached EOF and forwarding stopped.
+    pub(super) fn is_finished(&self) -> bool {
+        self.handle.is_finished()
     }
 }
 

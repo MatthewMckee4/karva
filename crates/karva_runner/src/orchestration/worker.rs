@@ -168,6 +168,19 @@ impl Worker {
             .is_some_and(|observed| observed.elapsed() >= CANCELLATION_EVENT_SETTLE)
     }
 
+    /// Whether every forwarded worker output pipe reached EOF.
+    pub(super) fn output_drained(&self) -> bool {
+        self.streams
+            .output
+            .as_ref()
+            .is_none_or(WorkerOutputForwarder::is_finished)
+            && self
+                .streams
+                .stderr
+                .as_ref()
+                .is_none_or(WorkerStderrForwarder::is_finished)
+    }
+
     /// Marks output forwarders as detached so cleanup never blocks on inherited handles.
     pub(super) fn mark_forced_disconnect(&mut self) {
         self.lifecycle.forced_disconnect = true;

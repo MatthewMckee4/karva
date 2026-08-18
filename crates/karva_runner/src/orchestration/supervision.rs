@@ -52,12 +52,6 @@ impl WorkerSupervisor {
         !self.workers.is_empty()
     }
 
-    /// Whether a generation delivered its terminal event before disconnecting.
-    #[cfg(unix)]
-    pub(super) fn worker_completed(&self, worker_id: usize) -> bool {
-        self.dispatcher.worker_completed(worker_id)
-    }
-
     /// Returns exact completed-case membership for replacement-worker filtering.
     pub(super) fn completed_test_keys(&self) -> HashSet<TestCacheKey> {
         self.dispatcher.completed_test_keys()

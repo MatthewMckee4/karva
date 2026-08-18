@@ -70,6 +70,7 @@ fn worker_disconnect_during_selection_recovers_selection() {
     ERROR Worker 0 failed with exit code 38 in [TIME]
     ");
     assert_eq!(context.read_file("completed-by"), "1");
+    assert_eq!(context.read_file("selection-received"), "1");
 }
 
 fn handshake_failure_command(context: &TestContext, failure: &str) -> Command {
@@ -140,7 +141,10 @@ elif failure == "during-selection":
     connection.sendall(json.dumps(hello).encode() + b"\n")
     # Receipt: this four-case suite took at most 0.72s across 20 local runs.
     connection.settimeout(5)
-    connection.recv(1)
+    if not connection.recv(1):
+        raise RuntimeError("controller closed before sending the worker selection")
+    with open("selection-received", "w", encoding="utf-8") as marker:
+        marker.write("1")
 connection.close()
 PY
 exit 38

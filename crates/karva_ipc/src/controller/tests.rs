@@ -113,6 +113,52 @@ fn controller_can_close_unauthenticated_reader_after_termination() {
 }
 
 #[test]
+fn dropping_controller_closes_accepted_readers() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    let mut retained_connection =
+        ControllerStream::connect(&server.endpoint()).expect("connect unauthenticated client");
+    accept_connections(&mut server, 1);
+
+    let (drop_finished, wait_for_drop) = mpsc::channel();
+    let dropper = thread::spawn(move || {
+        drop(server);
+        drop_finished.send(()).expect("report controller drop");
+    });
+    if let Err(error) = wait_for_drop.recv_timeout(BUFFERED_EVENT_TIMEOUT) {
+        let shutdown = retained_connection.shutdown();
+        dropper.join().expect("join controller drop");
+        panic!("controller drop did not join its readers: {error} (client shutdown: {shutdown:?})");
+    }
+    dropper.join().expect("join controller drop");
+
+    retained_connection
+        .set_nonblocking(true)
+        .expect("configure client stream");
+    let mut byte = [0_u8];
+    let deadline = Instant::now() + BUFFERED_EVENT_TIMEOUT;
+    let read = loop {
+        let read = retained_connection.read(&mut byte);
+        if !matches!(&read, Err(error) if error.kind() == ErrorKind::WouldBlock)
+            || Instant::now() >= deadline
+        {
+            break read;
+        }
+        thread::yield_now();
+    };
+    assert!(
+        match &read {
+            Ok(0) => true,
+            Err(error) => matches!(
+                error.kind(),
+                ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted
+            ),
+            Ok(_) => false,
+        },
+        "controller drop left its accepted connection open: {read:?}"
+    );
+}
+
+#[test]
 fn worker_can_disconnect_before_handshake() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server

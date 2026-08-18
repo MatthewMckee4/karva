@@ -45,22 +45,10 @@ impl WorkerSupervisor {
                 Ok(Some(status))
             } else {
                 #[cfg(unix)]
-                if process_control::has_exited(worker.child())? {
-                    if !server.worker_disconnected(worker.id())
-                        && let Err(error) = process_control::force_kill(worker.child())
-                        && error.kind() != std::io::ErrorKind::PermissionDenied
-                    {
-                        tracing::warn!(target: "karva_runner::orchestration",
-                            worker_id = worker.id(),
-                            "failed to clean up worker process group: {error}"
-                        );
-                    }
-                    worker.child_mut().wait().map(Some)
-                } else {
-                    Ok(None)
-                }
+                let status = reap_exited_process_group(&mut worker);
                 #[cfg(not(unix))]
-                worker.child_mut().try_wait()
+                let status = worker.child_mut().try_wait();
+                status
             };
             match status {
                 Ok(Some(status)) => {
@@ -68,26 +56,40 @@ impl WorkerSupervisor {
                         worker.observe_exit(status, server.worker_event_count(worker.id()));
                     }
                     let controller_authenticated = server.worker_started(worker.id())?;
-                    if controller_authenticated && !server.worker_disconnected(worker.id()) {
-                        let event_count = server.worker_event_count(worker.id());
-                        if event_count != worker.event_count() {
-                            worker.note_event_count(event_count);
+                    let completed =
+                        status.success() && self.dispatcher.worker_completed(worker.id());
+                    let controller_connected =
+                        controller_authenticated && !server.worker_disconnected(worker.id());
+                    if controller_connected || !worker.output_drained() {
+                        if controller_connected {
+                            let event_count = server.worker_event_count(worker.id());
+                            if event_count != worker.event_count() {
+                                worker.note_event_count(event_count);
+                            }
                         }
-                        if worker.drain_limit_reached() {
+                        if !worker.drain_limit_reached() {
+                            running.push(worker);
+                            continue;
+                        }
+                        if controller_connected {
                             server.disconnect_worker(worker.id())?;
-                            worker.mark_forced_disconnect();
+                        }
+                        worker.mark_forced_disconnect();
+                        if completed {
+                            tracing::warn!(target: "karva_runner::orchestration",
+                                worker_id = worker.id(),
+                                limit_ms = CANCELLATION_EVENT_SETTLE.as_millis(),
+                                "worker output drain limit reached; final output may be incomplete"
+                            );
+                        } else {
                             tracing::warn!(target: "karva_runner::orchestration",
                                 worker_id = worker.id(),
                                 limit_ms = CANCELLATION_EVENT_SETTLE.as_millis(),
                                 "worker output drain limit reached; final output and results may be incomplete"
                             );
                         }
-                        running.push(worker);
-                        continue;
                     }
                     worker.join_output();
-                    let completed =
-                        status.success() && self.dispatcher.worker_completed(worker.id());
                     if completed {
                         worker.join_stderr(false);
                         tracing::info!(target: "karva_runner::orchestration",
@@ -127,9 +129,8 @@ impl WorkerSupervisor {
 
     /// Reaps children that stop during termination without classifying their exits.
     pub(in crate::orchestration) fn reap_during_shutdown(&mut self) {
-        let dispatcher = &self.dispatcher;
         self.workers
-            .retain_mut(|worker| match shutdown_status(worker, dispatcher.worker_completed(worker.id())) {
+            .retain_mut(|worker| match shutdown_status(worker) {
                 Ok(Some(_)) => {
                     worker.mark_forced_disconnect();
                     worker.join_output();
@@ -217,33 +218,38 @@ impl WorkerSupervisor {
 /// Observes one child during graceful shutdown without exposing a recycled
 /// Unix process-group id.
 ///
-/// Incomplete Unix workers remain unreaped until either they are force-killed
-/// at the grace deadline or their leader exits. Once a leader exits, any group
-/// members that ignored the earlier graceful signal are killed before `wait`
-/// releases the numeric group id. Completed workers will never be signalled by
-/// shutdown and can therefore use the ordinary reaping path.
-fn shutdown_status(worker: &mut Worker, completed: bool) -> std::io::Result<Option<ExitStatus>> {
+/// Unix workers remain unreaped until either they are force-killed at the grace
+/// deadline or their leader exits. Once a leader exits, any remaining group
+/// members are killed before `wait` releases the numeric process-group id.
+fn shutdown_status(worker: &mut Worker) -> std::io::Result<Option<ExitStatus>> {
     #[cfg(unix)]
     {
-        if completed {
-            return worker.child_mut().try_wait();
-        }
-        if !process_control::has_exited(worker.child())? {
-            return Ok(None);
-        }
-        if let Err(error) = process_control::force_kill(worker.child())
-            && error.kind() != std::io::ErrorKind::PermissionDenied
-        {
-            tracing::warn!(target: "karva_runner::orchestration",
-                worker_id = worker.id(),
-                "failed to clean up worker process group after graceful exit: {error}"
-            );
-        }
-        worker.child_mut().wait().map(Some)
+        reap_exited_process_group(worker)
     }
     #[cfg(not(unix))]
     {
-        let _ = completed;
         worker.child_mut().try_wait()
     }
+}
+
+/// Reaps an exited Unix group leader only after terminating every descendant.
+///
+/// Keeping the leader waitable reserves its numeric process-group id, so the
+/// group signal cannot target an unrelated process after id reuse. This applies
+/// to successful workers too: subprocesses created by a test remain owned by
+/// that worker generation after the Python runtime reports completion.
+#[cfg(unix)]
+fn reap_exited_process_group(worker: &mut Worker) -> std::io::Result<Option<ExitStatus>> {
+    if !process_control::has_exited(worker.child())? {
+        return Ok(None);
+    }
+    if let Err(error) = process_control::force_kill(worker.child())
+        && error.kind() != std::io::ErrorKind::PermissionDenied
+    {
+        tracing::warn!(target: "karva_runner::orchestration",
+            worker_id = worker.id(),
+            "failed to clean up worker process group: {error}"
+        );
+    }
+    worker.child_mut().wait().map(Some)
 }

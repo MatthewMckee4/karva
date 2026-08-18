@@ -22,8 +22,8 @@ use connection_reader::ControllerReader;
 ///
 /// Keeping listener setup, selection ownership, reader threads, and shutdown
 /// handles together makes their lifetime contract explicit. The owning server
-/// must call [`ControllerConnections::finish`] before dropping this state so
-/// accepted reader threads are joined rather than detached.
+/// calls [`ControllerConnections::finish`] to surface reader failures; drop is
+/// a best-effort fallback that closes and joins every remaining reader.
 pub(super) struct ControllerConnections {
     /// Non-blocking listener used to accept worker connections.
     listener: ControllerListener,
@@ -173,5 +173,22 @@ impl ControllerConnections {
     #[cfg(test)]
     pub(super) fn reader_count(&self) -> usize {
         self.readers.len()
+    }
+}
+
+impl Drop for ControllerConnections {
+    fn drop(&mut self) {
+        if let Err(error) = self.disconnect_readers() {
+            tracing::warn!(
+                "failed to close Karva worker connection during controller cleanup: {error}"
+            );
+        }
+        let mut reader_panicked = false;
+        for reader in &mut self.readers {
+            reader_panicked |= reader.finish();
+        }
+        if reader_panicked {
+            tracing::warn!("Karva worker connection reader panicked during controller cleanup");
+        }
     }
 }

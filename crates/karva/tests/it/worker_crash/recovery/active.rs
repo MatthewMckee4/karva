@@ -53,6 +53,62 @@ def test_worker_crash(value):
 }
 
 #[test]
+fn worker_exit_recovers_static_cases_across_multiple_workers_exactly_once() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+from pathlib import Path
+
+import karva
+
+
+@karva.fixture
+def worker_fixture():
+    return "fixture"
+
+
+@karva.tags.parametrize("value", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+def test_worker_crash(value, worker_fixture):
+    Path("attempt-" + str(value)).touch(exist_ok=False)
+    if value == 0:
+        os._exit(44)
+    Path("completed-" + str(value)).touch()
+"#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--num-workers=2", "--status-level=none"]),
+        @r###"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test::test_worker_crash(value=0, worker_fixture='fixture'):
+
+    error[worker-crashed]: Worker terminated with exit code 44 while running `test::test_worker_crash(value=0, worker_fixture='fixture')`
+
+    ────────────
+         Summary [TIME] 10 tests run: 9 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 0 failed with exit code 44 in [TIME]
+    "###
+    );
+    for value in 0..10 {
+        assert!(context.root().join(format!("attempt-{value}")).is_file());
+        assert_eq!(
+            context.root().join(format!("completed-{value}")).is_file(),
+            value != 0
+        );
+    }
+}
+
+#[test]
 fn worker_exit_resumes_dynamic_parameter_cases() {
     let context = TestContext::with_file(
         "test.py",

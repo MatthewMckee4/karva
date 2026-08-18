@@ -73,12 +73,9 @@ impl WorkerSupervisor {
         // Signal every retained Unix group before reaping any leader. An
         // unreaped leader reserves its process-group id, so no signal can
         // target a group recycled after an earlier `wait` in this pass.
+        // Completed workers can still own test-created descendants.
         #[cfg(unix)]
-        for worker in self
-            .workers()
-            .iter()
-            .filter(|worker| !self.worker_completed(worker.id()))
-        {
+        for worker in self.workers() {
             if let Err(error) = process_control::force_kill(worker.child())
                 && error.kind() != std::io::ErrorKind::PermissionDenied
             {
