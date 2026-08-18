@@ -1273,6 +1273,7 @@ dependencies = [
  "anyhow",
  "camino",
  "fs-err",
+ "glob",
  "insta",
  "karva_metadata",
  "karva_python_semantic",

@@ -266,14 +266,16 @@ pub struct SrcOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub respect_ignore_files: Option<bool>,
 
-    /// A list of files and directories to check.
+    /// A list of files, directories, and shell-style glob patterns to check.
     /// Including a file or directory will make it so that it (and its contents)
-    /// are tested.
+    /// are tested. Glob patterns are relative to the project root and support
+    /// `*`, `?`, `[]`, and recursive `**` matching.
     /// When unset, Karva checks the `tests` directory if it exists, otherwise
     /// it checks the project root.
     ///
     /// - `tests` matches a directory named `tests`
     /// - `tests/test.py` matches a file named `test.py` in the `tests` directory
+    /// - `tests/**/test_*.py` matches test files below the `tests` directory
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#"null"#,

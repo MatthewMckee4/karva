@@ -135,7 +135,9 @@ impl PreparedSourceIndex {
             }
             SourceIndexScope::TestSelection => include_paths
                 .iter()
-                .map(|path| TestPath::new(absolute(path, &project_root).as_str()))
+                .flat_map(|path| {
+                    karva_project::path::resolve_test_paths(absolute(path, &project_root).as_str())
+                })
                 .collect(),
         };
         for test_path in test_paths {
@@ -742,6 +744,18 @@ mod tests {
         let index = fixture.build(vec!["specs".to_owned()], BTreeMap::new());
 
         assert!(index.module(&test).is_some());
+    }
+
+    #[test]
+    fn resolves_glob_include_from_project_root() {
+        let fixture = Fixture::new();
+        let included = fixture.write("specs/unit/test_sample.py", "def test_example(): pass\n");
+        let excluded = fixture.write("specs/unit/helper.py", "def helper(): pass\n");
+
+        let index = fixture.build(vec!["specs/**/test_*.py".to_owned()], BTreeMap::new());
+
+        assert!(index.module(&included).is_some());
+        assert!(index.module(&excluded).is_none());
     }
 
     #[test]

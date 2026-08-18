@@ -127,6 +127,36 @@ def test_in_other(): pass
 }
 
 #[test]
+fn test_src_include_globs() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.default.src]
+include = ["tests/**/test_*.py"]
+"#,
+        ),
+        ("tests/unit/test_unit.py", "def test_unit(): pass\n"),
+        (
+            "tests/integration/test_integration.py",
+            "def test_integration(): pass\n",
+        ),
+        ("tests/unit/helper.py", "def test_helper(): pass\n"),
+        ("other/test_other.py", "def test_other(): pass\n"),
+    ]);
+
+    assert_cmd_snapshot!(context.command().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn explicit_test_path_overrides_configured_src_include() {
     let context = TestContext::with_files([
         (
