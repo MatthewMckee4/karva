@@ -34,10 +34,10 @@ fn shuffle_tests_without_durations(test_infos: &mut Vec<TestInfo>) {
     let mut group_index: HashMap<Arc<str>, usize> = HashMap::new();
 
     for info in test_infos.drain(..) {
-        if let Some(idx) = group_index.get(&info.function_root) {
+        if let Some(idx) = group_index.get(&info.identity.function_root) {
             groups[*idx].push(info);
         } else {
-            group_index.insert(Arc::clone(&info.function_root), groups.len());
+            group_index.insert(Arc::clone(&info.identity.function_root), groups.len());
             groups.push(vec![info]);
         }
     }

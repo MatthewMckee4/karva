@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub use balancing::partition_collected_tests;
 #[cfg(test)]
 use balancing::partition_shuffled_tests;
-use collection::TestInfo;
+use collection::{TestIdentity, TestInfo};
 use karva_python_semantic::TestCacheKey;
 #[cfg(test)]
 use ordering::order_tests_for_partitioning;
@@ -32,7 +32,7 @@ pub enum TestOrdering {
 /// Worker assignment produced by module-aware load balancing.
 #[derive(Debug, Clone)]
 pub struct Partition {
-    /// Worker selectors paired with stable crash-recovery identities.
+    /// Compact test identities paired with stable crash-recovery indices.
     tests: Vec<ScheduledTest>,
 
     /// Runtime-expanded cases a replacement worker must not execute again.
@@ -45,25 +45,30 @@ pub struct Partition {
     unattributed_retry_baseline: Option<usize>,
 }
 
-/// One schedulable selector retained while its worker generation runs.
+/// One scheduled test identity retained while its worker generation runs.
 #[derive(Debug, Clone)]
 struct ScheduledTest {
-    /// Worker CLI selector shared with the outbound IPC selection.
-    path: Arc<str>,
-
-    /// Shared function identity used to reconstruct a key only after a crash.
-    function_root: Arc<str>,
+    /// Function identity shared by every case collected from one test function.
+    identity: Arc<TestIdentity>,
 
     /// Stable expansion index for a statically countable parameter case.
     case_index: Option<usize>,
 }
 
 impl ScheduledTest {
+    /// Materializes the exact worker selector for the outbound IPC selection.
+    fn worker_path(&self) -> Arc<str> {
+        self.case_index.map_or_else(
+            || Arc::clone(&self.identity.selector),
+            |index| format!("{}[{index}]", self.identity.selector).into(),
+        )
+    }
+
     /// Materializes the recovery key only on an exceptional worker-crash path.
     fn cache_key(&self) -> TestCacheKey {
         self.case_index.map_or_else(
-            || TestCacheKey::function_name(&self.function_root),
-            |index| TestCacheKey::parameter_case_name(&self.function_root, index),
+            || TestCacheKey::function_name(&self.identity.function_root),
+            |index| TestCacheKey::parameter_case_name(&self.identity.function_root, index),
         )
     }
 }
@@ -80,8 +85,7 @@ impl Partition {
 
     fn add_test(&mut self, test: TestInfo, test_weight: u128) {
         self.tests.push(ScheduledTest {
-            path: test.path,
-            function_root: test.function_root,
+            identity: test.identity,
             case_index: test.case_index,
         });
         self.weight += test_weight;
@@ -93,8 +97,8 @@ impl Partition {
 
     /// Returns worker CLI selectors in execution order.
     #[cfg(test)]
-    fn test_paths(&self) -> impl ExactSizeIterator<Item = &str> {
-        self.tests.iter().map(|test| test.path.as_ref())
+    fn test_paths(&self) -> impl ExactSizeIterator<Item = String> + '_ {
+        self.tests.iter().map(|test| test.worker_path().to_string())
     }
 
     /// Materializes scheduled keys for collector-to-recovery parity tests.
@@ -103,12 +107,9 @@ impl Partition {
         self.tests.iter().map(ScheduledTest::cache_key)
     }
 
-    /// Clones shared selector handles for the worker IPC handshake.
+    /// Materializes worker selectors for the outbound IPC handshake.
     pub(super) fn worker_test_paths(&self) -> Vec<Arc<str>> {
-        self.tests
-            .iter()
-            .map(|test| Arc::clone(&test.path))
-            .collect()
+        self.tests.iter().map(ScheduledTest::worker_path).collect()
     }
 
     /// Number of selectors assigned to this worker generation.
@@ -123,7 +124,9 @@ impl Partition {
 
     /// Returns function identities represented by this assignment.
     pub(super) fn function_roots(&self) -> impl Iterator<Item = &str> {
-        self.tests.iter().map(|test| test.function_root.as_ref())
+        self.tests
+            .iter()
+            .map(|test| test.identity.function_root.as_ref())
     }
 
     /// Runtime-expanded cases already handled by an earlier worker generation.

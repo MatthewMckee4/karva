@@ -65,9 +65,9 @@ pub fn partition_collected_tests(
             .collect::<HashSet<_>>();
         test_infos.retain(|info| {
             last_failed.contains(info.qualified_name.as_str())
-                || last_failed.contains(info.function_root.as_ref())
-                || (info.qualified_name == info.function_root.as_ref()
-                    && failed_function_roots.contains(info.function_root.as_ref()))
+                || last_failed.contains(info.identity.function_root.as_ref())
+                || (info.qualified_name == info.identity.function_root.as_ref()
+                    && failed_function_roots.contains(info.identity.function_root.as_ref()))
         });
     }
 
@@ -92,10 +92,13 @@ pub fn partition_collected_tests(
     let mut module_indices: HashMap<Arc<str>, usize> = HashMap::new();
     for test_info in test_infos {
         let weight = test_weight(test_info.duration);
-        if let Some(&index) = module_indices.get(&test_info.module_name) {
+        if let Some(&index) = module_indices.get(&test_info.identity.module_name) {
             module_groups[index].add_test(test_info, weight);
         } else {
-            module_indices.insert(Arc::clone(&test_info.module_name), module_groups.len());
+            module_indices.insert(
+                Arc::clone(&test_info.identity.module_name),
+                module_groups.len(),
+            );
             module_groups.push(ModuleGroup::new(vec![test_info], weight));
         }
     }

@@ -136,11 +136,12 @@ impl Partition {
         pending.resume_skip.clone_from(&self.resume_skip);
         for test in &self.tests {
             let cache_key = test.cache_key();
-            let completed_function = completed.function_results(test.function_root.as_ref());
+            let completed_function =
+                completed.function_results(test.identity.function_root.as_ref());
             let contains_crashed_dynamic_case = crashed.is_some_and(|crashed| {
                 crashed.is_parameter_case()
                     && test.case_index.is_none()
-                    && test.function_root.as_ref() == crashed.test_function_name()
+                    && test.identity.function_root.as_ref() == crashed.test_function_name()
             });
             let contains_completed_dynamic_case = crashed.is_none()
                 && test.case_index.is_none()
@@ -179,9 +180,9 @@ impl Partition {
             .map(|test| {
                 if test.case_index.is_some() {
                     usize::from(completed.contains(&test.cache_key()))
-                } else if counted_functions.insert(test.function_root.as_ref()) {
+                } else if counted_functions.insert(test.identity.function_root.as_ref()) {
                     completed
-                        .function_results(test.function_root.as_ref())
+                        .function_results(test.identity.function_root.as_ref())
                         .map_or(0, CompletedFunctionResults::len)
                 } else {
                     0

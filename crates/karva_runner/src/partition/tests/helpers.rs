@@ -6,7 +6,7 @@ use camino::Utf8PathBuf;
 use karva_collector::{CollectedPackage, CollectionSettings, collect_file};
 use ruff_python_ast::PythonVersion;
 
-use super::super::collection::TestInfo;
+use super::super::collection::{TestIdentity, TestInfo};
 
 pub(super) fn test_info(qualified_name: &str) -> TestInfo {
     test_info_with_duration(qualified_name, None)
@@ -26,11 +26,13 @@ pub(super) fn test_info_with_duration(
         })
         .unwrap_or((qualified_name, None));
     TestInfo {
-        module_name: Arc::from("test_module"),
+        identity: Arc::new(TestIdentity {
+            module_name: Arc::from("test_module"),
+            selector: function_root.into(),
+            function_root: Arc::from(function_root),
+        }),
         qualified_name: qualified_name.to_string(),
-        path: qualified_name.into(),
         duration,
-        function_root: Arc::from(function_root),
         case_index,
     }
 }
