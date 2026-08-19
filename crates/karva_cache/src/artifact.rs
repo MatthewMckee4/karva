@@ -6,7 +6,7 @@
 //! pairing the filename with its serializer in one place means adding a new
 //! artifact is a single-place change and read/write helpers can't drift.
 
-use std::io::{ErrorKind, Write};
+use std::io::{BufReader, BufWriter, ErrorKind, Write};
 
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -47,11 +47,6 @@ impl CacheFile {
 
 /// Pretty-prints `value` as JSON and writes it to `dir/<file>`.
 pub fn write_json<T: Serialize>(dir: &Utf8Path, file: CacheFile, value: &T) -> Result<()> {
-    let json = serde_json::to_vec_pretty(value)?;
-    write_bytes(dir, file, &json)
-}
-
-fn write_bytes(dir: &Utf8Path, file: CacheFile, content: &[u8]) -> Result<()> {
     let path = file.path_in(dir);
     let parent = path
         .parent()
@@ -59,10 +54,14 @@ fn write_bytes(dir: &Utf8Path, file: CacheFile, content: &[u8]) -> Result<()> {
 
     let mut temp =
         NamedTempFile::new_in(parent).with_context(|| format!("failed to create `{path}`"))?;
-    temp.write_all(content)
-        .with_context(|| format!("failed to write `{path}`"))?;
-    temp.flush()
-        .with_context(|| format!("failed to flush `{path}`"))?;
+    {
+        let mut writer = BufWriter::new(temp.as_file_mut());
+        serde_json::to_writer_pretty(&mut writer, value)
+            .with_context(|| format!("failed to write `{path}`"))?;
+        writer
+            .flush()
+            .with_context(|| format!("failed to flush `{path}`"))?;
+    }
     temp.persist(path.as_std_path())
         .map_err(|err| err.error)
         .with_context(|| format!("failed to replace `{path}`"))?;
@@ -72,12 +71,12 @@ fn write_bytes(dir: &Utf8Path, file: CacheFile, content: &[u8]) -> Result<()> {
 /// Reads `dir/<file>` as JSON, or returns `Ok(None)` when the file does not exist.
 pub fn read_json<T: DeserializeOwned>(dir: &Utf8Path, file: CacheFile) -> Result<Option<T>> {
     let path = file.path_in(dir);
-    let content = match fs::read_to_string(&path) {
-        Ok(content) => content,
+    let file = match fs::File::open(&path) {
+        Ok(file) => file,
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(err.into()),
     };
-    serde_json::from_str(&content)
+    serde_json::from_reader(BufReader::new(file))
         .with_context(|| format!("failed to parse cache artifact `{path}`"))
         .map(Some)
 }
