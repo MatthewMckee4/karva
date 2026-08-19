@@ -30,14 +30,16 @@ pub fn render_diagnostic(
     config: DisplayDiagnosticConfig,
 ) -> RenderedDiagnostic {
     let rendered = render(diagnostic, cwd, config.format, false);
-    let colored_rendered = render(diagnostic, cwd, config.format, config.color);
-    RenderedDiagnostic::new(
+    let mut result = RenderedDiagnostic::new(
         diagnostic.code(),
         diagnostic.severity(),
         diagnostic.primary_message(),
         rendered,
-    )
-    .with_colored_rendered(colored_rendered)
+    );
+    if config.color && config.format == DiagnosticFormat::Full {
+        result = result.with_colored_rendered(render(diagnostic, cwd, config.format, true));
+    }
+    result
 }
 
 fn render(
