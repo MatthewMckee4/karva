@@ -13,7 +13,7 @@ use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerEvent};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
-use karva_project::path::{TestPath, TestPathError, absolute};
+use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::{current_python_version, enable_faulthandler};
 use karva_static::EnvVars;
 
@@ -146,13 +146,11 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let (client, selection) =
         WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
     let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
+    // Controller selectors come from collected absolute module paths.
     let test_paths: Vec<Result<TestPath, TestPathError>> = selection
         .test_paths
         .into_iter()
-        .map(|path| {
-            let path = absolute(path.as_ref(), &cwd);
-            TestPath::new(path.as_str())
-        })
+        .map(|path| TestPath::new(path.as_ref()))
         .collect();
     let reporter = WorkerReporter::new(
         TestCaseReporter::new(printer),
