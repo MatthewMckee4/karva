@@ -259,10 +259,10 @@ impl<'a> FixturePlanCompiler<'a> {
         parametrize_param_names: &HashSet<&str>,
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let fixture_names = test.required_fixtures();
-        let regular_fixture_names: Vec<String> = fixture_names
+        let regular_fixture_names: Vec<&str> = fixture_names
             .iter()
-            .filter(|name| !parametrize_param_names.contains(name.as_str()))
-            .cloned()
+            .filter(|name| !parametrize_param_names.contains(*name))
+            .copied()
             .collect();
 
         // Wrapped and Hypothesis decorators can supply arguments declared in source.
@@ -274,7 +274,7 @@ impl<'a> FixturePlanCompiler<'a> {
             regular_fixture_names
                 .iter()
                 .filter(|name| !lookup_fixture(None, name, self.parents, self.current).is_found())
-                .cloned()
+                .map(|name| (*name).to_owned())
                 .collect::<Vec<_>>()
         };
 
@@ -300,11 +300,11 @@ impl<'a> FixturePlanCompiler<'a> {
     }
 
     /// Resolves a list of names and validates every dependency scope edge.
-    fn get_dependent_fixtures(
+    fn get_dependent_fixtures<N: AsRef<str>>(
         &mut self,
         py: Python,
         current_fixture: Option<&'a DiscoveredFixture>,
-        fixture_names: &[String],
+        fixture_names: &[N],
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
@@ -312,6 +312,7 @@ impl<'a> FixturePlanCompiler<'a> {
         let mut rejected_fixtures = Vec::new();
 
         for dep_name in fixture_names {
+            let dep_name = dep_name.as_ref();
             let lookup = lookup_fixture(current_fixture, dep_name, self.parents, self.current);
             if let Some(fixture) = current_fixture
                 && fixture.name().function_name() == dep_name
@@ -343,12 +344,12 @@ impl<'a> FixturePlanCompiler<'a> {
                 FixtureLookup::Rejected(rejected_fixture) => {
                     if current_fixture.is_some() {
                         rejected_fixtures.push(rejected_fixture.clone());
-                        missing_fixtures.push(dep_name.clone());
+                        missing_fixtures.push(dep_name.to_owned());
                     }
                 }
                 FixtureLookup::Missing => {
                     if current_fixture.is_some() {
-                        missing_fixtures.push(dep_name.clone());
+                        missing_fixtures.push(dep_name.to_owned());
                     }
                 }
             }
