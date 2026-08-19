@@ -72,6 +72,36 @@ fn literal_parametrize_cases_split_across_workers() {
 }
 
 #[test]
+fn single_module_fast_path_preserves_case_assignments() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "@karva.tags.parametrize('value', [0, 1])\n\
+         def test_value(value): pass\n\
+         def test_plain(): pass\n",
+    );
+
+    let partitions = partition_collected_tests(
+        &package,
+        2,
+        &HashMap::new(),
+        &HashSet::new(),
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{test_path}::test_plain"),
+            format!("{test_path}::test_value[1]"),
+        ]
+    );
+    assert_eq!(
+        partitions[1].test_paths().collect::<Vec<_>>(),
+        [format!("{test_path}::test_value[0]")]
+    );
+}
+
+#[test]
 fn dynamic_parametrize_cases_remain_one_unit() {
     let (_temp_dir, test_path, package) = collected_package(
         "@karva.tags.parametrize('value', range(6))\n\

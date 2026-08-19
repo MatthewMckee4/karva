@@ -88,20 +88,35 @@ pub fn partition_collected_tests(
         return partition_shuffled_tests(test_infos, num_workers, seed);
     }
 
-    let mut module_groups: Vec<ModuleGroup> = Vec::new();
-    let mut module_indices: HashMap<Arc<str>, usize> = HashMap::new();
-    for test_info in test_infos {
-        let weight = test_weight(test_info.duration);
-        if let Some(&index) = module_indices.get(&test_info.identity.module_name) {
-            module_groups[index].add_test(test_info, weight);
-        } else {
-            module_indices.insert(
-                Arc::clone(&test_info.identity.module_name),
-                module_groups.len(),
-            );
-            module_groups.push(ModuleGroup::new(vec![test_info], weight));
+    let single_module = test_infos.first().is_some_and(|first| {
+        let module_name = first.identity.module_name.as_ref();
+        test_infos
+            .iter()
+            .all(|test| test.identity.module_name.as_ref() == module_name)
+    });
+    let module_groups: Vec<ModuleGroup> = if single_module {
+        let total_weight = test_infos
+            .iter()
+            .map(|test| test_weight(test.duration))
+            .sum();
+        vec![ModuleGroup::new(test_infos, total_weight)]
+    } else {
+        let mut module_groups: Vec<ModuleGroup> = Vec::new();
+        let mut module_indices: HashMap<Arc<str>, usize> = HashMap::new();
+        for test_info in test_infos {
+            let weight = test_weight(test_info.duration);
+            if let Some(&index) = module_indices.get(&test_info.identity.module_name) {
+                module_groups[index].add_test(test_info, weight);
+            } else {
+                module_indices.insert(
+                    Arc::clone(&test_info.identity.module_name),
+                    module_groups.len(),
+                );
+                module_groups.push(ModuleGroup::new(vec![test_info], weight));
+            }
         }
-    }
+        module_groups
+    };
 
     let total_weight: u128 = module_groups.iter().map(ModuleGroup::weight).sum();
     let target_partition_weight = total_weight / num_workers.max(1) as u128;
