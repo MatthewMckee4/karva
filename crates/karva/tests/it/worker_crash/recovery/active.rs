@@ -80,7 +80,7 @@ def test_worker_crash(value, worker_fixture):
     assert_cmd_snapshot!(
         context
             .command()
-            .args(["--num-workers=2", "--status-level=none"]),
+            .args(["--num-workers=2", "--status-level=none", "--no-cache"]),
         @r###"
     success: false
     exit_code: 1

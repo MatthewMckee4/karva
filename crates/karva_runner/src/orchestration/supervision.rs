@@ -105,10 +105,15 @@ impl WorkerSupervisor {
     pub(super) fn with_test_capacity(
         test_capacity: usize,
         result_retention: TestResultRetention,
+        retain_durations: bool,
     ) -> Self {
         Self {
             workers: Vec::new(),
-            dispatcher: EventDispatcher::with_test_capacity(test_capacity, result_retention),
+            dispatcher: EventDispatcher::with_test_capacity(
+                test_capacity,
+                result_retention,
+                retain_durations,
+            ),
         }
     }
 }

@@ -436,6 +436,7 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
         partition: None,
         test_ordering: karva_runner::TestOrdering::Stable,
         result_retention: karva_runner::TestResultRetention::FailuresAndRetries,
+        duration_retention: karva_runner::DurationRetention::Compact,
     };
 
     let args = SubTestCommand {

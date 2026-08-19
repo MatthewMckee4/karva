@@ -81,6 +81,7 @@ impl<D> RunResults<D> {
         cache_key: TestCacheKey,
         test_case: TestCaseResult<D>,
         retain_case: bool,
+        retain_duration: bool,
     ) {
         let result = test_case.outcome().result_kind();
         self.stats.add(result.clone().into());
@@ -103,11 +104,13 @@ impl<D> RunResults<D> {
             ));
         }
 
-        let duration = test_case.duration();
-        self.durations
-            .entry(cache_key)
-            .and_modify(|existing_duration| *existing_duration += duration)
-            .or_insert(duration);
+        if retain_duration {
+            let duration = test_case.duration();
+            self.durations
+                .entry(cache_key)
+                .and_modify(|existing_duration| *existing_duration += duration)
+                .or_insert(duration);
+        }
         if retain_case {
             self.test_cases.push(test_case);
         }
@@ -141,11 +144,12 @@ impl RunResults<RenderedDiagnostic> {
         cache_key: TestCacheKey,
         test_case: TestCaseResult,
         retain_all_test_results: bool,
+        retain_duration: bool,
     ) {
         let retain_case = retain_all_test_results
             || test_case.outcome().is_non_success()
             || test_case.retry().is_some();
-        self.register_case(cache_key, test_case, retain_case);
+        self.register_case(cache_key, test_case, retain_case, retain_duration);
     }
 
     /// Records one worker-reported slow test.
@@ -178,7 +182,12 @@ impl RunResults<RenderedDiagnostic> {
     }
 
     /// Records a test interrupted by controller shutdown as a failed result.
-    pub fn register_interrupted_test(&mut self, name: &str, duration: std::time::Duration) {
+    pub fn register_interrupted_test(
+        &mut self,
+        name: &str,
+        duration: std::time::Duration,
+        retain_duration: bool,
+    ) {
         let cache_key = interrupted_test_cache_key(name);
         self.register_case(
             cache_key,
@@ -189,6 +198,7 @@ impl RunResults<RenderedDiagnostic> {
                 None,
             ),
             true,
+            retain_duration,
         );
     }
 
@@ -200,6 +210,7 @@ impl RunResults<RenderedDiagnostic> {
         duration: std::time::Duration,
         termination: &str,
         stderr: &str,
+        retain_duration: bool,
     ) {
         self.register_case(
             cache_key,
@@ -214,6 +225,7 @@ impl RunResults<RenderedDiagnostic> {
                 None,
             ),
             true,
+            retain_duration,
         );
     }
 
@@ -259,7 +271,7 @@ mod tests {
         );
         let mut aggregated = AggregatedResults::default();
 
-        aggregated.register_rendered_test_case(cache_key.clone(), result, false);
+        aggregated.register_rendered_test_case(cache_key.clone(), result, false, true);
 
         assert_eq!(aggregated.stats.failed(), 1);
         assert_eq!(aggregated.failed_tests, BTreeSet::from([cache_key.clone()]));
@@ -277,7 +289,7 @@ mod tests {
         );
         let mut aggregated = AggregatedResults::default();
 
-        aggregated.register_rendered_test_case(cache_key, result, false);
+        aggregated.register_rendered_test_case(cache_key, result, false, true);
 
         assert_eq!(aggregated.stats.passed(), 1);
         assert!(aggregated.test_cases.is_empty());
@@ -294,7 +306,7 @@ mod tests {
         );
         let mut aggregated = AggregatedResults::default();
 
-        aggregated.register_rendered_test_case(cache_key, result, true);
+        aggregated.register_rendered_test_case(cache_key, result, true, true);
 
         assert_eq!(aggregated.test_cases.len(), 1);
     }
@@ -303,10 +315,31 @@ mod tests {
     fn interrupted_parameters_use_base_name_for_history() {
         let mut aggregated = AggregatedResults::default();
 
-        aggregated.register_interrupted_test("mod::test_slow(value=1)", Duration::from_millis(24));
+        aggregated.register_interrupted_test(
+            "mod::test_slow(value=1)",
+            Duration::from_millis(24),
+            true,
+        );
 
         let cache_key = TestCacheKey::function_name("mod::test_slow");
         assert_eq!(aggregated.failed_tests, BTreeSet::from([cache_key.clone()]));
         assert!(aggregated.durations.contains_key(&cache_key));
+    }
+
+    #[test]
+    fn skips_duration_storage_when_not_needed() {
+        let cache_key = TestCacheKey::function_name("mod::test_success");
+        let result = TestCaseResult::from_display_name(
+            "mod::test_success",
+            TestCaseOutcome::Passed,
+            Duration::from_millis(10),
+            None,
+        );
+        let mut aggregated = AggregatedResults::default();
+
+        aggregated.register_rendered_test_case(cache_key, result, false, false);
+
+        assert_eq!(aggregated.stats().passed(), 1);
+        assert!(aggregated.durations.is_empty());
     }
 }

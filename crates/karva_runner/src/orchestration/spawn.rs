@@ -23,8 +23,10 @@ pub(super) fn spawn_workers(
     forward_stdout: bool,
     test_capacity: usize,
     result_retention: TestResultRetention,
+    retain_durations: bool,
 ) -> Result<WorkerSupervisor> {
-    let mut supervisor = WorkerSupervisor::with_test_capacity(test_capacity, result_retention);
+    let mut supervisor =
+        WorkerSupervisor::with_test_capacity(test_capacity, result_retention, retain_durations);
 
     for (worker_id, partition) in partitions.into_iter().enumerate() {
         if partition.is_empty() {

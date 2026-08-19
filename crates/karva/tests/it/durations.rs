@@ -20,7 +20,7 @@ def test_slow():
 ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--durations", "2"]), @"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--durations", "2", "--no-cache"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -84,7 +84,7 @@ def test_a():
 ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--durations", "0"]), @"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--durations", "0", "--no-cache"]), @"
     success: true
     exit_code: 0
     ----- stdout -----

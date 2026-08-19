@@ -36,6 +36,19 @@ pub struct ParallelTestConfig {
 
     /// Which completed test case bodies the controller retains.
     pub result_retention: TestResultRetention,
+
+    /// How completed test durations are retained.
+    pub duration_retention: DurationRetention,
+}
+
+/// Controls controller storage for completed test durations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DurationRetention {
+    /// Keep only compact completion identities for crash recovery.
+    Compact,
+
+    /// Keep every duration for cache writes or slowest-test output.
+    Retain,
 }
 
 /// Controls whether successful non-retried case bodies remain in memory.

@@ -75,6 +75,21 @@ impl TestCacheKey {
         Self(format!("{function}[{index}]"))
     }
 
+    /// Returns the serialized cache key without allocating.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Returns the canonical terminal parameter-case index used by generated keys.
+    pub fn parameter_case_index(&self) -> Option<usize> {
+        let (_, suffix) = self.0.rsplit_once('[')?;
+        let index = suffix.strip_suffix(']')?;
+        if !is_canonical_parameter_index(index) {
+            return None;
+        }
+        index.parse().ok()
+    }
+
     /// Returns the qualified function portion without a case index.
     pub fn test_function_name(&self) -> &str {
         let Some((function, suffix)) = self.0.rsplit_once('[') else {
@@ -83,7 +98,7 @@ impl TestCacheKey {
         let Some(index) = suffix.strip_suffix(']') else {
             return &self.0;
         };
-        if !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()) {
+        if is_parameter_index(index) {
             function
         } else {
             &self.0
@@ -94,6 +109,14 @@ impl TestCacheKey {
     pub fn is_parameter_case(&self) -> bool {
         self.test_function_name().len() != self.0.len()
     }
+}
+
+fn is_canonical_parameter_index(index: &str) -> bool {
+    (index == "0" || !index.starts_with('0')) && is_parameter_index(index)
+}
+
+fn is_parameter_index(index: &str) -> bool {
+    !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 impl std::borrow::Borrow<str> for TestCacheKey {
@@ -285,6 +308,8 @@ mod tests {
             TestCacheKey::function_name("tests/[generated]/test.py::test_case");
         let named_brackets = TestCacheKey::function_name("tests::test_case[name]");
         let indexed = TestCacheKey::function_name("tests/[generated]/test.py::test_case[12]");
+        let signed_index = TestCacheKey::function_name("tests::test_case[+1]");
+        let leading_zero_index = TestCacheKey::function_name("tests::test_case[01]");
 
         assert_eq!(
             path_with_brackets.test_function_name(),
@@ -301,5 +326,12 @@ mod tests {
             "tests/[generated]/test.py::test_case"
         );
         assert!(indexed.is_parameter_case());
+        assert_eq!(indexed.parameter_case_index(), Some(12));
+        assert_eq!(path_with_brackets.parameter_case_index(), None);
+        assert_eq!(named_brackets.parameter_case_index(), None);
+        assert_eq!(signed_index.parameter_case_index(), None);
+        assert!(!signed_index.is_parameter_case());
+        assert_eq!(leading_zero_index.parameter_case_index(), None);
+        assert!(leading_zero_index.is_parameter_case());
     }
 }

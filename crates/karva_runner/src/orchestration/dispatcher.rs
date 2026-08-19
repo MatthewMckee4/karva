@@ -4,7 +4,7 @@
 //! frames serially so result aggregation and active-test attribution have one
 //! owner.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::process::ExitStatus;
 use std::time::Duration;
 
@@ -28,12 +28,75 @@ pub(super) struct EventDispatcher {
     /// Results and diagnostics aggregated across every worker generation.
     results: AggregatedResults,
 
-    /// Synthetic crash results deferred until recovery no longer needs the
-    /// duration map as exact `TestFinished` membership.
+    /// Completed test membership retained in its smallest useful form when
+    /// durations are not needed by cache or terminal output.
+    completed_test_tracking: CompletedTestTracking,
+
+    /// Synthetic crash results deferred until recovery no longer needs exact
+    /// `TestFinished` membership.
     crashed_tests: Vec<CrashedTest>,
 
     /// Completed case bodies retained for final report formats.
     result_retention: TestResultRetention,
+}
+
+/// Selects the representation needed for crash-recovery membership checks.
+#[derive(Default)]
+enum CompletedTestTracking {
+    /// Use the retained duration-map keys as exact completion membership.
+    #[default]
+    Durations,
+
+    /// Retain completion identities without per-case durations.
+    Compact(CompactCompletedKeys),
+}
+
+/// Stores exact completed keys without retaining a duration per case.
+#[derive(Default)]
+struct CompactCompletedKeys {
+    /// Complete keys that cannot be represented as a canonical case index.
+    plain: HashSet<Box<str>>,
+
+    /// Canonical case indices grouped under one allocated function key.
+    parameterized: HashMap<Box<str>, HashSet<usize>>,
+}
+
+impl CompactCompletedKeys {
+    /// Records one completed function or indexed parameter case.
+    fn insert(&mut self, cache_key: &TestCacheKey) {
+        let Some(index) = cache_key.parameter_case_index() else {
+            self.plain.insert(cache_key.as_str().into());
+            return;
+        };
+
+        let function = cache_key.test_function_name();
+        if let Some(indices) = self.parameterized.get_mut(function) {
+            indices.insert(index);
+            return;
+        }
+
+        self.parameterized
+            .insert(function.into(), HashSet::from([index]));
+    }
+
+    /// Rebuilds full cache keys only when a replacement worker needs them.
+    fn materialize(&self) -> HashSet<TestCacheKey> {
+        let parameterized_count = self.parameterized.values().map(HashSet::len).sum::<usize>();
+        let mut keys = HashSet::with_capacity(self.plain.len() + parameterized_count);
+        keys.extend(
+            self.plain
+                .iter()
+                .map(|key| TestCacheKey::function_name(key)),
+        );
+        for (function, indices) in &self.parameterized {
+            keys.extend(
+                indices
+                    .iter()
+                    .map(|index| TestCacheKey::parameter_case_name(function, *index)),
+            );
+        }
+        keys
+    }
 }
 
 /// Unexpected test termination retained until crash recovery completes.
@@ -94,6 +157,7 @@ impl EventDispatcher {
     pub(super) fn with_test_capacity(
         test_capacity: usize,
         result_retention: TestResultRetention,
+        retain_durations: bool,
     ) -> Self {
         let test_case_capacity = match result_retention {
             TestResultRetention::FailuresAndRetries => 0,
@@ -102,7 +166,15 @@ impl EventDispatcher {
         Self {
             expected_workers: HashSet::new(),
             completed_workers: HashSet::new(),
-            results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
+            results: AggregatedResults::with_capacities(
+                if retain_durations { test_capacity } else { 0 },
+                test_case_capacity,
+            ),
+            completed_test_tracking: if retain_durations {
+                CompletedTestTracking::Durations
+            } else {
+                CompletedTestTracking::Compact(CompactCompletedKeys::default())
+            },
             crashed_tests: Vec::new(),
             result_retention,
         }
@@ -128,10 +200,19 @@ impl EventDispatcher {
             match *message.event {
                 WorkerEvent::TestSlow => self.results.register_slow_test(),
                 WorkerEvent::TestFinished { cache_key, result } => {
+                    if let CompletedTestTracking::Compact(completed) =
+                        &mut self.completed_test_tracking
+                    {
+                        completed.insert(&cache_key);
+                    }
                     self.results.register_rendered_test_case(
                         cache_key,
                         *result,
                         matches!(self.result_retention, TestResultRetention::All),
+                        matches!(
+                            &self.completed_test_tracking,
+                            CompletedTestTracking::Durations
+                        ),
                     );
                 }
                 WorkerEvent::RunDiagnostic(diagnostic) => {
@@ -164,7 +245,10 @@ impl EventDispatcher {
     ///
     /// Deferred synthetic crash results are intentionally absent.
     pub(super) fn completed_test_keys(&self) -> HashSet<TestCacheKey> {
-        self.results.durations.keys().cloned().collect()
+        match &self.completed_test_tracking {
+            CompletedTestTracking::Durations => self.results.durations.keys().cloned().collect(),
+            CompletedTestTracking::Compact(completed) => completed.materialize(),
+        }
     }
 
     /// Whether a worker delivered its terminal event exactly once.
@@ -227,6 +311,10 @@ impl EventDispatcher {
                 crashed.duration,
                 &crashed.termination,
                 &crashed.stderr,
+                matches!(
+                    &self.completed_test_tracking,
+                    CompletedTestTracking::Durations
+                ),
             );
         }
         results
@@ -235,11 +323,38 @@ impl EventDispatcher {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::time::Duration;
 
     use karva_python_semantic::TestCacheKey;
 
-    use super::EventDispatcher;
+    use super::{CompactCompletedKeys, EventDispatcher};
+
+    #[test]
+    fn compact_completed_keys_materialize_exact_cases() {
+        let mut completed = CompactCompletedKeys::default();
+        for key in [
+            "module::test_case[0]",
+            "module::test_case[2]",
+            "module::test_case[2]",
+            "module::test_case[01]",
+            "module::test_plain",
+            "module::test[not-an-index]",
+        ] {
+            completed.insert(&TestCacheKey::function_name(key));
+        }
+
+        assert_eq!(
+            completed.materialize(),
+            HashSet::from([
+                TestCacheKey::function_name("module::test_case[0]"),
+                TestCacheKey::function_name("module::test_case[2]"),
+                TestCacheKey::function_name("module::test_case[01]"),
+                TestCacheKey::function_name("module::test_plain"),
+                TestCacheKey::function_name("module::test[not-an-index]"),
+            ])
+        );
+    }
 
     #[test]
     fn crashed_test_is_not_committed_until_recovery_finishes() {

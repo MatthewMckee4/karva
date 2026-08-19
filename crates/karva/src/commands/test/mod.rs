@@ -146,6 +146,11 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         } else {
             karva_runner::TestResultRetention::FailuresAndRetries
         },
+        duration_retention: if !no_cache || durations.is_some_and(|count| count > 0) {
+            karva_runner::DurationRetention::Retain
+        } else {
+            karva_runner::DurationRetention::Compact
+        },
     };
 
     if watch {

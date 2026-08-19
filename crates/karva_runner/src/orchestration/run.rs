@@ -12,7 +12,7 @@ use karva_ipc::ControllerServer;
 use karva_logging::Printer;
 use karva_project::Project;
 
-use super::config::{ParallelTestConfig, RunOutput};
+use super::config::{DurationRetention, ParallelTestConfig, RunOutput};
 use super::planning::{collect_tests, last_failed_set, previous_durations, write_last_failed};
 use super::recovery::recover_crashed_workers;
 use super::spawn::{spawn_worker, spawn_workers};
@@ -29,6 +29,7 @@ pub fn run_parallel_tests(
     args: &SubTestCommand,
     printer: Printer,
 ) -> Result<RunOutput> {
+    let retain_durations = matches!(config.duration_retention, DurationRetention::Retain);
     // Install the Ctrl+C handler before any potentially long-running work
     // (collection, partitioning, worker spawn). Otherwise an early SIGINT
     // hits the default disposition and the run terminates silently with no
@@ -151,6 +152,7 @@ pub fn run_parallel_tests(
         forward_stdout,
         scheduled_cases,
         config.result_retention,
+        retain_durations,
     )?;
 
     let max_fail = project.settings().max_fail();
@@ -208,7 +210,7 @@ pub fn run_parallel_tests(
     worker_manager.finish_events(&mut controller)?;
     let mut results = worker_manager.take_results();
     for test in interrupted_tests {
-        results.register_interrupted_test(&test.name, test.duration);
+        results.register_interrupted_test(&test.name, test.duration, retain_durations);
     }
     let results = results.into_sorted();
 
