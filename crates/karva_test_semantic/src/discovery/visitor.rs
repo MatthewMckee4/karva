@@ -122,8 +122,10 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             Ok(fixture_def) => Some(fixture_def),
             Err(error) => {
                 let source_file = self.module.source_file();
+                let exposure_name =
+                    DiscoveredFixture::exposure_name_from_function(&stmt_function_def, py_module);
                 self.module.add_rejected_fixture(RejectedFixture::new(
-                    stmt_function_def.name.to_string(),
+                    exposure_name,
                     error.value(self.py).to_string(),
                     Rc::clone(&stmt_function_def),
                     source_file,
@@ -414,6 +416,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         ) {
             Ok(fixture_def) => self.module.add_fixture(fixture_def),
             Err(error) => {
+                // Imported fixtures are exposed under their conftest binding.
                 self.module.add_rejected_fixture(RejectedFixture::new(
                     name.to_string(),
                     error.value(self.py).to_string(),

@@ -242,8 +242,8 @@ fn test_rejected_conftest_fixture_blocks_framework_fixture() {
             r#"
 import karva
 
-@karva.fixture(scope="invalid")
-def tmp_path():
+@karva.fixture(name="tmp_path", scope="invalid")
+def invalid_tmp_path():
     return None
 "#,
         ),
@@ -278,11 +278,11 @@ def test_tmp_path(tmp_path):
 
     diagnostics:
 
-    error[invalid-fixture]: Discovered an invalid fixture `tmp_path`
+    error[invalid-fixture]: Discovered an invalid fixture `invalid_tmp_path`
      --> conftest.py:5:5
       |
-    5 | def tmp_path():
-      |     ^^^^^^^^
+    5 | def invalid_tmp_path():
+      |     ^^^^^^^^^^^^^^^^
     info: Invalid fixture scope `invalid`
 
     ────────────

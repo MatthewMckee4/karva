@@ -7,11 +7,13 @@ use camino::Utf8Path;
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 
-use crate::discovery::models::definition::{FunctionDefinition, TestDefinition};
+use crate::discovery::models::definition::{
+    FunctionDefinition, TestDefinition, required_keyword_parameter_names,
+};
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
     DiscoveredFixture, FixtureId, FixtureLookup, FixturePlan, FixtureScope, HasFixtures,
-    NormalizedFixture, RejectedFixture, RequiresFixtures, get_auto_use_fixtures,
+    NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
 };
 
 /// Compiles fixture lookup results into an arena for one request context.
@@ -213,7 +215,8 @@ impl<'a> FixturePlanCompiler<'a> {
         }
 
         let dependent_fixtures = path.enter(fixture, |path| {
-            let required_fixtures: Vec<String> = fixture.required_fixtures(py);
+            let required_fixtures =
+                required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
 
@@ -270,12 +273,7 @@ impl<'a> FixturePlanCompiler<'a> {
         } else {
             regular_fixture_names
                 .iter()
-                .filter(|name| {
-                    !matches!(
-                        lookup_fixture(None, name, self.parents, self.current),
-                        FixtureLookup::Found(_)
-                    )
-                })
+                .filter(|name| !lookup_fixture(None, name, self.parents, self.current).is_found())
                 .cloned()
                 .collect::<Vec<_>>()
         };
@@ -317,7 +315,7 @@ impl<'a> FixturePlanCompiler<'a> {
             let lookup = lookup_fixture(current_fixture, dep_name, self.parents, self.current);
             if let Some(fixture) = current_fixture
                 && fixture.name().function_name() == dep_name
-                && !matches!(lookup, FixtureLookup::Found(_))
+                && !lookup.is_found()
             {
                 let normalized = self.normalize_fixture(py, fixture, path)?;
                 normalized_fixtures.push(normalized);

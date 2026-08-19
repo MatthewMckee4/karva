@@ -608,6 +608,45 @@ def test_value(value):
     ");
 }
 
+#[test]
+fn test_defaulted_parameters_are_not_fixture_requests() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def positional():
+    return "injected positional"
+
+@karva.fixture
+def dependency():
+    return "injected dependency"
+
+@karva.fixture
+def configured(positional="fixture positional", /, dependency="fixture default"):
+    return positional, dependency
+
+def test_defaults(positional="test positional", /, *, configured, dependency="test default"):
+    assert configured == ("fixture positional", "fixture default")
+    assert positional == "test positional"
+    assert dependency == "test default"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_defaults(configured=('fixture positional', 'fix...)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest]
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(

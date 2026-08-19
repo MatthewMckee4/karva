@@ -1,8 +1,5 @@
 use std::fmt::Debug;
 
-use pyo3::Python;
-use ruff_python_ast::StmtFunctionDef;
-
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
 use crate::extensions::fixtures::{DiscoveredFixture, FixtureScope, RejectedFixture};
 
@@ -18,6 +15,13 @@ pub enum FixtureLookup<'a> {
 
     /// The provider does not define the name.
     Missing,
+}
+
+impl FixtureLookup<'_> {
+    /// Returns whether lookup found an accepted fixture.
+    pub(crate) const fn is_found(self) -> bool {
+        matches!(self, Self::Found(_))
+    }
 }
 
 /// Supplies fixtures from one position in the runtime provider chain.
@@ -102,28 +106,5 @@ impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
 
     fn auto_use_fixtures(&'a self, scopes: &[FixtureScope]) -> Vec<&'a DiscoveredFixture> {
         (*self).auto_use_fixtures(scopes)
-    }
-}
-
-/// This trait is used to represent an object that may require fixtures to be called before it is run.
-pub trait RequiresFixtures {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String>;
-}
-
-impl RequiresFixtures for StmtFunctionDef {
-    fn required_fixtures(&self, _py: Python<'_>) -> Vec<String> {
-        let mut required_fixtures = Vec::new();
-
-        for parameter in self.parameters.iter_non_variadic_params() {
-            required_fixtures.push(parameter.parameter.name.as_str().to_string());
-        }
-
-        required_fixtures
-    }
-}
-
-impl RequiresFixtures for DiscoveredFixture {
-    fn required_fixtures(&self, py: Python<'_>) -> Vec<String> {
-        self.stmt_function_def().required_fixtures(py)
     }
 }
