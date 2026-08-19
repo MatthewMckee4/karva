@@ -1,6 +1,8 @@
 //! Python keyword arguments prepared from fixtures and parametrization.
 
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -10,13 +12,47 @@ use ruff_python_ast::Parameters;
 #[derive(Default)]
 pub struct FixtureArguments {
     /// Python values keyed by test or fixture parameter name.
-    inner: HashMap<String, Py<PyAny>>,
+    inner: HashMap<ArgumentName, Py<PyAny>>,
+}
+
+enum ArgumentName {
+    Owned(String),
+    Shared(Rc<str>),
+}
+
+impl ArgumentName {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Owned(name) => name,
+            Self::Shared(name) => name,
+        }
+    }
+}
+
+impl PartialEq for ArgumentName {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for ArgumentName {}
+
+impl Hash for ArgumentName {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
+    }
 }
 
 impl FixtureArguments {
     /// Inserts one named Python argument.
     pub fn insert(&mut self, name: String, value: Py<PyAny>) -> Option<Py<PyAny>> {
-        self.inner.insert(name, value)
+        self.inner.insert(ArgumentName::Owned(name), value)
+    }
+
+    /// Inserts an argument using a fixture definition's shared name.
+    pub(super) fn insert_shared(&mut self, name: &Rc<str>, value: Py<PyAny>) -> Option<Py<PyAny>> {
+        self.inner
+            .insert(ArgumentName::Shared(Rc::clone(name)), value)
     }
 
     /// Returns whether no arguments were prepared.
@@ -25,8 +61,10 @@ impl FixtureArguments {
     }
 
     /// Iterates arguments in unspecified hash-map order.
-    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Py<PyAny>> {
-        self.inner.iter()
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Py<PyAny>)> {
+        self.inner
+            .iter()
+            .map(|(name, value)| (name.as_str(), value))
     }
 
     /// Iterates arguments by Python signature position, then name.
@@ -35,7 +73,7 @@ impl FixtureArguments {
     pub fn iter_in_signature_order<'a>(
         &'a self,
         parameters: Option<&Parameters>,
-    ) -> impl Iterator<Item = (&'a String, &'a Py<PyAny>)> {
+    ) -> impl Iterator<Item = (&'a str, &'a Py<PyAny>)> {
         let mut arguments = self.iter().collect::<Vec<_>>();
         arguments.sort_by(|(left, _), (right, _)| {
             let left_position = parameters
@@ -54,19 +92,10 @@ impl FixtureArguments {
     /// Builds a Python keyword-argument dictionary.
     pub fn to_kwargs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let kwargs = PyDict::new(py);
-        for (key, value) in self {
+        for (key, value) in self.iter() {
             kwargs.set_item(key, value)?;
         }
         Ok(kwargs)
-    }
-}
-
-impl<'a> IntoIterator for &'a FixtureArguments {
-    type IntoIter = std::collections::hash_map::Iter<'a, String, Py<PyAny>>;
-    type Item = (&'a String, &'a Py<PyAny>);
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.inner.iter()
     }
 }
 
@@ -95,6 +124,45 @@ mod tests {
                 .expect("answer should be an int");
 
             assert_eq!(answer, 42);
+        });
+    }
+
+    #[test]
+    fn builds_python_kwargs_from_shared_names() {
+        Python::initialize();
+        Python::attach(|py| {
+            let mut arguments = FixtureArguments::default();
+            let name = Rc::from("answer");
+            arguments.insert_shared(&name, 42i32.into_py_any(py).expect("convert shared value"));
+
+            let kwargs = arguments.to_kwargs(py).expect("build kwargs");
+            let answer = kwargs
+                .get_item("answer")
+                .expect("lookup should succeed")
+                .expect("answer should exist")
+                .extract::<i32>()
+                .expect("answer should be an int");
+
+            assert_eq!(answer, 42);
+        });
+    }
+
+    #[test]
+    fn owned_names_replace_matching_shared_names() {
+        Python::initialize();
+        Python::attach(|py| {
+            let mut arguments = FixtureArguments::default();
+            let name = Rc::from("answer");
+            arguments.insert_shared(&name, 41i32.into_py_any(py).expect("convert shared value"));
+
+            let replaced = arguments
+                .insert(
+                    "answer".to_string(),
+                    42i32.into_py_any(py).expect("convert owned value"),
+                )
+                .expect("matching shared name should be replaced");
+
+            assert_eq!(replaced.extract::<i32>(py).expect("extract value"), 41);
         });
     }
 }

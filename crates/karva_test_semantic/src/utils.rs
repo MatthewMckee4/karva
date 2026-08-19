@@ -464,12 +464,7 @@ pub fn test_parameters(
     parameters: Option<&Parameters>,
     name_only_arguments: &[&str],
 ) -> Option<String> {
-    render_test_parameters(
-        py,
-        kwargs.iter().map(|(name, value)| (name.as_str(), value)),
-        parameters,
-        name_only_arguments,
-    )
+    render_test_parameters(py, kwargs.iter(), parameters, name_only_arguments)
 }
 
 /// Renders borrowed Python arguments in signature order without cloning values.

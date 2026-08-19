@@ -20,6 +20,8 @@ pub fn required_keyword_parameter_names(parameters: &Parameters) -> Vec<String> 
 #[derive(Debug)]
 pub struct FunctionDefinition {
     name: QualifiedFunctionName,
+    /// Unqualified name shared by fixture execution argument maps.
+    argument_name: Rc<str>,
     statement: Rc<StmtFunctionDef>,
     source_file: SourceFile,
 }
@@ -30,8 +32,10 @@ impl FunctionDefinition {
         statement: Rc<StmtFunctionDef>,
         source_file: SourceFile,
     ) -> Self {
+        let argument_name = Rc::from(name.function_name());
         Self {
             name,
+            argument_name,
             statement,
             source_file,
         }
@@ -39,6 +43,11 @@ impl FunctionDefinition {
 
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
         &self.name
+    }
+
+    /// Returns the fixture name shared by call argument maps.
+    pub(crate) fn argument_name(&self) -> &Rc<str> {
+        &self.argument_name
     }
 
     pub(crate) fn statement(&self) -> &StmtFunctionDef {

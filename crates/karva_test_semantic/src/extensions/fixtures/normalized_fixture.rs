@@ -68,6 +68,11 @@ impl NormalizedFixture {
         self.identity.name().function_name()
     }
 
+    /// Returns the fixture name shared by call argument maps.
+    pub(crate) fn argument_name(&self) -> &Rc<str> {
+        self.identity.definition().argument_name()
+    }
+
     /// Returns the stable qualified fixture identity.
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
         self.identity.name()
