@@ -12,14 +12,23 @@ pub(super) struct TestInfo {
     /// Function-level metadata shared by cases collected from one function.
     pub(super) identity: Arc<TestIdentity>,
 
-    /// Qualified name of test, used for last-failed filtering.
-    pub(super) qualified_name: String,
+    /// Case-qualified name, when distinct from the shared function root.
+    pub(super) qualified_case_name: Option<String>,
 
     /// Wall-clock runtime from previous run, when cached.
     pub(super) duration: Option<Duration>,
 
     /// Stable expansion index for a statically countable parameter case.
     pub(super) case_index: Option<usize>,
+}
+
+impl TestInfo {
+    /// Qualified name used for filtering and deterministic ordering.
+    pub(super) fn qualified_name(&self) -> &str {
+        self.qualified_case_name
+            .as_deref()
+            .unwrap_or(&self.identity.function_root)
+    }
 }
 
 /// Scheduling identity shared by every case collected from one function.
@@ -71,7 +80,7 @@ pub(super) fn collect_test_paths_recursive(
                         });
                     test_infos.push(TestInfo {
                         identity: Arc::clone(&identity),
-                        qualified_name,
+                        qualified_case_name: Some(qualified_name),
                         duration,
                         case_index: Some(idx),
                     });
@@ -81,7 +90,7 @@ pub(super) fn collect_test_paths_recursive(
                     .get(identity.function_root.as_ref())
                     .copied();
                 test_infos.push(TestInfo {
-                    qualified_name: identity.function_root.to_string(),
+                    qualified_case_name: None,
                     identity,
                     duration,
                     case_index: None,
@@ -103,7 +112,7 @@ pub(super) fn collect_test_paths_recursive(
                 duration: previous_durations
                     .get(identity.function_root.as_ref())
                     .copied(),
-                qualified_name: identity.function_root.to_string(),
+                qualified_case_name: None,
                 identity,
                 case_index: None,
             });

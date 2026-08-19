@@ -31,7 +31,7 @@ pub(super) fn test_info_with_duration(
             selector: function_root.into(),
             function_root: Arc::from(function_root),
         }),
-        qualified_name: qualified_name.to_string(),
+        qualified_case_name: case_index.map(|_| qualified_name.to_string()),
         duration,
         case_index,
     }

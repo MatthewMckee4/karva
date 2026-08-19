@@ -12,10 +12,7 @@ fn deterministic_partitioning_sorts_by_qualified_name() {
 
     order_tests_for_partitioning(&mut tests, TestOrdering::Stable);
 
-    let ordered_names: Vec<_> = tests
-        .iter()
-        .map(|test| test.qualified_name.as_str())
-        .collect();
+    let ordered_names: Vec<_> = tests.iter().map(TestInfo::qualified_name).collect();
     assert_eq!(
         ordered_names,
         [
@@ -37,10 +34,7 @@ fn duration_backed_partitioning_starts_from_qualified_name_order() {
 
     order_tests_for_partitioning(&mut tests, TestOrdering::RandomizeUnmeasured);
 
-    let ordered_names: Vec<_> = tests
-        .iter()
-        .map(|test| test.qualified_name.as_str())
-        .collect();
+    let ordered_names: Vec<_> = tests.iter().map(TestInfo::qualified_name).collect();
     assert_eq!(
         ordered_names,
         [
@@ -70,7 +64,7 @@ fn seeded_ordering_is_reproducible() {
     let names = |tests: &[TestInfo]| {
         tests
             .iter()
-            .map(|test| test.qualified_name.clone())
+            .map(|test| test.qualified_name().to_string())
             .collect::<Vec<_>>()
     };
     assert_eq!(names(&first), names(&repeated));

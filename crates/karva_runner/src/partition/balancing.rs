@@ -64,19 +64,19 @@ pub fn partition_collected_tests(
             .map(TestCacheKey::test_function_name)
             .collect::<HashSet<_>>();
         test_infos.retain(|info| {
-            last_failed.contains(info.qualified_name.as_str())
+            last_failed.contains(info.qualified_name())
                 || last_failed.contains(info.identity.function_root.as_ref())
-                || (info.qualified_name == info.identity.function_root.as_ref()
+                || (info.qualified_name() == info.identity.function_root.as_ref()
                     && failed_function_roots.contains(info.identity.function_root.as_ref()))
         });
     }
 
     // Explicit partitioning uses deterministic ordering of post-filter tests.
     if let Some(selection) = partition_selection {
-        test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+        test_infos.sort_by(|a, b| a.qualified_name().cmp(b.qualified_name()));
         let mut position = 0usize;
         test_infos.retain(|info| {
-            let keep = selection.contains_test(position, &info.qualified_name);
+            let keep = selection.contains_test(position, info.qualified_name());
             position += 1;
             keep
         });
@@ -145,7 +145,7 @@ pub(super) fn partition_shuffled_tests(
     }
 
     for test_info in test_infos {
-        let key = seeded_order_key(seed, &test_info.qualified_name);
+        let key = seeded_order_key(seed, test_info.qualified_name());
         let partition_index = seeded_partition_index(key, partitions.len());
         partitions[partition_index].add_test(test_info, 1);
     }

@@ -10,12 +10,12 @@ use super::TestOrdering;
 use super::collection::TestInfo;
 
 pub(super) fn order_tests_for_partitioning(test_infos: &mut Vec<TestInfo>, ordering: TestOrdering) {
-    test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    test_infos.sort_by(|a, b| a.qualified_name().cmp(b.qualified_name()));
 
     match ordering {
         TestOrdering::RandomizeUnmeasured => shuffle_tests_without_durations(test_infos),
         TestOrdering::SeededShuffle(seed) => {
-            test_infos.sort_by_cached_key(|test| seeded_order_key(seed, &test.qualified_name));
+            test_infos.sort_by_cached_key(|test| seeded_order_key(seed, test.qualified_name()));
         }
         TestOrdering::Stable => {}
     }
