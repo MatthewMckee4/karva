@@ -494,7 +494,7 @@ fn handle_inline_snapshot(
     test_name: &str,
     update_mode: bool,
 ) -> PyResult<()> {
-    let expected = karva_snapshot::inline::dedent(inline_value);
+    let expected = karva_snapshot::inline::dedent_cow(inline_value);
 
     // Empty inline value is always treated as new/pending
     let is_empty = inline_value.is_empty();

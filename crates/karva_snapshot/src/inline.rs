@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io;
 
 use camino::Utf8Path;
@@ -20,6 +21,47 @@ struct InlineLocation {
 /// Python evaluates triple-quoted strings with all indentation intact,
 /// so we dedent before comparing.
 pub fn dedent(raw: &str) -> String {
+    dedent_cow(raw).into_owned()
+}
+
+/// Dedent an inline snapshot, borrowing input when it is already canonical.
+pub fn dedent_cow(raw: &str) -> Cow<'_, str> {
+    if is_canonical(raw) {
+        Cow::Borrowed(raw)
+    } else {
+        Cow::Owned(dedent_owned(raw))
+    }
+}
+
+fn is_canonical(raw: &str) -> bool {
+    if raw.is_empty() {
+        return true;
+    }
+    if raw.contains("\r\n") {
+        return false;
+    }
+
+    let mut has_non_empty = false;
+    let mut has_zero_indent = false;
+    let mut trailing_blank = false;
+
+    for line in raw.lines() {
+        if line.trim().is_empty() {
+            if !has_non_empty {
+                return false;
+            }
+            trailing_blank = true;
+        } else {
+            has_non_empty = true;
+            has_zero_indent |= line.len() == line.trim_start().len();
+            trailing_blank = false;
+        }
+    }
+
+    has_non_empty && has_zero_indent && !trailing_blank && !raw.ends_with('\n')
+}
+
+fn dedent_owned(raw: &str) -> String {
     let lines: Vec<&str> = raw.lines().collect();
 
     // Find minimum indentation of non-empty lines
@@ -410,11 +452,48 @@ pub(super) fn apply_inline_snapshot_update(
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use super::*;
 
     #[test]
     fn dedent_single_line() {
         insta::assert_snapshot!(dedent("hello"), @"hello");
+    }
+
+    #[test]
+    fn dedent_cow_borrows_canonical_input() {
+        let raw = "line 1\nline 2";
+
+        assert!(matches!(dedent_cow(raw), Cow::Borrowed(value) if value == raw));
+    }
+
+    #[test]
+    fn dedent_cow_preserves_indentation_semantics() {
+        let raw = "    line 1\n        line 2\n    line 3\n";
+
+        assert_eq!(dedent_cow(raw), "line 1\n    line 2\nline 3");
+    }
+
+    #[test]
+    fn dedent_cow_preserves_blank_line_semantics() {
+        let raw = "\n  line 1\n\n  line 2\n  ";
+
+        assert_eq!(dedent_cow(raw), "line 1\n\nline 2");
+    }
+
+    #[test]
+    fn dedent_cow_preserves_whitespace_only_semantics() {
+        let raw = "   \n   \n";
+
+        assert_eq!(dedent_cow(raw), "");
+    }
+
+    #[test]
+    fn dedent_cow_preserves_crlf_semantics() {
+        let raw = "  line 1\r\n  line 2\r\n";
+
+        assert_eq!(dedent_cow(raw), "line 1\nline 2");
     }
 
     #[test]
