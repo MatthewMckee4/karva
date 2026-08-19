@@ -99,6 +99,7 @@ pub fn run_parallel_tests(
         .iter()
         .filter(|partition| !partition.is_empty())
         .count();
+    drop(collected);
 
     if scheduled_cases > 0 {
         let mut stdout = printer.stream_for_test_result().lock();
