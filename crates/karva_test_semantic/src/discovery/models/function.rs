@@ -118,7 +118,7 @@ impl DiscoveredTestFunction {
         self.definition.is_async()
     }
 
-    pub(crate) fn required_fixtures(&self) -> Vec<String> {
+    pub(crate) fn required_fixtures(&self) -> Vec<&str> {
         self.definition.required_fixtures()
     }
 

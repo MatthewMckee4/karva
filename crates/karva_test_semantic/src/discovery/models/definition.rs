@@ -6,13 +6,13 @@ use ruff_source_file::SourceFile;
 use ruff_text_size::TextRange;
 
 /// Returns names Python requires and Karva can supply by keyword.
-pub fn required_keyword_parameter_names(parameters: &Parameters) -> Vec<String> {
+pub fn required_keyword_parameter_names(parameters: &Parameters) -> Vec<&str> {
     parameters
         .args
         .iter()
         .chain(&parameters.kwonlyargs)
         .filter(|parameter| parameter.default().is_none())
-        .map(|parameter| parameter.name().to_string())
+        .map(|parameter| parameter.name().as_str())
         .collect()
 }
 
@@ -140,7 +140,7 @@ impl TestDefinition {
             .is_some_and(|statement| statement.is_async)
     }
 
-    pub(super) fn required_fixtures(&self) -> Vec<String> {
+    pub(super) fn required_fixtures(&self) -> Vec<&str> {
         self.parameters()
             .map_or_else(Vec::new, required_keyword_parameter_names)
     }
