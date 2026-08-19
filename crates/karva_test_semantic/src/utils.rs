@@ -510,16 +510,13 @@ fn ordered_test_arguments<'a>(
     parameters: Option<&Parameters>,
 ) -> Vec<(&'a str, &'a Py<PyAny>)> {
     let mut arguments = arguments.into_iter().collect::<Vec<_>>();
-    arguments.sort_by(|(left, _), (right, _)| {
-        let left_position = parameters
-            .and_then(|parameters| parameters.index(left))
-            .unwrap_or(usize::MAX);
-        let right_position = parameters
-            .and_then(|parameters| parameters.index(right))
-            .unwrap_or(usize::MAX);
-        left_position
-            .cmp(&right_position)
-            .then_with(|| left.cmp(right))
+    arguments.sort_by_cached_key(|(name, _)| {
+        (
+            parameters
+                .and_then(|parameters| parameters.index(name))
+                .unwrap_or(usize::MAX),
+            *name,
+        )
     });
     arguments
 }
@@ -580,6 +577,8 @@ mod tests {
     use pyo3::IntoPyObjectExt;
     use pyo3::prelude::*;
     use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods};
+    use ruff_python_ast::Stmt;
+    use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
     use super::try_render_builtin_test_parameters;
 
@@ -589,12 +588,12 @@ mod tests {
         Python::attach(|py| {
             let values = [
                 (
-                    "integer".to_string(),
-                    42_i64.into_py_any(py).expect("convert integer"),
-                ),
-                (
                     "string".to_string(),
                     "hello".into_py_any(py).expect("convert string"),
+                ),
+                (
+                    "integer".to_string(),
+                    42_i64.into_py_any(py).expect("convert integer"),
                 ),
             ];
 
@@ -605,6 +604,44 @@ mod tests {
             );
 
             assert_eq!(rendered.as_deref(), Some("integer=42, string='hello'"));
+        });
+    }
+
+    #[test]
+    fn builtin_parameter_renderer_uses_signature_order_before_name_order() {
+        Python::initialize();
+        Python::attach(|py| {
+            let function = parse_unchecked(
+                "def test(second, first): pass\n",
+                ParseOptions::from(Mode::Module),
+            )
+            .try_into_module()
+            .expect("parse test function")
+            .into_syntax()
+            .body
+            .into_iter()
+            .find_map(|statement| match statement {
+                Stmt::FunctionDef(function) => Some(function),
+                _ => None,
+            })
+            .expect("find test function");
+            let values = [
+                ("unknown_z", 4_i64.into_py_any(py).expect("convert integer")),
+                ("first", 1_i64.into_py_any(py).expect("convert integer")),
+                ("unknown_a", 3_i64.into_py_any(py).expect("convert integer")),
+                ("second", 2_i64.into_py_any(py).expect("convert integer")),
+            ];
+
+            let rendered = try_render_builtin_test_parameters(
+                py,
+                values.iter().map(|(name, value)| (*name, value)),
+                Some(function.parameters.as_ref()),
+            );
+
+            assert_eq!(
+                rendered.as_deref(),
+                Some("second=2, first=1, unknown_a=3, unknown_z=4")
+            );
         });
     }
 
