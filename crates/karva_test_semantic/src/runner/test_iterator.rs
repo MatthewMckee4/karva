@@ -76,6 +76,8 @@ pub(super) struct TestVariantIterator<'a> {
     /// Restricts execution to the selected indices while retaining their
     /// positions in the full parametrize expansion.
     case_filter: Option<&'a [usize]>,
+    /// Position of the next selected case in the sorted filter.
+    next_filtered_case: usize,
     /// Index of the next item in the full parametrize expansion.
     next_case_index: usize,
     /// Whether emitted variants need a stable parametrize index.
@@ -141,6 +143,7 @@ impl<'a> TestVariantIterator<'a> {
             test,
             param_args: plan.parameters.into_iter(),
             case_filter: test.case_filter.as_deref(),
+            next_filtered_case: 0,
             next_case_index: 0,
             parametrized: test.tags.has_parametrize(),
             runtime_tags: plan.runtime_tags,
@@ -156,20 +159,19 @@ impl<'a> Iterator for TestVariantIterator<'a> {
     type Item = TestVariant<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (case_index, param_args) = loop {
-            let param_args = self.param_args.next()?;
-            if !self.parametrized {
-                break (None, param_args);
-            }
-
+        let (case_index, param_args) = if !self.parametrized {
+            (None, self.param_args.next()?)
+        } else if let Some(indices) = self.case_filter {
+            let case_index = *indices.get(self.next_filtered_case)?;
+            let skipped = case_index.checked_sub(self.next_case_index)?;
+            let param_args = self.param_args.nth(skipped)?;
+            self.next_case_index = case_index + 1;
+            self.next_filtered_case += 1;
+            (Some(case_index), param_args)
+        } else {
             let case_index = self.next_case_index;
             self.next_case_index += 1;
-            if self
-                .case_filter
-                .is_none_or(|indices| indices.contains(&case_index))
-            {
-                break (Some(case_index), param_args);
-            }
+            (Some(case_index), self.param_args.next()?)
         };
 
         let mut tags = self.runtime_tags.clone();
