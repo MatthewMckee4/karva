@@ -9,7 +9,8 @@ use pyo3::prelude::*;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_coroutine, run_test_with_timeout};
 
-use super::{VariantRunner, VariantSettings, finish_output_capture};
+use super::reporting::finish_output_capture;
+use super::{VariantRunner, VariantSettings};
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::package_runner::fixture::PreparedFixtures;
 use crate::runner::package_runner::outcome::{
@@ -57,7 +58,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         };
 
         let skipped = body.outcome.is_skipped();
-        self.set_coverage_context(&settings.qualified_name, CoveragePhase::Teardown);
+        self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
         let finalizer_diagnostics = self
             .package_runner
@@ -70,6 +71,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         };
         let duration = phases.total();
         let budget_exceeded = settings
+            .retry
             .fail_slow_budget
             .is_some_and(|budget| duration > budget);
         let outcome = attach_related_diagnostics(body.outcome, finalizer_diagnostics);
@@ -77,8 +79,8 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             outcome,
             duration,
             phases,
-            settings.fail_slow_budget,
-            self.test.definition(),
+            settings.retry.fail_slow_budget,
+            self.input.test.definition(),
         );
         let retryable = body.retryable || teardown_failed || (budget_exceeded && !skipped);
 
@@ -104,15 +106,15 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         attempt_env_result: PyResult<()>,
         function_arguments: &crate::runner::FixtureArguments,
     ) -> AttemptBody {
-        set_snapshot_context(settings.snapshot_context.clone());
+        set_snapshot_context(settings.identity.snapshot_context.clone());
         let prepared_call = attempt_env_result.and_then(|()| {
             if let Err(error) = test_name_env_result {
                 return Err(error.clone_ref(self.py));
             }
-            if let Err(error) = &settings.async_patch_result {
+            if let Err(error) = &settings.execution.async_patch_result {
                 return Err(error.clone_ref(self.py));
             }
-            if function_arguments.is_empty() || settings.timeout_seconds.is_some() {
+            if function_arguments.is_empty() || settings.execution.timeout_seconds.is_some() {
                 Ok(None)
             } else {
                 function_arguments.to_kwargs(self.py).map(Some)
@@ -121,14 +123,14 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         let (test_result, call_duration) = match prepared_call {
             Ok(keyword_arguments) => {
                 let call_start = Instant::now();
-                let result = if let Some(seconds) = settings.timeout_seconds {
+                let result = if let Some(seconds) = settings.execution.timeout_seconds {
                     run_test_with_timeout(
                         self.py,
                         function,
                         function_arguments,
-                        settings.is_async,
+                        settings.execution.is_async,
                         seconds,
-                        &settings.snapshot_context,
+                        &settings.identity.snapshot_context,
                     )
                 } else {
                     let result = if let Some(keyword_arguments) = keyword_arguments {
@@ -136,7 +138,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     } else {
                         function.call0(self.py)
                     };
-                    if settings.is_async {
+                    if settings.execution.is_async {
                         result.and_then(|coroutine| run_coroutine(self.py, coroutine))
                     } else {
                         result
@@ -153,9 +155,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             self.py,
             test_result,
             &OutcomeContext {
-                definition: self.test.definition(),
+                definition: self.input.test.definition(),
                 function_arguments,
-                expect_fail_tag: settings.expect_fail_tag.as_ref(),
+                expect_fail_tag: settings.execution.expect_fail_tag.as_ref(),
                 verbose: self.package_runner.context.is_verbose(),
             },
         );

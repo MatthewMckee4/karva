@@ -70,11 +70,29 @@ impl TestCacheKey {
         Self(format!("{function}[{index}]"))
     }
 
+    /// Creates a case-level key from an already serialized function identity.
+    pub fn parameter_case_name(function: &str, index: usize) -> Self {
+        Self(format!("{function}[{index}]"))
+    }
+
     /// Returns the qualified function portion without a case index.
     pub fn test_function_name(&self) -> &str {
-        self.0
-            .split_once('[')
-            .map_or(&self.0, |(function, _)| function)
+        let Some((function, suffix)) = self.0.rsplit_once('[') else {
+            return &self.0;
+        };
+        let Some(index) = suffix.strip_suffix(']') else {
+            return &self.0;
+        };
+        if !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()) {
+            function
+        } else {
+            &self.0
+        }
+    }
+
+    /// Whether this key identifies one statically indexed parameter case.
+    pub fn is_parameter_case(&self) -> bool {
+        self.test_function_name().len() != self.0.len()
     }
 }
 
@@ -132,6 +150,13 @@ impl QualifiedTestName {
         }
     }
 
+    /// Attaches rendered parameters while preserving the existing function and case identity.
+    #[must_use]
+    pub fn with_resolved_parameters(mut self, parameters: String) -> Self {
+        self.parameters = Some(parameters);
+        self
+    }
+
     /// Attach a parametrize case index. Used for stable cache/duration keys
     /// that survive renaming of parameter values across runs.
     #[must_use]
@@ -148,6 +173,11 @@ impl QualifiedTestName {
     /// Returns the rendered contents of the parameter list, without parentheses.
     pub fn parameters(&self) -> Option<&str> {
         self.parameters.as_deref()
+    }
+
+    /// Returns the stable expansion index for a parameter case, when known.
+    pub fn case_index(&self) -> Option<usize> {
+        self.case_index
     }
 
     /// Stable string identifier for cache and partitioning, of the form
@@ -247,5 +277,29 @@ mod tests {
             name.cache_key().test_function_name(),
             "tests.test::test_example"
         );
+    }
+
+    #[test]
+    fn cache_key_only_treats_terminal_numeric_brackets_as_case_index() {
+        let path_with_brackets =
+            TestCacheKey::function_name("tests/[generated]/test.py::test_case");
+        let named_brackets = TestCacheKey::function_name("tests::test_case[name]");
+        let indexed = TestCacheKey::function_name("tests/[generated]/test.py::test_case[12]");
+
+        assert_eq!(
+            path_with_brackets.test_function_name(),
+            "tests/[generated]/test.py::test_case"
+        );
+        assert!(!path_with_brackets.is_parameter_case());
+        assert_eq!(
+            named_brackets.test_function_name(),
+            "tests::test_case[name]"
+        );
+        assert!(!named_brackets.is_parameter_case());
+        assert_eq!(
+            indexed.test_function_name(),
+            "tests/[generated]/test.py::test_case"
+        );
+        assert!(indexed.is_parameter_case());
     }
 }

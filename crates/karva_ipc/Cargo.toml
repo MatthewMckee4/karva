@@ -16,8 +16,12 @@ karva_python_semantic = { workspace = true }
 
 anyhow = { workspace = true }
 crossbeam-channel = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+tempfile = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

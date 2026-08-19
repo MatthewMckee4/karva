@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
 use std::process::Command;
 
 use camino::Utf8PathBuf;
 
 use karva_cache::{RunArtifacts, RunHash};
 use karva_cli::SubTestCommand;
+use karva_ipc::ControllerEndpoint;
 use karva_logging::TerminalColor;
 use karva_metadata::{EnvironmentVariable, ProjectSettings};
 use karva_project::Project;
@@ -18,8 +18,8 @@ pub struct WorkerSpawn<'a> {
     /// Run-scoped files used to collect worker coverage data.
     pub artifacts: &'a RunArtifacts,
 
-    /// Loopback endpoint receiving worker runtime state.
-    pub controller_address: SocketAddr,
+    /// Local endpoint receiving worker runtime state.
+    pub controller_endpoint: ControllerEndpoint,
 
     /// Identifier shared by controller and all workers in this run.
     pub run_hash: &'a RunHash,
@@ -44,7 +44,7 @@ pub struct WorkerSpawn<'a> {
 pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     let mut cmd = Command::new(spawn.worker_binary);
     cmd.arg("--controller-address")
-        .arg(spawn.controller_address.to_string())
+        .arg(spawn.controller_endpoint.to_argument())
         .arg("--run-id")
         .arg(spawn.run_hash.inner())
         .arg("--worker-id")

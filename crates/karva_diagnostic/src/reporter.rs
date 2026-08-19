@@ -42,11 +42,16 @@ pub trait Reporter: Send + Sync {
         let _ = (test_name, duration);
     }
 
-    /// Called immediately before a test starts executing.
+    /// Called before a test enters fixture setup or body execution.
     ///
-    /// Used by reporters that track in-flight tests for cancellation
-    /// reporting; default is a no-op.
+    /// Used by reporters that checkpoint in-flight tests for crash and
+    /// cancellation reporting; default is a no-op.
     fn report_test_started(&self, test_name: &QualifiedTestName) {
+        let _ = test_name;
+    }
+
+    /// Refines an in-flight identity after fixture-derived parameters resolve.
+    fn report_test_identified(&self, test_name: &QualifiedTestName) {
         let _ = test_name;
     }
 
@@ -54,6 +59,9 @@ pub trait Reporter: Send + Sync {
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
         let _ = (cache_key, result);
     }
+
+    /// Commits buffered test results before broader-scope teardown can terminate execution.
+    fn flush_test_results(&self) {}
 }
 
 fn show_for_status_level(level: StatusLevel, kind: &IndividualTestResultKind) -> bool {

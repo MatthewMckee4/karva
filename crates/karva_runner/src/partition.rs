@@ -1,10 +1,20 @@
-use std::collections::{HashMap, HashSet};
-use std::hash::Hasher;
-use std::time::Duration;
+//! Worker assignment state and crash-recovery filtering.
 
-use karva_cli::PartitionSelection;
+mod balancing;
+mod collection;
+mod ordering;
+mod recovery;
+
+use std::sync::Arc;
+
+pub use balancing::partition_collected_tests;
+#[cfg(test)]
+use balancing::partition_shuffled_tests;
+use collection::{TestIdentity, TestInfo};
 use karva_python_semantic::TestCacheKey;
-use siphasher::sip::SipHasher13;
+#[cfg(test)]
+use ordering::order_tests_for_partitioning;
+pub use recovery::{CompletedTestIndex, UnattributedCrashRecovery};
 
 /// Ordering strategy for partition inputs.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -19,86 +29,65 @@ pub enum TestOrdering {
     Stable,
 }
 
-/// Test metadata needed to filter, group, weight, and dispatch one test.
-#[derive(Debug, Clone)]
-struct TestInfo {
-    /// Importable module name used to keep cheap modules together.
-    module_name: String,
-
-    /// The qualified name of the test (e.g., `test_a::test_1`), used for last-failed filtering.
-    qualified_name: String,
-
-    /// Worker CLI selector for this exact test.
-    path: String,
-
-    /// Wall-clock runtime from the previous run, when cached.
-    duration: Option<Duration>,
-    /// Qualified name without any `[idx]` suffix. Cases of the same
-    /// parametrized function share this key so they can be shuffled and
-    /// reasoned about as a single unit.
-    function_root: String,
-}
-
-/// Calculate the weight of a test for partitioning.
-///
-/// Uses the actual duration in microseconds if available, otherwise defaults to 1.
-fn test_weight(duration: Option<Duration>) -> u128 {
-    duration.map_or(1, |d| d.as_micros())
-}
-
-/// Tests sharing one module import, weighted as a unit before large groups split.
-#[derive(Debug)]
-struct ModuleGroup {
-    /// Tests collected from this module.
-    tests: Vec<TestInfo>,
-
-    /// Sum of historical microseconds, using one for each unknown duration.
-    total_weight: u128,
-}
-
-impl ModuleGroup {
-    fn new(tests: Vec<TestInfo>, total_weight: u128) -> Self {
-        Self {
-            tests,
-            total_weight,
-        }
-    }
-
-    fn add_test(&mut self, test: TestInfo, test_weight: u128) {
-        self.tests.push(test);
-        self.total_weight += test_weight;
-    }
-
-    fn weight(&self) -> u128 {
-        self.total_weight
-    }
-}
-
 /// Worker assignment produced by module-aware load balancing.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Partition {
-    /// Worker CLI selectors in execution order.
-    tests: Vec<String>,
+    /// Compact test identities paired with stable crash-recovery indices.
+    tests: Vec<ScheduledTest>,
 
-    /// Function identities represented by the selectors.
-    function_roots: HashSet<String>,
+    /// Runtime-expanded cases a replacement worker must not execute again.
+    resume_skip: Vec<TestCacheKey>,
 
     /// Cumulative historical microseconds, using one per unknown test.
     weight: u128,
+
+    /// Completed cases in this assignment when its recovery worker was spawned.
+    unattributed_retry_baseline: Option<usize>,
+}
+
+/// One scheduled test identity retained while its worker generation runs.
+#[derive(Debug, Clone)]
+struct ScheduledTest {
+    /// Function identity shared by every case collected from one test function.
+    identity: Arc<TestIdentity>,
+
+    /// Stable expansion index for a statically countable parameter case.
+    case_index: Option<usize>,
+}
+
+impl ScheduledTest {
+    /// Materializes the exact worker selector for the outbound IPC selection.
+    fn worker_path(&self) -> Arc<str> {
+        self.case_index.map_or_else(
+            || Arc::clone(&self.identity.selector),
+            |index| format!("{}[{index}]", self.identity.selector).into(),
+        )
+    }
+
+    /// Materializes the recovery key only on an exceptional worker-crash path.
+    fn cache_key(&self) -> TestCacheKey {
+        self.case_index.map_or_else(
+            || TestCacheKey::function_name(&self.identity.function_root),
+            |index| TestCacheKey::parameter_case_name(&self.identity.function_root, index),
+        )
+    }
 }
 
 impl Partition {
     fn new() -> Self {
         Self {
             tests: Vec::new(),
-            function_roots: HashSet::new(),
+            resume_skip: Vec::new(),
             weight: 0,
+            unattributed_retry_baseline: None,
         }
     }
 
     fn add_test(&mut self, test: TestInfo, test_weight: u128) {
-        self.function_roots.insert(test.function_root);
-        self.tests.push(test.path);
+        self.tests.push(ScheduledTest {
+            identity: test.identity,
+            case_index: test.case_index,
+        });
         self.weight += test_weight;
     }
 
@@ -106,325 +95,43 @@ impl Partition {
         self.weight
     }
 
-    pub(super) fn tests(&self) -> &[String] {
-        &self.tests
+    /// Returns worker CLI selectors in execution order.
+    #[cfg(test)]
+    fn test_paths(&self) -> impl ExactSizeIterator<Item = String> + '_ {
+        self.tests.iter().map(|test| test.worker_path().to_string())
     }
 
-    pub(super) fn into_tests(self) -> Vec<String> {
-        self.tests
+    /// Materializes scheduled keys for collector-to-recovery parity tests.
+    #[cfg(test)]
+    fn cache_keys(&self) -> impl Iterator<Item = TestCacheKey> + '_ {
+        self.tests.iter().map(ScheduledTest::cache_key)
     }
 
+    /// Materializes worker selectors for the outbound IPC handshake.
+    pub(super) fn worker_test_paths(&self) -> Vec<Arc<str>> {
+        self.tests.iter().map(ScheduledTest::worker_path).collect()
+    }
+
+    /// Number of selectors assigned to this worker generation.
+    pub(super) fn test_count(&self) -> usize {
+        self.tests.len()
+    }
+
+    /// Whether this assignment has any worker selectors.
+    pub(super) fn is_empty(&self) -> bool {
+        self.tests.is_empty()
+    }
+
+    /// Returns function identities represented by this assignment.
     pub(super) fn function_roots(&self) -> impl Iterator<Item = &str> {
-        self.function_roots.iter().map(String::as_str)
-    }
-}
-
-/// Partition collected tests into N groups using module-aware greedy bin-packing
-///
-/// # Algorithm: Hybrid Module-Aware LPT (Longest Processing Time First)
-///
-/// This implements a hybrid approach that balances load while minimizing module imports:
-///
-/// 1. **Group**: Tests are grouped by module and module weights are calculated
-/// 2. **Classify**: Modules are classified as "small" or "large" based on a threshold
-/// 3. **Assign Small Modules**: Small modules are assigned atomically to partitions (no splitting)
-/// 4. **Split Large Modules**: Large modules are split using LPT to prevent imbalance
-///
-/// ## Module Grouping Benefits
-/// - **Reduced imports**: Tests from the same module stay together in one partition
-/// - **Faster startup**: Each partition loads fewer unique modules
-/// - **Shared fixtures**: Fixture setup/teardown happens once per module per partition
-///
-/// ## Threshold Strategy
-/// The split threshold is set to `(total_weight / num_workers) / 2`:
-/// - Modules below this are kept together (typical case)
-/// - Modules above this are split to prevent worker imbalance
-///
-/// ## Complexity
-/// - Time: O(n log n + m log m + n*w) where n = tests, m = modules, w = workers
-/// - Space: O(n + m + w)
-/// - Since m ≤ n and w is small (4-16), this is effectively O(n log n)
-///
-/// ## Weighting Strategy
-/// - **With historical data**: Uses actual test duration in microseconds
-/// - **Without historical data**: Tests are shuffled randomly and assigned with equal weight
-/// - **With seeded shuffling**: Ignores duration history and derives ordering
-///   and worker assignment from each test's identity so filters commute with it
-pub fn partition_collected_tests(
-    package: &karva_collector::CollectedPackage,
-    num_workers: usize,
-    previous_durations: &HashMap<TestCacheKey, Duration>,
-    last_failed: &HashSet<TestCacheKey>,
-    partition_selection: Option<PartitionSelection>,
-    test_ordering: TestOrdering,
-) -> Vec<Partition> {
-    let mut test_infos = Vec::new();
-    collect_test_paths_recursive(package, &mut test_infos, previous_durations);
-
-    if !last_failed.is_empty() {
-        test_infos.retain(|info| {
-            last_failed.contains(info.qualified_name.as_str())
-                || last_failed.contains(info.function_root.as_str())
-        });
+        self.tests
+            .iter()
+            .map(|test| test.identity.function_root.as_ref())
     }
 
-    // Explicit partitioning runs on a deterministic ordering of the
-    // post-filter test set so that `slice:M/N` is stable across runs and
-    // machines. `hash:M/N` does not depend on the position, but sharing the
-    // same ordering keeps the selected worker input stable too.
-    if let Some(selection) = partition_selection {
-        test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-        let mut position = 0usize;
-        test_infos.retain(|info| {
-            let keep = selection.contains_test(position, &info.qualified_name);
-            position += 1;
-            keep
-        });
-    }
-
-    order_tests_for_partitioning(&mut test_infos, test_ordering);
-
-    if let TestOrdering::SeededShuffle(seed) = test_ordering {
-        return partition_shuffled_tests(test_infos, num_workers, seed);
-    }
-
-    // Step 1: Group tests by module and calculate module weights, preserving
-    // the order chosen above for the first test seen from each module.
-    let mut module_groups: Vec<ModuleGroup> = Vec::new();
-    let mut module_indices: HashMap<String, usize> = HashMap::new();
-
-    for test_info in test_infos {
-        let weight = test_weight(test_info.duration);
-
-        if let Some(&index) = module_indices.get(&test_info.module_name) {
-            module_groups[index].add_test(test_info, weight);
-        } else {
-            module_indices.insert(test_info.module_name.clone(), module_groups.len());
-            module_groups.push(ModuleGroup::new(vec![test_info], weight));
-        }
-    }
-
-    // Step 2: Calculate threshold for splitting decision
-    let total_weight: u128 = module_groups.iter().map(ModuleGroup::weight).sum();
-    let target_partition_weight = total_weight / num_workers.max(1) as u128;
-    let split_threshold = target_partition_weight / 2;
-
-    // Step 3: Classify modules as small (keep together) or large (allow splitting)
-    let mut small_modules = Vec::new();
-    let mut large_modules = Vec::new();
-
-    for module_group in module_groups {
-        if module_group.weight() < split_threshold {
-            small_modules.push(module_group);
-        } else {
-            large_modules.push(module_group);
-        }
-    }
-
-    // Sort small modules by weight (descending) for better bin-packing
-    small_modules.sort_by_key(|module| std::cmp::Reverse(module.weight()));
-
-    let mut partitions: Vec<Partition> = (0..num_workers).map(|_| Partition::new()).collect();
-
-    // Step 4: Assign small modules atomically (entire module to one partition)
-    for module_group in small_modules {
-        let min_partition_idx = find_lightest_partition(&partitions);
-        for test_info in module_group.tests {
-            let weight = test_weight(test_info.duration);
-            partitions[min_partition_idx].add_test(test_info, weight);
-        }
-    }
-
-    // Step 5: Split large modules using LPT to prevent imbalance
-    for mut module_group in large_modules {
-        // Sort tests within large modules by weight (descending)
-        module_group.tests.sort_by(compare_test_weights);
-
-        for test_info in module_group.tests {
-            let weight = test_weight(test_info.duration);
-            let min_partition_idx = find_lightest_partition(&partitions);
-            partitions[min_partition_idx].add_test(test_info, weight);
-        }
-    }
-
-    partitions
-}
-
-/// Assigns each shuffled test from its stable random key, independent of sibling tests.
-fn partition_shuffled_tests(
-    test_infos: Vec<TestInfo>,
-    num_workers: usize,
-    seed: u64,
-) -> Vec<Partition> {
-    let mut partitions: Vec<Partition> = (0..num_workers).map(|_| Partition::new()).collect();
-    if partitions.is_empty() {
-        return partitions;
-    }
-
-    for test_info in test_infos {
-        let key = seeded_order_key(seed, &test_info.qualified_name);
-        let partition_index = seeded_partition_index(key, partitions.len());
-        partitions[partition_index].add_test(test_info, 1);
-    }
-
-    partitions
-}
-
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "the remainder is below a worker count that already fits usize"
-)]
-fn seeded_partition_index(key: u64, num_workers: usize) -> usize {
-    (key % num_workers as u64) as usize
-}
-
-/// Finds the index of the partition with the smallest weight
-fn find_lightest_partition(partitions: &[Partition]) -> usize {
-    partitions
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, partition)| partition.weight())
-        .map_or(0, |(idx, _)| idx)
-}
-
-/// Compares two tests by duration descending; tests without durations are considered equal
-fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
-    match (&a.duration, &b.duration) {
-        (Some(dur_a), Some(dur_b)) => dur_b.cmp(dur_a),
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, _) => std::cmp::Ordering::Greater,
-        (_, None) => std::cmp::Ordering::Less,
-    }
-}
-
-/// Shuffles tests that have no historical duration data, treating cases of
-/// the same parametrized function as a single unit.
-///
-/// Without this grouping, parametrize cases for one function would be
-/// reordered relative to one another, making test output order
-/// non-deterministic in the common single-worker case.
-fn shuffle_tests_without_durations(test_infos: &mut Vec<TestInfo>) {
-    let mut groups: Vec<Vec<TestInfo>> = Vec::new();
-    let mut group_index: HashMap<String, usize> = HashMap::new();
-
-    for info in test_infos.drain(..) {
-        if let Some(idx) = group_index.get(&info.function_root) {
-            groups[*idx].push(info);
-        } else {
-            group_index.insert(info.function_root.clone(), groups.len());
-            groups.push(vec![info]);
-        }
-    }
-
-    let no_duration_groups: Vec<usize> = groups
-        .iter()
-        .enumerate()
-        .filter(|(_, g)| g.iter().any(|t| t.duration.is_none()))
-        .map(|(i, _)| i)
-        .collect();
-
-    for i in (1..no_duration_groups.len()).rev() {
-        let j = fastrand::usize(..=i);
-        let idx_a = no_duration_groups[i];
-        let idx_b = no_duration_groups[j];
-        groups.swap(idx_a, idx_b);
-    }
-
-    for group in groups {
-        test_infos.extend(group);
-    }
-}
-
-fn order_tests_for_partitioning(test_infos: &mut Vec<TestInfo>, ordering: TestOrdering) {
-    test_infos.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-
-    match ordering {
-        TestOrdering::RandomizeUnmeasured => shuffle_tests_without_durations(test_infos),
-        TestOrdering::SeededShuffle(seed) => {
-            test_infos.sort_by_cached_key(|test| seeded_order_key(seed, &test.qualified_name));
-        }
-        TestOrdering::Stable => {}
-    }
-}
-
-/// Produces a stable pseudo-random priority from one run seed and test identity.
-fn seeded_order_key(seed: u64, qualified_name: &str) -> u64 {
-    let mut hasher = SipHasher13::new_with_keys(seed, !seed);
-    hasher.write(qualified_name.as_bytes());
-    hasher.finish()
-}
-
-/// Recursively collects test information from a package and all its subpackages.
-///
-/// For each test function whose `@parametrize` decorators can be statically
-/// counted, emits one `TestInfo` per case so that the partitioner can split
-/// individual cases across workers. Cases of the same function share a
-/// `function_root` key so they can be reordered as a unit.
-fn collect_test_paths_recursive(
-    package: &karva_collector::CollectedPackage,
-    test_infos: &mut Vec<TestInfo>,
-    previous_durations: &HashMap<TestCacheKey, Duration>,
-) {
-    for module in package.modules.values() {
-        for test_fn_def in &module.test_function_defs {
-            let module_name = module.path.module_name();
-            let module_path = module.path.path();
-            let function_name = test_fn_def.name.as_str();
-            let function_root = format!("{module_name}::{function_name}");
-            let case_count = karva_collector::count_parametrize_cases(test_fn_def);
-
-            if let Some(case_count) = case_count
-                && case_count > 0
-            {
-                for idx in 0..case_count {
-                    let qualified_name = format!("{function_root}[{idx}]");
-                    let duration = previous_durations
-                        .get(qualified_name.as_str())
-                        .copied()
-                        .or_else(|| {
-                            u32::try_from(case_count).ok().and_then(|case_count| {
-                                previous_durations
-                                    .get(function_root.as_str())
-                                    .and_then(|duration| duration.checked_div(case_count))
-                            })
-                        });
-                    test_infos.push(TestInfo {
-                        module_name: module_name.to_string(),
-                        qualified_name,
-                        path: format!("{module_path}::{function_name}[{idx}]"),
-                        duration,
-                        function_root: function_root.clone(),
-                    });
-                }
-            } else {
-                let duration = previous_durations.get(function_root.as_str()).copied();
-                test_infos.push(TestInfo {
-                    module_name: module_name.to_string(),
-                    qualified_name: function_root.clone(),
-                    path: format!("{module_path}::{function_name}"),
-                    duration,
-                    function_root,
-                });
-            }
-        }
-
-        for doctest in &module.doctests {
-            let module_name = module.path.module_name();
-            let module_path = module.path.path();
-            let function_name = doctest.name.as_str();
-            let qualified_name = format!("{module_name}::{function_name}");
-            test_infos.push(TestInfo {
-                module_name: module_name.to_string(),
-                duration: previous_durations.get(qualified_name.as_str()).copied(),
-                path: format!("{module_path}::{function_name}"),
-                function_root: qualified_name.clone(),
-                qualified_name,
-            });
-        }
-    }
-
-    for subpackage in package.packages.values() {
-        collect_test_paths_recursive(subpackage, test_infos, previous_durations);
+    /// Runtime-expanded cases already handled by an earlier worker generation.
+    pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
+        &self.resume_skip
     }
 }
 
@@ -453,359 +160,4 @@ pub fn scheduled_test_count(package: &karva_collector::CollectedPackage) -> usiz
 }
 
 #[cfg(test)]
-mod tests {
-    use camino::Utf8PathBuf;
-    use karva_collector::{CollectedPackage, CollectionSettings, collect_file};
-    use ruff_python_ast::PythonVersion;
-
-    use super::*;
-
-    fn test_info(qualified_name: &str) -> TestInfo {
-        test_info_with_duration(qualified_name, None)
-    }
-
-    fn test_info_with_duration(qualified_name: &str, duration: Option<Duration>) -> TestInfo {
-        TestInfo {
-            module_name: "test_module".to_string(),
-            qualified_name: qualified_name.to_string(),
-            path: qualified_name.to_string(),
-            duration,
-            function_root: qualified_name.to_string(),
-        }
-    }
-
-    #[test]
-    fn deterministic_partitioning_sorts_by_qualified_name() {
-        let mut tests = vec![
-            test_info("test_module::test_c"),
-            test_info("test_module::test_a"),
-            test_info("test_module::test_b"),
-        ];
-
-        order_tests_for_partitioning(&mut tests, TestOrdering::Stable);
-
-        let ordered_names: Vec<_> = tests
-            .iter()
-            .map(|test| test.qualified_name.as_str())
-            .collect();
-        assert_eq!(
-            ordered_names,
-            [
-                "test_module::test_a",
-                "test_module::test_b",
-                "test_module::test_c"
-            ]
-        );
-    }
-
-    #[test]
-    fn duration_backed_partitioning_starts_from_qualified_name_order() {
-        let duration = Some(Duration::from_millis(1));
-        let mut tests = vec![
-            test_info_with_duration("test_module::test_c", duration),
-            test_info_with_duration("test_module::test_a", duration),
-            test_info_with_duration("test_module::test_b", duration),
-        ];
-
-        order_tests_for_partitioning(&mut tests, TestOrdering::RandomizeUnmeasured);
-
-        let ordered_names: Vec<_> = tests
-            .iter()
-            .map(|test| test.qualified_name.as_str())
-            .collect();
-        assert_eq!(
-            ordered_names,
-            [
-                "test_module::test_a",
-                "test_module::test_b",
-                "test_module::test_c"
-            ]
-        );
-    }
-
-    #[test]
-    fn seeded_ordering_is_reproducible() {
-        let tests = vec![
-            test_info("test_module::test_d"),
-            test_info("test_module::test_a"),
-            test_info("test_module::test_c"),
-            test_info("test_module::test_b"),
-        ];
-        let mut first = tests.clone();
-        let mut repeated = tests.clone();
-        let mut different_seed = tests;
-
-        order_tests_for_partitioning(&mut first, TestOrdering::SeededShuffle(170_938));
-        order_tests_for_partitioning(&mut repeated, TestOrdering::SeededShuffle(170_938));
-        order_tests_for_partitioning(&mut different_seed, TestOrdering::SeededShuffle(170_939));
-
-        let names = |tests: &[TestInfo]| {
-            tests
-                .iter()
-                .map(|test| test.qualified_name.clone())
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(names(&first), names(&repeated));
-        assert_ne!(names(&first), names(&different_seed));
-    }
-
-    #[test]
-    fn seeded_partitioning_reproduces_worker_assignment_and_order() {
-        let mut tests = vec![
-            test_info("test_module::test_f"),
-            test_info("test_module::test_a"),
-            test_info("test_module::test_e"),
-            test_info("test_module::test_b"),
-            test_info("test_module::test_d"),
-            test_info("test_module::test_c"),
-        ];
-        order_tests_for_partitioning(&mut tests, TestOrdering::SeededShuffle(170_938));
-
-        let first = partition_shuffled_tests(tests.clone(), 2, 170_938);
-        let repeated = partition_shuffled_tests(tests, 2, 170_938);
-
-        assert_eq!(first[0].tests(), repeated[0].tests());
-        assert_eq!(first[1].tests(), repeated[1].tests());
-        assert_eq!(
-            first
-                .iter()
-                .map(|partition| partition.tests().len())
-                .sum::<usize>(),
-            6
-        );
-    }
-
-    #[test]
-    fn partition_selection_filters_after_sorting_by_qualified_name() {
-        let (_temp_dir, test_path, package) = collected_package(
-            "def test_c(): pass\n\
-             def test_a(): pass\n\
-             def test_b(): pass\n",
-        );
-        let selection = "slice:2/3"
-            .parse::<PartitionSelection>()
-            .expect("valid partition selection");
-
-        let partitions = partition_collected_tests(
-            &package,
-            1,
-            &HashMap::new(),
-            &HashSet::new(),
-            Some(selection),
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(partitions[0].tests(), &[format!("{test_path}::test_b")]);
-    }
-
-    #[test]
-    fn last_failed_filters_before_explicit_partition_selection() {
-        let (_temp_dir, test_path, package) = collected_package(
-            "def test_c(): pass\n\
-             def test_a(): pass\n\
-             def test_b(): pass\n\
-             def test_d(): pass\n",
-        );
-        let selection = "slice:2/2"
-            .parse::<PartitionSelection>()
-            .expect("valid partition selection");
-        let last_failed = HashSet::from([
-            TestCacheKey::function_name("test_sample::test_b"),
-            TestCacheKey::function_name("test_sample::test_c"),
-        ]);
-
-        let partitions = partition_collected_tests(
-            &package,
-            1,
-            &HashMap::new(),
-            &last_failed,
-            Some(selection),
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(partitions[0].tests(), &[format!("{test_path}::test_c")]);
-    }
-
-    #[test]
-    fn stable_partitioning_preserves_module_order_after_grouping() {
-        let (_temp_dir, test_paths, package) = collected_package_with_files([
-            ("test_c.py", "def test_1(): pass\n"),
-            ("test_a.py", "def test_1(): pass\n"),
-            ("test_b.py", "def test_1(): pass\n"),
-        ]);
-
-        let partitions = partition_collected_tests(
-            &package,
-            2,
-            &HashMap::new(),
-            &HashSet::new(),
-            None,
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(
-            partitions[0].tests(),
-            &[
-                format!("{}::test_1", test_paths["test_a.py"]),
-                format!("{}::test_1", test_paths["test_c.py"]),
-            ]
-        );
-        assert_eq!(
-            partitions[1].tests(),
-            &[format!("{}::test_1", test_paths["test_b.py"])]
-        );
-    }
-
-    #[test]
-    fn literal_parametrize_cases_split_across_workers() {
-        let (_temp_dir, _test_path, package) = collected_package(
-            "@karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])\n\
-             def test_value(value): pass\n",
-        );
-
-        let partitions = partition_collected_tests(
-            &package,
-            2,
-            &HashMap::new(),
-            &HashSet::new(),
-            None,
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(scheduled_test_count(&package), 6);
-        assert!(
-            partitions
-                .iter()
-                .all(|partition| !partition.tests().is_empty())
-        );
-        assert_eq!(
-            partitions
-                .iter()
-                .map(|partition| partition.tests().len())
-                .sum::<usize>(),
-            6
-        );
-    }
-
-    #[test]
-    fn dynamic_parametrize_cases_remain_one_unit() {
-        let (_temp_dir, test_path, package) = collected_package(
-            "@karva.tags.parametrize('value', range(6))\n\
-             def test_value(value): pass\n",
-        );
-
-        let partitions = partition_collected_tests(
-            &package,
-            2,
-            &HashMap::new(),
-            &HashSet::new(),
-            None,
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(scheduled_test_count(&package), 1);
-        assert_eq!(
-            partitions
-                .iter()
-                .flat_map(Partition::tests)
-                .collect::<Vec<_>>(),
-            [&format!("{test_path}::test_value")]
-        );
-    }
-
-    #[test]
-    fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
-        let (_temp_dir, test_path, package) = collected_package(
-            "@karva.tags.parametrize('value', [1])\n\
-             def test_value(value): pass\n",
-        );
-        let durations = HashMap::from([(
-            TestCacheKey::function_name("test_sample::test_value"),
-            Duration::from_millis(10),
-        )]);
-
-        let partitions = partition_collected_tests(
-            &package,
-            1,
-            &durations,
-            &HashSet::new(),
-            None,
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(
-            partitions[0].tests(),
-            &[format!("{test_path}::test_value[0]")]
-        );
-        assert_eq!(partitions[0].weight(), 10_000);
-    }
-
-    #[test]
-    fn literal_parametrize_cases_share_legacy_function_duration() {
-        let (_temp_dir, _test_path, package) = collected_package(
-            "@karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])\n\
-             def test_value(value): pass\n",
-        );
-        let durations = HashMap::from([(
-            TestCacheKey::function_name("test_sample::test_value"),
-            Duration::from_millis(60),
-        )]);
-
-        let partitions = partition_collected_tests(
-            &package,
-            2,
-            &durations,
-            &HashSet::new(),
-            None,
-            TestOrdering::Stable,
-        );
-
-        assert_eq!(
-            partitions.iter().map(Partition::weight).sum::<u128>(),
-            60_000
-        );
-    }
-
-    fn collected_package(source: &str) -> (tempfile::TempDir, Utf8PathBuf, CollectedPackage) {
-        let (temp_dir, mut test_paths, package) =
-            collected_package_with_files([("test_sample.py", source)]);
-        let test_path = test_paths
-            .remove("test_sample.py")
-            .expect("test path should exist");
-
-        (temp_dir, test_path, package)
-    }
-
-    fn collected_package_with_files<const N: usize>(
-        files: [(&str, &str); N],
-    ) -> (
-        tempfile::TempDir,
-        HashMap<String, Utf8PathBuf>,
-        CollectedPackage,
-    ) {
-        let temp_dir = tempfile::tempdir().expect("create temp dir");
-        let root = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
-            .expect("temp path should be UTF-8");
-        let settings = CollectionSettings {
-            python_version: PythonVersion::PY312,
-            test_function_prefix: "test_",
-            respect_ignore_files: true,
-            collect_fixtures: false,
-            collect_doctests: false,
-        };
-        let mut package = CollectedPackage::new(root);
-        let mut test_paths = HashMap::new();
-
-        for (name, source) in files {
-            let test_path = package.path.join(name);
-            std::fs::write(&test_path, source).expect("write test file");
-            let module = collect_file(&test_path, &package.path, &settings, &[])
-                .expect("collect test file")
-                .expect("test file should collect");
-            package.add_module(module);
-            test_paths.insert(name.to_string(), test_path);
-        }
-
-        (temp_dir, test_paths, package)
-    }
-}
+mod tests;

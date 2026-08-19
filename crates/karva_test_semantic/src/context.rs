@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
@@ -5,8 +7,10 @@ use karva_diagnostic::{
     TestExecutionResult, sort_diagnostics_for_display,
 };
 use karva_metadata::ProjectSettings;
-use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
+use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use ruff_python_ast::PythonVersion;
+
+use crate::RunRequest;
 
 /// Immutable configuration and reporting services shared by one test run.
 pub struct Context<'a> {
@@ -22,6 +26,9 @@ pub struct Context<'a> {
     /// Reporter for outputting test progress and results.
     reporter: &'a dyn Reporter,
 
+    /// Cases already committed by an earlier worker generation.
+    resume_skip: &'a BTreeSet<TestCacheKey>,
+
     /// Whether diagnostics should include the full Python call chain.
     verbose: bool,
 }
@@ -29,23 +36,20 @@ pub struct Context<'a> {
 /// Run-level diagnostics retained until execution completes.
 #[derive(Default)]
 pub struct RunState {
+    /// Discovery, fixture, and coverage diagnostics not owned by one test case.
     run_diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> Context<'a> {
-    pub(super) fn new(
-        cwd: &'a Utf8Path,
-        settings: &'a ProjectSettings,
-        python_version: PythonVersion,
-        reporter: &'a dyn Reporter,
-        verbose: bool,
-    ) -> Self {
+    /// Retains borrowed run services while leaving owned test paths on the request.
+    pub(super) fn from_request(request: &RunRequest<'a>) -> Self {
         Self {
-            cwd,
-            settings,
-            python_version,
-            reporter,
-            verbose,
+            cwd: request.cwd,
+            settings: request.settings,
+            python_version: request.python_version,
+            reporter: request.reporter,
+            resume_skip: request.resume_skip,
+            verbose: request.verbose,
         }
     }
 
@@ -61,6 +65,11 @@ impl<'a> Context<'a> {
         self.verbose
     }
 
+    /// Whether crash recovery already committed this exact case.
+    pub(super) fn should_resume_skip(&self, test_name: &QualifiedTestName) -> bool {
+        !self.resume_skip.is_empty() && self.resume_skip.contains(&test_name.cache_key())
+    }
+
     pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {
         CollectionSettings {
             python_version: self.python_version,
@@ -71,11 +80,22 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Record the start of a test execution. Forwarded to the reporter
-    /// so cancellation logic can render per-test `SIGINT` lines naming
-    /// the in-flight test.
+    /// Records entry into one test's setup-or-execution lifecycle.
+    ///
+    /// Forwarded before fixture setup so crashes and cancellation can name the
+    /// in-flight test. Fixture-derived parameters may refine the name later.
     pub fn report_test_started(&self, test_case_name: &QualifiedTestName) {
         self.reporter.report_test_started(test_case_name);
+    }
+
+    /// Refines the active test checkpoint after fixture parameters resolve.
+    pub fn report_test_identified(&self, test_case_name: &QualifiedTestName) {
+        self.reporter.report_test_identified(test_case_name);
+    }
+
+    /// Commits completed results before broader-scope fixture cleanup begins.
+    pub(super) fn flush_test_results(&self) {
+        self.reporter.flush_test_results();
     }
 
     /// Returns the parser target matching the embedded interpreter.
@@ -111,12 +131,10 @@ impl Context<'_> {
         let cache_key = test_case_name.cache_key();
         let test_case =
             TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
-        self.reporter.report_test_case_result(
-            test_case_name,
-            test_case.outcome().result_kind(),
-            duration,
-        );
+        let result_kind = test_case.outcome().result_kind();
         self.reporter.report_test_completed(&cache_key, test_case);
+        self.reporter
+            .report_test_case_result(test_case_name, result_kind, duration);
 
         passed
     }

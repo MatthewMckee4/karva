@@ -5,7 +5,10 @@ use karva_static::WorkerEnvVars;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyAnyMethods, PyCFunction, PyDict, PyString, PyTuple};
+use pyo3::types::{
+    PyAnyMethods, PyBool, PyBytes, PyCFunction, PyComplex, PyDict, PyFloat, PyInt, PyNone,
+    PyString, PyTuple,
+};
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
@@ -461,17 +464,92 @@ pub fn test_parameters(
     parameters: Option<&Parameters>,
     name_only_arguments: &[&str],
 ) -> Option<String> {
-    if kwargs.is_empty() {
+    render_test_parameters(
+        py,
+        kwargs.iter().map(|(name, value)| (name.as_str(), value)),
+        parameters,
+        name_only_arguments,
+    )
+}
+
+/// Renders borrowed Python arguments in signature order without cloning values.
+pub fn render_test_parameters<'a>(
+    py: Python,
+    arguments: impl IntoIterator<Item = (&'a str, &'a Py<PyAny>)>,
+    parameters: Option<&Parameters>,
+    name_only_arguments: &[&str],
+) -> Option<String> {
+    let arguments = ordered_test_arguments(arguments, parameters);
+    render_ordered_test_parameters(py, arguments, name_only_arguments)
+}
+
+/// Renders parameters only when representation cannot dispatch user Python.
+///
+/// Exact scalar builtins have interpreter-owned string representations.
+/// Subclasses and containers are rejected because their representation can
+/// execute arbitrary user code before the worker records a crash checkpoint.
+pub fn try_render_builtin_test_parameters<'a>(
+    py: Python,
+    arguments: impl IntoIterator<Item = (&'a str, &'a Py<PyAny>)>,
+    parameters: Option<&Parameters>,
+) -> Option<String> {
+    let arguments = ordered_test_arguments(arguments, parameters);
+    if arguments.iter().any(|(_, value)| {
+        let Ok(value) = value.cast_bound::<PyAny>(py) else {
+            return true;
+        };
+        !has_builtin_display(value)
+    }) {
+        return None;
+    }
+    render_ordered_test_parameters(py, arguments, &[])
+}
+
+fn ordered_test_arguments<'a>(
+    arguments: impl IntoIterator<Item = (&'a str, &'a Py<PyAny>)>,
+    parameters: Option<&Parameters>,
+) -> Vec<(&'a str, &'a Py<PyAny>)> {
+    let mut arguments = arguments.into_iter().collect::<Vec<_>>();
+    arguments.sort_by(|(left, _), (right, _)| {
+        let left_position = parameters
+            .and_then(|parameters| parameters.index(left))
+            .unwrap_or(usize::MAX);
+        let right_position = parameters
+            .and_then(|parameters| parameters.index(right))
+            .unwrap_or(usize::MAX);
+        left_position
+            .cmp(&right_position)
+            .then_with(|| left.cmp(right))
+    });
+    arguments
+}
+
+fn has_builtin_display(value: &Bound<'_, PyAny>) -> bool {
+    value.is_exact_instance_of::<PyInt>()
+        || value.is_exact_instance_of::<PyNone>()
+        || value.is_exact_instance_of::<PyBool>()
+        || value.is_exact_instance_of::<PyFloat>()
+        || value.is_exact_instance_of::<PyComplex>()
+        || value.is_exact_instance_of::<PyString>()
+        || value.is_exact_instance_of::<PyBytes>()
+}
+
+fn render_ordered_test_parameters(
+    py: Python,
+    arguments: Vec<(&str, &Py<PyAny>)>,
+    name_only_arguments: &[&str],
+) -> Option<String> {
+    if arguments.is_empty() {
         return None;
     }
 
     let mut rendered = String::new();
-    for (index, (key, value)) in kwargs.iter_in_signature_order(parameters).enumerate() {
+    for (index, (key, value)) in arguments.into_iter().enumerate() {
         if index > 0 {
             rendered.push_str(", ");
         }
         let truncated_key = truncate_string(key);
-        if name_only_arguments.contains(&key.as_str()) {
+        if name_only_arguments.contains(&key) {
             let _ = write!(rendered, "{truncated_key}");
         } else if let Ok(value) = value.cast_bound::<PyAny>(py) {
             let trimmed_value = truncated_display_value(value);
@@ -494,5 +572,71 @@ pub fn truncate_string(value: &str) -> String {
         format!("{truncated}...")
     } else {
         value.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pyo3::IntoPyObjectExt;
+    use pyo3::prelude::*;
+    use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods};
+
+    use super::try_render_builtin_test_parameters;
+
+    #[test]
+    fn builtin_parameter_renderer_preserves_display_format() {
+        Python::initialize();
+        Python::attach(|py| {
+            let values = [
+                (
+                    "integer".to_string(),
+                    42_i64.into_py_any(py).expect("convert integer"),
+                ),
+                (
+                    "string".to_string(),
+                    "hello".into_py_any(py).expect("convert string"),
+                ),
+            ];
+
+            let rendered = try_render_builtin_test_parameters(
+                py,
+                values.iter().map(|(name, value)| (name.as_str(), value)),
+                None,
+            );
+
+            assert_eq!(rendered.as_deref(), Some("integer=42, string='hello'"));
+        });
+    }
+
+    #[test]
+    fn builtin_parameter_renderer_rejects_subclasses_without_calling_string() {
+        Python::initialize();
+        Python::attach(|py| {
+            let namespace = PyDict::new(py);
+            py.run(
+                c"class Value(int):\n    calls = 0\n    def __str__(self):\n        type(self).calls += 1\n        return 'value'\nvalue = Value(1)\n",
+                Some(&namespace),
+                None,
+            )
+            .expect("define parameter subclass");
+            let value = namespace
+                .get_item("value")
+                .expect("read namespace")
+                .expect("value should exist")
+                .unbind();
+
+            let rendered =
+                try_render_builtin_test_parameters(py, std::iter::once(("value", &value)), None);
+
+            assert_eq!(rendered, None);
+            let calls = value
+                .bind(py)
+                .get_type()
+                .getattr("calls")
+                .expect("read call count")
+                .extract::<usize>()
+                .expect("call count should be an integer");
+            assert_eq!(calls, 0);
+        });
     }
 }

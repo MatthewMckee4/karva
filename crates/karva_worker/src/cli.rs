@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::collections::BTreeSet;
 use std::{ffi::OsString, io};
 
 use anyhow::Context as _;
@@ -9,12 +9,12 @@ use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
 use karva_diagnostic::{
     DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
 };
-use karva_ipc::{WorkerClient, WorkerEvent};
+use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerEvent};
 use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, RunIgnoredMode};
 use karva_project::path::{TestPath, TestPathError, absolute};
-use karva_python_semantic::current_python_version;
+use karva_python_semantic::{current_python_version, enable_faulthandler};
 use karva_static::EnvVars;
 
 use crate::reporter::WorkerReporter;
@@ -27,8 +27,8 @@ use crate::reporter::WorkerReporter;
 #[command(name = "karva_worker", about = "Karva test worker")]
 struct Args {
     /// Controller endpoint used for runtime events and final results.
-    #[arg(long)]
-    controller_address: SocketAddr,
+    #[arg(long = "controller-address")]
+    controller_endpoint: OsString,
 
     /// Unique identifier correlating events for this test run.
     #[arg(long)]
@@ -111,6 +111,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let cwd = cwd()?;
 
     let python_version = current_python_version();
+    enable_faulthandler().context("Failed to enable Python faulthandler")?;
 
     let filter = FiltersetSet::new(&args.sub_command.filter_expressions)
         .context("invalid `--filter` expression")?;
@@ -122,7 +123,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         .unwrap_or_default();
 
     let coverage = worker_coverage_config(&args.sub_command)?;
-
     let registered_tags = args.sub_command.registered_tag.clone();
     let mut settings = args.sub_command.into_options().to_settings().with_tags(
         registered_tags
@@ -141,12 +141,16 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_format,
         colored::control::SHOULD_COLORIZE.should_colorize(),
     );
-    let (client, test_paths) =
-        WorkerClient::connect(args.controller_address, &args.run_id, args.worker_id)?;
-    let test_paths: Vec<Result<TestPath, TestPathError>> = test_paths
+    let controller_endpoint =
+        ControllerEndpoint::from_argument(&args.controller_endpoint).map_err(anyhow::Error::msg)?;
+    let (client, selection) =
+        WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
+    let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
+    let test_paths: Vec<Result<TestPath, TestPathError>> = selection
+        .test_paths
         .into_iter()
         .map(|path| {
-            let path = absolute(&path, &cwd);
+            let path = absolute(path.as_ref(), &cwd);
             TestPath::new(path.as_str())
         })
         .collect();
@@ -157,15 +161,16 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_config,
     );
 
-    let result = karva_test_semantic::run_tests(
-        &cwd,
-        &settings,
+    let result = karva_test_semantic::run_tests(karva_test_semantic::RunRequest {
+        cwd: &cwd,
+        settings: &settings,
         python_version,
-        &reporter,
+        reporter: &reporter,
         test_paths,
-        coverage.as_ref(),
-        !verbosity.is_default(),
-    );
+        resume_skip: &resume_skip,
+        coverage: coverage.as_ref(),
+        verbose: !verbosity.is_default(),
+    });
     reporter.finish()?;
     drop(reporter);
     for diagnostic in &result {

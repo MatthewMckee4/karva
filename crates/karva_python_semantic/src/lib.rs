@@ -8,7 +8,9 @@ mod name;
 pub use function_kind::FunctionKind;
 pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 #[cfg(feature = "python-runtime")]
-use pyo3::Python;
+use pyo3::types::PyAnyMethods;
+#[cfg(feature = "python-runtime")]
+use pyo3::{PyResult, Python};
 #[cfg(feature = "python-runtime")]
 use ruff_python_ast::PythonVersion;
 use ruff_python_ast::{Expr, StmtFunctionDef};
@@ -73,6 +75,13 @@ pub fn current_python_version() -> PythonVersion {
         let version_info = py.version_info();
         (version_info.major, version_info.minor)
     }))
+}
+
+/// Enables Python traceback output for fatal signals in the current process.
+#[cfg(feature = "python-runtime")]
+pub fn enable_faulthandler() -> PyResult<()> {
+    Python::initialize();
+    Python::attach(|py| py.import("faulthandler")?.call_method0("enable").map(drop))
 }
 
 #[cfg(test)]

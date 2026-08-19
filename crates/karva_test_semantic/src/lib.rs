@@ -1,5 +1,7 @@
 //! Python test semantics, fixture resolution, extensions, and in-process execution.
 
+use std::collections::BTreeSet;
+
 pub(crate) mod collection;
 mod context;
 pub(crate) mod diagnostic;
@@ -21,6 +23,7 @@ use karva_coverage::CoverageSession;
 use karva_diagnostic::{Diagnostic, Reporter};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
+use karva_python_semantic::TestCacheKey;
 use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::failed_to_start_coverage_diagnostic;
@@ -28,31 +31,60 @@ use crate::discovery::{DiscoveryIssue, StandardDiscoverer};
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
 
-/// Runs discovery and execution inside one interpreter attachment.
+/// Inputs needed to discover and execute one worker's test selection.
 ///
-/// Coverage startup or persistence failures are logged but do not discard test results.
-pub fn run_tests(
-    cwd: &Utf8Path,
-    settings: &ProjectSettings,
-    python_version: PythonVersion,
-    reporter: &dyn Reporter,
-    test_paths: Vec<Result<TestPath, TestPathError>>,
-    coverage: Option<&CoverageConfig>,
-    verbose: bool,
-) -> Vec<Diagnostic> {
-    let context = Context::new(cwd, settings, python_version, reporter, verbose);
+/// Borrowed values remain owned by the worker for the duration of the run;
+/// `test_paths` is consumed by discovery. Coverage startup failures become run
+/// diagnostics; persistence failures are traced without discarding results.
+pub struct RunRequest<'a> {
+    /// Current working directory used to resolve paths and render diagnostics.
+    pub cwd: &'a Utf8Path,
+
+    /// Project-level configuration that controls collection and execution.
+    pub settings: &'a ProjectSettings,
+
+    /// Python grammar target matching the embedded interpreter.
+    pub python_version: PythonVersion,
+
+    /// Reporter receiving test lifecycle events and results.
+    pub reporter: &'a dyn Reporter,
+
+    /// Test paths assigned to this worker, including paths that failed parsing.
+    pub test_paths: Vec<Result<TestPath, TestPathError>>,
+
+    /// Cases already committed by an earlier worker generation and therefore
+    /// safe to omit during crash recovery.
+    pub resume_skip: &'a BTreeSet<TestCacheKey>,
+
+    /// Optional coverage configuration for this worker's run.
+    pub coverage: Option<&'a CoverageConfig>,
+
+    /// Whether diagnostics should include the full Python call chain.
+    pub verbose: bool,
+}
+
+/// Runs discovery and execution inside one interpreter attachment.
+pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
+    let context = Context::from_request(&request);
+    let RunRequest {
+        settings,
+        test_paths,
+        coverage,
+        ..
+    } = request;
     let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {
-        let cov_session = coverage.and_then(|cfg| match CoverageSession::start(py, cwd, cfg) {
-            Ok(session) => Some(session),
-            Err(err) => {
-                state.add_run_diagnostic(failed_to_start_coverage_diagnostic(
-                    &err.value(py).to_string(),
-                ));
-                None
-            }
-        });
+        let cov_session =
+            coverage.and_then(|cfg| match CoverageSession::start(py, context.cwd(), cfg) {
+                Ok(session) => Some(session),
+                Err(err) => {
+                    state.add_run_diagnostic(failed_to_start_coverage_diagnostic(
+                        &err.value(py).to_string(),
+                    ));
+                    None
+                }
+            });
 
         let discovery = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 

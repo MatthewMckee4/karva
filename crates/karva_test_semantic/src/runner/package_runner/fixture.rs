@@ -47,6 +47,12 @@ impl PackageRunner<'_, '_> {
         };
         let fixture_plan = compiler.finish();
 
+        // Commit the preceding result before a broader-scope fixture can
+        // terminate the worker. Empty scopes leave delivery to the next test
+        // checkpoint, which combines both frames in one socket flush.
+        if !auto_use_fixtures.is_empty() {
+            self.context.flush_test_results();
+        }
         let failures =
             self.run_fixtures(py, &fixture_plan, &auto_use_fixtures, FixtureUsage::AutoUse);
         let Some(failures) = FixtureSetupError::from_vec(failures) else {
@@ -81,7 +87,14 @@ impl PackageRunner<'_, '_> {
     }
 
     /// Cleans one scope and promotes teardown failures to run diagnostics.
+    ///
+    /// Results need committing only when cleanup can execute user Python:
+    /// finalizers run directly, while releasing a cached value may invoke
+    /// `__del__`. Empty cleanup stays buffered until the next checkpoint.
     pub(super) fn report_scope_cleanup(&mut self, py: Python<'_>, scope: ScopeKey<'_>) {
+        if self.finalizer_cache.has_finalizers(scope) || self.fixture_cache.has_values(scope) {
+            self.context.flush_test_results();
+        }
         for diagnostic in self.clean_up_scope(py, scope) {
             self.state.add_run_diagnostic(diagnostic);
         }

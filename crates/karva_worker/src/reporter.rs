@@ -12,10 +12,19 @@ use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
 /// Streams worker lifecycle and results while preserving terminal output.
 pub struct WorkerReporter {
+    /// Terminal-facing status reporter local to the worker process.
     output: TestCaseReporter,
+
+    /// Shared transport for lifecycle and result frames.
     client: WorkerClient,
+
+    /// Project directory used to render portable diagnostic paths.
     cwd: Utf8PathBuf,
+
+    /// Formatting policy applied before results cross the process boundary.
     diagnostic_config: DisplayDiagnosticConfig,
+
+    /// First transport failure retained for worker shutdown.
     send_error: Mutex<Option<String>>,
 }
 
@@ -48,7 +57,11 @@ impl WorkerReporter {
     }
 
     fn send(&self, event: WorkerEvent) {
-        if let Err(error) = self.client.send_event(event) {
+        self.record_send_result(self.client.send_event(event));
+    }
+
+    fn record_send_result(&self, result: Result<()>) {
+        if let Err(error) = result {
             tracing::warn!("failed to stream worker event: {error:#}");
             if let Ok(mut send_error) = self.send_error.lock()
                 && send_error.is_none()
@@ -87,15 +100,19 @@ impl Reporter for WorkerReporter {
     }
 
     fn report_test_started(&self, test_name: &QualifiedTestName) {
-        self.send(WorkerEvent::TestStarted {
-            name: test_name.to_string(),
-        });
+        self.record_send_result(self.client.checkpoint(test_name));
+    }
+
+    fn report_test_identified(&self, test_name: &QualifiedTestName) {
+        self.report_test_started(test_name);
     }
 
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
-        self.send(WorkerEvent::TestFinished {
-            cache_key: cache_key.clone(),
-            result: Box::new(result.render(&self.cwd, self.diagnostic_config)),
-        });
+        let result = result.render(&self.cwd, self.diagnostic_config);
+        self.record_send_result(self.client.send_test_finished(cache_key, &result));
+    }
+
+    fn flush_test_results(&self) {
+        self.record_send_result(self.client.flush());
     }
 }

@@ -191,6 +191,38 @@ impl RunResults<RenderedDiagnostic> {
             true,
         );
     }
+
+    /// Records a test whose worker process terminated unexpectedly.
+    pub fn register_crashed_test(
+        &mut self,
+        name: &str,
+        cache_key: TestCacheKey,
+        duration: std::time::Duration,
+        termination: &str,
+        stderr: &str,
+    ) {
+        self.register_case(
+            cache_key,
+            TestCaseResult::from_display_name(
+                name,
+                TestCaseOutcome::error(RenderedDiagnostic::worker_crashed(
+                    name,
+                    termination,
+                    stderr,
+                )),
+                duration,
+                None,
+            ),
+            true,
+        );
+    }
+
+    /// Records an unexpected worker exit with no active test checkpoint.
+    pub fn register_worker_exit(&mut self, summary: &str, recovery: &str, stderr: &str) {
+        self.add_rendered_run_diagnostic(RenderedDiagnostic::worker_exited(
+            summary, recovery, stderr,
+        ));
+    }
 }
 
 fn interrupted_test_cache_key(name: &str) -> TestCacheKey {
