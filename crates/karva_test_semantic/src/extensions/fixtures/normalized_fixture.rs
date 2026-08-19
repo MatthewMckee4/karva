@@ -52,7 +52,7 @@ pub struct NormalizedFixture {
     /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
 
-    /// Package whose lifetime owns package-scoped values and finalizers.
+    /// Package whose lifetime owns package-scoped values and finalizers; empty for other scopes.
     pub(crate) package_owner: Utf8PathBuf,
 
     /// Whether this fixture uses yield for teardown logic.
