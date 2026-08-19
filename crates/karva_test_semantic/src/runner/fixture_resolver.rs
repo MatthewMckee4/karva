@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use camino::Utf8Path;
+use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 
 use crate::discovery::models::definition::{FunctionDefinition, TestDefinition};
@@ -29,7 +30,7 @@ pub(super) struct FixturePlanCompiler<'a> {
     /// Package owning fixtures provided by `current`.
     current_package: &'a Utf8Path,
     /// Definition IDs reused within this compilation pass.
-    fixture_ids: HashMap<String, FixtureId>,
+    fixture_ids: HashMap<QualifiedFunctionName, FixtureId>,
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
@@ -207,9 +208,7 @@ impl<'a> FixturePlanCompiler<'a> {
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<FixtureId> {
-        let cache_key = fixture.name().to_string();
-
-        if let Some(cached) = self.fixture_ids.get(&cache_key) {
+        if let Some(cached) = self.fixture_ids.get(fixture.name()) {
             return Ok(*cached);
         }
 
@@ -229,7 +228,7 @@ impl<'a> FixturePlanCompiler<'a> {
 
         let fixture_id = FixtureId::new(self.fixtures.len());
         self.fixtures.push(result);
-        self.fixture_ids.insert(cache_key, fixture_id);
+        self.fixture_ids.insert(fixture.name().clone(), fixture_id);
 
         Ok(fixture_id)
     }
@@ -383,7 +382,7 @@ fn lookup_fixture<'a>(
 ) -> FixtureLookup<'a> {
     match current.lookup_fixture(name) {
         FixtureLookup::Found(fixture)
-            if current_fixture.is_some_and(|current| std::ptr::eq(current, fixture)) => {}
+            if current_fixture.is_some_and(|current| current.name() == fixture.name()) => {}
         FixtureLookup::Missing => {}
         lookup => return lookup,
     }
@@ -391,7 +390,7 @@ fn lookup_fixture<'a>(
     for parent in parents.iter().rev() {
         match parent.lookup_fixture(name) {
             FixtureLookup::Found(fixture)
-                if current_fixture.is_some_and(|current| std::ptr::eq(current, fixture)) => {}
+                if current_fixture.is_some_and(|current| current.name() == fixture.name()) => {}
             FixtureLookup::Missing => {}
             lookup => return lookup,
         }

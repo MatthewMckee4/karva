@@ -68,6 +68,7 @@ impl NormalizedFixture {
         self.definition.name().function_name()
     }
 
+    /// Returns the stable qualified fixture identity.
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
         self.definition.name()
     }
