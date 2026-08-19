@@ -15,9 +15,16 @@ pub struct FixtureArguments {
 
 impl FixtureArguments {
     /// Creates an argument map sized for the known fixture and parameter count.
+    ///
+    /// Zero- and one-entry maps stay lazy because they cannot grow after their
+    /// first insertion, while eager tables accumulate down nested fixture calls.
     pub(super) fn with_capacity(capacity: usize) -> Self {
         Self {
-            inner: HashMap::with_capacity(capacity),
+            inner: if capacity > 1 {
+                HashMap::with_capacity(capacity)
+            } else {
+                HashMap::new()
+            },
         }
     }
 
