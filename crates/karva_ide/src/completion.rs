@@ -32,8 +32,8 @@ pub fn complete_fixtures(
     let prefix = source.get(replacement.start().to_usize()..replacement.end().to_usize())?;
 
     let mut completions = Vec::new();
-    let mut names = analysis.fixture_completion_blocked_names.clone();
-    for fixture in &analysis.visible_fixtures {
+    let mut names = analysis.fixture_model.blocked_names().clone();
+    for fixture in analysis.fixture_model.visible() {
         if names.insert(fixture.name.clone()) && fixture.name.starts_with(prefix) {
             completions.push(completion(
                 fixture.name.clone(),
@@ -44,7 +44,7 @@ pub fn complete_fixtures(
             ));
         }
     }
-    if analysis.fixture_completion_builtins_visible {
+    if analysis.fixture_model.builtins_visible() {
         for (name, scope) in crate::fixture::builtin_fixtures() {
             if names.insert(name.to_owned()) && name.starts_with(prefix) {
                 completions.push(completion(
@@ -138,7 +138,7 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
             let Expr::Call(call) = &decorator.expression else {
                 continue;
             };
-            if !crate::fixture::is_use_fixtures_reference(&analysis.module, &call.func) {
+            if !analysis.fixture_model.is_use_fixtures_reference(&call.func) {
                 continue;
             }
             for argument in &call.arguments.args {

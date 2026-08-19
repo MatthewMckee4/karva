@@ -1,3 +1,12 @@
+//! Models fixture declarations, references, and their static runtime resolution.
+//!
+//! Fixture parameters are ordinary Python definitions, but Karva resolves them
+//! by public fixture name across the current module and ancestor `conftest.py`
+//! providers. This module overlays that relationship on collected syntax. One
+//! [`FixtureModel`] owns the resolved declarations and visibility barriers used
+//! by every editor feature, so provider discovery and precedence stay
+//! consistent across diagnostics, completion, navigation, and rename.
+
 #![expect(
     clippy::redundant_pub_crate,
     reason = "the crate root re-exports fixture analysis across this private module"
@@ -170,8 +179,69 @@ struct FixtureProvider {
     definitions: Vec<FixtureDefinition>,
     by_name: HashMap<String, FixtureId>,
     rejected: HashMap<String, Vec<FixtureId>>,
+    bindings: FixtureBindings,
     unknown: bool,
     diagnostics: Vec<SourceDiagnostic>,
+}
+
+/// Resolved fixture declarations and visibility for one source document.
+#[derive(Debug)]
+pub(super) struct FixtureModel {
+    local: Vec<FixtureDefinition>,
+    visible: Vec<FixtureDefinition>,
+    blocked_names: HashSet<String>,
+    bindings: FixtureBindings,
+    builtins_visible: bool,
+}
+
+impl FixtureModel {
+    /// Returns declarations defined by the current source document.
+    pub(super) fn local(&self) -> &[FixtureDefinition] {
+        &self.local
+    }
+
+    /// Returns declarations selected before any dynamic provider barrier.
+    pub(super) fn visible(&self) -> &[FixtureDefinition] {
+        &self.visible
+    }
+
+    /// Returns the visible source declaration for `name`.
+    pub(super) fn resolve(&self, name: &str) -> Option<&FixtureDefinition> {
+        if self.blocked_names.contains(name) {
+            return None;
+        }
+        self.visible.iter().find(|fixture| fixture.name == name)
+    }
+
+    /// Returns the visible declaration with stable identity `id`.
+    pub(super) fn definition(&self, id: &FixtureId) -> Option<&FixtureDefinition> {
+        self.visible.iter().find(|fixture| &fixture.id == id)
+    }
+
+    /// Returns names whose rejected declarations prevent provider fallback.
+    pub(super) fn blocked_names(&self) -> &HashSet<String> {
+        &self.blocked_names
+    }
+
+    /// Returns whether `expression` is a recognized fixture-use decorator.
+    pub(super) fn is_use_fixtures_reference(&self, expression: &Expr) -> bool {
+        self.bindings.is_use_fixtures_reference(expression)
+    }
+
+    /// Returns whether a test parameter remains available for fixture injection.
+    pub(super) fn parameter_is_fixture(&self, function: &StmtFunctionDef, name: &str) -> bool {
+        parameter_is_fixture(self.bindings, function, name)
+    }
+
+    /// Returns whether parametrization may capture unknown parameter names.
+    pub(super) fn parametrization_is_dynamic(&self, function: &StmtFunctionDef) -> bool {
+        parametrization_is_dynamic(self.bindings, function)
+    }
+
+    /// Returns whether static lookup may fall back to Karva's built-ins.
+    pub(super) const fn builtins_visible(&self) -> bool {
+        self.builtins_visible
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -287,7 +357,7 @@ const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
 pub(super) fn analyze(
     module: &CollectedModule,
     try_import_fixtures: bool,
-) -> (Vec<FixtureDefinition>, Vec<SourceDiagnostic>) {
+) -> (FixtureModel, Vec<SourceDiagnostic>) {
     analyze_modules(module, &[], try_import_fixtures)
 }
 
@@ -297,7 +367,7 @@ pub(super) fn analyze_modules(
     current: &CollectedModule,
     parents: &[&CollectedModule],
     try_import_fixtures: bool,
-) -> (Vec<FixtureDefinition>, Vec<SourceDiagnostic>) {
+) -> (FixtureModel, Vec<SourceDiagnostic>) {
     let mut providers = parents
         .iter()
         .rev()
@@ -305,17 +375,6 @@ pub(super) fn analyze_modules(
         .collect::<Vec<_>>();
     let current_provider = parse_provider(current, try_import_fixtures);
     providers.insert(0, current_provider);
-
-    let definition_order = providers
-        .iter()
-        .flat_map(|provider| provider.definitions.iter())
-        .map(|definition| definition.id.clone())
-        .collect::<Vec<_>>();
-    let mut definitions = providers
-        .iter()
-        .flat_map(|provider| provider.definitions.iter().cloned())
-        .map(|definition| (definition.id.clone(), definition))
-        .collect::<HashMap<_, _>>();
 
     let resolutions = providers
         .iter()
@@ -335,13 +394,15 @@ pub(super) fn analyze_modules(
         })
         .collect::<HashMap<_, _>>();
 
-    for definition in definitions.values_mut() {
-        if let Some(resolved) = resolutions.get(&definition.id) {
-            for reference in &mut definition.dependencies {
-                if let Some((_, resolution)) =
-                    resolved.iter().find(|(name, _)| name == &reference.name)
-                {
-                    reference.resolution = resolution.clone();
+    for provider in &mut providers {
+        for definition in &mut provider.definitions {
+            if let Some(resolved) = resolutions.get(&definition.id) {
+                for reference in &mut definition.dependencies {
+                    if let Some((_, resolution)) =
+                        resolved.iter().find(|(name, _)| name == &reference.name)
+                    {
+                        reference.resolution = resolution.clone();
+                    }
                 }
             }
         }
@@ -351,20 +412,15 @@ pub(super) fn analyze_modules(
         .iter()
         .flat_map(|provider| provider.diagnostics.iter().cloned())
         .collect::<Vec<_>>();
-    let all_definitions = definition_order
+    let all_definitions = providers
         .iter()
-        .filter_map(|id| definitions.get(id))
+        .flat_map(|provider| &provider.definitions)
         .collect::<Vec<_>>();
     diagnostics.extend(reference_diagnostics(&all_definitions));
     diagnostics.extend(scope_diagnostics(&all_definitions));
     diagnostics.extend(cycle_diagnostics(&all_definitions));
     diagnostics.extend(test_diagnostics(current, &providers));
 
-    let current_definitions = providers[0]
-        .definitions
-        .iter()
-        .filter_map(|definition| definitions.get(&definition.id).cloned())
-        .collect::<Vec<_>>();
     diagnostics.sort_by(|left, right| {
         (
             &left.location.path,
@@ -377,61 +433,44 @@ pub(super) fn analyze_modules(
                 right.code.as_str(),
             ))
     });
-    (current_definitions, diagnostics)
+    (FixtureModel::from_providers(&providers), diagnostics)
 }
 
-/// Visible fixture providers plus conservative completion barriers.
-pub(super) struct VisibleFixtures {
-    /// Definitions selected before any dynamic provider barrier.
-    pub(super) definitions: Vec<FixtureDefinition>,
-
-    /// Rejected names that prevent fallback to later providers.
-    pub(super) blocked_names: HashSet<String>,
-
-    /// Whether every provider was statically known, allowing built-in fallback.
-    pub(super) builtins_visible: bool,
-}
-
-/// Returns fixture definitions that can be selected from the current module.
-///
-/// Providers follow runtime lookup order. A rejected definition blocks the same
-/// name from every later provider, including Karva's built-ins.
-pub(super) fn visible_fixtures(
-    current: &CollectedModule,
-    parents: &[&CollectedModule],
-    try_import_fixtures: bool,
-) -> VisibleFixtures {
-    let mut providers = parents
-        .iter()
-        .rev()
-        .map(|module| parse_provider(module, try_import_fixtures))
-        .collect::<Vec<_>>();
-    providers.insert(0, parse_provider(current, try_import_fixtures));
-
-    let mut visible = Vec::new();
-    let mut names = HashSet::new();
-    let mut blocked_names = HashSet::new();
-    let mut builtins_visible = true;
-    for provider in providers {
-        for rejected in provider.rejected.keys() {
-            if names.insert(rejected.clone()) {
-                blocked_names.insert(rejected.clone());
+impl FixtureModel {
+    fn from_providers(providers: &[FixtureProvider]) -> Self {
+        let local = providers
+            .first()
+            .map_or_else(Vec::new, |provider| provider.definitions.clone());
+        let bindings = providers
+            .first()
+            .map_or_else(FixtureBindings::default, |provider| provider.bindings);
+        let mut visible = Vec::new();
+        let mut names = HashSet::new();
+        let mut blocked_names = HashSet::new();
+        let mut builtins_visible = true;
+        for provider in providers {
+            for rejected in provider.rejected.keys() {
+                if names.insert(rejected.clone()) {
+                    blocked_names.insert(rejected.clone());
+                }
+            }
+            for definition in &provider.definitions {
+                if names.insert(definition.name.clone()) {
+                    visible.push(definition.clone());
+                }
+            }
+            if provider.unknown {
+                builtins_visible = false;
+                break;
             }
         }
-        for definition in provider.definitions {
-            if names.insert(definition.name.clone()) {
-                visible.push(definition);
-            }
+        Self {
+            local,
+            visible,
+            blocked_names,
+            bindings,
+            builtins_visible,
         }
-        if provider.unknown {
-            builtins_visible = false;
-            break;
-        }
-    }
-    VisibleFixtures {
-        definitions: visible,
-        blocked_names,
-        builtins_visible,
     }
 }
 
@@ -451,6 +490,7 @@ impl FixtureProvider {
     fn from_parsed(
         parsed: &[ParsedFixture],
         path: &Utf8PathBuf,
+        bindings: FixtureBindings,
         imported_fixtures_unknown: bool,
     ) -> Self {
         let mut diagnostics = Vec::new();
@@ -492,6 +532,7 @@ impl FixtureProvider {
             definitions,
             by_name,
             rejected,
+            bindings,
             unknown: imported_fixtures_unknown
                 || parsed.iter().any(|fixture| !fixture.public_name_known),
             diagnostics,
@@ -510,7 +551,7 @@ fn parse_provider(module: &CollectedModule, try_import_fixtures: bool) -> Fixtur
     let imported_fixtures_unknown = (try_import_fixtures
         || module.module_type == ModuleType::Configuration)
         && has_external_imports(&module.module_body);
-    FixtureProvider::from_parsed(&parsed, &path, imported_fixtures_unknown)
+    FixtureProvider::from_parsed(&parsed, &path, bindings, imported_fixtures_unknown)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -600,10 +641,6 @@ impl FixtureBindings {
             _ => false,
         }
     }
-}
-
-pub(super) fn is_use_fixtures_reference(module: &CollectedModule, expression: &Expr) -> bool {
-    FixtureBindings::from_statements(&module.module_body).is_use_fixtures_reference(expression)
 }
 
 /// Returns the replaceable contents of a non-concatenated string literal.
@@ -1142,10 +1179,13 @@ fn test_diagnostics(
     module: &CollectedModule,
     providers: &[FixtureProvider],
 ) -> Vec<SourceDiagnostic> {
+    let bindings = providers
+        .first()
+        .map_or_else(FixtureBindings::default, |provider| provider.bindings);
     let path = module.path.path();
     let mut diagnostics = Vec::new();
     for test in &module.test_function_defs {
-        let Some(parametrized) = parametrized_names(module, test) else {
+        let Some(parametrized) = parametrized_names(bindings, test) else {
             continue;
         };
         diagnostics.extend(
@@ -1191,12 +1231,7 @@ fn test_diagnostics(
     diagnostics
 }
 
-pub(super) fn test_parameter_is_fixture(
-    module: &CollectedModule,
-    function: &StmtFunctionDef,
-    name: &str,
-) -> bool {
-    let bindings = FixtureBindings::from_statements(&module.module_body);
+fn parameter_is_fixture(bindings: FixtureBindings, function: &StmtFunctionDef, name: &str) -> bool {
     for decorator in &function.decorator_list {
         let Expr::Call(call) = &decorator.expression else {
             continue;
@@ -1228,12 +1263,7 @@ pub(super) fn test_parameter_is_fixture(
     true
 }
 
-/// Returns whether recognized parametrization may capture unknown parameter names.
-pub(super) fn test_parametrization_is_dynamic(
-    module: &CollectedModule,
-    function: &StmtFunctionDef,
-) -> bool {
-    let bindings = FixtureBindings::from_statements(&module.module_body);
+fn parametrization_is_dynamic(bindings: FixtureBindings, function: &StmtFunctionDef) -> bool {
     function.decorator_list.iter().any(|decorator| {
         let Expr::Call(call) = &decorator.expression else {
             return false;
@@ -1259,10 +1289,9 @@ pub(super) fn test_parametrization_is_dynamic(
 
 /// Returns `None` when a decorator may supply arguments dynamically.
 fn parametrized_names(
-    module: &CollectedModule,
+    bindings: FixtureBindings,
     function: &StmtFunctionDef,
 ) -> Option<HashSet<String>> {
-    let bindings = FixtureBindings::from_statements(&module.module_body);
     let mut names = HashSet::new();
     for decorator in &function.decorator_list {
         let Expr::Call(call) = &decorator.expression else {
@@ -1496,7 +1525,7 @@ mod tests {
         let analysis = analyze_sources(current, &[parent], &settings());
 
         assert!(analysis.diagnostics.is_empty());
-        let dependency = &analysis.fixtures[0].dependencies[0].resolution;
+        let dependency = &analysis.fixture_model.local()[0].dependencies[0].resolution;
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/conftest.py")
         );
@@ -1519,7 +1548,7 @@ mod tests {
         let analysis = analyze_sources(current, &[root, nearest], &settings());
 
         assert!(analysis.diagnostics.is_empty());
-        let dependency = &analysis.fixtures[0].dependencies[0].resolution;
+        let dependency = &analysis.fixture_model.local()[0].dependencies[0].resolution;
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/pkg/conftest.py")
         );
@@ -1611,7 +1640,7 @@ mod tests {
             "from custom import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database): pass\n",
         );
 
-        assert!(analysis.fixtures.is_empty());
+        assert!(analysis.fixture_model.local().is_empty());
         assert!(analysis.diagnostics.is_empty());
     }
 
@@ -1621,7 +1650,7 @@ mod tests {
             "from karva import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database): pass\n",
         );
 
-        assert_eq!(analysis.fixtures[0].name, "database");
+        assert_eq!(analysis.fixture_model.local()[0].name, "database");
         assert!(analysis.diagnostics.is_empty());
     }
 

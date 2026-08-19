@@ -59,7 +59,8 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
 
     occurrences.extend(
         analysis
-            .fixtures
+            .fixture_model
+            .local()
             .iter()
             .map(|definition| FixtureOccurrence {
                 range: definition.public_name_range,
@@ -69,25 +70,31 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
             }),
     );
 
-    occurrences.extend(analysis.fixtures.iter().flat_map(|definition| {
-        definition.dependencies.iter().filter_map(|reference| {
-            let FixtureResolution::Resolved(fixture) = &reference.resolution else {
-                return None;
-            };
-            Some(FixtureOccurrence {
-                range: reference.range,
-                edit_range: Some(reference.range),
-                kind: FixtureOccurrenceKind::Dependency,
-                fixture: fixture.clone(),
-            })
-        })
-    }));
+    occurrences.extend(
+        analysis
+            .fixture_model
+            .local()
+            .iter()
+            .flat_map(|definition| {
+                definition.dependencies.iter().filter_map(|reference| {
+                    let FixtureResolution::Resolved(fixture) = &reference.resolution else {
+                        return None;
+                    };
+                    Some(FixtureOccurrence {
+                        range: reference.range,
+                        edit_range: Some(reference.range),
+                        kind: FixtureOccurrenceKind::Dependency,
+                        fixture: fixture.clone(),
+                    })
+                })
+            }),
+    );
 
     for function in &analysis.module.test_function_defs {
         occurrences.extend(function.parameters.iter_non_variadic_params().filter_map(
             |parameter| {
                 let name = parameter.parameter.name.as_str();
-                if !crate::fixture::test_parameter_is_fixture(&analysis.module, function, name) {
+                if !analysis.fixture_model.parameter_is_fixture(function, name) {
                     return None;
                 }
                 Some(FixtureOccurrence {
@@ -124,7 +131,8 @@ pub fn fixture_target(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fix
         .map(|occurrence| occurrence.fixture)
         .or_else(|| {
             analysis
-                .fixtures
+                .fixture_model
+                .local()
                 .iter()
                 .find(|definition| definition.name_range.contains_inclusive(offset))
                 .map(|definition| definition.id.clone())
@@ -146,7 +154,8 @@ pub fn fixture_document_highlights(
         .collect();
 
     if let Some(definition) = analysis
-        .fixtures
+        .fixture_model
+        .local()
         .iter()
         .find(|definition| definition.id == fixture)
         && definition.name_range != definition.public_name_range
@@ -180,7 +189,8 @@ pub fn fixture_rename_target(
     }
 
     let definition = analysis
-        .fixtures
+        .fixture_model
+        .local()
         .iter()
         .find(|definition| definition.name_range.contains_inclusive(offset))?;
     Some(FixtureRenameTarget {
@@ -196,27 +206,16 @@ pub fn fixture_rename_target(
 
 fn fixture_name(analysis: &SourceAnalysis, fixture: &FixtureId) -> Option<String> {
     analysis
-        .fixtures
-        .iter()
-        .chain(&analysis.visible_fixtures)
-        .find(|definition| &definition.id == fixture)
+        .fixture_model
+        .definition(fixture)
         .map(|definition| definition.name.clone())
 }
 
 fn resolve_source_fixture(analysis: &SourceAnalysis, name: &str) -> Option<FixtureId> {
-    if analysis
-        .visible_fixtures
-        .iter()
-        .any(|fixture| fixture.name == name)
-        && !analysis.fixture_completion_blocked_names.contains(name)
-    {
-        return analysis
-            .visible_fixtures
-            .iter()
-            .find(|fixture| fixture.name == name)
-            .map(|fixture| fixture.id.clone());
-    }
-    None
+    analysis
+        .fixture_model
+        .resolve(name)
+        .map(|fixture| fixture.id.clone())
 }
 
 fn use_fixtures_occurrences(
@@ -230,7 +229,10 @@ fn use_fixtures_occurrences(
             let Expr::Call(call) = &decorator.expression else {
                 return None;
             };
-            crate::fixture::is_use_fixtures_reference(&analysis.module, &call.func).then_some(call)
+            analysis
+                .fixture_model
+                .is_use_fixtures_reference(&call.func)
+                .then_some(call)
         })
         .flat_map(move |call| {
             call.arguments.args.iter().filter_map(move |argument| {

@@ -18,8 +18,8 @@ use ruff_text_size::TextRange;
 
 pub use completion::{FixtureCompletion, complete_fixtures};
 pub use definition::{FixtureDefinitionTarget, fixture_definition};
-use fixture::{FixtureDefinition, FixtureResolution};
 pub use fixture::{FixtureId, FixtureScope};
+use fixture::{FixtureModel, FixtureResolution};
 pub use hover::{FixtureHover, hover_fixture};
 pub use implementation::{FixtureImplementationTarget, fixture_implementation};
 pub(crate) use occurrences::fixture_occurrences;
@@ -142,15 +142,8 @@ pub struct SourceAnalysis {
     /// Collector output retained for later editor features.
     module: CollectedModule,
 
-    /// Statically understood fixture declarations.
-    fixtures: Vec<FixtureDefinition>,
-
-    /// Fixture declarations visible to the current module, including parents.
-    visible_fixtures: Vec<FixtureDefinition>,
-
-    fixture_completion_blocked_names: std::collections::HashSet<String>,
-
-    fixture_completion_builtins_visible: bool,
+    /// Resolved fixture declarations and provider visibility.
+    fixture_model: FixtureModel,
 
     /// Definite diagnostics. Unknown dynamic behavior remains silent.
     pub diagnostics: Vec<SourceDiagnostic>,
@@ -178,14 +171,10 @@ pub(crate) fn analyze_source(
         collect_doctests: false,
     };
     let module = collect_source(path, project_root, source_text, &collection_settings, &[])?;
-    let (fixtures, diagnostics) = fixture::analyze(&module, settings.try_import_fixtures);
-    let visible_fixtures = fixture::visible_fixtures(&module, &[], settings.try_import_fixtures);
+    let (fixture_model, diagnostics) = fixture::analyze(&module, settings.try_import_fixtures);
     Some(SourceAnalysis {
         module,
-        fixtures,
-        visible_fixtures: visible_fixtures.definitions,
-        fixture_completion_blocked_names: visible_fixtures.blocked_names,
-        fixture_completion_builtins_visible: visible_fixtures.builtins_visible,
+        fixture_model,
         diagnostics,
     })
 }
@@ -230,16 +219,11 @@ pub(crate) fn analyze_source_with_parents(
         })
         .collect::<Vec<_>>();
     let parent_modules = parent_modules.iter().collect::<Vec<_>>();
-    let (fixtures, diagnostics) =
+    let (fixture_model, diagnostics) =
         fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
-    let visible_fixtures =
-        fixture::visible_fixtures(&current, &parent_modules, settings.try_import_fixtures);
     Some(SourceAnalysis {
         module: current,
-        fixtures,
-        visible_fixtures: visible_fixtures.definitions,
-        fixture_completion_blocked_names: visible_fixtures.blocked_names,
-        fixture_completion_builtins_visible: visible_fixtures.builtins_visible,
+        fixture_model,
         diagnostics,
     })
 }
@@ -269,16 +253,11 @@ pub(crate) fn analyze_collected_source(
     parents: &[&CollectedModule],
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
-    let (fixtures, diagnostics) =
+    let (fixture_model, diagnostics) =
         fixture::analyze_modules(&current, parents, settings.try_import_fixtures);
-    let visible_fixtures =
-        fixture::visible_fixtures(&current, parents, settings.try_import_fixtures);
     SourceAnalysis {
         module: current,
-        fixtures,
-        visible_fixtures: visible_fixtures.definitions,
-        fixture_completion_blocked_names: visible_fixtures.blocked_names,
-        fixture_completion_builtins_visible: visible_fixtures.builtins_visible,
+        fixture_model,
         diagnostics,
     }
 }

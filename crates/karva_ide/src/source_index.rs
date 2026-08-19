@@ -212,7 +212,7 @@ mod tests {
             .analyze(Utf8Path::new("/project/pkg/test_example.py"))
             .expect("indexed source should analyze");
         assert!(matches!(
-            &analysis.fixtures[0].dependencies[0].resolution,
+            &analysis.fixture_model.local()[0].dependencies[0].resolution,
             FixtureResolution::Resolved(id) if id.path == "/project/pkg/conftest.py"
         ));
     }
@@ -261,6 +261,6 @@ mod tests {
 
         assert!(index.parent_modules(path).is_empty());
         assert!(analysis.diagnostics.is_empty());
-        assert_eq!(analysis.visible_fixtures.len(), 1);
+        assert_eq!(analysis.fixture_model.visible().len(), 1);
     }
 }
