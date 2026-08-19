@@ -251,6 +251,11 @@ fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
         }
     }
 
+    for indices in filter.values_mut().flatten() {
+        indices.sort_unstable();
+        indices.dedup();
+    }
+
     filter
 }
 

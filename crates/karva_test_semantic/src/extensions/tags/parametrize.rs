@@ -481,9 +481,51 @@ impl Iterator for ParameterPlanIterator {
         self.advance();
         Some(combination)
     }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if !self.skip(n) {
+            return None;
+        }
+        self.next()
+    }
 }
 
 impl ParameterPlanIterator {
+    /// Advances mixed-radix indices without materializing skipped combinations.
+    fn skip(&mut self, mut count: usize) -> bool {
+        if self.complete {
+            return false;
+        }
+        if self.dimensions.is_empty() {
+            if count == 0 {
+                return true;
+            }
+            self.complete = true;
+            return false;
+        }
+
+        for dimension_index in (0..self.indices.len()).rev() {
+            let radix = self.dimensions[dimension_index].len();
+            let quotient = count / radix;
+            let remainder = count % radix;
+            let (sum, overflow) = self.indices[dimension_index].overflowing_add(remainder);
+            if overflow || sum >= radix {
+                self.indices[dimension_index] = sum.wrapping_sub(radix);
+                count = quotient + 1;
+            } else {
+                self.indices[dimension_index] = sum;
+                count = quotient;
+            }
+        }
+
+        if count == 0 {
+            true
+        } else {
+            self.complete = true;
+            false
+        }
+    }
+
     fn advance(&mut self) {
         for dimension_index in (0..self.indices.len()).rev() {
             self.indices[dimension_index] += 1;
@@ -952,5 +994,24 @@ mod tests {
 
         assert_eq!(combinations.len(), 1);
         assert_eq!(combinations[0].id(), None);
+    }
+
+    #[test]
+    fn parameter_plan_jumps_to_requested_combination() {
+        let mut combinations = ParameterPlan::new(vec![
+            vec![args("a0"), args("a1")],
+            vec![args("b0"), args("b1"), args("b2")],
+        ])
+        .into_iter();
+
+        assert_eq!(
+            combinations.nth(4).map(|args| args.id),
+            Some("a1-b1".to_string())
+        );
+        assert_eq!(
+            combinations.next().map(|args| args.id),
+            Some("a1-b2".to_string())
+        );
+        assert!(combinations.nth(usize::MAX).is_none());
     }
 }
