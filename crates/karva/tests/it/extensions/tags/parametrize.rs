@@ -1292,6 +1292,35 @@ def test_value(value):
 }
 
 #[test]
+fn test_module_level_pytestmark_applies_to_multiple_tests() {
+    let test_context = TestContext::with_file(
+        "test.py",
+        r#"import pytest
+
+pytestmark = pytest.mark.skip(reason="module mark")
+
+def test_first():
+    assert False
+
+@pytest.mark.parametrize("value", [1, 2])
+def test_second(value):
+    assert False
+"#,
+    );
+
+    assert_cmd_snapshot!(test_context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+    ────────────
+         Summary [TIME] 3 tests run: 0 passed, 3 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_multiple_module_level_pytest_parametrize_marks() {
     let test_context = TestContext::with_file(
         "test.py",

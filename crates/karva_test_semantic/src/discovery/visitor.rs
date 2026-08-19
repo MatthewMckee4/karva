@@ -15,6 +15,7 @@ use ruff_source_file::SourceFileBuilder;
 use ruff_text_size::TextRange;
 
 use crate::Context;
+use crate::discovery::models::function::ModuleTagsCache;
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction, DiscoveryError, DiscoveryIssue};
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
@@ -43,6 +44,9 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     /// Flag to prevent multiple import attempts for the same module.
     tried_to_import_module: bool,
 
+    /// Module-level pytest marks loaded once and cloned into each test's tags.
+    module_tags: ModuleTagsCache,
+
     /// Issues produced while discovering this module, in source order.
     issues: Vec<DiscoveryIssue>,
 }
@@ -61,6 +65,7 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
             py_module: None,
             py,
             tried_to_import_module: false,
+            module_tags: ModuleTagsCache::default(),
             issues: Vec::new(),
         }
     }
@@ -161,6 +166,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 Rc::new(stmt_function_def),
                 py_function.unbind(),
                 case_filter,
+                &mut self.module_tags,
             ) {
                 Ok(test_function) => {
                     if self.context.settings().test().strict_tags {
@@ -259,6 +265,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 doctest.name,
                 doctest.range,
                 function.unbind(),
+                &mut self.module_tags,
             ) {
                 Ok(mut test_function) => {
                     test_function.tags.remove_parametrize();

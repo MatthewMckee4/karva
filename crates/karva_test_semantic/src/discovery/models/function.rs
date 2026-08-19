@@ -11,6 +11,33 @@ use crate::discovery::DiscoveredModule;
 use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::tags::Tags;
 
+/// Cached module-level pytest marks for one discovery visitor.
+#[derive(Default)]
+pub struct ModuleTagsCache(Option<PyResult<Option<Rc<Tags>>>>);
+
+impl ModuleTagsCache {
+    fn get(
+        &mut self,
+        py: Python<'_>,
+        py_module: &Bound<'_, PyModule>,
+    ) -> PyResult<Option<Rc<Tags>>> {
+        if self.0.is_none() {
+            let result = match py_module.getattr("pytestmark") {
+                Ok(marks) => Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))
+                    .map(|tags| tags.map(Rc::new)),
+                Err(_) => Ok(None),
+            };
+            self.0 = Some(result);
+        }
+
+        match self.0.as_ref() {
+            Some(Ok(tags)) => Ok(tags.clone()),
+            Some(Err(error)) => Err(error.clone_ref(py)),
+            None => Ok(None),
+        }
+    }
+}
+
 /// Represents a single executable test discovered from Python source code.
 ///
 /// Contains all the information needed to execute a test, including the
@@ -40,6 +67,7 @@ impl DiscoveredTestFunction {
         stmt_function_def: Rc<StmtFunctionDef>,
         py_function: Py<PyAny>,
         case_filter: Option<Vec<usize>>,
+        module_tags: &mut ModuleTagsCache,
     ) -> PyResult<Self> {
         let name = QualifiedFunctionName::new(
             stmt_function_def.name.to_string(),
@@ -47,11 +75,8 @@ impl DiscoveredTestFunction {
         );
 
         let mut tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
-        if let Ok(marks) = py_module.getattr("pytestmark") {
-            tags.extend(
-                &Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
-                    .unwrap_or_default(),
-            );
+        if let Some(module_tags) = module_tags.get(py, py_module)? {
+            tags.extend(&module_tags);
         }
 
         Ok(Self {
@@ -73,14 +98,12 @@ impl DiscoveredTestFunction {
         name: String,
         range: TextRange,
         py_function: Py<PyAny>,
+        module_tags: &mut ModuleTagsCache,
     ) -> PyResult<Self> {
         let name = QualifiedFunctionName::new(name, module.module_path().clone());
-        let tags = if let Ok(marks) = py_module.getattr("pytestmark") {
-            Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
-                .unwrap_or_default()
-        } else {
-            Tags::default()
-        };
+        let tags = module_tags
+            .get(py, py_module)?
+            .map_or_else(Tags::default, |tags| (*tags).clone());
 
         Ok(Self {
             definition: Rc::new(TestDefinition::doctest(name, range, module.source_file())),
