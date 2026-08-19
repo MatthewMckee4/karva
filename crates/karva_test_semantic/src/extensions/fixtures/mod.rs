@@ -53,11 +53,11 @@ impl FixtureIdentity {
         }
     }
 
-    pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
+    fn definition(&self) -> &Rc<FunctionDefinition> {
         &self.definition
     }
 
-    pub(crate) fn name(&self) -> &QualifiedFunctionName {
+    fn name(&self) -> &QualifiedFunctionName {
         self.definition.name()
     }
 }
