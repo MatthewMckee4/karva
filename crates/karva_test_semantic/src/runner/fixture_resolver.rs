@@ -32,6 +32,8 @@ pub(super) struct FixturePlanCompiler<'a> {
     current_package: &'a Utf8Path,
     /// Definition IDs reused within this compilation pass.
     fixture_ids: HashMap<FixtureIdentity, FixtureId>,
+    /// Root fixture lookup outcomes reused across validation and resolution.
+    root_fixture_lookups: HashMap<String, FixtureLookup<'a>>,
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
@@ -168,8 +170,20 @@ impl<'a> FixturePlanCompiler<'a> {
             current,
             current_package,
             fixture_ids: HashMap::new(),
+            root_fixture_lookups: HashMap::new(),
             fixtures: Vec::new(),
         }
+    }
+
+    /// Looks up a fixture without a current fixture dependency context.
+    fn lookup_root_fixture(&mut self, name: &str) -> FixtureLookup<'a> {
+        if let Some(lookup) = self.root_fixture_lookups.get(name).copied() {
+            return lookup;
+        }
+
+        let lookup = lookup_fixture(None, name, self.parents, self.current);
+        self.root_fixture_lookups.insert(name.to_owned(), lookup);
+        lookup
     }
 
     /// Finds the package whose provider contributed `fixture`.
@@ -278,7 +292,7 @@ impl<'a> FixturePlanCompiler<'a> {
         } else {
             regular_fixture_names
                 .iter()
-                .filter(|name| !lookup_fixture(None, name, self.parents, self.current).is_found())
+                .filter(|name| !self.lookup_root_fixture(name).is_found())
                 .map(|name| (*name).to_owned())
                 .collect::<Vec<_>>()
         };
@@ -318,7 +332,11 @@ impl<'a> FixturePlanCompiler<'a> {
 
         for dep_name in fixture_names {
             let dep_name = dep_name.as_ref();
-            let lookup = lookup_fixture(current_fixture, dep_name, self.parents, self.current);
+            let lookup = if let Some(current_fixture) = current_fixture {
+                lookup_fixture(Some(current_fixture), dep_name, self.parents, self.current)
+            } else {
+                self.lookup_root_fixture(dep_name)
+            };
             if let Some(fixture) = current_fixture
                 && fixture.name().function_name() == dep_name
                 && !lookup.is_found()
