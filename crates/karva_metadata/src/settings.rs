@@ -558,6 +558,17 @@ impl ProjectSettings {
         &self.overrides
     }
 
+    /// Returns whether any test may have a retry attempt.
+    ///
+    /// This is intentionally conservative because matching overrides are
+    /// resolved only after a test's final identity is known.
+    pub fn may_retry(&self) -> bool {
+        self.test.retry > 0
+            || self.overrides.iter().any(|override_settings| {
+                override_settings.retries.is_some_and(|retries| retries > 0)
+            })
+    }
+
     /// Find the first matching override that sets a value for `field`.
     fn first_matching_override<T>(
         &self,

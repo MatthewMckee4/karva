@@ -1852,6 +1852,40 @@ retries = 0
     }
 
     #[test]
+    fn may_retry_covers_profile_and_positive_overrides() {
+        let no_retry = Config::default()
+            .resolve_profile(None)
+            .expect("default profile resolves")
+            .to_settings();
+        assert!(!no_retry.may_retry());
+
+        let profile_retry = Config::from_toml_str("[profile.default.test]\nretry = 1\n")
+            .expect("profile retry parses")
+            .resolve_profile(None)
+            .expect("default profile resolves")
+            .to_settings();
+        assert!(profile_retry.may_retry());
+
+        let override_retry = Config::from_toml_str(
+            "[[profile.default.overrides]]\nfilter = \"tag(retry)\"\nretries = 1\n",
+        )
+        .expect("override retry parses")
+        .resolve_profile(None)
+        .expect("default profile resolves")
+        .to_settings();
+        assert!(override_retry.may_retry());
+
+        let disabled_override = Config::from_toml_str(
+            "[[profile.default.overrides]]\nfilter = \"tag(retry)\"\nretries = 0\n",
+        )
+        .expect("disabled override parses")
+        .resolve_profile(None)
+        .expect("default profile resolves")
+        .to_settings();
+        assert!(!disabled_override.may_retry());
+    }
+
+    #[test]
     fn timeout_for_picks_first_matching_override() {
         let toml = r#"
 [profile.default.test]

@@ -88,7 +88,12 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         self.package_runner
             .context
             .report_test_started(&initial_test_name);
-        let retry_params = self.input.params.clone();
+        let retry_params = self
+            .package_runner
+            .context
+            .settings()
+            .may_retry()
+            .then(|| self.input.params.clone());
         let first_params = std::mem::take(&mut self.input.params);
         self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
@@ -112,6 +117,20 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             set_test_name_env(self.py, &settings.identity.qualified_test_name.to_string());
 
         tracing::debug!("Running test `{}`", settings.identity.qualified_test_name);
+        let Some(retry_params) = retry_params else {
+            let attempt_env_result = set_attempt_env(self.py, 1, settings.retry.max_attempts);
+            self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Run);
+            let final_attempt = self.execute_attempt(
+                &settings,
+                &function,
+                &test_name_env_result,
+                attempt_env_result,
+                first_attempt,
+                1,
+            );
+            return self.finish(&settings, Vec::new(), final_attempt.lifecycle);
+        };
+
         let mut attempt_number = 1;
         let mut prepared_attempt = Some(first_attempt);
         let mut prior_attempts = Vec::new();
