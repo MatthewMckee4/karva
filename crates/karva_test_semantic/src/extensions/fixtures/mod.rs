@@ -1,5 +1,7 @@
 //! Fixture definitions, dependency resolution, caching, and teardown semantics.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use karva_python_semantic::{ModulePath, QualifiedFunctionName};
@@ -18,13 +20,61 @@ mod utils;
 pub use finalizer::Finalizer;
 pub use normalized_fixture::{FixtureId, FixturePlan, NormalizedFixture};
 pub use scope::FixtureScope;
-pub use traits::{HasFixtures, RequiresFixtures};
+pub use traits::{FixtureLookup, HasFixtures};
 pub use utils::missing_arguments_from_error;
 
 use crate::discovery::DiscoveredPackage;
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
+
+/// Cheap run-local key for one qualified fixture definition.
+///
+/// The qualified name is hashed once during discovery. Equality still compares
+/// the full name, so independently discovered imports share scoped values and
+/// hash collisions cannot merge distinct fixtures.
+#[derive(Clone, Debug)]
+pub struct FixtureIdentity {
+    /// Source definition retained for diagnostics and execution.
+    definition: Rc<FunctionDefinition>,
+
+    /// Precomputed qualified-name hash used by fixture hot paths.
+    hash: u64,
+}
+
+impl FixtureIdentity {
+    fn new(definition: FunctionDefinition) -> Self {
+        let definition = Rc::new(definition);
+        let mut hasher = DefaultHasher::new();
+        definition.name().hash(&mut hasher);
+        Self {
+            definition,
+            hash: hasher.finish(),
+        }
+    }
+
+    fn definition(&self) -> &Rc<FunctionDefinition> {
+        &self.definition
+    }
+
+    fn name(&self) -> &QualifiedFunctionName {
+        self.definition.name()
+    }
+}
+
+impl PartialEq for FixtureIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.name() == other.name()
+    }
+}
+
+impl Eq for FixtureIdentity {}
+
+impl Hash for FixtureIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
 
 /// Represents a pytest-style fixture discovered from Python source code.
 ///
@@ -33,8 +83,8 @@ use crate::extensions::fixtures::scope::fixture_scope;
 /// be auto-used without explicit declaration.
 #[derive(Clone, Debug)]
 pub struct DiscoveredFixture {
-    /// Immutable source identity and syntax.
-    definition: Rc<FunctionDefinition>,
+    /// Qualified identity and immutable source definition.
+    identity: FixtureIdentity,
 
     /// The scope at which this fixture's value is cached.
     scope: FixtureScope,
@@ -54,8 +104,8 @@ pub struct DiscoveredFixture {
 /// Fixture definition rejected during discovery.
 #[derive(Clone, Debug)]
 pub struct RejectedFixture {
-    /// Unqualified fixture name used for later lookup failures.
-    name: String,
+    /// Public fixture name used for lookup and diagnostics.
+    exposure_name: String,
 
     /// Discovery error retained for dependency diagnostics.
     reason: String,
@@ -66,7 +116,7 @@ pub struct RejectedFixture {
 
 impl RejectedFixture {
     pub(crate) fn new(
-        name: String,
+        exposure_name: String,
         reason: String,
         stmt_function_def: Rc<StmtFunctionDef>,
         source_file: SourceFile,
@@ -75,7 +125,7 @@ impl RejectedFixture {
         let qualified_name =
             QualifiedFunctionName::new(stmt_function_def.name.to_string(), module_path);
         Self {
-            name,
+            exposure_name,
             reason,
             definition: Rc::new(FunctionDefinition::new(
                 qualified_name,
@@ -85,8 +135,8 @@ impl RejectedFixture {
         }
     }
 
-    pub(crate) fn name(&self) -> &str {
-        &self.name
+    pub(crate) fn exposure_name(&self) -> &str {
+        &self.exposure_name
     }
 
     pub(crate) fn reason(&self) -> &str {
@@ -113,7 +163,7 @@ impl DiscoveredFixture {
         is_generator: bool,
     ) -> Self {
         Self {
-            definition: Rc::new(FunctionDefinition::new(
+            identity: FixtureIdentity::new(FunctionDefinition::new(
                 name,
                 stmt_function_def,
                 source_file,
@@ -126,11 +176,15 @@ impl DiscoveredFixture {
     }
 
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
-        self.definition.name()
+        self.identity.name()
+    }
+
+    pub(crate) fn identity(&self) -> &FixtureIdentity {
+        &self.identity
     }
 
     pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
-        &self.definition
+        self.identity.definition()
     }
 
     pub(crate) fn scope(&self) -> FixtureScope {
@@ -150,7 +204,32 @@ impl DiscoveredFixture {
     }
 
     pub(crate) fn stmt_function_def(&self) -> &Rc<StmtFunctionDef> {
-        self.definition.statement_rc()
+        self.identity.definition().statement_rc()
+    }
+
+    /// Reads the fixture name exposed at runtime, falling back to its source symbol.
+    pub(crate) fn exposure_name_from_function(
+        stmt_function_def: &StmtFunctionDef,
+        py_module: &Bound<'_, PyModule>,
+    ) -> String {
+        let fallback = stmt_function_def.name.as_str();
+        let Ok(function) = py_module.getattr(fallback) else {
+            return fallback.to_string();
+        };
+
+        if let Ok(marker) = get_fixture_function_marker(&function)
+            && let Ok(name) = pytest_fixture_name(&marker, fallback)
+        {
+            return name;
+        }
+
+        if let Ok(function) = function.cast::<python::FixtureFunctionDefinition>()
+            && let Ok(function) = function.try_borrow()
+        {
+            return function.name.clone();
+        }
+
+        fallback.to_string()
     }
 
     pub(crate) fn try_from_function(
@@ -196,19 +275,13 @@ impl DiscoveredFixture {
     ) -> PyResult<Self> {
         let fixture_function_marker = get_fixture_function_marker(function)?;
 
-        let found_name = fixture_function_marker.getattr("name")?;
-
         let scope = fixture_function_marker.getattr("scope")?;
 
         let auto_use = fixture_function_marker.getattr("autouse")?;
 
         let fixture_function = get_fixture_function(function)?;
 
-        let name = if found_name.is_none() {
-            stmt_function_def.name.to_string()
-        } else {
-            found_name.to_string()
-        };
+        let name = pytest_fixture_name(&fixture_function_marker, stmt_function_def.name.as_str())?;
 
         let fixture_scope =
             fixture_scope(py, &scope, &name).map_err(InvalidFixtureError::new_err)?;
@@ -254,6 +327,15 @@ impl DiscoveredFixture {
             py_function.into(),
             is_generator_function,
         ))
+    }
+}
+
+fn pytest_fixture_name(marker: &Bound<'_, PyAny>, fallback: &str) -> PyResult<String> {
+    let name = marker.getattr("name")?;
+    if name.is_none() {
+        Ok(fallback.to_string())
+    } else {
+        name.extract()
     }
 }
 

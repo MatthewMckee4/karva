@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use pyo3::prelude::*;
 
+use crate::extensions::fixtures::FixtureIdentity;
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
 /// Caches fixture values at different scope levels.
@@ -13,23 +14,33 @@ use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 #[derive(Debug, Default)]
 pub(super) struct FixtureCache {
     /// Fixture values isolated by their declared lifetime scope.
-    storage: ScopedStorage<HashMap<String, Py<PyAny>>>,
+    storage: ScopedStorage<HashMap<FixtureIdentity, Py<PyAny>>>,
 }
 
 impl FixtureCache {
     /// Returns a new Python reference to a cached fixture value.
-    pub(super) fn get(&self, py: Python<'_>, name: &str, scope: ScopeKey<'_>) -> Option<Py<PyAny>> {
+    pub(super) fn get(
+        &self,
+        py: Python<'_>,
+        identity: &FixtureIdentity,
+        scope: ScopeKey<'_>,
+    ) -> Option<Py<PyAny>> {
         self.storage
             .with(scope, |values| {
-                values.get(name).map(|value| value.clone_ref(py))
+                values.get(identity).map(|value| value.clone_ref(py))
             })
             .flatten()
     }
 
     /// Caches a fixture value until its declared scope completes.
-    pub(super) fn insert(&mut self, name: String, value: Py<PyAny>, scope: ScopeKey<'_>) {
+    pub(super) fn insert(
+        &mut self,
+        identity: FixtureIdentity,
+        value: Py<PyAny>,
+        scope: ScopeKey<'_>,
+    ) {
         self.storage.with_mut(scope, |values| {
-            values.insert(name, value);
+            values.insert(identity, value);
         });
     }
 

@@ -6,11 +6,13 @@ use std::rc::Rc;
 use camino::Utf8Path;
 use pyo3::prelude::*;
 
-use crate::discovery::models::definition::{FunctionDefinition, TestDefinition};
+use crate::discovery::models::definition::{
+    FunctionDefinition, TestDefinition, required_keyword_parameter_names,
+};
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
-    DiscoveredFixture, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
-    RejectedFixture, RequiresFixtures, get_auto_use_fixtures,
+    DiscoveredFixture, FixtureId, FixtureIdentity, FixtureLookup, FixturePlan, FixtureScope,
+    HasFixtures, NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
 };
 
 /// Compiles fixture lookup results into an arena for one request context.
@@ -29,7 +31,7 @@ pub(super) struct FixturePlanCompiler<'a> {
     /// Package owning fixtures provided by `current`.
     current_package: &'a Utf8Path,
     /// Definition IDs reused within this compilation pass.
-    fixture_ids: HashMap<String, FixtureId>,
+    fixture_ids: HashMap<FixtureIdentity, FixtureId>,
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
@@ -173,11 +175,10 @@ impl<'a> FixturePlanCompiler<'a> {
     /// Finds the package whose provider contributed `fixture`.
     fn package_owner(&self, fixture: &DiscoveredFixture) -> &Utf8Path {
         let name = fixture.name().function_name();
-        if self
-            .current
-            .get_fixture(name)
-            .is_some_and(|candidate| std::ptr::eq(candidate, fixture))
-        {
+        if matches!(
+            self.current.lookup_fixture(name),
+            FixtureLookup::Found(candidate) if std::ptr::eq(candidate, fixture)
+        ) {
             return self.current_package;
         }
 
@@ -185,9 +186,10 @@ impl<'a> FixturePlanCompiler<'a> {
             .iter()
             .rev()
             .find(|package| {
-                package
-                    .get_fixture(name)
-                    .is_some_and(|candidate| std::ptr::eq(candidate, fixture))
+                matches!(
+                    package.lookup_fixture(name),
+                    FixtureLookup::Found(candidate) if std::ptr::eq(candidate, fixture)
+                )
             })
             .map_or(self.current_package, |package| package.path())
     }
@@ -207,19 +209,18 @@ impl<'a> FixturePlanCompiler<'a> {
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<FixtureId> {
-        let cache_key = fixture.name().to_string();
-
-        if let Some(cached) = self.fixture_ids.get(&cache_key) {
+        if let Some(cached) = self.fixture_ids.get(fixture.identity()) {
             return Ok(*cached);
         }
 
         let dependent_fixtures = path.enter(fixture, |path| {
-            let required_fixtures: Vec<String> = fixture.required_fixtures(py);
+            let required_fixtures =
+                required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
 
         let result = NormalizedFixture {
-            definition: Rc::clone(fixture.definition()),
+            identity: fixture.identity().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
             package_owner: self.package_owner(fixture).to_path_buf(),
@@ -229,7 +230,8 @@ impl<'a> FixturePlanCompiler<'a> {
 
         let fixture_id = FixtureId::new(self.fixtures.len());
         self.fixtures.push(result);
-        self.fixture_ids.insert(cache_key, fixture_id);
+        self.fixture_ids
+            .insert(fixture.identity().clone(), fixture_id);
 
         Ok(fixture_id)
     }
@@ -271,7 +273,7 @@ impl<'a> FixturePlanCompiler<'a> {
         } else {
             regular_fixture_names
                 .iter()
-                .filter(|name| find_fixture(None, name, self.parents, self.current).is_none())
+                .filter(|name| !lookup_fixture(None, name, self.parents, self.current).is_found())
                 .cloned()
                 .collect::<Vec<_>>()
         };
@@ -310,35 +312,44 @@ impl<'a> FixturePlanCompiler<'a> {
         let mut rejected_fixtures = Vec::new();
 
         for dep_name in fixture_names {
-            if let Some(fixture) =
-                find_fixture(current_fixture, dep_name, self.parents, self.current)
+            let lookup = lookup_fixture(current_fixture, dep_name, self.parents, self.current);
+            if let Some(fixture) = current_fixture
+                && fixture.name().function_name() == dep_name
+                && !lookup.is_found()
             {
-                if let Some(current_fixture) = current_fixture
-                    && !current_fixture.scope().can_use(fixture.scope())
-                {
-                    let dependency_path = path
-                        .fixtures
-                        .split_last()
-                        .map_or(&[][..], |(_, dependency_path)| dependency_path);
-                    return Err(FixtureResolutionError::scope_mismatch(
-                        dependency_path,
-                        current_fixture,
-                        fixture,
-                    ));
-                }
                 let normalized = self.normalize_fixture(py, fixture, path)?;
                 normalized_fixtures.push(normalized);
-            } else if let Some(fixture) = current_fixture {
-                if fixture.name().function_name() == dep_name {
+                continue;
+            }
+
+            match lookup {
+                FixtureLookup::Found(fixture) => {
+                    if let Some(current_fixture) = current_fixture
+                        && !current_fixture.scope().can_use(fixture.scope())
+                    {
+                        let dependency_path = path
+                            .fixtures
+                            .split_last()
+                            .map_or(&[][..], |(_, dependency_path)| dependency_path);
+                        return Err(FixtureResolutionError::scope_mismatch(
+                            dependency_path,
+                            current_fixture,
+                            fixture,
+                        ));
+                    }
                     let normalized = self.normalize_fixture(py, fixture, path)?;
                     normalized_fixtures.push(normalized);
-                } else {
-                    if let Some(rejected_fixture) =
-                        find_rejected_fixture(dep_name, self.parents, self.current)
-                    {
+                }
+                FixtureLookup::Rejected(rejected_fixture) => {
+                    if current_fixture.is_some() {
                         rejected_fixtures.push(rejected_fixture.clone());
+                        missing_fixtures.push(dep_name.clone());
                     }
-                    missing_fixtures.push(dep_name.clone());
+                }
+                FixtureLookup::Missing => {
+                    if current_fixture.is_some() {
+                        missing_fixtures.push(dep_name.clone());
+                    }
                 }
             }
         }
@@ -357,52 +368,31 @@ impl<'a> FixturePlanCompiler<'a> {
     }
 }
 
-/// Finds a fixture by name, searching in the current node and parent packages.
+/// Looks up a fixture by name in the current node and parent packages.
 /// The current definition is skipped so a fixture can override and depend on a
 /// same-name fixture from a parent scope. If no override exists, the resolver
 /// handles the dependency as a direct cycle.
-fn find_fixture<'a>(
+fn lookup_fixture<'a>(
     current_fixture: Option<&DiscoveredFixture>,
     name: &str,
     parents: &'a [&'a DiscoveredPackage],
     current: &'a (dyn HasFixtures<'a> + 'a),
-) -> Option<&'a DiscoveredFixture> {
-    if let Some(fixture) = current.get_fixture(name)
-        && current_fixture.is_none_or(|current_fixture| current_fixture.name() != fixture.name())
-    {
-        return Some(fixture);
-    }
-    if current.get_rejected_fixture(name).is_some() {
-        return None;
+) -> FixtureLookup<'a> {
+    match current.lookup_fixture(name) {
+        FixtureLookup::Found(fixture)
+            if current_fixture.is_some_and(|current| current.name() == fixture.name()) => {}
+        FixtureLookup::Missing => {}
+        lookup => return lookup,
     }
 
     for parent in parents.iter().rev() {
-        if let Some(fixture) = parent.get_fixture(name)
-            && current_fixture
-                .is_none_or(|current_fixture| current_fixture.name() != fixture.name())
-        {
-            return Some(fixture);
-        }
-        if parent.get_rejected_fixture(name).is_some() {
-            return None;
+        match parent.lookup_fixture(name) {
+            FixtureLookup::Found(fixture)
+                if current_fixture.is_some_and(|current| current.name() == fixture.name()) => {}
+            FixtureLookup::Missing => {}
+            lookup => return lookup,
         }
     }
 
-    None
-}
-
-/// Finds rejected fixture metadata using the same provider precedence as fixture lookup.
-fn find_rejected_fixture<'a>(
-    name: &str,
-    parents: &'a [&'a DiscoveredPackage],
-    current: &'a (dyn HasFixtures<'a> + 'a),
-) -> Option<&'a RejectedFixture> {
-    if let Some(fixture) = current.get_rejected_fixture(name) {
-        return Some(fixture);
-    }
-
-    parents
-        .iter()
-        .rev()
-        .find_map(|parent| parent.get_rejected_fixture(name))
+    FixtureLookup::Missing
 }

@@ -5,6 +5,17 @@ use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::SourceFile;
 use ruff_text_size::TextRange;
 
+/// Returns names Python requires and Karva can supply by keyword.
+pub fn required_keyword_parameter_names(parameters: &Parameters) -> Vec<String> {
+    parameters
+        .args
+        .iter()
+        .chain(&parameters.kwonlyargs)
+        .filter(|parameter| parameter.default().is_none())
+        .map(|parameter| parameter.name().to_string())
+        .collect()
+}
+
 /// Immutable source identity shared by fixtures and fixture diagnostics.
 #[derive(Debug)]
 pub struct FunctionDefinition {
@@ -130,11 +141,7 @@ impl TestDefinition {
     }
 
     pub(super) fn required_fixtures(&self) -> Vec<String> {
-        self.parameters().map_or_else(Vec::new, |parameters| {
-            parameters
-                .iter_non_variadic_params()
-                .map(|parameter| parameter.parameter.name.to_string())
-                .collect()
-        })
+        self.parameters()
+            .map_or_else(Vec::new, required_keyword_parameter_names)
     }
 }

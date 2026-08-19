@@ -590,7 +590,7 @@ fn fixture_missing_fixtures_diagnostic(
             Severity::Info,
             format!(
                 "Fixture `{}` was rejected during discovery: {}",
-                rejected_fixture.name(),
+                rejected_fixture.exposure_name(),
                 rejected_fixture.reason()
             ),
         );
