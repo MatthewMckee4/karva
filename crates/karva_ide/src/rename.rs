@@ -85,28 +85,28 @@ fn fixture_name_conflicts(
     new_name: &str,
 ) -> bool {
     let target_name = analysis
-        .fixtures
-        .iter()
-        .chain(&analysis.visible_fixtures)
-        .find(|definition| &definition.id == target)
+        .fixture_model
+        .definition(target)
         .map(|definition| definition.name.as_str());
     if target_name == Some(new_name) {
         return false;
     }
 
-    analysis.fixture_completion_blocked_names.contains(new_name)
+    analysis.fixture_model.blocked_names().contains(new_name)
         || analysis
-            .visible_fixtures
+            .fixture_model
+            .visible()
             .iter()
             .any(|definition| definition.name == new_name && &definition.id != target)
         || crate::fixture::builtin_info(new_name).is_some()
         || target_name.is_some_and(|target_name| {
             analysis
-                .visible_fixtures
+                .fixture_model
+                .visible()
                 .iter()
                 .any(|definition| &definition.id == target && definition.name == target_name)
                 && analysis.module.test_function_defs.iter().any(|function| {
-                    crate::fixture::test_parametrization_is_dynamic(&analysis.module, function)
+                    analysis.fixture_model.parametrization_is_dynamic(function)
                         && function
                             .parameters
                             .iter_non_variadic_params()
@@ -151,11 +151,9 @@ fn fixture_name_conflicts(
                                 })
                         })
                         || is_test
-                            && !crate::fixture::test_parameter_is_fixture(
-                                &analysis.module,
-                                function,
-                                new_name,
-                            ))
+                            && !analysis
+                                .fixture_model
+                                .parameter_is_fixture(function, new_name))
             })
 }
 

@@ -25,10 +25,7 @@ pub fn fixture_implementation(
     offset: TextSize,
 ) -> Option<FixtureImplementationTarget> {
     let fixture = fixture_target(analysis, offset)?;
-    let definition = analysis
-        .visible_fixtures
-        .iter()
-        .find(|definition| definition.id == fixture)?;
+    let definition = analysis.fixture_model.definition(&fixture)?;
     Some(FixtureImplementationTarget {
         path: definition.id.path.clone(),
         range: definition.implementation_range,

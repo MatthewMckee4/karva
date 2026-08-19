@@ -57,7 +57,7 @@ pub fn source_symbols(analysis: &SourceAnalysis) -> Vec<SourceSymbol> {
                 .fixture_function_defs
                 .iter()
                 .filter_map(|function| {
-                    let definition = analysis.fixtures.iter().find(|definition| {
+                    let definition = analysis.fixture_model.local().iter().find(|definition| {
                         definition.id.path.as_path() == analysis.module.path.path().as_path()
                             && definition.id.range == function.name.range
                     })?;

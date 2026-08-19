@@ -24,10 +24,7 @@ pub fn fixture_definition(
 ) -> Option<FixtureDefinitionTarget> {
     let hover = hover_fixture(analysis, offset)?;
     let provider = hover.provider?;
-    let definition = analysis
-        .visible_fixtures
-        .iter()
-        .find(|definition| definition.id == provider)?;
+    let definition = analysis.fixture_model.definition(&provider)?;
     Some(FixtureDefinitionTarget {
         path: definition.id.path.clone(),
         range: definition.name_range,

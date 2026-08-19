@@ -1,7 +1,8 @@
 use ruff_python_ast::{Expr, StmtFunctionDef};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
-use crate::{FixtureDefinition, FixtureId, FixtureResolution, FixtureScope, SourceAnalysis};
+use crate::fixture::FixtureDefinition;
+use crate::{FixtureId, FixtureResolution, FixtureScope, SourceAnalysis};
 
 /// Source-only hover information for one fixture reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,7 +38,7 @@ pub struct FixtureHover {
 /// missing, and dynamic providers remain silent rather than showing a target
 /// that runtime lookup cannot guarantee.
 pub fn hover_fixture(analysis: &SourceAnalysis, offset: TextSize) -> Option<FixtureHover> {
-    if let Some(reference) = analysis.fixtures.iter().find_map(|fixture| {
+    if let Some(reference) = analysis.fixture_model.local().iter().find_map(|fixture| {
         fixture
             .dependencies
             .iter()
@@ -77,17 +78,10 @@ fn hover_from_name(
     name: String,
     range: TextRange,
 ) -> Option<FixtureHover> {
-    let definition = analysis
-        .visible_fixtures
-        .iter()
-        .find(|fixture| fixture.name == name);
-    if analysis.fixture_completion_blocked_names.contains(&name) {
-        return None;
-    }
-    if let Some(definition) = definition {
+    if let Some(definition) = analysis.fixture_model.resolve(&name) {
         return Some(hover_from_definition(name, range, definition));
     }
-    if !analysis.fixture_completion_builtins_visible {
+    if !analysis.fixture_model.builtins_visible() {
         return None;
     }
     let builtin = crate::fixture::builtin_info(&name)?;
@@ -111,10 +105,7 @@ fn hover_from_resolution(
 ) -> Option<FixtureHover> {
     match resolution {
         FixtureResolution::Resolved(id) => {
-            let definition = analysis
-                .visible_fixtures
-                .iter()
-                .find(|fixture| fixture.id == *id)?;
+            let definition = analysis.fixture_model.definition(id)?;
             Some(hover_from_definition(name, range, definition))
         }
         FixtureResolution::Builtin => hover_from_name(analysis, name, range),
@@ -154,15 +145,14 @@ fn test_parameter_reference(
         .parameters
         .iter_non_variadic_params()
         .find(|parameter| parameter.parameter.name.range.contains_inclusive(offset))?;
-    if !crate::fixture::test_parameter_is_fixture(
-        &analysis.module,
-        function,
-        parameter.parameter.name.as_str(),
-    ) {
+    if !analysis
+        .fixture_model
+        .parameter_is_fixture(function, parameter.parameter.name.as_str())
+    {
         return None;
     }
     let name = parameter.parameter.name.to_string();
-    if analysis.fixture_completion_blocked_names.contains(&name) {
+    if analysis.fixture_model.blocked_names().contains(&name) {
         return None;
     }
     Some((name, parameter.parameter.name.range))
@@ -180,7 +170,7 @@ fn use_fixtures_reference(
         let Expr::Call(call) = &decorator.expression else {
             continue;
         };
-        if !crate::fixture::is_use_fixtures_reference(&analysis.module, &call.func) {
+        if !analysis.fixture_model.is_use_fixtures_reference(&call.func) {
             continue;
         }
         for argument in &call.arguments.args {
