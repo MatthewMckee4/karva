@@ -11,7 +11,7 @@ use karva_snapshot::format::{SnapshotFile, SnapshotMetadata};
 use karva_snapshot::storage::{
     read_snapshot, snapshot_path, write_pending_snapshot, write_snapshot,
 };
-use karva_static::{EnvVars, parse_boolish_env_var};
+use karva_static::{BoolishEnvVarError, EnvVars, parse_boolish_env_var};
 use pyo3::exceptions::PyOSError;
 use pyo3::prelude::*;
 
@@ -32,6 +32,7 @@ pub struct SnapshotContext {
     test_file: String,
     test_name: String,
     counter: u32,
+    update_mode: Option<bool>,
 }
 
 impl SnapshotContext {
@@ -41,7 +42,25 @@ impl SnapshotContext {
             test_file,
             test_name,
             counter: 0,
+            update_mode: None,
         }
+    }
+
+    fn snapshot_update_mode(&mut self) -> Result<bool, BoolishEnvVarError> {
+        self.snapshot_update_mode_with(|| parse_boolish_env_var(EnvVars::KARVA_SNAPSHOT_UPDATE))
+    }
+
+    fn snapshot_update_mode_with(
+        &mut self,
+        read: impl FnOnce() -> Result<Option<bool>, BoolishEnvVarError>,
+    ) -> Result<bool, BoolishEnvVarError> {
+        if let Some(value) = self.update_mode {
+            return Ok(value);
+        }
+
+        let value = read()?.unwrap_or(false);
+        self.update_mode = Some(value);
+        Ok(value)
     }
 }
 
@@ -358,24 +377,20 @@ fn assert_snapshot_impl(
         ));
     }
 
-    let (test_file, test_name) = SNAPSHOT_CONTEXT
-        .with(|ctx| {
-            let ctx = ctx.borrow();
-            let snapshot_ctx = ctx.as_ref()?;
-            Some((
-                snapshot_ctx.test_file.clone(),
-                snapshot_ctx.test_name.clone(),
-            ))
-        })
-        .ok_or_else(|| {
+    let (test_file, test_name, update_mode) = SNAPSHOT_CONTEXT.with(|ctx| {
+        let mut ctx = ctx.borrow_mut();
+        let snapshot_ctx = ctx.as_mut().ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err(
                 "assert_snapshot() called outside of a karva test context",
             )
         })?;
-
-    let update_mode = parse_boolish_env_var(EnvVars::KARVA_SNAPSHOT_UPDATE)
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
-        .unwrap_or(false);
+        let test_file = snapshot_ctx.test_file.clone();
+        let test_name = snapshot_ctx.test_name.clone();
+        let update_mode = snapshot_ctx
+            .snapshot_update_mode()
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+        Ok::<_, PyErr>((test_file, test_name, update_mode))
+    })?;
 
     if let Some(inline_value) = inline {
         return handle_inline_snapshot(
@@ -676,5 +691,84 @@ mod tests {
             compute_named_snapshot("test_foo(x=1)", "header"),
             "test_foo--header(x=1)"
         );
+    }
+
+    #[test]
+    fn snapshot_update_mode_caches_absent_true_and_false_values() {
+        let mut absent = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        assert_eq!(absent.snapshot_update_mode_with(|| Ok(None)), Ok(false));
+
+        let mut true_value = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        assert_eq!(
+            true_value.snapshot_update_mode_with(|| Ok(Some(true))),
+            Ok(true)
+        );
+
+        let mut false_value = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        assert_eq!(
+            false_value.snapshot_update_mode_with(|| Ok(Some(false))),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn snapshot_update_mode_cache_is_per_context_and_retries_errors() {
+        let mut context = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        let mut reads = 0;
+        assert_eq!(
+            context.snapshot_update_mode_with(|| {
+                reads += 1;
+                Ok(Some(true))
+            }),
+            Ok(true)
+        );
+        assert_eq!(
+            context.snapshot_update_mode_with(|| {
+                reads += 1;
+                Ok(Some(false))
+            }),
+            Ok(true)
+        );
+        assert_eq!(reads, 1);
+
+        let mut reset_context = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        assert_eq!(
+            reset_context.snapshot_update_mode_with(|| Ok(Some(false))),
+            Ok(false)
+        );
+
+        let invalid = BoolishEnvVarError::InvalidValue {
+            name: EnvVars::KARVA_SNAPSHOT_UPDATE,
+            value: "sometimes".to_string(),
+        };
+        let mut invalid_context = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        let mut reads = 0;
+        assert_eq!(
+            invalid_context.snapshot_update_mode_with(|| {
+                reads += 1;
+                Err(invalid.clone())
+            }),
+            Err(invalid.clone())
+        );
+        assert_eq!(
+            invalid_context.snapshot_update_mode_with(|| {
+                reads += 1;
+                Ok(Some(true))
+            }),
+            Ok(true)
+        );
+        assert_eq!(reads, 2);
+    }
+
+    #[test]
+    fn snapshot_thread_state_carries_update_mode_cache() {
+        let mut context = SnapshotContext::new("test.py".to_string(), "test".to_string());
+        assert_eq!(
+            context.snapshot_update_mode_with(|| Ok(Some(true))),
+            Ok(true)
+        );
+
+        let state = capture_snapshot_thread_state(context);
+        assert_eq!(state.context.update_mode, Some(true));
     }
 }
