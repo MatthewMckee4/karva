@@ -1,5 +1,5 @@
 use karva_collector::{
-    CollectedModule, CollectedPackage, CollectionSettings, ModuleType, collect_file,
+    CollectedModule, CollectedPackage, CollectionSettings, ModuleType, collect_file_for_scheduling,
 };
 
 use std::thread;
@@ -98,7 +98,7 @@ impl<'a> ParallelCollector<'a> {
                     return WalkState::Continue;
                 };
 
-                match collect_file(&file_path, self.cwd, &self.settings, &[]) {
+                match collect_file_for_scheduling(&file_path, self.cwd, &self.settings, &[]) {
                     Ok(Some(module)) => {
                         if let Err(err) = tx.send(CollectionMessage::Module(module)) {
                             tracing::warn!(
@@ -147,14 +147,19 @@ impl<'a> ParallelCollector<'a> {
                     function_name,
                     parametrize_index: _,
                 }) => {
-                    if let Some(module) =
-                        collect_file(&file_path, self.cwd, &self.settings, &[function_name])?
-                    {
+                    if let Some(module) = collect_file_for_scheduling(
+                        &file_path,
+                        self.cwd,
+                        &self.settings,
+                        &[function_name],
+                    )? {
                         session_package.add_module(module);
                     }
                 }
                 TestPath::File(file_path) => {
-                    if let Some(module) = collect_file(&file_path, self.cwd, &self.settings, &[])? {
+                    if let Some(module) =
+                        collect_file_for_scheduling(&file_path, self.cwd, &self.settings, &[])?
+                    {
                         session_package.add_module(module);
                     }
                 }
@@ -214,6 +219,29 @@ mod tests {
             collect_fixtures: false,
             collect_doctests: false,
         }
+    }
+
+    #[test]
+    fn scheduling_collection_discards_module_context() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let root = temp_path(&temp_dir);
+        let test_path = root.join("test_sample.py");
+        std::fs::write(
+            &test_path,
+            "\"\"\"Example.\n\n>>> 1 + 1\n2\n\"\"\"\nvalue = 1\ndef test_sample(): assert value == 1\n",
+        )
+        .expect("write test file");
+        let mut settings = collection_settings();
+        settings.collect_doctests = true;
+
+        let module = collect_file_for_scheduling(&test_path, root, &settings, &[])
+            .expect("collect file")
+            .expect("module should collect");
+
+        assert_eq!(module.test_function_defs[0].name.as_str(), "test_sample");
+        assert_eq!(module.doctests[0].name, "doctest:@module");
+        assert!(module.source_text.is_empty());
+        assert!(module.module_body.is_empty());
     }
 
     #[cfg(unix)]
