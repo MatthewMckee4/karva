@@ -120,7 +120,8 @@ impl PackageRunner<'_, '_> {
             use_fixture_dependencies,
             FixtureUsage::UseFixtures,
         );
-        let mut function_arguments = FixtureArguments::default();
+        let mut function_arguments =
+            FixtureArguments::with_capacity(fixture_dependencies.len() + params.len());
 
         for fixture_id in fixture_dependencies {
             let fixture = fixture_plan.fixture(*fixture_id);
@@ -176,7 +177,7 @@ impl PackageRunner<'_, '_> {
             return Ok((cached, None));
         }
 
-        let mut function_arguments = FixtureArguments::default();
+        let mut function_arguments = FixtureArguments::with_capacity(fixture.dependencies().len());
 
         for dependency_id in fixture.dependencies() {
             let dependency = fixture_plan.fixture(*dependency_id);

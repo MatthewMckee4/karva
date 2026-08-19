@@ -14,6 +14,13 @@ pub struct FixtureArguments {
 }
 
 impl FixtureArguments {
+    /// Creates an argument map sized for the known fixture and parameter count.
+    pub(super) fn with_capacity(capacity: usize) -> Self {
+        Self {
+            inner: HashMap::with_capacity(capacity),
+        }
+    }
+
     /// Inserts one named Python argument.
     pub fn insert(&mut self, name: String, value: Py<PyAny>) -> Option<Py<PyAny>> {
         self.inner.insert(name, value)
