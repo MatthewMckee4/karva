@@ -88,7 +88,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         self.package_runner
             .context
             .report_test_started(&initial_test_name);
-        let retry_params = self.input.params.clone();
+        let retry_params = if self.package_runner.retry_possible {
+            self.input.params.clone()
+        } else {
+            HashMap::new()
+        };
         let first_params = std::mem::take(&mut self.input.params);
         self.begin_pending_coverage_setup();
         let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
@@ -108,8 +112,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         };
         self.resolve_pending_coverage_setup(&settings.identity.qualified_name);
         let function = self.input.test.py_function.clone_ref(self.py);
-        let test_name_env_result =
-            set_test_name_env(self.py, &settings.identity.qualified_test_name.to_string());
+        let test_name_env_result = set_test_name_env(self.py, &settings.identity.qualified_name);
 
         tracing::debug!("Running test `{}`", settings.identity.qualified_test_name);
         let mut attempt_number = 1;

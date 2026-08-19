@@ -1852,6 +1852,34 @@ retries = 0
     }
 
     #[test]
+    fn retry_possible_requires_positive_configured_retry() {
+        let no_retry = Config::from_toml_str(
+            r"
+[profile.default.test]
+retry = 0
+",
+        )
+        .expect("parse")
+        .resolve_profile(None)
+        .expect("resolves")
+        .to_settings();
+        assert!(!no_retry.retry_possible());
+
+        let positive_override = Config::from_toml_str(
+            r#"
+[[profile.default.overrides]]
+filter = "tag(network)"
+retries = 1
+"#,
+        )
+        .expect("parse")
+        .resolve_profile(None)
+        .expect("resolves")
+        .to_settings();
+        assert!(positive_override.retry_possible());
+    }
+
+    #[test]
     fn timeout_for_picks_first_matching_override() {
         let toml = r#"
 [profile.default.test]

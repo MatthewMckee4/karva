@@ -44,6 +44,8 @@ pub struct PackageRunner<'context, 'settings> {
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: u32,
+    /// Whether any test in this run can receive a positive retry budget.
+    retry_possible: bool,
 }
 
 impl<'context, 'settings> PackageRunner<'context, 'settings> {
@@ -60,6 +62,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             finalizer_cache: FinalizerCache::default(),
             coverage,
             failed_count: 0,
+            retry_possible: context.settings().retry_possible(),
         }
     }
 
