@@ -126,8 +126,7 @@ impl PackageRunner<'_, '_> {
             let fixture = fixture_plan.fixture(*fixture_id);
             match self.run_fixture(py, fixture_plan, *fixture_id) {
                 Ok((value, finalizer)) => {
-                    function_arguments
-                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
+                    function_arguments.insert(fixture.function_name().to_string(), value);
 
                     if let Some(finalizer) = finalizer {
                         test_finalizers.push(finalizer);
@@ -182,8 +181,7 @@ impl PackageRunner<'_, '_> {
             let dependency = fixture_plan.fixture(*dependency_id);
             match self.run_fixture(py, fixture_plan, *dependency_id) {
                 Ok((value, finalizer)) => {
-                    function_arguments
-                        .insert(dependency.function_name().to_string(), value.clone_ref(py));
+                    function_arguments.insert(dependency.function_name().to_string(), value);
 
                     if let Some(finalizer) = finalizer {
                         self.finalizer_cache.add_finalizer(finalizer);
