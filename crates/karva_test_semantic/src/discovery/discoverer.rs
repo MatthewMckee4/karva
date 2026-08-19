@@ -203,6 +203,14 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
                 .collect()
         };
 
+        // Runtime tag validation is the only discovery step that reads the complete AST.
+        // Release it before visiting functions in non-strict mode.
+        let module_body = if self.context.settings().test().strict_tags {
+            module_body
+        } else {
+            Box::default()
+        };
+
         self.issues.extend(discover(
             self.context,
             py,

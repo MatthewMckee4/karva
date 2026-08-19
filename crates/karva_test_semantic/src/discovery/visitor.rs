@@ -31,7 +31,8 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     /// The module being populated with discovered test functions and fixtures.
     module: &'b mut DiscoveredModule,
 
-    /// Complete module statements used to locate runtime-discovered module marks.
+    /// Complete module statements used to locate runtime-discovered module marks during strict
+    /// tag validation. Empty when strict tags are disabled.
     module_body: Box<[Stmt]>,
 
     /// Lazily-loaded Python module, imported only when needed to avoid side effects.
@@ -440,8 +441,8 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
 /// Binds collected AST definitions to imported Python callables.
 ///
 /// Duplicate or invalid definitions emit diagnostics and are excluded. Imported fixtures
-/// are scanned only for `conftest.py` or when `try_import_fixtures` is enabled. The complete
-/// module body provides source ranges for marks inherited by each test at runtime.
+/// are scanned only for `conftest.py` or when `try_import_fixtures` is enabled. In strict-tag mode,
+/// the complete module body provides source ranges for marks inherited by each test at runtime.
 pub fn discover(
     context: &Context,
     py: Python,
