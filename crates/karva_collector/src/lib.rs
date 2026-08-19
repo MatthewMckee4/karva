@@ -78,6 +78,81 @@ pub fn collect_file(
     ))
 }
 
+/// Collects only metadata needed by controller-side test scheduling.
+///
+/// Source text and the complete syntax tree are discarded before returning.
+/// Test function definitions are moved from the syntax tree instead of cloned.
+pub fn collect_file_for_scheduling(
+    path: &Utf8PathBuf,
+    cwd: &Utf8Path,
+    settings: &CollectionSettings,
+    function_names: &[String],
+) -> Result<Option<CollectedModule>, CollectionError> {
+    if ModulePath::new(path, cwd).is_none() {
+        return Ok(None);
+    }
+
+    let source_text = fs::read_to_string(path).map_err(|source| CollectionError::ReadSource {
+        path: path.clone(),
+        source,
+    })?;
+
+    Ok(collect_source_for_scheduling(
+        path,
+        cwd,
+        &source_text,
+        settings,
+        function_names,
+    ))
+}
+
+fn collect_source_for_scheduling(
+    path: &Utf8PathBuf,
+    cwd: &Utf8Path,
+    source_text: &str,
+    settings: &CollectionSettings,
+    function_names: &[String],
+) -> Option<CollectedModule> {
+    let module_path = ModulePath::new(path, cwd)?;
+    let module_type: ModuleType = path.into();
+    let parse_options =
+        ParseOptions::from(Mode::Module).with_target_version(settings.python_version);
+    let parsed = parse_unchecked(source_text, parse_options).try_into_module()?;
+    let module_body = parsed.into_suite();
+    let doctests = if settings.collect_doctests && module_type == ModuleType::Test {
+        collect_doctests(&module_body, source_text)
+    } else {
+        Vec::new()
+    };
+    let mut collected_module =
+        CollectedModule::new(module_path, module_type, Box::default(), String::new());
+
+    for doctest in doctests {
+        if function_names.is_empty() || function_names.iter().any(|name| name == &doctest.name) {
+            collected_module.add_doctest(doctest);
+        }
+    }
+
+    for statement in module_body {
+        let Stmt::FunctionDef(function_def) = statement else {
+            continue;
+        };
+        if settings.collect_fixtures && is_fixture_function(&function_def) {
+            collected_module.add_fixture_function_def(function_def);
+            continue;
+        }
+        if is_test_function_to_collect(
+            &function_def.name,
+            function_names,
+            settings.test_function_prefix,
+        ) {
+            collected_module.add_test_function_def(function_def);
+        }
+    }
+
+    Some(collected_module)
+}
+
 /// Collects tests and fixtures from supplied Python source.
 ///
 /// This is the source-first collection boundary used for unsaved editor buffers.
