@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::models::definition::FunctionDefinition;
-use crate::extensions::fixtures::FixtureScope;
+use crate::extensions::fixtures::{FixtureIdentity, FixtureScope};
 use crate::runner::FixtureArguments;
 use crate::utils::run_coroutine;
 
@@ -43,8 +43,8 @@ impl FixturePlan {
 /// and normalized the same way as user-defined ones.
 #[derive(Debug)]
 pub struct NormalizedFixture {
-    /// Immutable fixture identity, syntax, and source.
-    pub(crate) definition: Rc<FunctionDefinition>,
+    /// Qualified identity and immutable source definition.
+    pub(crate) identity: FixtureIdentity,
 
     /// Resolved fixture dependencies this fixture requires.
     pub(crate) dependencies: Vec<FixtureId>,
@@ -65,16 +65,24 @@ pub struct NormalizedFixture {
 impl NormalizedFixture {
     /// Returns the fixture's unqualified function name.
     pub(crate) fn function_name(&self) -> &str {
-        self.definition.name().function_name()
+        self.identity.name().function_name()
     }
 
     /// Returns the stable qualified fixture identity.
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
-        self.definition.name()
+        self.identity.name()
+    }
+
+    pub(crate) fn identity(&self) -> &FixtureIdentity {
+        &self.identity
+    }
+
+    pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
+        self.identity.definition()
     }
 
     pub(crate) fn statement(&self) -> &StmtFunctionDef {
-        self.definition.statement()
+        self.identity.definition().statement()
     }
 
     /// Returns the fixture dependencies.

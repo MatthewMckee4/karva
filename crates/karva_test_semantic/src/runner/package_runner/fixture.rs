@@ -159,7 +159,7 @@ impl PackageRunner<'_, '_> {
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
         let fixture = fixture_plan.fixture(fixture_id);
         let scope = scope_key(fixture.scope(), fixture.package_owner());
-        if let Some(cached) = self.fixture_cache.get(py, fixture.name(), scope) {
+        if let Some(cached) = self.fixture_cache.get(py, fixture.identity(), scope) {
             return Ok((cached, None));
         }
 
@@ -189,7 +189,7 @@ impl PackageRunner<'_, '_> {
             .map_err(|error| FixtureCallError::new(fixture, error, function_arguments))?;
 
         self.fixture_cache
-            .insert(fixture.name().clone(), value.clone_ref(py), scope);
+            .insert(fixture.identity().clone(), value.clone_ref(py), scope);
 
         let function_finalizer = finalizer.and_then(|finalizer| {
             if finalizer.scope == FixtureScope::Function {
@@ -360,7 +360,7 @@ impl FixtureCallError {
         Self {
             fixture_name: fixture.function_name().to_string(),
             error,
-            definition: Rc::clone(&fixture.definition),
+            definition: Rc::clone(fixture.definition()),
             arguments,
             dependency_chain: Vec::new(),
         }
@@ -370,7 +370,7 @@ impl FixtureCallError {
     fn with_dependent(mut self, fixture: &NormalizedFixture) -> Self {
         self.dependency_chain.push(FixtureChainEntry {
             name: fixture.function_name().to_string(),
-            definition: Rc::clone(&fixture.definition),
+            definition: Rc::clone(fixture.definition()),
         });
         self
     }
@@ -392,7 +392,7 @@ fn get_value_and_finalizer(
             is_async: true,
             scope: fixture.scope(),
             package_owner: fixture.package_owner().to_path_buf(),
-            definition: Rc::clone(&fixture.definition),
+            definition: Rc::clone(fixture.definition()),
         };
 
         Ok((value, Some(finalizer)))
@@ -413,7 +413,7 @@ fn get_value_and_finalizer(
                     is_async: false,
                     scope: fixture.scope(),
                     package_owner: fixture.package_owner().to_path_buf(),
-                    definition: Rc::clone(&fixture.definition),
+                    definition: Rc::clone(fixture.definition()),
                 };
 
                 Ok((value.unbind(), Some(finalizer)))

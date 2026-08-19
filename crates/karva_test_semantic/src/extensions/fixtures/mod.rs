@@ -1,5 +1,7 @@
 //! Fixture definitions, dependency resolution, caching, and teardown semantics.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use karva_python_semantic::{ModulePath, QualifiedFunctionName};
@@ -26,6 +28,54 @@ use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
 
+/// Cheap run-local key for one qualified fixture definition.
+///
+/// The qualified name is hashed once during discovery. Equality still compares
+/// the full name, so independently discovered imports share scoped values and
+/// hash collisions cannot merge distinct fixtures.
+#[derive(Clone, Debug)]
+pub struct FixtureIdentity {
+    /// Source definition retained for diagnostics and execution.
+    definition: Rc<FunctionDefinition>,
+
+    /// Precomputed qualified-name hash used by fixture hot paths.
+    hash: u64,
+}
+
+impl FixtureIdentity {
+    fn new(definition: FunctionDefinition) -> Self {
+        let definition = Rc::new(definition);
+        let mut hasher = DefaultHasher::new();
+        definition.name().hash(&mut hasher);
+        Self {
+            definition,
+            hash: hasher.finish(),
+        }
+    }
+
+    pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
+        &self.definition
+    }
+
+    pub(crate) fn name(&self) -> &QualifiedFunctionName {
+        self.definition.name()
+    }
+}
+
+impl PartialEq for FixtureIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.name() == other.name()
+    }
+}
+
+impl Eq for FixtureIdentity {}
+
+impl Hash for FixtureIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
+
 /// Represents a pytest-style fixture discovered from Python source code.
 ///
 /// Fixtures provide reusable setup and teardown logic for tests. They can be
@@ -33,8 +83,8 @@ use crate::extensions::fixtures::scope::fixture_scope;
 /// be auto-used without explicit declaration.
 #[derive(Clone, Debug)]
 pub struct DiscoveredFixture {
-    /// Immutable source identity and syntax.
-    definition: Rc<FunctionDefinition>,
+    /// Qualified identity and immutable source definition.
+    identity: FixtureIdentity,
 
     /// The scope at which this fixture's value is cached.
     scope: FixtureScope,
@@ -113,7 +163,7 @@ impl DiscoveredFixture {
         is_generator: bool,
     ) -> Self {
         Self {
-            definition: Rc::new(FunctionDefinition::new(
+            identity: FixtureIdentity::new(FunctionDefinition::new(
                 name,
                 stmt_function_def,
                 source_file,
@@ -126,11 +176,15 @@ impl DiscoveredFixture {
     }
 
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
-        self.definition.name()
+        self.identity.name()
+    }
+
+    pub(crate) fn identity(&self) -> &FixtureIdentity {
+        &self.identity
     }
 
     pub(crate) fn definition(&self) -> &Rc<FunctionDefinition> {
-        &self.definition
+        self.identity.definition()
     }
 
     pub(crate) fn scope(&self) -> FixtureScope {
@@ -150,7 +204,7 @@ impl DiscoveredFixture {
     }
 
     pub(crate) fn stmt_function_def(&self) -> &Rc<StmtFunctionDef> {
-        self.definition.statement_rc()
+        self.identity.definition().statement_rc()
     }
 
     /// Reads the fixture name exposed at runtime, falling back to its source symbol.

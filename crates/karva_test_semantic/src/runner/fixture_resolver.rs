@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use camino::Utf8Path;
-use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 
 use crate::discovery::models::definition::{
@@ -12,8 +11,8 @@ use crate::discovery::models::definition::{
 };
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
-    DiscoveredFixture, FixtureId, FixtureLookup, FixturePlan, FixtureScope, HasFixtures,
-    NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
+    DiscoveredFixture, FixtureId, FixtureIdentity, FixtureLookup, FixturePlan, FixtureScope,
+    HasFixtures, NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
 };
 
 /// Compiles fixture lookup results into an arena for one request context.
@@ -32,7 +31,7 @@ pub(super) struct FixturePlanCompiler<'a> {
     /// Package owning fixtures provided by `current`.
     current_package: &'a Utf8Path,
     /// Definition IDs reused within this compilation pass.
-    fixture_ids: HashMap<QualifiedFunctionName, FixtureId>,
+    fixture_ids: HashMap<FixtureIdentity, FixtureId>,
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
@@ -210,7 +209,7 @@ impl<'a> FixturePlanCompiler<'a> {
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<FixtureId> {
-        if let Some(cached) = self.fixture_ids.get(fixture.name()) {
+        if let Some(cached) = self.fixture_ids.get(fixture.identity()) {
             return Ok(*cached);
         }
 
@@ -221,7 +220,7 @@ impl<'a> FixturePlanCompiler<'a> {
         })?;
 
         let result = NormalizedFixture {
-            definition: Rc::clone(fixture.definition()),
+            identity: fixture.identity().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
             package_owner: self.package_owner(fixture).to_path_buf(),
@@ -231,7 +230,8 @@ impl<'a> FixturePlanCompiler<'a> {
 
         let fixture_id = FixtureId::new(self.fixtures.len());
         self.fixtures.push(result);
-        self.fixture_ids.insert(fixture.name().clone(), fixture_id);
+        self.fixture_ids
+            .insert(fixture.identity().clone(), fixture_id);
 
         Ok(fixture_id)
     }

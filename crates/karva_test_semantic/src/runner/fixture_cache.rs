@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 
+use crate::extensions::fixtures::FixtureIdentity;
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
 /// Caches fixture values at different scope levels.
@@ -14,7 +14,7 @@ use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 #[derive(Debug, Default)]
 pub(super) struct FixtureCache {
     /// Fixture values isolated by their declared lifetime scope.
-    storage: ScopedStorage<HashMap<QualifiedFunctionName, Py<PyAny>>>,
+    storage: ScopedStorage<HashMap<FixtureIdentity, Py<PyAny>>>,
 }
 
 impl FixtureCache {
@@ -22,7 +22,7 @@ impl FixtureCache {
     pub(super) fn get(
         &self,
         py: Python<'_>,
-        identity: &QualifiedFunctionName,
+        identity: &FixtureIdentity,
         scope: ScopeKey<'_>,
     ) -> Option<Py<PyAny>> {
         self.storage
@@ -35,7 +35,7 @@ impl FixtureCache {
     /// Caches a fixture value until its declared scope completes.
     pub(super) fn insert(
         &mut self,
-        identity: QualifiedFunctionName,
+        identity: FixtureIdentity,
         value: Py<PyAny>,
         scope: ScopeKey<'_>,
     ) {
