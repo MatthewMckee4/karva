@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use pyo3::prelude::*;
 
 use crate::discovery::models::definition::{
@@ -223,7 +223,12 @@ impl<'a> FixturePlanCompiler<'a> {
             identity: fixture.identity().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
-            package_owner: self.package_owner(fixture).to_path_buf(),
+            package_owner: match fixture.scope() {
+                FixtureScope::Package => self.package_owner(fixture).to_path_buf(),
+                FixtureScope::Function | FixtureScope::Module | FixtureScope::Session => {
+                    Utf8PathBuf::new()
+                }
+            },
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
         };
