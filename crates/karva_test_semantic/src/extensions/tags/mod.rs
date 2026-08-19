@@ -4,6 +4,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     ffi::CString,
     ops::Deref,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -294,7 +295,7 @@ pub struct RuntimeTags {
     expect_fail: Option<ExpectFailTag>,
     timeout: Option<TimeoutTag>,
     fail_slow: Option<FailSlowTag>,
-    names: Vec<String>,
+    names: Rc<[String]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -312,8 +313,13 @@ impl RuntimeTags {
     }
 
     pub(crate) fn extend(&mut self, tags: &Tags) {
+        if tags.inner.is_empty() {
+            return;
+        }
+
+        let mut names = self.names.to_vec();
         for tag in &tags.inner {
-            self.names.push(tag.name().to_string());
+            names.push(tag.name().to_string());
             match tag {
                 Tag::Skip(skip) if matches!(self.skip, SkipPolicy::Run) && skip.should_skip() => {
                     self.skip = SkipPolicy::Skip(skip.reason());
@@ -328,6 +334,7 @@ impl RuntimeTags {
                 _ => {}
             }
         }
+        self.names = names.into();
     }
 
     pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
