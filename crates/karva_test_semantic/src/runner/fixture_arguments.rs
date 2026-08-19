@@ -14,6 +14,16 @@ pub struct FixtureArguments {
 }
 
 impl FixtureArguments {
+    /// Owns borrowed fixture names only when a call needs diagnostics.
+    pub(super) fn from_fixture_values(arguments: Vec<(&str, Py<PyAny>)>) -> Self {
+        Self {
+            inner: arguments
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value))
+                .collect(),
+        }
+    }
+
     /// Inserts one named Python argument.
     pub fn insert(&mut self, name: String, value: Py<PyAny>) -> Option<Py<PyAny>> {
         self.inner.insert(name, value)

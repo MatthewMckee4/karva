@@ -3,11 +3,11 @@ use std::rc::Rc;
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{FixtureIdentity, FixtureScope};
-use crate::runner::FixtureArguments;
 use crate::utils::run_coroutine;
 
 /// Stable index into one compiled [`FixturePlan`].
@@ -104,12 +104,15 @@ impl NormalizedFixture {
     pub(crate) fn call(
         &self,
         py: Python,
-        fixture_arguments: &FixtureArguments,
+        fixture_arguments: &[(&str, Py<PyAny>)],
     ) -> PyResult<Py<PyAny>> {
         let result = if fixture_arguments.is_empty() {
             self.py_function.call0(py)
         } else {
-            let kwargs_dict = fixture_arguments.to_kwargs(py)?;
+            let kwargs_dict = PyDict::new(py);
+            for (name, value) in fixture_arguments {
+                kwargs_dict.set_item(*name, value)?;
+            }
             self.py_function.call(py, (), Some(&kwargs_dict))
         };
 

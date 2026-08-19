@@ -176,14 +176,18 @@ impl PackageRunner<'_, '_> {
             return Ok((cached, None));
         }
 
-        let mut function_arguments = FixtureArguments::default();
+        let mut function_arguments = Vec::new();
 
         for dependency_id in fixture.dependencies() {
             let dependency = fixture_plan.fixture(*dependency_id);
             match self.run_fixture(py, fixture_plan, *dependency_id) {
                 Ok((value, finalizer)) => {
-                    function_arguments
-                        .insert(dependency.function_name().to_string(), value.clone_ref(py));
+                    if function_arguments.is_empty() {
+                        // Delay allocation until recursion unwinds so deep chains do not
+                        // retain empty argument buffers for every active fixture call.
+                        function_arguments.reserve_exact(fixture.dependencies().len());
+                    }
+                    function_arguments.push((dependency.function_name(), value));
 
                     if let Some(finalizer) = finalizer {
                         self.finalizer_cache.add_finalizer(finalizer);
@@ -195,11 +199,23 @@ impl PackageRunner<'_, '_> {
 
         let fixture_call_result = match fixture.call(py, &function_arguments) {
             Ok(result) => result,
-            Err(error) => return Err(FixtureCallError::new(fixture, error, function_arguments)),
+            Err(error) => {
+                return Err(FixtureCallError::new(
+                    fixture,
+                    error,
+                    FixtureArguments::from_fixture_values(function_arguments),
+                ));
+            }
         };
 
         let (value, finalizer) = get_value_and_finalizer(py, fixture, fixture_call_result)
-            .map_err(|error| FixtureCallError::new(fixture, error, function_arguments))?;
+            .map_err(|error| {
+                FixtureCallError::new(
+                    fixture,
+                    error,
+                    FixtureArguments::from_fixture_values(function_arguments),
+                )
+            })?;
 
         self.fixture_cache
             .insert(fixture.identity().clone(), value.clone_ref(py), scope);
