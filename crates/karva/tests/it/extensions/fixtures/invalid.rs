@@ -334,7 +334,7 @@ fn test_missing_fixture() {
 fn test_fixture_resolution_error_does_not_block_other_tests() {
     let context = TestContext::with_file(
         "test.py",
-        r#"
+        r"
 import karva
 
 @karva.fixture
@@ -350,7 +350,7 @@ def test_broken(broken_fixture):
 
 def test_valid(valid_fixture):
     assert valid_fixture == 42
-"#,
+",
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @"
