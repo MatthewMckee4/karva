@@ -411,8 +411,13 @@ pub struct ParametrizationArgs {
 }
 
 impl ParametrizationArgs {
-    fn extend(&mut self, other: Self) {
-        self.values.extend(other.values);
+    fn extend(&mut self, other: &Self) {
+        self.values.extend(
+            other
+                .values
+                .iter()
+                .map(|(name, value)| (name.clone(), Arc::clone(value))),
+        );
         self.tags.extend(&other.tags);
         if !self.id.is_empty() && !other.id.is_empty() {
             self.id.push('-');
@@ -473,9 +478,18 @@ impl Iterator for ParameterPlanIterator {
             return Some(ParametrizationArgs::default());
         }
 
-        let mut combination = ParametrizationArgs::default();
+        let value_capacity = self
+            .dimensions
+            .iter()
+            .zip(&self.indices)
+            .map(|(dimension, index)| dimension[*index].values.len())
+            .fold(0, usize::saturating_add);
+        let mut combination = ParametrizationArgs {
+            values: HashMap::with_capacity(value_capacity),
+            ..ParametrizationArgs::default()
+        };
         for (dimension, index) in self.dimensions.iter().zip(&self.indices) {
-            combination.extend(dimension[*index].clone());
+            combination.extend(&dimension[*index]);
         }
 
         self.advance();
