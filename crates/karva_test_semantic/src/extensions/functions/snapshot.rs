@@ -358,6 +358,43 @@ fn assert_snapshot_impl(
         ));
     }
 
+    if let Some(inline_value) = inline {
+        SNAPSHOT_CONTEXT.with(|ctx| {
+            let ctx = ctx.borrow();
+            if ctx.is_none() {
+                return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                    "assert_snapshot() called outside of a karva test context",
+                ));
+            }
+            Ok(())
+        })?;
+        let update_mode = parse_boolish_env_var(EnvVars::KARVA_SNAPSHOT_UPDATE)
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
+            .unwrap_or(false);
+        let (source_file, lineno) = caller_source_info(py).ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "Could not determine caller source info for inline snapshot",
+            )
+        })?;
+        return SNAPSHOT_CONTEXT.with(|ctx| {
+            let ctx = ctx.borrow();
+            let snapshot_ctx = ctx.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "assert_snapshot() called outside of a karva test context",
+                )
+            })?;
+            handle_inline_snapshot(
+                serialized,
+                inline_value,
+                &snapshot_ctx.test_file,
+                &snapshot_ctx.test_name,
+                source_file,
+                lineno,
+                update_mode,
+            )
+        });
+    }
+
     let (test_file, test_name) = SNAPSHOT_CONTEXT
         .with(|ctx| {
             let ctx = ctx.borrow();
@@ -376,17 +413,6 @@ fn assert_snapshot_impl(
     let update_mode = parse_boolish_env_var(EnvVars::KARVA_SNAPSHOT_UPDATE)
         .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
         .unwrap_or(false);
-
-    if let Some(inline_value) = inline {
-        return handle_inline_snapshot(
-            py,
-            serialized,
-            inline_value,
-            &test_file,
-            &test_name,
-            update_mode,
-        );
-    }
 
     let snapshot_name = if let Some(custom_name) = name {
         compute_named_snapshot(&test_name, custom_name)
@@ -487,19 +513,14 @@ fn assert_snapshot_impl(
 
 /// Handle an inline snapshot assertion.
 fn handle_inline_snapshot(
-    py: Python<'_>,
     actual: &str,
     inline_value: &str,
     test_file: &str,
     test_name: &str,
+    source_file: String,
+    lineno: u32,
     update_mode: bool,
 ) -> PyResult<()> {
-    let (source_file, lineno) = caller_source_info(py).ok_or_else(|| {
-        pyo3::exceptions::PyRuntimeError::new_err(
-            "Could not determine caller source info for inline snapshot",
-        )
-    })?;
-
     let expected = karva_snapshot::inline::dedent(inline_value);
 
     // Empty inline value is always treated as new/pending

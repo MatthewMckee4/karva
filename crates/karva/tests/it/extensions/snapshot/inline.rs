@@ -64,6 +64,42 @@ def test_hello():
 }
 
 #[test]
+fn test_inline_snapshot_allows_reentrant_frame_lookup() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+import karva
+
+original_getframe = sys._getframe
+
+def reentrant_getframe(depth=0):
+    sys._getframe = original_getframe
+    karva.assert_snapshot("nested", inline="nested")
+    return original_getframe(depth)
+
+sys._getframe = reentrant_getframe
+
+def test_hello():
+    karva.assert_snapshot("hello", inline="hello")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_inline_snapshot_mismatch_no_update() {
     let context = TestContext::with_file(
         "test.py",
