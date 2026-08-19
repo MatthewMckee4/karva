@@ -176,9 +176,19 @@ pub fn collect_source(
     let module_body = parsed.into_suite();
     let function_defs = module_body
         .iter()
-        .filter_map(|stmt| match stmt {
-            Stmt::FunctionDef(function_def) => Some(function_def.clone()),
-            _ => None,
+        .filter_map(|stmt| {
+            let Stmt::FunctionDef(function_def) = stmt else {
+                return None;
+            };
+            if settings.collect_fixtures && is_fixture_function(function_def) {
+                return Some(function_def.clone());
+            }
+            is_test_function_to_collect(
+                &function_def.name,
+                function_names,
+                settings.test_function_prefix,
+            )
+            .then(|| function_def.clone())
         })
         .collect::<Vec<_>>();
     let mut collected_module = CollectedModule::new(
