@@ -235,6 +235,65 @@ def second():
 }
 
 #[test]
+fn test_rejected_conftest_fixture_blocks_framework_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+
+@karva.fixture(scope="invalid")
+def tmp_path():
+    return None
+"#,
+        ),
+        (
+            "test_example.py",
+            r#"
+from pathlib import Path
+
+def test_tmp_path(tmp_path):
+    Path("test-ran").touch()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test_example::test_tmp_path
+
+    failures:
+
+    test_example::test_tmp_path:
+
+    error[missing-fixtures]: Test `test_tmp_path` has missing fixtures
+     --> test_example.py:4:5
+      |
+    4 | def test_tmp_path(tmp_path):
+      |     ^^^^^^^^^^^^^
+    info: Missing fixtures: `tmp_path`
+
+    diagnostics:
+
+    error[invalid-fixture]: Discovered an invalid fixture `tmp_path`
+     --> conftest.py:5:5
+      |
+    5 | def tmp_path():
+      |     ^^^^^^^^
+    info: Invalid fixture scope `invalid`
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("test-ran").exists());
+}
+
+#[test]
 fn test_missing_fixture() {
     let context = TestContext::with_file(
         "test.py",
