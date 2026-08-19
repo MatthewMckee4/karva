@@ -494,12 +494,6 @@ fn handle_inline_snapshot(
     test_name: &str,
     update_mode: bool,
 ) -> PyResult<()> {
-    let (source_file, lineno) = caller_source_info(py).ok_or_else(|| {
-        pyo3::exceptions::PyRuntimeError::new_err(
-            "Could not determine caller source info for inline snapshot",
-        )
-    })?;
-
     let expected = karva_snapshot::inline::dedent(inline_value);
 
     // Empty inline value is always treated as new/pending
@@ -509,6 +503,12 @@ fn handle_inline_snapshot(
     if matches {
         return Ok(());
     }
+
+    let (source_file, lineno) = caller_source_info(py).ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err(
+            "Could not determine caller source info for inline snapshot",
+        )
+    })?;
 
     if update_mode {
         let fn_name = test_name
