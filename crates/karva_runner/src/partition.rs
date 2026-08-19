@@ -11,6 +11,7 @@ pub use balancing::partition_collected_tests;
 #[cfg(test)]
 use balancing::partition_shuffled_tests;
 use collection::{TestIdentity, TestInfo};
+use karva_ipc::WorkerPath;
 use karva_python_semantic::TestCacheKey;
 #[cfg(test)]
 use ordering::order_tests_for_partitioning;
@@ -56,11 +57,11 @@ struct ScheduledTest {
 }
 
 impl ScheduledTest {
-    /// Materializes the exact worker selector for the outbound IPC selection.
-    fn worker_path(&self) -> Arc<str> {
+    /// Retains exact worker selector without formatting static case suffix.
+    fn worker_path(&self) -> WorkerPath {
         self.case_index.map_or_else(
-            || Arc::clone(&self.identity.selector),
-            |index| format!("{}[{index}]", self.identity.selector).into(),
+            || WorkerPath::owned(Arc::clone(&self.identity.selector)),
+            |index| WorkerPath::indexed(Arc::clone(&self.identity.selector), index),
         )
     }
 
@@ -107,8 +108,8 @@ impl Partition {
         self.tests.iter().map(ScheduledTest::cache_key)
     }
 
-    /// Materializes worker selectors for the outbound IPC handshake.
-    pub(super) fn worker_test_paths(&self) -> Vec<Arc<str>> {
+    /// Retains worker selectors compactly for the outbound IPC handshake.
+    pub(super) fn worker_test_paths(&self) -> Vec<WorkerPath> {
         self.tests.iter().map(ScheduledTest::worker_path).collect()
     }
 

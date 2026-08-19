@@ -11,6 +11,6 @@ mod transport;
 mod worker;
 
 pub use controller::{ControllerEvent, ControllerServer, WorkerCheckpoint, WorkerConnectionClose};
-pub use protocol::{WorkerEvent, WorkerSelection};
+pub use protocol::{WorkerEvent, WorkerPath, WorkerSelection};
 pub use transport::ControllerEndpoint;
 pub use worker::WorkerClient;

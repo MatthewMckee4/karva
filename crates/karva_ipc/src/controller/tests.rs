@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use rstest::rstest;
 
-use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
+use crate::protocol::{WireMessage, WorkerEvent, WorkerPath, WorkerSelection};
 use crate::transport::ControllerStream;
 use crate::worker::WorkerClient;
 
@@ -20,7 +20,7 @@ const BUFFERED_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
-        test_paths: test_paths.into_iter().map(Into::into).collect(),
+        test_paths: test_paths.into_iter().map(WorkerPath::owned).collect(),
         resume_skip: Vec::new(),
     }
 }
@@ -36,7 +36,13 @@ fn accept_connections(server: &mut ControllerServer, count: usize) {
 fn retains_attributed_worker_checkpoint_after_disconnect() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server
-        .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+        .register_worker_selection(
+            7,
+            WorkerSelection {
+                test_paths: vec![WorkerPath::indexed("mod::test".into(), 3)],
+                resume_skip: Vec::new(),
+            },
+        )
         .expect("register worker selection");
     let address = server.endpoint();
     let worker = thread::spawn(move || {
@@ -46,9 +52,9 @@ fn retains_attributed_worker_checkpoint_after_disconnect() {
             selection
                 .test_paths
                 .iter()
-                .map(AsRef::as_ref)
+                .map(|path| path.as_cow().into_owned())
                 .collect::<Vec<_>>(),
-            ["mod::test"]
+            ["mod::test[3]".to_string()]
         );
         let test_name = QualifiedTestName::new(QualifiedFunctionName::new(
             "test".to_string(),
@@ -123,7 +129,7 @@ fn closing_worker_connection_interrupts_a_blocked_selection_write() {
         .register_worker_selection(
             7,
             WorkerSelection {
-                test_paths: vec![path; 1_000_000],
+                test_paths: vec![WorkerPath::owned(path); 1_000_000],
                 resume_skip: Vec::new(),
             },
         )
@@ -308,7 +314,13 @@ fn worker_can_disconnect_before_handshake() {
 fn retired_startup_selection_rejects_a_late_handshake_cleanly() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     server
-        .register_worker_selection(7, selection(vec!["mod::test".to_string()]))
+        .register_worker_selection(
+            7,
+            WorkerSelection {
+                test_paths: vec![WorkerPath::indexed("mod::test".into(), 3)],
+                resume_skip: Vec::new(),
+            },
+        )
         .expect("register worker selection");
     server
         .retire_worker_startup(7)
@@ -416,7 +428,7 @@ fn transfers_resume_skip_cases() {
         .register_worker_selection(
             7,
             WorkerSelection {
-                test_paths: vec!["mod::test".into()],
+                test_paths: vec![WorkerPath::owned("mod::test")],
                 resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
             },
         )
@@ -499,13 +511,13 @@ fn transfers_large_worker_selection(#[values(50_000, 1_000_000)] path_count: usi
         let test_paths = selection.test_paths;
         assert_eq!(test_paths.len(), path_count);
         assert_eq!(
-            test_paths.first().map(AsRef::as_ref),
-            Some("tests/test_0.py::test_case")
+            test_paths.first().map(|path| path.as_cow().into_owned()),
+            Some("tests/test_0.py::test_case".to_string())
         );
         let last_path = format!("tests/test_{}.py::test_case", path_count - 1);
         assert_eq!(
-            test_paths.last().map(AsRef::as_ref),
-            Some(last_path.as_str())
+            test_paths.last().map(|path| path.as_cow().into_owned()),
+            Some(last_path)
         );
         client.complete().expect("complete worker");
     });

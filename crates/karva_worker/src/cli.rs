@@ -150,7 +150,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let test_paths: Vec<Result<TestPath, TestPathError>> = selection
         .test_paths
         .into_iter()
-        .map(|path| TestPath::new(path.as_ref()))
+        .map(|path| TestPath::new(path.as_cow().as_ref()))
         .collect();
     let reporter = WorkerReporter::new(
         TestCaseReporter::new(printer),
