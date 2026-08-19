@@ -158,7 +158,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             return;
         };
 
-        if let Ok(py_function) = py_module.getattr(stmt_function_def.name.to_string()) {
+        if let Ok(py_function) = py_module.getattr(stmt_function_def.name.as_str()) {
             match DiscoveredTestFunction::new_function(
                 self.py,
                 self.module,
