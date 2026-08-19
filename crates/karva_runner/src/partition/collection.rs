@@ -42,13 +42,17 @@ pub(super) fn collect_test_paths_recursive(
     previous_durations: &HashMap<TestCacheKey, Duration>,
 ) {
     for module in package.modules.values() {
+        if module.test_function_defs.is_empty() && module.doctests.is_empty() {
+            continue;
+        }
+
+        let module_name: Arc<str> = module.path.module_name().into();
+        let module_path = module.path.path();
         for test_fn_def in &module.test_function_defs {
-            let module_name: Arc<str> = module.path.module_name().into();
-            let module_path = module.path.path();
             let function_name = test_fn_def.name.as_str();
             let qualified_function: Arc<str> = format!("{module_name}::{function_name}").into();
             let identity = Arc::new(TestIdentity {
-                module_name,
+                module_name: Arc::clone(&module_name),
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
             });
@@ -90,12 +94,10 @@ pub(super) fn collect_test_paths_recursive(
         }
 
         for doctest in &module.doctests {
-            let module_name: Arc<str> = module.path.module_name().into();
-            let module_path = module.path.path();
             let function_name = doctest.name.as_str();
             let qualified_function: Arc<str> = format!("{module_name}::{function_name}").into();
             let identity = Arc::new(TestIdentity {
-                module_name,
+                module_name: Arc::clone(&module_name),
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
             });
