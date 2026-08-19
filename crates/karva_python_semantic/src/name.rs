@@ -119,7 +119,7 @@ impl Serialize for TestCacheKey {
     where
         S: Serializer,
     {
-        serializer.collect_str(self)
+        serializer.serialize_str(&self.0)
     }
 }
 
