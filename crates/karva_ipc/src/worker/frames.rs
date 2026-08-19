@@ -1,8 +1,12 @@
 //! Borrowed hot-path frames matching the owned worker protocol.
 
 use std::fmt;
+use std::time::Duration;
 
-use karva_diagnostic::TestCaseResult;
+use karva_diagnostic::{
+    CapturedTestOutput, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
+    TestCaseRetry,
+};
 use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use serde::{Serialize, Serializer};
 
@@ -22,7 +26,10 @@ pub(super) fn completion<'a>(
     cache_key: &'a TestCacheKey,
     result: &'a TestCaseResult,
 ) -> impl Serialize + 'a {
-    BorrowedEventFrame::Event(BorrowedWorkerEvent::TestFinished { cache_key, result })
+    BorrowedEventFrame::Event(BorrowedWorkerEvent::TestFinished {
+        cache_key,
+        result: BorrowedTestCaseResult::from_result(result),
+    })
 }
 
 /// Allocation-free checkpoint frame matching the owned protocol variant.
@@ -57,8 +64,50 @@ enum BorrowedWorkerEvent<'a> {
         cache_key: &'a TestCacheKey,
 
         /// Transport-safe completed test result.
-        result: &'a TestCaseResult,
+        result: BorrowedTestCaseResult<'a>,
     },
+}
+
+/// Compact completed result frame omitting identities derivable from `full_name`.
+#[derive(Serialize)]
+struct BorrowedTestCaseResult<'a> {
+    /// Fully qualified user-visible test name.
+    full_name: &'a str,
+
+    /// Final semantic outcome after retry policy has completed.
+    outcome: &'a TestCaseOutcome<RenderedDiagnostic>,
+
+    /// Total duration represented by this final result.
+    duration: Duration,
+
+    /// Retry policy and attempt count, when the test was retried.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retry: Option<&'a TestCaseRetry>,
+
+    /// Output captured during the final attempt, when non-empty.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    captured_output: Option<&'a CapturedTestOutput>,
+
+    /// Earlier attempts retained when retry policy reran the test.
+    #[serde(skip_serializing_if = "slice_is_empty")]
+    attempts: &'a [TestCaseAttempt],
+}
+
+impl<'a> BorrowedTestCaseResult<'a> {
+    fn from_result(result: &'a TestCaseResult) -> Self {
+        Self {
+            full_name: result.full_name(),
+            outcome: result.outcome(),
+            duration: result.duration(),
+            retry: result.retry(),
+            captured_output: result.captured_output(),
+            attempts: result.attempts(),
+        }
+    }
+}
+
+fn slice_is_empty<T>(value: &[T]) -> bool {
+    value.is_empty()
 }
 
 /// Stable cache identity serialized without constructing an owned string.
@@ -121,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_completion_matches_owned_wire_format() {
+    fn borrowed_completion_omits_derived_identities_and_round_trips() {
         let test_name = QualifiedTestName::new(QualifiedFunctionName::new(
             "test_example".to_string(),
             ModulePath::new_with_name("test.py", "tests.test".to_string()),
@@ -135,14 +184,31 @@ mod tests {
         );
         let borrowed = serde_json::to_value(completion(&cache_key, &result))
             .expect("serialize borrowed completion");
-        let owned = WireMessage::Event(Box::new(WorkerEvent::TestFinished {
-            cache_key,
-            result: Box::new(result),
-        }));
-
-        assert_eq!(
-            borrowed,
-            serde_json::to_value(owned).expect("serialize owned completion")
+        assert!(
+            borrowed["Event"]["TestFinished"]["result"]
+                .get("module_name")
+                .is_none()
         );
+        assert!(
+            borrowed["Event"]["TestFinished"]["result"]
+                .get("name")
+                .is_none()
+        );
+
+        let decoded: WireMessage =
+            serde_json::from_value(borrowed).expect("deserialize compact completion");
+        let (decoded_cache_key, decoded_result) = (if let WireMessage::Event(event) = decoded
+            && let WorkerEvent::TestFinished {
+                cache_key: decoded_cache_key,
+                result: decoded_result,
+            } = *event
+        {
+            Some((decoded_cache_key, decoded_result))
+        } else {
+            None
+        })
+        .expect("compact completion should decode as test result");
+        assert_eq!(decoded_cache_key, cache_key);
+        assert_eq!(*decoded_result, result);
     }
 }

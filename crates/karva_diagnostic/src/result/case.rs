@@ -30,13 +30,7 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
 /// Display identity attached to a final test result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TestCaseIdentity {
-    /// Dotted Python module containing the test.
-    module_name: String,
-
-    /// Module-relative test name, including rendered parameters.
-    name: String,
-
-    /// Fully qualified user-visible test name.
+    /// Canonical `module::name` identity; component accessors borrow slices.
     full_name: String,
 }
 
@@ -103,12 +97,18 @@ impl<D> TestCaseResult<D> {
 
     /// Returns the dotted Python module containing the test.
     pub fn module_name(&self) -> &str {
-        &self.identity.module_name
+        self.identity
+            .full_name
+            .split_once("::")
+            .map_or("unknown", |(module_name, _)| module_name)
     }
 
     /// Returns the module-relative name, including rendered parameters.
     pub fn name(&self) -> &str {
-        &self.identity.name
+        self.identity
+            .full_name
+            .split_once("::")
+            .map_or(self.identity.full_name.as_str(), |(_, name)| name)
     }
 
     /// Returns the fully qualified user-visible test name.
@@ -169,26 +169,14 @@ impl<D> TestCaseResult<D> {
 impl TestCaseIdentity {
     /// Builds identity directly from semantic worker-side names.
     fn from_test_name(test_case_name: &QualifiedTestName) -> Self {
-        let function_name = test_case_name.function_name();
-        let name = test_case_name.parameters().map_or_else(
-            || function_name.function_name().to_string(),
-            |parameters| format!("{}({parameters})", function_name.function_name()),
-        );
         Self {
-            module_name: function_name.module_path().module_name().to_string(),
-            name,
             full_name: test_case_name.to_string(),
         }
     }
 
     /// Splits the canonical `module::test` display form.
     fn from_display_name(full_name: &str) -> Self {
-        let (module_name, name) = full_name
-            .split_once("::")
-            .map_or(("unknown", full_name), |identity| identity);
         Self {
-            module_name: module_name.to_string(),
-            name: name.to_string(),
             full_name: full_name.to_string(),
         }
     }

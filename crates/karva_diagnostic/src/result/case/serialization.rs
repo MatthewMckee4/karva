@@ -17,12 +17,6 @@ use super::{
 #[derive(Deserialize)]
 #[serde(bound(deserialize = "D: Deserialize<'de>"))]
 struct SerializedTestCaseResult<D> {
-    /// Dotted Python module containing the test.
-    module_name: String,
-
-    /// Module-relative test name, including rendered parameters.
-    name: String,
-
     /// Fully qualified user-visible test name.
     full_name: String,
 
@@ -54,8 +48,8 @@ impl<D: Serialize> Serialize for TestCaseResult<D> {
             + usize::from(self.payload.captured_output.is_some())
             + usize::from(!self.payload.attempts.is_empty());
         let mut result = serializer.serialize_struct("TestCaseResult", 5 + optional_fields)?;
-        result.serialize_field("module_name", &self.identity.module_name)?;
-        result.serialize_field("name", &self.identity.name)?;
+        result.serialize_field("module_name", self.module_name())?;
+        result.serialize_field("name", self.name())?;
         result.serialize_field("full_name", &self.identity.full_name)?;
         result.serialize_field("outcome", &self.payload.outcome)?;
         result.serialize_field("duration", &self.payload.duration)?;
@@ -80,8 +74,6 @@ impl<'de, D: Deserialize<'de>> Deserialize<'de> for TestCaseResult<D> {
         let result = SerializedTestCaseResult::deserialize(deserializer)?;
         Ok(Self {
             identity: TestCaseIdentity {
-                module_name: result.module_name,
-                name: result.name,
                 full_name: result.full_name,
             },
             payload: TestCaseResultPayload {
