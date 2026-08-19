@@ -239,9 +239,7 @@ fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
             Some(None) => {}
             Some(existing @ Some(_)) if test_path.parametrize_index.is_none() => *existing = None,
             Some(Some(indices)) => {
-                if let Some(index) = test_path.parametrize_index
-                    && !indices.contains(&index)
-                {
+                if let Some(index) = test_path.parametrize_index {
                     indices.push(index);
                 }
             }
@@ -356,4 +354,51 @@ fn discover_framework_fixtures(
     }
 
     Some(framework_module)
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+    use karva_project::path::TestPathFunction;
+
+    use super::build_case_filter;
+
+    fn test_path(parametrize_index: Option<usize>) -> TestPathFunction {
+        TestPathFunction {
+            path: Utf8PathBuf::from("tests/test_example.py"),
+            function_name: "test_example".to_string(),
+            parametrize_index,
+        }
+    }
+
+    #[test]
+    fn sorts_and_deduplicates_case_indices() {
+        let filter = build_case_filter(&[
+            test_path(Some(3)),
+            test_path(Some(1)),
+            test_path(Some(3)),
+            test_path(Some(2)),
+        ]);
+
+        assert_eq!(
+            filter.get(&(
+                Utf8PathBuf::from("tests/test_example.py"),
+                "test_example".to_string(),
+            )),
+            Some(&Some(vec![1, 2, 3]))
+        );
+    }
+
+    #[test]
+    fn bare_selector_keeps_all_case_indices() {
+        let filter = build_case_filter(&[test_path(Some(2)), test_path(None), test_path(Some(1))]);
+
+        assert_eq!(
+            filter.get(&(
+                Utf8PathBuf::from("tests/test_example.py"),
+                "test_example".to_string(),
+            )),
+            Some(&None)
+        );
+    }
 }
