@@ -103,12 +103,21 @@ pub(super) struct CompiledTestPlan {
     runtime_tags: RuntimeTags,
 }
 
-impl CompiledTestPlan {
-    /// Resolves all fixture roots for one test without executing fixture code.
+/// Per-test roots and parameter cases compiled against a module fixture arena.
+pub(super) struct PendingTestPlan {
+    fixture_dependencies: Rc<[FixtureId]>,
+    use_fixture_dependencies: Rc<[FixtureId]>,
+    auto_use_fixtures: Rc<[FixtureId]>,
+    parameters: ParameterPlan,
+    runtime_tags: RuntimeTags,
+}
+
+impl PendingTestPlan {
+    /// Resolves one test's fixture roots without executing fixture code.
     pub(super) fn compile(
         py: Python,
         test: &DiscoveredTestFunction,
-        mut compiler: FixturePlanCompiler<'_>,
+        compiler: &mut FixturePlanCompiler<'_>,
     ) -> FixtureResolutionResult<Self> {
         let tags = CompiledTags::new(&test.tags);
         let parametrize_param_names = tags.parameter_names();
@@ -126,13 +135,24 @@ impl CompiledTestPlan {
         let (parameters, runtime_tags) = tags.into_runtime();
 
         Ok(Self {
-            fixture_plan: Rc::new(compiler.finish()),
             fixture_dependencies: Rc::from(fixture_dependencies),
             use_fixture_dependencies: Rc::from(use_fixture_dependencies),
             auto_use_fixtures: Rc::from(auto_use_fixtures),
             parameters,
             runtime_tags,
         })
+    }
+
+    /// Attaches the immutable arena shared by every test in the module.
+    pub(super) fn finish(self, fixture_plan: Rc<FixturePlan>) -> CompiledTestPlan {
+        CompiledTestPlan {
+            fixture_plan,
+            fixture_dependencies: self.fixture_dependencies,
+            use_fixture_dependencies: self.use_fixture_dependencies,
+            auto_use_fixtures: self.auto_use_fixtures,
+            parameters: self.parameters,
+            runtime_tags: self.runtime_tags,
+        }
     }
 }
 

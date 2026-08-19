@@ -331,6 +331,55 @@ fn test_missing_fixture() {
 }
 
 #[test]
+fn test_fixture_resolution_error_does_not_block_other_tests() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def valid_fixture():
+    return 42
+
+@karva.fixture
+def broken_fixture(missing_fixture):
+    return missing_fixture
+
+def test_broken(broken_fixture):
+    pass
+
+def test_valid(valid_fixture):
+    assert valid_fixture == 42
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+           ERROR [TIME] test::test_broken
+            PASS [TIME] test::test_valid(valid_fixture=42)
+
+    failures:
+
+    test::test_broken:
+
+    error[missing-fixtures]: Fixture `broken_fixture` has missing fixtures
+     --> test.py:9:5
+      |
+    9 | def broken_fixture(missing_fixture):
+      |     ^^^^^^^^^^^^^^
+    info: Missing fixtures: `missing_fixture`
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_fixture_fails_to_run() {
     let context = TestContext::with_file(
         "test.py",

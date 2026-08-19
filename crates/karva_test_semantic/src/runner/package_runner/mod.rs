@@ -1,6 +1,7 @@
 //! Package-tree orchestration and run-wide execution state.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use karva_coverage::CoverageSession;
 use karva_python_semantic::QualifiedTestName;
@@ -11,7 +12,7 @@ use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFuncti
 use crate::extensions::fixtures::FixtureScope;
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionError};
 use crate::runner::scoped_storage::ScopeKey;
-use crate::runner::test_iterator::{CompiledTestPlan, TestVariantIterator};
+use crate::runner::test_iterator::{CompiledTestPlan, PendingTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::{Context, RunState};
 
@@ -164,10 +165,19 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         child_parents.push(package);
 
         for module in package.modules().values() {
+            let mut compiler = FixturePlanCompiler::new(&child_parents, module, package.path());
+            let mut module_plans = Vec::with_capacity(module.test_functions().len());
+
             for test in module.test_functions() {
-                let compiler = FixturePlanCompiler::new(&child_parents, module, package.path());
-                let plan = CompiledTestPlan::compile(py, test, compiler);
-                plans.insert(test.name().to_string(), plan);
+                module_plans.push((
+                    test.name().to_string(),
+                    PendingTestPlan::compile(py, test, &mut compiler),
+                ));
+            }
+
+            let fixture_plan = Rc::new(compiler.finish());
+            for (name, plan) in module_plans {
+                plans.insert(name, plan.map(|plan| plan.finish(Rc::clone(&fixture_plan))));
             }
         }
 
