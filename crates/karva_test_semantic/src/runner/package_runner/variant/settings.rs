@@ -13,7 +13,7 @@ use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::runner::fixture_arguments::FixtureArguments;
-use crate::utils::test_parameters;
+use crate::utils::{test_parameters, truncate_string};
 
 use super::VariantRunner;
 
@@ -176,15 +176,34 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 snapshot_test_name.push_str(parameters);
                 snapshot_test_name.push(')');
             }
-        } else if let Some(parameters) = test_parameters(
-            self.py,
-            function_arguments,
-            self.input.test.parameters(),
-            &fixture_names,
-        ) {
-            snapshot_test_name.push('(');
-            snapshot_test_name.push_str(&parameters);
-            snapshot_test_name.push(')');
+        } else {
+            let parameters = if !fixture_names.is_empty()
+                && function_arguments.len() == fixture_names.len()
+                && fixture_names
+                    .iter()
+                    .all(|name| function_arguments.contains(name))
+            {
+                let mut rendered = String::new();
+                for (index, name) in fixture_names.iter().enumerate() {
+                    if index > 0 {
+                        rendered.push_str(", ");
+                    }
+                    rendered.push_str(&truncate_string(name));
+                }
+                Some(rendered)
+            } else {
+                test_parameters(
+                    self.py,
+                    function_arguments,
+                    self.input.test.parameters(),
+                    &fixture_names,
+                )
+            };
+            if let Some(parameters) = parameters {
+                snapshot_test_name.push('(');
+                snapshot_test_name.push_str(&parameters);
+                snapshot_test_name.push(')');
+            }
         }
         let snapshot_context =
             SnapshotContext::new(self.input.module_path.to_string(), snapshot_test_name);

@@ -34,6 +34,16 @@ impl FixtureArguments {
         self.inner.is_empty()
     }
 
+    /// Returns the number of prepared arguments.
+    pub(crate) fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Returns whether an argument with the given name is prepared.
+    pub(crate) fn contains(&self, name: &str) -> bool {
+        self.inner.contains_key(name)
+    }
+
     /// Iterates arguments in unspecified hash-map order.
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Py<PyAny>> {
         self.inner.iter()

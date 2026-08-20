@@ -112,6 +112,54 @@ def test_response(machine_path, tmp_path: Path, monkeypatch: karva.MockEnv, ok):
 }
 
 #[test]
+fn test_json_snapshot_fixture_names_use_signature_order_and_truncation() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def first_fixture():
+    return 1
+
+@karva.fixture
+def fixture_very_very_very_very_very_long_name():
+    return 2
+
+def test_fixture_only(fixture_very_very_very_very_very_long_name, first_fixture):
+    karva.assert_json_snapshot({"ok": True})
+        "#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--snapshot-update", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let content = context.read_file(
+        "snapshots/test__test_fixture_only(fixture_very_very_very_very..., first_fixture).snap",
+    );
+    insta::assert_snapshot!(content, @r#"
+    ---
+    source: test.py:13::test_fixture_only(fixture_very_very_very_very..., first_fixture)
+    ---
+    {
+      "ok": true
+    }
+    "#);
+}
+
+#[test]
 fn test_json_snapshot_nested_data() {
     let context = TestContext::with_file(
         "test.py",
