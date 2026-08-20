@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
 
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_coroutine, run_test_with_timeout};
@@ -115,13 +116,21 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 return Err(error.clone_ref(self.py));
             }
             if function_arguments.is_empty() || settings.execution.timeout_seconds.is_some() {
-                Ok(None)
+                Ok(PreparedCall::Empty)
+            } else if let Some(statement) = self.input.test.function_statement()
+                && statement.decorator_list.is_empty()
+                && let Some(parameters) = self.input.test.parameters()
+                && let Some(arguments) = function_arguments.to_positional(self.py, parameters)?
+            {
+                Ok(PreparedCall::Positional(arguments))
             } else {
-                function_arguments.to_kwargs(self.py).map(Some)
+                function_arguments
+                    .to_kwargs(self.py)
+                    .map(PreparedCall::Keyword)
             }
         });
         let (test_result, call_duration) = match prepared_call {
-            Ok(keyword_arguments) => {
+            Ok(call) => {
                 let call_start = Instant::now();
                 let result = if let Some(seconds) = settings.execution.timeout_seconds {
                     run_test_with_timeout(
@@ -133,10 +142,14 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                         &settings.identity.snapshot_context,
                     )
                 } else {
-                    let result = if let Some(keyword_arguments) = keyword_arguments {
-                        function.call(self.py, (), Some(&keyword_arguments))
-                    } else {
-                        function.call0(self.py)
+                    let result = match call {
+                        PreparedCall::Empty => function.call0(self.py),
+                        PreparedCall::Positional(arguments) => {
+                            function.call(self.py, &arguments, None)
+                        }
+                        PreparedCall::Keyword(arguments) => {
+                            function.call(self.py, (), Some(&arguments))
+                        }
                     };
                     if settings.execution.is_async {
                         result.and_then(|coroutine| run_coroutine(self.py, coroutine))
@@ -168,6 +181,12 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             retryable: result.retryable,
         }
     }
+}
+
+enum PreparedCall<'py> {
+    Empty,
+    Positional(Bound<'py, PyTuple>),
+    Keyword(Bound<'py, PyDict>),
 }
 
 /// Test-body result before common teardown and duration policy are applied.

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyTuple};
 use ruff_python_ast::Parameters;
 
 /// Keyword arguments resolved for a test or fixture call.
@@ -68,6 +68,32 @@ impl FixtureArguments {
             kwargs.set_item(key, value)?;
         }
         Ok(kwargs)
+    }
+
+    /// Builds positional arguments when every value fills the signature prefix.
+    pub(crate) fn to_positional<'py>(
+        &self,
+        py: Python<'py>,
+        parameters: &Parameters,
+    ) -> PyResult<Option<Bound<'py, PyTuple>>> {
+        if !parameters.posonlyargs.is_empty() || self.inner.len() > parameters.args.len() {
+            return Ok(None);
+        }
+
+        let Some(values) = parameters
+            .args
+            .iter()
+            .take(self.inner.len())
+            .map(|parameter| self.inner.get(parameter.name().as_str()))
+            .collect::<Option<Vec<_>>>()
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(PyTuple::new(
+            py,
+            values.into_iter().map(|value| value.bind(py)),
+        )?))
     }
 }
 
