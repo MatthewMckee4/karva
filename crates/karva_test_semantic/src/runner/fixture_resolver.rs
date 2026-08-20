@@ -277,12 +277,10 @@ impl<'a> FixturePlanCompiler<'a> {
         test: &DiscoveredTestFunction,
         parametrize_param_names: &HashSet<&str>,
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
-        let fixture_names = test.required_fixtures();
-        let regular_fixture_names: Vec<&str> = fixture_names
-            .iter()
-            .filter(|name| !parametrize_param_names.contains(*name))
-            .copied()
-            .collect();
+        let mut fixture_names = test.required_fixtures();
+        if !parametrize_param_names.is_empty() {
+            fixture_names.retain(|name| !parametrize_param_names.contains(*name));
+        }
 
         // Wrapped and Hypothesis decorators can supply arguments declared in source.
         let decorator_supplies_arguments = test.py_function.getattr(py, "__wrapped__").is_ok()
@@ -290,7 +288,7 @@ impl<'a> FixturePlanCompiler<'a> {
         let missing_fixtures = if decorator_supplies_arguments {
             Vec::new()
         } else {
-            regular_fixture_names
+            fixture_names
                 .iter()
                 .filter(|name| !self.lookup_root_fixture(name).is_found())
                 .map(|name| (*name).to_owned())
@@ -305,7 +303,7 @@ impl<'a> FixturePlanCompiler<'a> {
         }
 
         let mut path = FixturePath::default();
-        self.get_dependent_fixtures(py, None, &regular_fixture_names, &mut path)
+        self.get_dependent_fixtures(py, None, &fixture_names, &mut path)
     }
 
     /// Resolves fixtures requested only for their side effects.
