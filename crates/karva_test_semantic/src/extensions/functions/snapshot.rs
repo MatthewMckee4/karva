@@ -236,7 +236,7 @@ pub fn assert_cmd_snapshot(
 ) -> PyResult<()> {
     let output = run_command(cmd)?;
     let serialized = format_cmd_output(&output);
-    let serialized = apply_active_filters(&serialized)?;
+    let serialized = apply_active_filters(serialized)?;
     assert_snapshot_impl(py, &serialized, inline, name)
 }
 
@@ -246,7 +246,7 @@ fn is_allow_duplicates_active() -> bool {
 }
 
 /// Collect all filters from the settings stack and apply them to the input.
-fn apply_active_filters(input: &str) -> PyResult<String> {
+fn apply_active_filters(input: String) -> PyResult<String> {
     SNAPSHOT_SETTINGS.with(|stack| {
         let stack = stack.borrow();
         let mut compiled = Vec::new();
@@ -261,9 +261,9 @@ fn apply_active_filters(input: &str) -> PyResult<String> {
             }
         }
         if compiled.is_empty() {
-            return Ok(input.to_string());
+            return Ok(input);
         }
-        Ok(apply_filters(input, &compiled))
+        Ok(apply_filters(&input, &compiled))
     })
 }
 
@@ -321,7 +321,7 @@ pub fn assert_snapshot(
     name: Option<&str>,
 ) -> PyResult<()> {
     let serialized = serialize_value(py, &value)?;
-    let serialized = apply_active_filters(&serialized)?;
+    let serialized = apply_active_filters(serialized)?;
     assert_snapshot_impl(py, &serialized, inline, name)
 }
 
@@ -340,7 +340,7 @@ pub fn assert_json_snapshot(
     name: Option<&str>,
 ) -> PyResult<()> {
     let serialized = serialize_json(py, &value)?;
-    let serialized = apply_active_filters(&serialized)?;
+    let serialized = apply_active_filters(serialized)?;
     assert_snapshot_impl(py, &serialized, inline, name)
 }
 
