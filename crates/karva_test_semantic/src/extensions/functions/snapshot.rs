@@ -228,17 +228,16 @@ fn command_error(action: &str, cmd: &process::Command, err: &io::Error) -> PyErr
 /// the output in insta-cmd style before comparing against the snapshot.
 #[pyfunction]
 #[pyo3(signature = (cmd, *, inline=None, name=None))]
-#[expect(clippy::needless_pass_by_value)]
 pub fn assert_cmd_snapshot(
     py: Python<'_>,
     cmd: &mut Command,
-    inline: Option<String>,
-    name: Option<String>,
+    inline: Option<&str>,
+    name: Option<&str>,
 ) -> PyResult<()> {
     let output = run_command(cmd)?;
     let serialized = format_cmd_output(&output);
     let serialized = apply_active_filters(&serialized)?;
-    assert_snapshot_impl(py, &serialized, inline.as_deref(), name.as_deref())
+    assert_snapshot_impl(py, &serialized, inline, name)
 }
 
 /// Check if any active settings scope has `allow_duplicates` enabled.
@@ -318,12 +317,12 @@ pub fn set_snapshot_thread_state(state: SnapshotThreadState) {
 pub fn assert_snapshot(
     py: Python<'_>,
     value: Py<PyAny>,
-    inline: Option<String>,
-    name: Option<String>,
+    inline: Option<&str>,
+    name: Option<&str>,
 ) -> PyResult<()> {
     let serialized = serialize_value(py, &value)?;
     let serialized = apply_active_filters(&serialized)?;
-    assert_snapshot_impl(py, &serialized, inline.as_deref(), name.as_deref())
+    assert_snapshot_impl(py, &serialized, inline, name)
 }
 
 /// Assert that a value matches a stored snapshot, serialized as JSON.
@@ -337,12 +336,12 @@ pub fn assert_snapshot(
 pub fn assert_json_snapshot(
     py: Python<'_>,
     value: Py<PyAny>,
-    inline: Option<String>,
-    name: Option<String>,
+    inline: Option<&str>,
+    name: Option<&str>,
 ) -> PyResult<()> {
     let serialized = serialize_json(py, &value)?;
     let serialized = apply_active_filters(&serialized)?;
-    assert_snapshot_impl(py, &serialized, inline.as_deref(), name.as_deref())
+    assert_snapshot_impl(py, &serialized, inline, name)
 }
 
 /// Shared implementation for snapshot assertions.
