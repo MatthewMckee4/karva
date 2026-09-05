@@ -140,7 +140,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: "Install Rust toolchain"
         run: rustup component add clippy
@@ -162,7 +162,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: editors/zed
 
@@ -217,7 +217,7 @@ jobs:
           persist-credentials: false
 
       - name: "Install cargo shear"
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
+        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
           tool: cargo-shear@1.12.4
 
@@ -243,13 +243,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: "Install Rust toolchain"
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
+        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
           tool: cargo-nextest
 
@@ -327,13 +327,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: "Install Rust toolchain"
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
+        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
           tool: cargo-nextest
 
@@ -376,7 +376,7 @@ jobs:
           persist-credentials: false
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@18b1216eba7f8039b0f8d131d5473787f0edce68 # v2.85.3
+        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
         with:
           tool: cargo-nextest
 
