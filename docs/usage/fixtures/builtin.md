@@ -326,6 +326,35 @@ def test_old_entrypoint():
         warnings.warn("old entrypoint", FutureWarning)
 ```
 
+Both helpers also accept a callable, positional arguments, and keyword
+arguments. They return the callable's result after checking its warnings.
+In callable mode, all keywords are forwarded to the callable, including a
+keyword named `match`. In context-manager mode, `match` matches the warning
+message.
+
+```py title="test.py"
+import warnings
+
+import karva
+
+
+def old_entrypoint(name, *, match):
+    warnings.warn(f"{name}: {match}", DeprecationWarning)
+    return f"{name}: {match}"
+
+
+def emit_warning(value, *, match):
+    warnings.warn(match, UserWarning)
+    return value
+
+
+def test_callable_forms():
+    assert karva.warns(UserWarning, emit_warning, 42, match="value") == 42
+    assert karva.deprecated_call(old_entrypoint, "old", match="entrypoint") == (
+        "old: entrypoint"
+    )
+```
+
 The `recwarn` fixture captures every warning raised during the test. It behaves like a list of `warnings.WarningMessage` objects — you can index into it, iterate it, and take its length.
 
 ```py title="test.py"

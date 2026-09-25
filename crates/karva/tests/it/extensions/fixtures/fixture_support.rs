@@ -181,6 +181,85 @@ def test_deprecated_call_accepts_deprecation_warnings():
 }
 
 #[test]
+fn test_warning_assertion_callables() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+
+
+def emit_warning(value, *, label, match):
+    warnings.warn(f"{label}: {match}", UserWarning)
+    return value
+
+
+def emit_deprecation(prefix, *, match):
+    warnings.warn(f"{prefix}: {match}", DeprecationWarning)
+    return f"{prefix}: {match}"
+
+
+def raise_after_warning():
+    warnings.warn("before failure", UserWarning)
+    raise ValueError("callback failure")
+
+
+def test_warns_callable_returns_and_forwards_arguments():
+    assert karva.warns(
+        UserWarning,
+        emit_warning,
+        42,
+        label="value 42",
+        match="callable keyword",
+    ) == 42
+
+
+def test_deprecated_call_forwards_match_keyword():
+    assert karva.deprecated_call(emit_deprecation, "old", match="entrypoint") == (
+        "old: entrypoint"
+    )
+
+
+def test_callable_exception_propagates_and_restores_filters():
+    original_filters = warnings.filters[:]
+    with karva.raises(ValueError, match="callback failure"):
+        karva.warns(UserWarning, raise_after_warning)
+    assert warnings.filters == original_filters
+
+
+def test_callable_validation_and_warning_failures():
+    with karva.raises(TypeError, match="must be callable"):
+        karva.warns(UserWarning, 42)
+
+    with karva.raises(TypeError, match="must be callable"):
+        karva.deprecated_call(42)
+
+    with karva.raises(AssertionError, match="No warnings of type"):
+        karva.warns(UserWarning, lambda: None)
+
+    with karva.raises(AssertionError, match="No warnings of type"):
+        karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
+
+
+def test_deprecated_call_context_still_matches():
+    with karva.deprecated_call(match="entrypoint"):
+        warnings.warn("old entrypoint", FutureWarning)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 5 tests run: 5 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_warning_assertion_failures_and_cleanup() {
     let context = TestContext::with_file(
         "test.py",
