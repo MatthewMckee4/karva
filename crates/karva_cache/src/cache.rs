@@ -367,7 +367,10 @@ mod tests {
 
         assert_eq!(
             artifacts.coverage_files()?,
-            vec![artifacts.coverage_data_file(2), artifacts.coverage_data_file(10)]
+            vec![
+                artifacts.coverage_data_file(2),
+                artifacts.coverage_data_file(10)
+            ]
         );
         Ok(())
     }
