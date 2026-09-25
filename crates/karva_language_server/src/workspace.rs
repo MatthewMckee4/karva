@@ -1,6 +1,7 @@
 //! Karva project discovery isolated by LSP workspace folder.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -23,6 +24,14 @@ pub enum WorkspaceError {
     /// The file URI has no containing directory.
     #[error("document has no containing directory: {0}")]
     MissingParent(Utf8PathBuf),
+
+    /// The process current directory could not be read while creating the default workspace.
+    #[error("failed to determine process current directory: {0}")]
+    CurrentDirectory(#[source] std::io::Error),
+
+    /// The process current directory is not valid UTF-8.
+    #[error("process current directory is not UTF-8: {0:?}")]
+    NonUtf8CurrentDirectory(PathBuf),
 
     /// Karva configuration discovery failed.
     #[error(transparent)]
@@ -79,10 +88,32 @@ impl Workspaces {
         python_version: PythonVersion,
         profile: Option<String>,
     ) -> Result<Self, WorkspaceError> {
+        Self::new_with_current_directory(folders, python_version, profile, || {
+            std::env::current_dir()
+                .map_err(WorkspaceError::CurrentDirectory)
+                .and_then(|path| {
+                    Utf8PathBuf::from_path_buf(path)
+                        .map_err(WorkspaceError::NonUtf8CurrentDirectory)
+                })
+        })
+    }
+
+    fn new_with_current_directory(
+        folders: Vec<WorkspaceFolder>,
+        python_version: PythonVersion,
+        profile: Option<String>,
+        current_directory: impl FnOnce() -> Result<Utf8PathBuf, WorkspaceError>,
+    ) -> Result<Self, WorkspaceError> {
         let roots = folders
             .iter()
             .map(|folder| uri_to_path(&folder.uri).map(Workspace::new))
             .collect::<Result<Vec<_>, _>>()?;
+        let roots = if roots.is_empty() {
+            let current_directory = current_directory()?;
+            vec![Workspace::new(current_directory)]
+        } else {
+            roots
+        };
         Ok(Self {
             folders,
             profile,
@@ -323,6 +354,58 @@ mod tests {
 
         assert_eq!(project.cwd(), &root);
         assert_eq!(prefix(&project), "test");
+    }
+
+    #[test]
+    fn missing_workspace_folders_use_process_current_directory() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let root = root(&temp_dir);
+        fs::write(
+            root.join("karva.toml"),
+            "[profile.default.test]\ntest-function-prefix = \"workspace_\"\n",
+        )
+        .expect("write Karva configuration");
+        let nested = root.join("src/package");
+        fs::create_dir_all(&nested).expect("create nested source directory");
+        let mut workspaces =
+            Workspaces::new_with_current_directory(Vec::new(), PythonVersion::PY311, None, || {
+                Ok(root.clone())
+            })
+            .expect("create default workspace");
+
+        let project = workspaces
+            .project_for_uri(&file_uri(&nested.join("test_example.py")))
+            .expect("discover project from default workspace");
+
+        assert_eq!(project.cwd(), &root);
+        assert_eq!(prefix(&project), "workspace_");
+    }
+
+    #[test]
+    fn empty_workspace_folders_use_real_process_current_directory() {
+        let expected = Utf8PathBuf::from_path_buf(
+            std::env::current_dir().expect("process current directory should be readable"),
+        )
+        .expect("process current directory should be UTF-8");
+
+        let workspaces = Workspaces::new(Vec::new(), PythonVersion::PY311, None)
+            .expect("create default workspace");
+
+        assert_eq!(workspaces.roots[0].root, expected);
+    }
+
+    #[test]
+    fn reports_current_directory_failure_without_workspace_folders() {
+        let error =
+            Workspaces::new_with_current_directory(Vec::new(), PythonVersion::PY311, None, || {
+                Err(WorkspaceError::CurrentDirectory(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "current directory unavailable",
+                )))
+            })
+            .expect_err("default workspace creation should fail");
+
+        assert!(matches!(error, WorkspaceError::CurrentDirectory(_)));
     }
 
     #[test]
