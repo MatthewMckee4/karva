@@ -9,6 +9,7 @@ _ScopeName: TypeAlias = Literal["session", "package", "module", "function"]
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
+_E = TypeVar("_E", bound=BaseException)
 
 
 def karva_run() -> int:
@@ -137,9 +138,10 @@ class RaisesContext:
 
 
 def raises(
-    expected_exception: type[BaseException],
+    expected_exception: type[_E],
     *,
     match: str | None = None,
+    check: Callable[[_E], bool] | None = None,
 ) -> RaisesContext:
     """Assert that a block of code raises a specific exception.
 
@@ -147,6 +149,8 @@ def raises(
         expected_exception: The expected exception type.
         match: An optional regex pattern to match against the string
             representation of the exception.
+        check: An optional callback called with the exception after type and
+            match checks. It must return True for the exception to match.
 
     """
 

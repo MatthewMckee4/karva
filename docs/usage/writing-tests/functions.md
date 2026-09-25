@@ -100,6 +100,19 @@ def test_function():
         raise ValueError("something went wrong")
 ```
 
+Use `check` to validate structured exception attributes after the type and
+`match` checks pass. The callback receives the raised exception and must return
+`True` for the context to succeed.
+
+```python title="test.py"
+import errno
+import karva
+
+def test_permission_error():
+    with karva.raises(OSError, check=lambda error: error.errno == errno.EACCES):
+        raise OSError(errno.EACCES, "permission denied")
+```
+
 You can access the exception info by using the `as` keyword. The returned object has `type`, `value`, and `tb` properties.
 
 ```python title="test.py"

@@ -777,3 +777,175 @@ def test_raises_subclass():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_raises_check_passes_after_match() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_passes_after_match():
+    calls = []
+
+    def check(error):
+        calls.append(str(error))
+        return error.args == (13, "permission denied")
+
+    with karva.raises(OSError, match="permission", check=check) as exc_info:
+        raise OSError(13, "permission denied")
+
+    assert calls == ["[Errno 13] permission denied"]
+    assert exc_info.value.args == (13, "permission denied")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_passes_after_match
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_failure_reports_diagnostic() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_failure():
+    with karva.raises(OSError, check=lambda error: error.errno == 13):
+        raise OSError(2, "not found")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_raises_check_failure
+
+    failures:
+
+    test::test_raises_check_failure:
+
+    error[test-failure]: Test `test_raises_check_failure` failed
+     --> test.py:4:5
+      |
+    4 | def test_raises_check_failure():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     with karva.raises(OSError, check=lambda error: error.errno == 13):
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Raised exception check did not return True
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_exception_propagates() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_exception_propagates():
+    def check(_error):
+        raise RuntimeError("check failed")
+
+    with karva.raises(RuntimeError):
+        with karva.raises(ValueError, check=check):
+            raise ValueError("value")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_exception_propagates
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_rejects_non_callable_check() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_rejects_non_callable_check():
+    with karva.raises(TypeError, match="check must be callable"):
+        karva.raises(ValueError, check=42)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_rejects_non_callable_check
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_runs_only_after_type_and_match() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_runs_only_after_type_and_match():
+    def unexpected_check(_error):
+        raise AssertionError("check should not run")
+
+    with karva.raises(TypeError):
+        with karva.raises(ValueError, check=unexpected_check):
+            raise TypeError("wrong type")
+
+    with karva.raises(karva.FailError, match="did not match pattern"):
+        with karva.raises(ValueError, match="expected", check=unexpected_check):
+            raise ValueError("wrong message")
+
+    with karva.raises(karva.FailError, match="DID NOT RAISE"):
+        with karva.raises(ValueError, check=unexpected_check):
+            pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_runs_only_after_type_and_match
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
