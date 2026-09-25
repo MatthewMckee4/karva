@@ -348,6 +348,50 @@ fn rejects_wrong_run_id() {
 }
 
 #[test]
+fn rejects_event_before_handshake() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    let address = server.endpoint();
+    let (release_worker, wait_for_release) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        let mut stream = ControllerStream::connect(&address).expect("connect worker");
+        serde_json::to_writer(
+            &mut stream,
+            &WireMessage::Event(Box::new(WorkerEvent::TestSlow)),
+        )
+        .expect("write event before handshake");
+        stream.write_all(b"\n").expect("frame event");
+        stream.flush().expect("flush event");
+        wait_for_release
+            .recv()
+            .expect("release worker after controller rejection");
+    });
+
+    accept_connections(&mut server, 1);
+    let deadline = Instant::now() + BUFFERED_EVENT_TIMEOUT;
+    let result = loop {
+        if let Err(error) = server.try_recv() {
+            break error;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "controller did not reject event before handshake"
+        );
+        thread::yield_now();
+    };
+    release_worker
+        .send(())
+        .expect("release worker after controller rejection");
+    worker.join().expect("join worker");
+    server.finish().expect("finish readers");
+
+    assert!(
+        result
+            .to_string()
+            .contains("Karva worker sent an event before its handshake")
+    );
+}
+
+#[test]
 fn reset_connections_are_clean_disconnects() {
     for kind in [ErrorKind::ConnectionReset, ErrorKind::ConnectionAborted] {
         let error = serde_json::Error::io(std::io::Error::from(kind));
