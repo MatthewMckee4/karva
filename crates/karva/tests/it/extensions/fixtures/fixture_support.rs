@@ -21,6 +21,7 @@
 //! See the pytest license block in the repository `LICENSE` file for the
 //! applicable copyright notice.
 
+use insta::Settings;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -378,6 +379,83 @@ def test_warning_message_mismatch():
     captured stderr:
     <temp_dir>/test.py:14: UserWarning: different message
       warnings.warn("different message", UserWarning)
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_warning_assertion_callable_diagnostics() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+
+
+def test_callable_missing_warning():
+    karva.warns(UserWarning, lambda: None)
+
+
+def test_callable_wrong_warning():
+    karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
+"#,
+    );
+
+    let mut settings = Settings::clone_current();
+    settings.add_filter(
+        r"/[^ \n]+/python/karva/_fixtures/recwarn\.py",
+        "<karva>/python/karva/_fixtures/recwarn.py",
+    );
+    let _settings_scope = settings.bind_to_scope();
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_callable_missing_warning
+            FAIL [TIME] test::test_callable_wrong_warning
+
+    failures:
+
+    test::test_callable_missing_warning:
+
+    error[test-failure]: Test `test_callable_missing_warning` failed
+     --> test.py:7:5
+      |
+    7 | def test_callable_missing_warning():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+       --> <karva>/python/karva/_fixtures/recwarn.py:168:17
+        |
+    168 |                 raise AssertionError(
+        |                 ^^^^^^^^^^^^^^^^^^^^^
+    info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
+           Emitted warnings: [].
+
+    test::test_callable_wrong_warning:
+
+    error[test-failure]: Test `test_callable_wrong_warning` failed
+      --> test.py:11:5
+       |
+    11 | def test_callable_wrong_warning():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+       --> <karva>/python/karva/_fixtures/recwarn.py:168:17
+        |
+    168 |                 raise AssertionError(
+        |                 ^^^^^^^^^^^^^^^^^^^^^
+    info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
+           Emitted warnings: [RuntimeWarning('wrong')].
+
+    captured stderr:
+    <temp_dir>/test.py:12: RuntimeWarning: wrong
+      karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
