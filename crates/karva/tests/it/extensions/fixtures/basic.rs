@@ -564,6 +564,75 @@ def test_database(database):
 }
 
 #[test]
+fn test_nested_conftest_fixture_overrides_chain_to_each_outer_fixture() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r#"
+import karva
+
+@karva.fixture
+def database():
+    return "root"
+"#,
+        ),
+        (
+            "nested/conftest.py",
+            r#"
+import karva
+
+@karva.fixture
+def database(database):
+    return "nested-" + database
+"#,
+        ),
+        (
+            "nested/inner/conftest.py",
+            r#"
+import karva
+
+@karva.fixture
+def database(database):
+    return "inner-" + database
+"#,
+        ),
+        (
+            "nested/inner/test_example.py",
+            r#"
+def test_database(database):
+    assert database == "inner-nested-root"
+"#,
+        ),
+        (
+            "nested/inner/test_local.py",
+            r#"
+import karva
+
+@karva.fixture
+def database(database):
+    return "local-" + database
+
+def test_database(database):
+    assert database == "local-inner-nested-root"
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] nested.inner.test_example::test_database(database='inner-nested-root')
+            PASS [TIME] nested.inner.test_local::test_database(database='local-inner-nested-root')
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_same_named_session_fixtures_do_not_share_values() {
     let context = TestContext::with_files([
         (
