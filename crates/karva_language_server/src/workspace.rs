@@ -216,6 +216,7 @@ pub(crate) fn uri_to_path(uri: &Uri) -> Result<Utf8PathBuf, WorkspaceError> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
     use std::fs;
 
     use ruff_python_ast::PythonVersion;
@@ -392,6 +393,29 @@ mod tests {
             .expect("create default workspace");
 
         assert_eq!(workspaces.roots[0].root, expected);
+    }
+
+    #[test]
+    fn explicit_workspace_folders_skip_process_current_directory() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let root = root(&temp_dir);
+        let called = Cell::new(false);
+
+        let workspaces = Workspaces::new_with_current_directory(
+            vec![folder(&root, "root")],
+            PythonVersion::PY311,
+            None,
+            || {
+                called.set(true);
+                Err(WorkspaceError::CurrentDirectory(std::io::Error::other(
+                    "current directory should not be read",
+                )))
+            },
+        )
+        .expect("create explicit workspace");
+
+        assert!(!called.get());
+        assert_eq!(workspaces.roots[0].root, root);
     }
 
     #[test]
