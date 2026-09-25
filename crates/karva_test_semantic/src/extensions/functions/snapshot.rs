@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io;
@@ -236,7 +237,7 @@ pub fn assert_cmd_snapshot(
 ) -> PyResult<()> {
     let output = run_command(cmd)?;
     let serialized = format_cmd_output(&output);
-    let serialized = apply_active_filters(serialized)?;
+    let serialized = apply_active_filters(Cow::Owned(serialized))?;
     assert_snapshot_impl(py, &serialized, inline, name)
 }
 
@@ -246,7 +247,8 @@ fn is_allow_duplicates_active() -> bool {
 }
 
 /// Collect all filters from the settings stack and apply them to the input.
-fn apply_active_filters(input: String) -> PyResult<String> {
+/// Unfiltered values keep their borrowed representation for comparison.
+fn apply_active_filters(input: Cow<'_, str>) -> PyResult<Cow<'_, str>> {
     SNAPSHOT_SETTINGS.with(|stack| {
         let stack = stack.borrow();
         let mut compiled = Vec::new();
@@ -263,7 +265,7 @@ fn apply_active_filters(input: String) -> PyResult<String> {
         if compiled.is_empty() {
             return Ok(input);
         }
-        Ok(apply_filters(&input, &compiled))
+        Ok(Cow::Owned(apply_filters(&input, &compiled)))
     })
 }
 
@@ -320,8 +322,8 @@ pub fn assert_snapshot(
     inline: Option<&str>,
     name: Option<&str>,
 ) -> PyResult<()> {
-    let serialized = serialize_value(py, &value)?;
-    let serialized = apply_active_filters(serialized)?;
+    let value = value.bind(py).str()?;
+    let serialized = apply_active_filters(value.to_string_lossy())?;
     assert_snapshot_impl(py, &serialized, inline, name)
 }
 
@@ -340,7 +342,7 @@ pub fn assert_json_snapshot(
     name: Option<&str>,
 ) -> PyResult<()> {
     let serialized = serialize_json(py, &value)?;
-    let serialized = apply_active_filters(serialized)?;
+    let serialized = apply_active_filters(Cow::Owned(serialized))?;
     assert_snapshot_impl(py, &serialized, inline, name)
 }
 
@@ -612,12 +614,6 @@ fn compute_named_snapshot(test_name: &str, custom_name: &str) -> String {
     format!("{base_name}--{custom_name}{param_suffix}")
 }
 
-/// Serialize a Python value to its string representation.
-fn serialize_value(py: Python<'_>, value: &Py<PyAny>) -> PyResult<String> {
-    let bound = value.bind(py);
-    Ok(bound.str()?.to_string_lossy().into_owned())
-}
-
 /// Serialize a Python value to JSON using `json.dumps(value, sort_keys=True, indent=2)`.
 fn serialize_json(py: Python<'_>, value: &Py<PyAny>) -> PyResult<String> {
     let json = py.import("json")?;
@@ -636,6 +632,34 @@ fn serialize_json(py: Python<'_>, value: &Py<PyAny>) -> PyResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::types::PyString;
+
+    #[test]
+    fn snapshot_value_borrows_valid_utf8_and_owns_lossy_fallback() {
+        Python::initialize();
+        Python::attach(|py| {
+            let valid_string = PyString::new(py, "value");
+            let valid = valid_string.to_string_lossy();
+            assert!(matches!(valid, Cow::Borrowed("value")));
+
+            let surrogate = py
+                .eval(cr"'value\ud800'", None, None)
+                .expect("surrogate string should be valid Python")
+                .cast_into::<PyString>()
+                .expect("value should be a string");
+            let lossy = surrogate.to_string_lossy();
+            assert!(matches!(lossy, Cow::Owned(_)));
+            assert_eq!(lossy, "value���");
+        });
+    }
+
+    #[test]
+    fn unfiltered_snapshot_value_stays_borrowed() {
+        let filtered =
+            apply_active_filters(Cow::Borrowed("value")).expect("filtering should succeed");
+
+        assert!(matches!(filtered, Cow::Borrowed("value")));
+    }
 
     #[test]
     fn test_compute_snapshot_name_single() {
