@@ -30,6 +30,21 @@ Pytest marks are also recognized as custom tags, so
 Arguments attached to custom tags do not affect filtering; filters match the
 tag name.
 
+Set `karva_tag` at module scope to apply one Karva tag or several tags to every
+test in that module:
+
+```python title="test_checkout.py"
+import karva
+
+karva_tag = [karva.tags.integration, karva.tags.slow]
+```
+
+Module tags support built-in tags, custom tags, and parametrization. Karva
+composes tags in this order: function decorators, `karva_tag`, then
+`pytestmark`. Scalar policies such as timeout use the first applicable value;
+skip tags accumulate, and parametrization dimensions compose. An empty list
+applies no tags.
+
 Projects can register supported names once and enable strict validation in any
 profile:
 
@@ -42,10 +57,10 @@ slow = ""
 strict-tags = true
 ```
 
-With strict validation, unregistered `karva.tags.*` decorators and
-`pytest.mark.*` marks fail collection. Karva validates tags on tests, fixtures,
-and individual parameter sets. Clear misspellings include a suggested
-registered name. Built-in tags and marks do not need registration.
+With strict validation, unregistered `karva.tags.*` decorators, `karva_tag`
+values, and `pytest.mark.*` marks fail collection. Karva validates tags on
+tests, fixtures, and individual parameter sets. Clear misspellings include a
+suggested registered name. Built-in tags and marks do not need registration.
 
 When `-E` is passed more than once, a test runs if it matches **any** of
 the expressions (OR across flags):
