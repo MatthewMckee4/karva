@@ -348,6 +348,40 @@ mod tests {
     }
 
     #[test]
+    fn coverage_files_returns_existing_files_in_worker_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let run_hash = RunHash::current_time();
+        let artifacts = RunArtifacts::new(&cache_dir, &run_hash);
+
+        for worker_id in [10, 2, 1] {
+            fs::create_dir_all(artifacts.worker_dir(worker_id)).unwrap();
+        }
+        fs::write(artifacts.coverage_data_file(10), "worker 10").unwrap();
+        fs::write(artifacts.coverage_data_file(1), "worker 1").unwrap();
+        fs::create_dir_all(artifacts.run_dir.join("not-worker")).unwrap();
+        fs::write(
+            artifacts.run_dir.join("not-worker").join("coverage.json"),
+            "not a worker",
+        )
+        .unwrap();
+
+        assert_eq!(
+            artifacts.coverage_files().unwrap(),
+            vec![artifacts.coverage_data_file(1), artifacts.coverage_data_file(10)]
+        );
+    }
+
+    #[test]
+    fn coverage_files_returns_empty_when_run_directory_is_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+        let artifacts = RunArtifacts::new(&cache_dir, &RunHash::current_time());
+
+        assert!(artifacts.coverage_files().unwrap().is_empty());
+    }
+
+    #[test]
     fn write_last_failed_overwrites_previous_list() {
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
