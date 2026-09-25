@@ -348,6 +348,35 @@ fn rejects_wrong_run_id() {
 }
 
 #[test]
+fn rejects_event_before_handshake() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    let address = server.endpoint();
+    let worker = thread::spawn(move || {
+        let mut stream = ControllerStream::connect(&address).expect("connect worker");
+        serde_json::to_writer(
+            &mut stream,
+            &WireMessage::Event(Box::new(WorkerEvent::TestSlow)),
+        )
+        .expect("write event before handshake");
+        stream.write_all(b"\n").expect("frame event");
+        stream.flush().expect("flush event");
+    });
+
+    accept_connections(&mut server, 1);
+    worker.join().expect("join worker");
+    server.finish().expect("finish readers");
+    let Err(error) = server.try_recv() else {
+        panic!("event before handshake should be rejected");
+    };
+
+    assert!(
+        error
+            .to_string()
+            .contains("Karva worker sent an event before its handshake")
+    );
+}
+
+#[test]
 fn reset_connections_are_clean_disconnects() {
     for kind in [ErrorKind::ConnectionReset, ErrorKind::ConnectionAborted] {
         let error = serde_json::Error::io(std::io::Error::from(kind));
