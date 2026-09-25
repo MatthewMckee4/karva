@@ -122,3 +122,6 @@ files and lines, and distinguish blockers from improvements.
 ## Contributor Workflow
 
 See `CONTRIBUTING.md` for documentation and pull requests.
+
+Use plain descriptive pull request titles without Conventional Commit prefixes
+such as `feat:`, `fix:`, or `test:`.
