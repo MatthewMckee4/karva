@@ -411,6 +411,14 @@ def test_callable_wrong_warning():
         r"(?i)(?:[a-z]:)?[\\/][^ \n]+[\\/]python[\\/]karva[\\/]_fixtures[\\/]recwarn\.py",
         "<karva>/python/karva/_fixtures/recwarn.py",
     );
+    settings.add_filter(
+        r"(?s)info: Test failed here\n\s+--> <karva>/python/karva/_fixtures/recwarn\.py:168:17\n.*?info: DID NOT WARN",
+        "info: Test failed here\n       --> <warning assertion>\ninfo: DID NOT WARN",
+    );
+    settings.add_filter(
+        r"(?s)info: Test failed here\n\s+--> test\.py:\d+:\d+\n.*?info: DID NOT WARN",
+        "info: Test failed here\n       --> <warning assertion>\ninfo: DID NOT WARN",
+    );
     let _settings_scope = settings.bind_to_scope();
 
     assert_cmd_snapshot!(context.command_no_parallel(), @r#"
@@ -431,10 +439,7 @@ def test_callable_wrong_warning():
     7 | def test_callable_missing_warning():
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-       --> <karva>/python/karva/_fixtures/recwarn.py:168:17
-        |
-    168 |                 raise AssertionError(
-        |                 ^^^^^^^^^^^^^^^^^^^^^
+           --> <warning assertion>
     info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
            Emitted warnings: [].
 
@@ -446,10 +451,7 @@ def test_callable_wrong_warning():
     11 | def test_callable_wrong_warning():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-       --> <karva>/python/karva/_fixtures/recwarn.py:168:17
-        |
-    168 |                 raise AssertionError(
-        |                 ^^^^^^^^^^^^^^^^^^^^^
+           --> <warning assertion>
     info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
            Emitted warnings: [RuntimeWarning('wrong')].
 
