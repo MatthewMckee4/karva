@@ -1,6 +1,7 @@
 //! Package-tree orchestration and run-wide execution state.
 
-use std::collections::HashMap;
+use camino::Utf8PathBuf;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use karva_coverage::CoverageSession;
@@ -25,7 +26,17 @@ pub use fixture::{FixtureCallError, FixtureChainEntry};
 
 use failure::TestError;
 
-type CompiledTestPlans = HashMap<String, Result<CompiledTestPlan, FixtureResolutionError>>;
+type TestPlanKey = (Utf8PathBuf, String);
+type CompiledTestPlans = HashMap<TestPlanKey, Result<CompiledTestPlan, FixtureResolutionError>>;
+type VariantIterators<'a> = HashMap<TestPlanKey, TestVariantIterator<'a>>;
+
+struct TestContext<'a> {
+    package: &'a DiscoveredPackage,
+    parents: Vec<&'a DiscoveredPackage>,
+    module: &'a DiscoveredModule,
+    test: &'a DiscoveredTestFunction,
+    case_index: Option<usize>,
+}
 
 /// Executes one discovered package tree inside an attached Python interpreter.
 ///
@@ -45,6 +56,8 @@ pub struct PackageRunner<'context, 'settings> {
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: u32,
+    /// Module whose scoped fixtures are currently being prepared or executed.
+    active_module: Option<Utf8PathBuf>,
 }
 
 impl<'context, 'settings> PackageRunner<'context, 'settings> {
@@ -61,6 +74,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             finalizer_cache: FinalizerCache::default(),
             coverage,
             failed_count: 0,
+            active_module: None,
         }
     }
 
@@ -177,7 +191,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
             let fixture_plan = Rc::new(compiler.finish());
             for (name, plan) in module_plans {
-                plans.insert(name, plan.map(|plan| plan.finish(Rc::clone(&fixture_plan))));
+                plans.insert(
+                    (module.path().clone(), name),
+                    plan.map(|plan| plan.finish(Rc::clone(&fixture_plan))),
+                );
             }
         }
 
@@ -202,111 +219,301 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             return;
         }
 
-        self.execute_package(py, session, &[], &mut test_plans);
+        self.execute_ordered(py, session, &mut test_plans);
         self.report_scope_cleanup(py, ScopeKey::Session);
     }
 
-    /// Executes module auto-use fixtures, variants, and module teardown.
-    fn execute_module(
+    fn collect_test_contexts<'a>(
+        package: &'a DiscoveredPackage,
+        parents: &[&'a DiscoveredPackage],
+        contexts: &mut Vec<TestContext<'a>>,
+    ) {
+        let mut child_parents = parents.to_vec();
+        child_parents.push(package);
+        for (module, test) in package.ordered_test_functions() {
+            contexts.push(TestContext {
+                package,
+                parents: parents.to_vec(),
+                module,
+                test,
+                case_index: None,
+            });
+        }
+        for child in package.packages().values() {
+            Self::collect_test_contexts(child, &child_parents, contexts);
+        }
+    }
+
+    fn ordered_test_contexts(session: &DiscoveredPackage) -> Vec<TestContext<'_>> {
+        let mut discovered = Vec::new();
+        Self::collect_test_contexts(session, &[], &mut discovered);
+        let order = session.test_order();
+        if order.is_empty() {
+            return discovered;
+        }
+        let context_by_key = discovered
+            .iter()
+            .enumerate()
+            .map(|(index, context)| {
+                (
+                    (
+                        context.module.path().clone(),
+                        context.test.name().function_name().to_owned(),
+                    ),
+                    index,
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let mut ordered = Vec::with_capacity(order.len());
+        for (path, name, case_index) in order {
+            if let Some(&index) = context_by_key.get(&(path.clone(), name.clone())) {
+                let context = &discovered[index];
+                ordered.push(TestContext {
+                    package: context.package,
+                    parents: context.parents.clone(),
+                    module: context.module,
+                    test: context.test,
+                    case_index: *case_index,
+                });
+            }
+        }
+        ordered
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "test execution receives independent plan and cache state"
+    )]
+    fn execute_one_test<'a>(
         &mut self,
         py: Python<'_>,
         module: &DiscoveredModule,
-        parents: &[&DiscoveredPackage],
+        test: &'a DiscoveredTestFunction,
         test_plans: &mut CompiledTestPlans,
+        variant_iterators: &mut VariantIterators<'a>,
+        failed_plans: &mut HashMap<TestPlanKey, TestError>,
+        case_index: Option<usize>,
     ) -> bool {
-        let package_path = parents
-            .last()
-            .map_or_else(|| module.path(), |package| package.path());
-        if let Err(error) =
-            self.run_auto_use_fixtures(py, parents, module, package_path, FixtureScope::Module)
-        {
-            self.register_error_module_tests(module, &error);
-            return false;
-        }
-
-        let mut passed = true;
-        for test in module.test_functions() {
-            let Some(test_plan) = test_plans.remove(&test.name().to_string()) else {
-                passed = false;
-                continue;
+        let key = (module.path().clone(), test.name().to_string());
+        if !variant_iterators.contains_key(&key) && !failed_plans.contains_key(&key) {
+            let Some(test_plan) = test_plans.remove(&key) else {
+                return false;
             };
-            let test_plan = match test_plan {
-                Ok(plan) => plan,
+            match test_plan {
+                Ok(plan) => {
+                    variant_iterators.insert(key.clone(), TestVariantIterator::new(test, plan));
+                }
                 Err(error) => {
-                    self.register_error_test(
-                        test,
+                    failed_plans.insert(
+                        key.clone(),
                         TestError::new(fixture_resolution_diagnostic(error)),
                     );
-                    passed = false;
-                    if self.max_fail_reached() {
-                        break;
-                    }
-                    continue;
                 }
-            };
-            let variants = TestVariantIterator::new(test, test_plan);
-
-            for variant in variants {
-                let variant_passed = self.execute_test_variant(py, variant);
-                self.record_outcome(variant_passed);
-                passed &= variant_passed;
-
-                if self.max_fail_reached() {
-                    break;
-                }
-            }
-
-            if self.max_fail_reached() {
-                break;
             }
         }
-
-        self.report_scope_cleanup(py, ScopeKey::Module);
+        if let Some(error) = failed_plans.get(&key) {
+            self.register_error_test(test, error.clone());
+            return false;
+        }
+        let Some(iterator) = variant_iterators.get_mut(&key) else {
+            return false;
+        };
+        let variant = if let Some(index) = case_index {
+            iterator.next_case(index)
+        } else {
+            iterator.next()
+        };
+        let Some(variant) = variant else {
+            return false;
+        };
+        let passed = self.execute_test_variant(py, variant);
+        self.record_outcome(passed);
         passed
     }
 
-    /// Recursively executes package modules, child packages, and teardown.
-    fn execute_package(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "scope accounting updates independent lifetime state"
+    )]
+    fn cleanup_finished_scopes(
         &mut self,
         py: Python<'_>,
-        package: &DiscoveredPackage,
-        parents: &[&DiscoveredPackage],
+        context: &TestContext<'_>,
+        module_remaining: &mut HashMap<Utf8PathBuf, usize>,
+        package_remaining: &mut HashMap<Utf8PathBuf, usize>,
+        started_modules: &mut HashSet<Utf8PathBuf>,
+        started_packages: &mut HashSet<Utf8PathBuf>,
+        module_start_order: &mut Vec<Utf8PathBuf>,
+        package_start_order: &mut Vec<Utf8PathBuf>,
+    ) {
+        if let Some(remaining) = module_remaining.get_mut(context.module.path()) {
+            *remaining = remaining.saturating_sub(1);
+            if *remaining == 0 && started_modules.remove(context.module.path()) {
+                self.report_scope_cleanup(py, ScopeKey::Module(context.module.path()));
+                self.active_module = None;
+                module_start_order.retain(|path| path != context.module.path());
+            }
+        }
+        let mut package_chain = context.parents.clone();
+        package_chain.push(context.package);
+        for package in package_chain.into_iter().rev() {
+            if let Some(remaining) = package_remaining.get_mut(package.path()) {
+                *remaining = remaining.saturating_sub(1);
+                if *remaining == 0 && started_packages.remove(package.path()) {
+                    self.report_scope_cleanup(py, ScopeKey::Package(package.path()));
+                    package_start_order.retain(|path| path != package.path());
+                }
+            }
+        }
+    }
+
+    fn cleanup_all_started_scopes(
+        &mut self,
+        py: Python<'_>,
+        started_modules: &mut HashSet<Utf8PathBuf>,
+        started_packages: &mut HashSet<Utf8PathBuf>,
+        module_start_order: &mut Vec<Utf8PathBuf>,
+        package_start_order: &mut Vec<Utf8PathBuf>,
+    ) {
+        for module in module_start_order.drain(..).rev() {
+            self.report_scope_cleanup(py, ScopeKey::Module(&module));
+        }
+        started_modules.clear();
+        for package in package_start_order.drain(..).rev() {
+            self.report_scope_cleanup(py, ScopeKey::Package(&package));
+        }
+        started_packages.clear();
+        self.active_module = None;
+    }
+
+    /// Executes the selected tests in scheduler order, preserving each fixture scope.
+    fn execute_ordered(
+        &mut self,
+        py: Python<'_>,
+        session: &DiscoveredPackage,
         test_plans: &mut CompiledTestPlans,
     ) -> bool {
-        let mut child_parents = parents.to_vec();
-        child_parents.push(package);
-
-        if package.configuration_module_impl().is_some()
-            && let Err(error) = self.run_auto_use_fixtures(
-                py,
-                parents,
-                package,
-                package.path(),
-                FixtureScope::Package,
-            )
-        {
-            self.register_error_package_tests(package, &error);
-            return false;
+        let contexts = Self::ordered_test_contexts(session);
+        let mut module_remaining = HashMap::<Utf8PathBuf, usize>::new();
+        let mut package_remaining = HashMap::<Utf8PathBuf, usize>::new();
+        for context in &contexts {
+            *module_remaining
+                .entry(context.module.path().clone())
+                .or_default() += 1;
+            let mut chain = context.parents.clone();
+            chain.push(context.package);
+            for package in chain {
+                *package_remaining.entry(package.path().clone()).or_default() += 1;
+            }
         }
 
+        let mut started_modules = HashSet::new();
+        let mut started_packages = HashSet::new();
+        let mut module_start_order = Vec::new();
+        let mut package_start_order = Vec::new();
+        let mut failed_modules = HashMap::<Utf8PathBuf, TestError>::new();
+        let mut failed_packages = HashMap::<Utf8PathBuf, TestError>::new();
+        let mut variant_iterators = VariantIterators::new();
+        let mut failed_plans = HashMap::new();
         let mut passed = true;
-        for module in package.modules().values() {
-            passed &= self.execute_module(py, module, &child_parents, test_plans);
+
+        for context in &contexts {
+            let mut package_error = None;
+            let mut package_chain = context.parents.clone();
+            package_chain.push(context.package);
+            for (index, package) in package_chain.iter().enumerate() {
+                if let Some(error) = failed_packages.get(package.path()) {
+                    package_error = Some(error.clone());
+                    break;
+                }
+                if started_packages.insert(package.path().clone()) {
+                    package_start_order.push(package.path().clone());
+                    let result = self.run_auto_use_fixtures(
+                        py,
+                        &package_chain[..index],
+                        *package,
+                        package.path(),
+                        FixtureScope::Package,
+                    );
+                    if let Err(error) = result {
+                        failed_packages.insert(package.path().clone(), error.clone());
+                        package_error = Some(error);
+                        break;
+                    }
+                }
+            }
+
+            let test_passed = if let Some(error) = package_error {
+                self.register_error_test(context.test, error);
+                false
+            } else if let Some(error) = failed_modules.get(context.module.path()) {
+                self.register_error_test(context.test, error.clone());
+                false
+            } else {
+                self.active_module = Some(context.module.path().clone());
+                if started_modules.insert(context.module.path().clone()) {
+                    module_start_order.push(context.module.path().clone());
+                    let mut module_parents = context.parents.clone();
+                    module_parents.push(context.package);
+                    let package_path = context
+                        .parents
+                        .last()
+                        .map_or_else(|| context.module.path(), |package| package.path());
+                    if let Err(error) = self.run_auto_use_fixtures(
+                        py,
+                        &module_parents,
+                        context.module,
+                        package_path,
+                        FixtureScope::Module,
+                    ) {
+                        failed_modules.insert(context.module.path().clone(), error.clone());
+                        self.register_error_test(context.test, error);
+                        false
+                    } else {
+                        self.execute_one_test(
+                            py,
+                            context.module,
+                            context.test,
+                            test_plans,
+                            &mut variant_iterators,
+                            &mut failed_plans,
+                            context.case_index,
+                        )
+                    }
+                } else {
+                    self.execute_one_test(
+                        py,
+                        context.module,
+                        context.test,
+                        test_plans,
+                        &mut variant_iterators,
+                        &mut failed_plans,
+                        context.case_index,
+                    )
+                }
+            };
+            passed &= test_passed;
+            self.cleanup_finished_scopes(
+                py,
+                context,
+                &mut module_remaining,
+                &mut package_remaining,
+                &mut started_modules,
+                &mut started_packages,
+                &mut module_start_order,
+                &mut package_start_order,
+            );
             if self.max_fail_reached() {
                 break;
             }
         }
-
-        if !self.max_fail_reached() {
-            for child_package in package.packages().values() {
-                passed &= self.execute_package(py, child_package, &child_parents, test_plans);
-                if self.max_fail_reached() {
-                    break;
-                }
-            }
-        }
-
-        self.report_scope_cleanup(py, ScopeKey::Package(package.path()));
+        self.cleanup_all_started_scopes(
+            py,
+            &mut started_modules,
+            &mut started_packages,
+            &mut module_start_order,
+            &mut package_start_order,
+        );
         passed
     }
 }

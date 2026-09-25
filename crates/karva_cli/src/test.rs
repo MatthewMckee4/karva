@@ -363,6 +363,18 @@ pub struct TestCommand {
     #[clap(long, alias = "lf", help_heading = "Filter options")]
     pub last_failed: bool,
 
+    /// Run tests that failed in the previous run before other selected tests.
+    #[clap(
+        long,
+        alias = "ff",
+        env = EnvVars::KARVA_FAILED_FIRST,
+        default_missing_value = "true",
+        require_equals = true,
+        num_args = 0..=1,
+        help_heading = "Runner options"
+    )]
+    pub failed_first: Option<bool>,
+
     /// Run only one partition of the collected tests.
     ///
     /// Accepts `slice:M/N` where this run executes slice `M` of `N` total
@@ -541,6 +553,7 @@ impl SubTestCommand {
                 try_import_fixtures: self.try_import_fixtures,
                 doctest_modules: self.doctest_modules,
                 retry: self.retry,
+                failed_first: None,
                 shuffle: None,
                 random_seed: None,
                 flaky_result: self.flaky_result.map(Into::into),
@@ -588,6 +601,7 @@ impl TestCommand {
         let run_timeout = self.run_timeout;
         let termination_grace_period = self.termination_grace_period;
         let shuffle = self.shuffle;
+        let failed_first = self.failed_first;
         let random_seed = self.random_seed.and_then(RandomSeed::value);
         let mut sub_command = self.sub_command;
         if self.no_capture {
@@ -596,6 +610,7 @@ impl TestCommand {
         let mut options = sub_command.into_options();
         if let Some(test) = options.test.as_mut() {
             test.shuffle = shuffle;
+            test.failed_first = failed_first;
             test.random_seed = random_seed;
             test.run_timeout = run_timeout.map(RunTimeoutSecs);
             test.termination_grace_period =
@@ -703,6 +718,7 @@ mod tests {
             "--no-parallel=false",
             "--no-cache=false",
             "--shuffle=false",
+            "--failed-first=false",
         ]);
 
         assert_eq!(command.sub_command.no_ignore, Some(false));
@@ -714,6 +730,7 @@ mod tests {
         assert_eq!(command.no_parallel, Some(false));
         assert_eq!(command.no_cache, Some(false));
         assert_eq!(command.shuffle, Some(false));
+        assert_eq!(command.failed_first, Some(false));
     }
 
     #[test]
@@ -729,6 +746,7 @@ mod tests {
             "--no-parallel",
             "--no-cache",
             "--shuffle",
+            "--failed-first",
         ]);
 
         assert_eq!(command.sub_command.no_ignore, Some(true));
@@ -740,6 +758,14 @@ mod tests {
         assert_eq!(command.no_parallel, Some(true));
         assert_eq!(command.no_cache, Some(true));
         assert_eq!(command.shuffle, Some(true));
+        assert_eq!(command.failed_first, Some(true));
+    }
+
+    #[test]
+    fn failed_first_short_alias_works() {
+        let command = TestCommand::parse_from(["karva-test", "--ff"]);
+
+        assert_eq!(command.failed_first, Some(true));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use camino::Utf8PathBuf;
 
@@ -16,6 +16,9 @@ pub struct DiscoveredPackage {
     /// Test modules directly in this package, keyed by file path.
     modules: BTreeMap<Utf8PathBuf, DiscoveredModule>,
 
+    /// Test selectors in the scheduler's requested execution order.
+    test_order: Vec<(Utf8PathBuf, String, Option<usize>)>,
+
     /// Sub-packages within this package, keyed by directory path.
     packages: BTreeMap<Utf8PathBuf, Self>,
 
@@ -32,6 +35,7 @@ impl DiscoveredPackage {
         Self {
             path,
             modules: BTreeMap::new(),
+            test_order: Vec::new(),
             packages: BTreeMap::new(),
             configuration_module: None,
             framework_module: None,
@@ -44,6 +48,47 @@ impl DiscoveredPackage {
 
     pub(crate) fn modules(&self) -> &BTreeMap<Utf8PathBuf, DiscoveredModule> {
         &self.modules
+    }
+
+    pub(crate) fn set_test_order(&mut self, test_order: Vec<(Utf8PathBuf, String, Option<usize>)>) {
+        self.test_order = test_order;
+    }
+
+    pub(crate) fn test_order(&self) -> &[(Utf8PathBuf, String, Option<usize>)] {
+        &self.test_order
+    }
+
+    pub(crate) fn ordered_test_functions(
+        &self,
+    ) -> Vec<(&DiscoveredModule, &crate::discovery::DiscoveredTestFunction)> {
+        let mut ordered = Vec::new();
+        let mut seen: HashSet<(Utf8PathBuf, String)> = HashSet::new();
+        for (path, name, _) in &self.test_order {
+            let Some(module) = self.modules.get(path) else {
+                continue;
+            };
+            let Some(test) = module
+                .test_functions()
+                .iter()
+                .find(|test| test.name().function_name() == name)
+            else {
+                continue;
+            };
+            if seen.insert((path.clone(), name.clone())) {
+                ordered.push((module, test));
+            }
+        }
+        for module in self.modules.values() {
+            for test in module.test_functions() {
+                if seen.insert((
+                    module.path().clone(),
+                    test.name().function_name().to_owned(),
+                )) {
+                    ordered.push((module, test));
+                }
+            }
+        }
+        ordered
     }
 
     pub(crate) fn packages(&self) -> &BTreeMap<Utf8PathBuf, Self> {
@@ -78,10 +123,6 @@ impl DiscoveredPackage {
 
     /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
-        for module in self.modules.values_mut() {
-            module.shrink();
-        }
-
         for package in self.packages.values_mut() {
             package.shrink();
         }

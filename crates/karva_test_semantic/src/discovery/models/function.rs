@@ -102,10 +102,6 @@ impl DiscoveredTestFunction {
         self.definition.name()
     }
 
-    pub(super) fn source_range(&self) -> TextRange {
-        self.definition.source_range()
-    }
-
     pub(crate) fn diagnostic_range(&self) -> TextRange {
         self.definition.diagnostic_range()
     }

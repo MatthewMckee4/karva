@@ -75,13 +75,18 @@ pub fn run_parallel_tests(
         );
     }
 
-    let last_failed_set = last_failed_set(&cache_dir, config.last_failed);
+    let last_failed_set = last_failed_set(
+        &cache_dir,
+        config.last_failed || (config.failed_first && !config.no_cache),
+    );
 
     let partitions = partition_collected_tests(
         &collected,
         num_workers,
         &previous_durations,
         &last_failed_set,
+        config.last_failed,
+        config.failed_first,
         config.partition,
         config.test_ordering,
     );

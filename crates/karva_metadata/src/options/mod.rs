@@ -480,6 +480,20 @@ pub struct TestOptions {
     )]
     pub retry: Option<u32>,
 
+    /// Run tests that failed in the previous run before other selected tests.
+    ///
+    /// Defaults to `false`. Tests are still selected and partitioned normally;
+    /// this only changes scheduling priority.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"false"#,
+        value_type = "true | false",
+        example = r#"
+            failed-first = true
+        "#
+    )]
+    pub failed_first: Option<bool>,
+
     /// Use seeded randomized ordering instead of duration-aware scheduling.
     ///
     /// Defaults to `false`. When enabled, Karva prints the seed used for the
@@ -652,6 +666,7 @@ impl TestOptions {
             try_import_fixtures: self.try_import_fixtures.unwrap_or_default(),
             doctest_modules: self.doctest_modules.unwrap_or_default(),
             retry: self.retry.unwrap_or_default(),
+            failed_first: self.failed_first.unwrap_or_default(),
             shuffle: self.shuffle.unwrap_or_default(),
             random_seed: self.random_seed,
             flaky_result: self.flaky_result.unwrap_or_default(),

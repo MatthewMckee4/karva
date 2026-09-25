@@ -73,11 +73,8 @@ pub(super) struct TestVariantIterator<'a> {
     test: &'a DiscoveredTestFunction,
     /// Consumed as we iterate, so parameter values and tags move into variants.
     param_args: ParameterPlanIterator,
-    /// Restricts execution to the selected indices while retaining their
-    /// positions in the full parametrize expansion.
-    case_filter: Option<&'a [usize]>,
-    /// Position of the next selected case in the sorted filter.
-    next_filtered_case: usize,
+    /// Selected parameter indices in controller scheduling order.
+    case_filter: Option<std::vec::IntoIter<usize>>,
     /// Index of the next item in the full parametrize expansion.
     next_case_index: usize,
     /// Whether emitted variants need a stable parametrize index.
@@ -162,8 +159,7 @@ impl<'a> TestVariantIterator<'a> {
         Self {
             test,
             param_args: plan.parameters.into_iter(),
-            case_filter: test.case_filter.as_deref(),
-            next_filtered_case: 0,
+            case_filter: test.case_filter.clone().map(Vec::into_iter),
             next_case_index: 0,
             parametrized: test.tags.has_parametrize(),
             runtime_tags: plan.runtime_tags,
@@ -179,25 +175,40 @@ impl<'a> Iterator for TestVariantIterator<'a> {
     type Item = TestVariant<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (case_index, param_args) = if !self.parametrized {
+        let (case_index, param_args) = if let Some(indices) = &mut self.case_filter {
+            let index = indices.next()?;
+            (Some(index), self.param_args.seek(index)?)
+        } else if !self.parametrized {
             (None, self.param_args.next()?)
-        } else if let Some(indices) = self.case_filter {
-            let case_index = *indices.get(self.next_filtered_case)?;
-            let skipped = case_index.checked_sub(self.next_case_index)?;
-            let param_args = self.param_args.nth(skipped)?;
-            self.next_case_index = case_index + 1;
-            self.next_filtered_case += 1;
-            (Some(case_index), param_args)
         } else {
             let case_index = self.next_case_index;
             self.next_case_index += 1;
             (Some(case_index), self.param_args.next()?)
         };
 
+        Some(self.make_variant(case_index, param_args))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.param_args.size_hint()
+    }
+}
+
+impl<'a> TestVariantIterator<'a> {
+    pub(super) fn next_case(&mut self, index: usize) -> Option<TestVariant<'a>> {
+        let param_args = self.param_args.seek(index)?;
+        Some(self.make_variant(Some(index), param_args))
+    }
+
+    fn make_variant(
+        &self,
+        case_index: Option<usize>,
+        param_args: crate::extensions::tags::parametrize::ParametrizationArgs,
+    ) -> TestVariant<'a> {
         let mut tags = self.runtime_tags.clone();
         tags.extend(&param_args.tags);
 
-        Some(TestVariant {
+        TestVariant {
             test: self.test,
             id: param_args.id().map(str::to_string),
             params: param_args.values,
@@ -207,10 +218,6 @@ impl<'a> Iterator for TestVariantIterator<'a> {
             auto_use_fixtures: Rc::clone(&self.auto_use_fixtures),
             tags,
             case_index,
-        })
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.param_args.size_hint()
+        }
     }
 }

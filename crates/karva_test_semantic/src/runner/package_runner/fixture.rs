@@ -36,7 +36,8 @@ impl PackageRunner<'_, '_> {
         current_package: &'a Utf8Path,
         scope: FixtureScope,
     ) -> Result<(), TestError> {
-        let scope_key = scope_key(scope, current_package);
+        let module_owner = self.active_module.clone();
+        let scope_key = scope_key(scope, current_package, module_owner.as_deref());
         let mut compiler = FixturePlanCompiler::new(parents, current, current_package);
         let auto_use_fixtures = match compiler.get_normalized_auto_use_fixtures(py, scope) {
             Ok(fixtures) => fixtures,
@@ -171,7 +172,12 @@ impl PackageRunner<'_, '_> {
         fixture_id: FixtureId,
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
         let fixture = fixture_plan.fixture(fixture_id);
-        let scope = scope_key(fixture.scope(), fixture.package_owner());
+        let module_owner = self.active_module.clone();
+        let scope = scope_key(
+            fixture.scope(),
+            fixture.package_owner(),
+            module_owner.as_deref(),
+        );
         if let Some(cached) = self.fixture_cache.get(py, fixture.identity(), scope) {
             return Ok((cached, None));
         }
@@ -190,7 +196,8 @@ impl PackageRunner<'_, '_> {
                     function_arguments.push((dependency.function_name(), value));
 
                     if let Some(finalizer) = finalizer {
-                        self.finalizer_cache.add_finalizer(finalizer);
+                        self.finalizer_cache
+                            .add_finalizer(finalizer, module_owner.as_deref());
                     }
                 }
                 Err(error) => return Err(error.with_dependent(fixture)),
@@ -224,7 +231,8 @@ impl PackageRunner<'_, '_> {
             if finalizer.scope == FixtureScope::Function {
                 Some(finalizer)
             } else {
-                self.finalizer_cache.add_finalizer(finalizer);
+                self.finalizer_cache
+                    .add_finalizer(finalizer, module_owner.as_deref());
                 None
             }
         });
@@ -244,7 +252,9 @@ impl PackageRunner<'_, '_> {
         for fixture_id in fixture_ids {
             let fixture = fixture_plan.fixture(*fixture_id);
             match self.run_fixture(py, fixture_plan, *fixture_id) {
-                Ok((_, Some(finalizer))) => self.finalizer_cache.add_finalizer(finalizer),
+                Ok((_, Some(finalizer))) => self
+                    .finalizer_cache
+                    .add_finalizer(finalizer, self.active_module.as_deref()),
                 Ok((_, None)) => {}
                 Err(error) => errors.push(PreparedFixtureFailure::new(
                     fixture.function_name(),
@@ -257,11 +267,15 @@ impl PackageRunner<'_, '_> {
     }
 }
 
-fn scope_key(scope: FixtureScope, package_owner: &Utf8Path) -> ScopeKey<'_> {
+fn scope_key<'a>(
+    scope: FixtureScope,
+    package_owner: &'a Utf8Path,
+    module_owner: Option<&'a Utf8Path>,
+) -> ScopeKey<'a> {
     match scope {
         FixtureScope::Session => ScopeKey::Session,
         FixtureScope::Package => ScopeKey::Package(package_owner),
-        FixtureScope::Module => ScopeKey::Module,
+        FixtureScope::Module => ScopeKey::Module(module_owner.map_or(package_owner, |path| path)),
         FixtureScope::Function => ScopeKey::Function,
     }
 }

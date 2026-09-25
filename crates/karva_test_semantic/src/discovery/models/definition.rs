@@ -107,13 +107,6 @@ impl TestDefinition {
         &self.source_file
     }
 
-    pub(super) fn source_range(&self) -> TextRange {
-        match &self.kind {
-            TestDefinitionKind::Function(statement) => statement.range,
-            TestDefinitionKind::Doctest { range } => *range,
-        }
-    }
-
     /// Returns the source range to underline in diagnostics.
     pub(crate) fn diagnostic_range(&self) -> TextRange {
         match &self.kind {

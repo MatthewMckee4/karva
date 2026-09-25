@@ -432,6 +432,7 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
         no_cache: true,
         create_ctrlc_handler: false,
         last_failed: false,
+        failed_first: false,
         profile: None,
         partition: None,
         test_ordering: karva_runner::TestOrdering::Stable,

@@ -19,6 +19,8 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
         2,
         &HashMap::new(),
         &HashSet::new(),
+        false,
+        false,
         None,
         TestOrdering::Stable,
     );
@@ -48,6 +50,8 @@ fn literal_parametrize_cases_split_across_workers() {
         2,
         &HashMap::new(),
         &HashSet::new(),
+        false,
+        false,
         None,
         TestOrdering::Stable,
     );
@@ -72,6 +76,35 @@ fn literal_parametrize_cases_split_across_workers() {
 }
 
 #[test]
+fn failed_first_places_cached_parametrize_case_first() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "@karva.tags.parametrize('value', [0, 1, 2])\n\
+         def test_value(value): pass\n",
+    );
+    let failed = HashSet::from([TestCacheKey::function_name("test_sample::test_value[1]")]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &HashMap::new(),
+        &failed,
+        false,
+        true,
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{test_path}::test_value[1]"),
+            format!("{test_path}::test_value[0]"),
+            format!("{test_path}::test_value[2]"),
+        ]
+    );
+}
+
+#[test]
 fn dynamic_parametrize_cases_remain_one_unit() {
     let (_temp_dir, test_path, package) = collected_package(
         "@karva.tags.parametrize('value', range(6))\n\
@@ -83,6 +116,8 @@ fn dynamic_parametrize_cases_remain_one_unit() {
         2,
         &HashMap::new(),
         &HashSet::new(),
+        false,
+        false,
         None,
         TestOrdering::Stable,
     );
@@ -110,6 +145,8 @@ fn last_failed_case_selects_opaque_dynamic_parameter_function() {
         1,
         &HashMap::new(),
         &last_failed,
+        true,
+        false,
         None,
         TestOrdering::Stable,
     );
@@ -139,6 +176,8 @@ fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
         1,
         &durations,
         &HashSet::new(),
+        false,
+        false,
         None,
         TestOrdering::Stable,
     );
@@ -166,6 +205,8 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
         2,
         &durations,
         &HashSet::new(),
+        false,
+        false,
         None,
         TestOrdering::Stable,
     );
@@ -173,5 +214,118 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
     assert_eq!(
         partitions.iter().map(Partition::weight).sum::<u128>(),
         60_000
+    );
+}
+
+#[test]
+fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "def test_a(): pass\n\
+         def test_b(): pass\n\
+         def test_c(): pass\n",
+    );
+    let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_b")]);
+    let durations = HashMap::from([
+        (
+            TestCacheKey::function_name("test_sample::test_a"),
+            Duration::from_millis(30),
+        ),
+        (
+            TestCacheKey::function_name("test_sample::test_b"),
+            Duration::from_millis(1),
+        ),
+        (
+            TestCacheKey::function_name("test_sample::test_c"),
+            Duration::from_millis(20),
+        ),
+    ]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &durations,
+        &last_failed,
+        false,
+        true,
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{test_path}::test_b"),
+            format!("{test_path}::test_a"),
+            format!("{test_path}::test_c"),
+        ]
+    );
+}
+
+#[test]
+fn failed_first_keeps_partition_selection_before_priority_ordering() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "def test_a(): pass\n\
+         def test_b(): pass\n\
+         def test_c(): pass\n\
+         def test_d(): pass\n",
+    );
+    let selection = "slice:1/2".parse().expect("valid partition selection");
+    let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_b")]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &HashMap::new(),
+        &last_failed,
+        false,
+        true,
+        Some(selection),
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{test_path}::test_a"),
+            format!("{test_path}::test_c")
+        ]
+    );
+}
+
+#[test]
+fn failed_first_reorders_across_module_groups() {
+    let (_temp_dir, test_paths, package) = collected_package_with_files([
+        ("test_pass.py", "def test_pass(): pass\n"),
+        ("test_fail.py", "def test_fail(): pass\n"),
+    ]);
+    let last_failed = HashSet::from([TestCacheKey::function_name("test_fail::test_fail")]);
+    let durations = HashMap::from([
+        (
+            TestCacheKey::function_name("test_pass::test_pass"),
+            Duration::from_micros(1),
+        ),
+        (
+            TestCacheKey::function_name("test_fail::test_fail"),
+            Duration::from_millis(10),
+        ),
+    ]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &durations,
+        &last_failed,
+        false,
+        true,
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{}::test_fail", test_paths["test_fail.py"]),
+            format!("{}::test_pass", test_paths["test_pass.py"]),
+        ]
     );
 }

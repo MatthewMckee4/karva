@@ -82,6 +82,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     }
 
     let project = Project::from_metadata(project_metadata);
+    let failed_first = project.settings().test().failed_first;
 
     let exclusion_patterns = project
         .settings()
@@ -135,6 +136,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         no_cache,
         create_ctrlc_handler: true,
         last_failed,
+        failed_first,
         profile,
         partition,
         test_ordering: random_seed.map_or(

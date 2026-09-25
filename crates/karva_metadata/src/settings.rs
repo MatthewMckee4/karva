@@ -809,6 +809,9 @@ pub struct TestSettings {
     /// Additional attempts permitted after first failure.
     pub retry: u32,
 
+    /// Whether tests that failed in the previous run are scheduled first.
+    pub failed_first: bool,
+
     /// Whether controller-side test ordering is randomized.
     pub shuffle: bool,
 
