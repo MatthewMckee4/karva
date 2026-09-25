@@ -185,7 +185,7 @@ impl TestCaseIdentity {
     fn from_display_name(full_name: &str) -> Self {
         let (module_name, name) = full_name
             .split_once("::")
-            .map_or(("unknown", full_name), |identity| identity);
+            .unwrap_or(("unknown", full_name));
         Self {
             module_name: module_name.to_string(),
             name: name.to_string(),
