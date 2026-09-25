@@ -200,7 +200,7 @@ jobs:
             "https://github.com/astral-sh/hawk/releases/download/${HAWK_VERSION}/cargo-hawk-installer.sh" | sh
 
       - name: "Check public Rust APIs"
-        run: cargo +1.98.1 hawk check -D warnings -D hawk::unnecessary_crate_visibility
+        run: cargo hawk check -D warnings -D hawk::unnecessary_crate_visibility
 
   cargo-shear:
     name: "cargo shear"
