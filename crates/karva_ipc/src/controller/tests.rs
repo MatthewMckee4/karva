@@ -365,15 +365,15 @@ fn rejects_event_before_handshake() {
     accept_connections(&mut server, 1);
     worker.join().expect("join worker");
     server.finish().expect("finish readers");
-    let Err(error) = server.try_recv() else {
-        panic!("event before handshake should be rejected");
-    };
-
-    assert!(
-        error
-            .to_string()
-            .contains("Karva worker sent an event before its handshake")
-    );
+    let result = server.try_recv();
+    assert!(result.is_err(), "event before handshake should be rejected");
+    if let Err(error) = result {
+        assert!(
+            error
+                .to_string()
+                .contains("Karva worker sent an event before its handshake")
+        );
+    }
 }
 
 #[test]
