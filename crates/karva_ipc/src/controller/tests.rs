@@ -351,6 +351,7 @@ fn rejects_wrong_run_id() {
 fn rejects_event_before_handshake() {
     let mut server = ControllerServer::bind("run-id").expect("bind controller");
     let address = server.endpoint();
+    let (release_worker, wait_for_release) = mpsc::channel();
     let worker = thread::spawn(move || {
         let mut stream = ControllerStream::connect(&address).expect("connect worker");
         serde_json::to_writer(
@@ -360,20 +361,34 @@ fn rejects_event_before_handshake() {
         .expect("write event before handshake");
         stream.write_all(b"\n").expect("frame event");
         stream.flush().expect("flush event");
+        wait_for_release
+            .recv()
+            .expect("release worker after controller rejection");
     });
 
     accept_connections(&mut server, 1);
+    let deadline = Instant::now() + BUFFERED_EVENT_TIMEOUT;
+    let result = loop {
+        if let Err(error) = server.try_recv() {
+            break error;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "controller did not reject event before handshake"
+        );
+        thread::yield_now();
+    };
+    release_worker
+        .send(())
+        .expect("release worker after controller rejection");
     worker.join().expect("join worker");
     server.finish().expect("finish readers");
-    let result = server.try_recv();
-    assert!(result.is_err(), "event before handshake should be rejected");
-    if let Err(error) = result {
-        assert!(
-            error
-                .to_string()
-                .contains("Karva worker sent an event before its handshake")
-        );
-    }
+
+    assert!(
+        result
+            .to_string()
+            .contains("Karva worker sent an event before its handshake")
+    );
 }
 
 #[test]
