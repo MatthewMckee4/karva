@@ -408,7 +408,7 @@ def test_callable_wrong_warning():
 
     let mut settings = Settings::clone_current();
     settings.add_filter(
-        r"/[^ \n]+/python/karva/_fixtures/recwarn\.py",
+        r"(?i)(?:[a-z]:)?[\\/][^ \n]+[\\/]python[\\/]karva[\\/]_fixtures[\\/]recwarn\.py",
         "<karva>/python/karva/_fixtures/recwarn.py",
     );
     let _settings_scope = settings.bind_to_scope();
