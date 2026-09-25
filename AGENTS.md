@@ -75,6 +75,8 @@ files and lines, and distinguish blockers from improvements.
 
 ## Tests
 
+- Do not add standalone typing tests or `typing_tests` directories; they are not
+  needed. Cover behavior with runtime tests instead.
 - Add focused tests when existing coverage does not establish changed behavior.
 - Prefer integration tests under `crates/karva/tests/it/` for behavior crossing
   crate, Python, worker, or CLI boundaries.
