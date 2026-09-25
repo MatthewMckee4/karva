@@ -57,6 +57,36 @@ fn initialization_reports_server_info() {
 }
 
 #[test]
+fn initialization_accepts_missing_workspace_folders() {
+    let server = TestServerBuilder::new().without_workspace_folders().build();
+
+    assert_eq!(
+        server
+            .initialization_result()
+            .server_info
+            .as_ref()
+            .map(|info| info.name.as_str()),
+        Some("karva")
+    );
+}
+
+#[test]
+fn initialization_accepts_null_workspace_folders() {
+    let server = TestServerBuilder::new()
+        .with_null_workspace_folders()
+        .build();
+
+    assert_eq!(
+        server
+            .initialization_result()
+            .server_info
+            .as_ref()
+            .map(|info| info.name.as_str()),
+        Some("karva")
+    );
+}
+
+#[test]
 fn initialization_negotiates_utf8() {
     let server = TestServer::new(ClientCapabilities {
         general: Some(GeneralClientCapabilities {
