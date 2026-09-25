@@ -348,37 +348,38 @@ mod tests {
     }
 
     #[test]
-    fn coverage_files_returns_existing_files_in_worker_order() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+    fn coverage_files_returns_existing_files_in_worker_order() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf())?;
         let run_hash = RunHash::current_time();
         let artifacts = RunArtifacts::new(&cache_dir, &run_hash);
 
         for worker_id in [10, 2, 1] {
-            fs::create_dir_all(artifacts.worker_dir(worker_id)).unwrap();
+            fs::create_dir_all(artifacts.worker_dir(worker_id))?;
         }
-        fs::write(artifacts.coverage_data_file(10), "worker 10").unwrap();
-        fs::write(artifacts.coverage_data_file(1), "worker 1").unwrap();
-        fs::create_dir_all(artifacts.run_dir.join("not-worker")).unwrap();
+        fs::write(artifacts.coverage_data_file(10), "worker 10")?;
+        fs::write(artifacts.coverage_data_file(2), "worker 2")?;
+        fs::create_dir_all(artifacts.run_dir.join("not-worker"))?;
         fs::write(
             artifacts.run_dir.join("not-worker").join("coverage.json"),
             "not a worker",
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(
-            artifacts.coverage_files().unwrap(),
-            vec![artifacts.coverage_data_file(1), artifacts.coverage_data_file(10)]
+            artifacts.coverage_files()?,
+            vec![artifacts.coverage_data_file(2), artifacts.coverage_data_file(10)]
         );
+        Ok(())
     }
 
     #[test]
-    fn coverage_files_returns_empty_when_run_directory_is_absent() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
+    fn coverage_files_returns_empty_when_run_directory_is_absent() -> anyhow::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf())?;
         let artifacts = RunArtifacts::new(&cache_dir, &RunHash::current_time());
 
-        assert!(artifacts.coverage_files().unwrap().is_empty());
+        assert!(artifacts.coverage_files()?.is_empty());
+        Ok(())
     }
 
     #[test]
