@@ -183,9 +183,7 @@ impl TestCaseIdentity {
 
     /// Splits the canonical `module::test` display form.
     fn from_display_name(full_name: &str) -> Self {
-        let (module_name, name) = full_name
-            .split_once("::")
-            .unwrap_or(("unknown", full_name));
+        let (module_name, name) = full_name.split_once("::").unwrap_or(("unknown", full_name));
         Self {
             module_name: module_name.to_string(),
             name: name.to_string(),
