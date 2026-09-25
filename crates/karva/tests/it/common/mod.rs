@@ -1,5 +1,8 @@
 #![allow(clippy::print_stderr)]
+use std::collections::hash_map::DefaultHasher;
 use std::fs::File;
+use std::hash::{Hash, Hasher};
+use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -264,17 +267,12 @@ fn get_or_create_shared_venv(
     SHARED_VENV.get_or_init(|| {
         let start = Instant::now();
 
-        // Include wheel modification time in the venv name to invalidate when wheel changes
-        let wheel_mtime = std::fs::metadata(karva_wheel_path)
-            .and_then(|m| m.modified())
-            .map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0)
-            })
-            .unwrap_or(0);
-
-        let venv_name = format!("shared-venv-py{python_version}-{wheel_mtime}");
+        let worktree_path = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Utf8Path::parent)
+            .expect("Karva crate must be nested under the worktree root");
+        let venv_name = shared_venv_name(worktree_path, python_version, karva_wheel_path)
+            .expect("Failed to identify shared venv");
         let venv_path = cache_dir.join(&venv_name);
 
         // Use a lock file to coordinate venv creation across parallel test processes
@@ -301,9 +299,6 @@ fn get_or_create_shared_venv(
                 let _ = std::fs::remove_dir_all(&venv_path);
             }
 
-            // Clean up old shared venvs (from previous wheel builds)
-            cleanup_old_shared_venvs(cache_dir, &venv_name);
-
             create_and_populate_venv(&venv_path, python_version, karva_wheel_path)
                 .expect("Failed to create shared venv");
 
@@ -320,33 +315,39 @@ fn get_or_create_shared_venv(
     })
 }
 
-/// Removes old shared venvs that are no longer needed.
-fn cleanup_old_shared_venvs(cache_dir: &Utf8Path, current_venv_name: &str) {
-    let Ok(entries) = std::fs::read_dir(cache_dir) else {
-        return;
-    };
+/// Names each reusable environment by checkout and wheel contents.
+///
+/// Wheel bytes avoid filesystem timestamp collisions; old namespaces remain
+/// available because another test process may still be using them.
+fn shared_venv_name(
+    worktree_path: &Utf8Path,
+    python_version: &str,
+    karva_wheel_path: &str,
+) -> anyhow::Result<String> {
+    let worktree_path = dunce::canonicalize(worktree_path.as_std_path())
+        .with_context(|| format!("Failed to canonicalize worktree path `{worktree_path}`"))?;
+    let mut worktree_hasher = DefaultHasher::new();
+    worktree_path.hash(&mut worktree_hasher);
+    let worktree_identity = format!("{:016x}", worktree_hasher.finish());
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-
-        // Remove old shared venvs and their lock files (but not the current one)
-        let is_lock_file = std::path::Path::new(name)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("lock"));
-
-        if name.starts_with("shared-venv-") && !is_lock_file && name != current_venv_name {
-            let _ = std::fs::remove_dir_all(&path);
-            eprintln!("Cleaned up old shared venv: {name}");
-        } else if name.starts_with("shared-venv-") && is_lock_file {
-            let venv_name = name.trim_end_matches(".lock");
-            if venv_name != current_venv_name {
-                let _ = std::fs::remove_file(&path);
-            }
+    let mut wheel_file = File::open(karva_wheel_path)
+        .with_context(|| format!("Failed to open Karva wheel `{karva_wheel_path}`"))?;
+    let mut wheel_hasher = DefaultHasher::new();
+    let mut buffer = [0; 8 * 1024];
+    loop {
+        let count = wheel_file
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to hash Karva wheel `{karva_wheel_path}`"))?;
+        if count == 0 {
+            break;
         }
+        wheel_hasher.write(&buffer[..count]);
     }
+    let wheel_identity = format!("{:016x}", wheel_hasher.finish());
+
+    Ok(format!(
+        "shared-venv-{worktree_identity}-py{python_version}-{wheel_identity}"
+    ))
 }
 
 fn create_and_populate_venv(
@@ -390,4 +391,49 @@ fn create_and_populate_venv(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shared_venv_name;
+    use camino::Utf8Path;
+    use tempfile::tempdir;
+
+    #[test]
+    fn shared_venv_name_scopes_checkout_identity() {
+        let directory = tempdir().expect("temporary directory");
+        let wheel = directory.path().join("karva.whl");
+        std::fs::write(&wheel, b"wheel").expect("wheel");
+        let wheel = wheel.to_str().expect("UTF-8 wheel path");
+        let first_path = directory.path().join("first");
+        let second_path = directory.path().join("second");
+        std::fs::create_dir_all(&first_path).expect("first worktree");
+        std::fs::create_dir_all(&second_path).expect("second worktree");
+        let first_path = Utf8Path::from_path(&first_path).expect("UTF-8 worktree path");
+        let second_path = Utf8Path::from_path(&second_path).expect("UTF-8 worktree path");
+
+        let first = shared_venv_name(first_path, "3.13", wheel).expect("first venv name");
+        let second = shared_venv_name(second_path, "3.13", wheel).expect("second venv name");
+
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn shared_venv_name_scopes_wheel_identity() {
+        let directory = tempdir().expect("temporary directory");
+        let first_wheel = directory.path().join("first.whl");
+        let second_wheel = directory.path().join("second.whl");
+        std::fs::write(&first_wheel, b"first wheel").expect("first wheel");
+        std::fs::write(&second_wheel, b"second wheel").expect("second wheel");
+        let first_wheel = first_wheel.to_str().expect("UTF-8 wheel path");
+        let second_wheel = second_wheel.to_str().expect("UTF-8 wheel path");
+        let worktree_path = directory.path().join("worktree");
+        std::fs::create_dir_all(&worktree_path).expect("worktree");
+        let worktree = Utf8Path::from_path(&worktree_path).expect("UTF-8 worktree path");
+
+        let first = shared_venv_name(worktree, "3.13", first_wheel).expect("first venv name");
+        let second = shared_venv_name(worktree, "3.13", second_wheel).expect("second venv name");
+
+        assert_ne!(first, second);
+    }
 }
