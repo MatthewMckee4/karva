@@ -911,3 +911,41 @@ def test_raises_rejects_non_callable_check():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_raises_check_runs_only_after_type_and_match() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_runs_only_after_type_and_match():
+    def unexpected_check(_error):
+        raise AssertionError("check should not run")
+
+    with karva.raises(TypeError):
+        with karva.raises(ValueError, check=unexpected_check):
+            raise TypeError("wrong type")
+
+    with karva.raises(karva.FailError, match="did not match pattern"):
+        with karva.raises(ValueError, match="expected", check=unexpected_check):
+            raise ValueError("wrong message")
+
+    with karva.raises(karva.FailError, match="DID NOT RAISE"):
+        with karva.raises(ValueError, check=unexpected_check):
+            pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_runs_only_after_type_and_match
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
