@@ -18,6 +18,7 @@ use crate::Context;
 use crate::discovery::{DiscoveredModule, DiscoveredTestFunction, DiscoveryError, DiscoveryIssue};
 use crate::extensions::fixtures::python::FixtureFunctionDefinition;
 use crate::extensions::fixtures::{DiscoveredFixture, RejectedFixture};
+use crate::extensions::tags::Tags;
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::extensions::tags::validation::unknown_runtime_tags;
 
@@ -43,6 +44,9 @@ struct FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
     /// Flag to prevent multiple import attempts for the same module.
     tried_to_import_module: bool,
 
+    /// Module-level native tags parsed once and shared by every test.
+    module_tags: Tags,
+
     /// Issues produced while discovering this module, in source order.
     issues: Vec<DiscoveryIssue>,
 }
@@ -61,6 +65,7 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
             py_module: None,
             py,
             tried_to_import_module: false,
+            module_tags: Tags::default(),
             issues: Vec::new(),
         }
     }
@@ -77,9 +82,28 @@ impl<'ctx, 'py, 'a, 'b> FunctionDefinitionVisitor<'ctx, 'py, 'a, 'b> {
         self.tried_to_import_module = true;
 
         match self.py.import(self.module.name()) {
-            Ok(py_module) => {
-                self.py_module = Some(py_module);
-            }
+            Ok(py_module) => match py_module.dict().get_item("karva_tag") {
+                Ok(Some(module_tags)) => match Tags::from_karva_module_value(self.py, &module_tags)
+                {
+                    Ok(module_tags) => {
+                        self.module_tags = module_tags;
+                        self.py_module = Some(py_module);
+                    }
+                    Err(error) => self
+                        .issues
+                        .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                            module_name: self.module.name().to_string(),
+                            reason: error.value(self.py).to_string(),
+                        })),
+                },
+                Ok(None) => self.py_module = Some(py_module),
+                Err(error) => self
+                    .issues
+                    .push(DiscoveryIssue::Error(DiscoveryError::Import {
+                        module_name: self.module.name().to_string(),
+                        reason: error.value(self.py).to_string(),
+                    })),
+            },
             Err(error) => {
                 if is_skip_exception(self.py, &error) {
                     self.issues.push(DiscoveryIssue::SkippedModule {
@@ -158,6 +182,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 self.py,
                 self.module,
                 py_module,
+                &self.module_tags,
                 Rc::new(stmt_function_def),
                 py_function.unbind(),
                 case_filter,
@@ -256,6 +281,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 self.py,
                 self.module,
                 &py_module,
+                &self.module_tags,
                 doctest.name,
                 doctest.range,
                 function.unbind(),
