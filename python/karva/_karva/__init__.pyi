@@ -140,6 +140,7 @@ def raises(
     expected_exception: type[BaseException],
     *,
     match: str | None = None,
+    check: Callable[[BaseException], bool] | None = None,
 ) -> RaisesContext:
     """Assert that a block of code raises a specific exception.
 
@@ -147,6 +148,8 @@ def raises(
         expected_exception: The expected exception type.
         match: An optional regex pattern to match against the string
             representation of the exception.
+        check: An optional callback called with the exception after type and
+            match checks. It must return true for the exception to match.
 
     """
 
