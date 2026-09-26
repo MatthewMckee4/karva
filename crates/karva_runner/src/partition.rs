@@ -125,7 +125,7 @@ impl Partition {
     }
 
     /// Puts cached failures first while retaining duration order in each group.
-    pub(super) fn prioritize_failures(
+    fn prioritize_failures(
         &mut self,
         last_failed: &HashSet<TestCacheKey>,
         previous_durations: &HashMap<TestCacheKey, Duration>,

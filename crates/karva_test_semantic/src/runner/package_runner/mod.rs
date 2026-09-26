@@ -38,6 +38,44 @@ struct TestContext<'a> {
     case_index: Option<usize>,
 }
 
+/// Tracks selected-test counts and start order for scope cleanup.
+struct ScopeLifetimeState {
+    module_remaining: HashMap<Utf8PathBuf, usize>,
+    package_remaining: HashMap<Utf8PathBuf, usize>,
+    started_modules: HashSet<Utf8PathBuf>,
+    started_packages: HashSet<Utf8PathBuf>,
+    module_start_order: Vec<Utf8PathBuf>,
+    package_start_order: Vec<Utf8PathBuf>,
+}
+
+impl ScopeLifetimeState {
+    fn new(contexts: &[TestContext<'_>]) -> Self {
+        let mut state = Self {
+            module_remaining: HashMap::new(),
+            package_remaining: HashMap::new(),
+            started_modules: HashSet::new(),
+            started_packages: HashSet::new(),
+            module_start_order: Vec::new(),
+            package_start_order: Vec::new(),
+        };
+        for context in contexts {
+            *state
+                .module_remaining
+                .entry(context.module.path().clone())
+                .or_default() += 1;
+            let mut chain = context.parents.clone();
+            chain.push(context.package);
+            for package in chain {
+                *state
+                    .package_remaining
+                    .entry(package.path().clone())
+                    .or_default() += 1;
+            }
+        }
+        state
+    }
+}
+
 /// Executes one discovered package tree inside an attached Python interpreter.
 ///
 /// This type owns only run-wide state: fixture caches, coverage context, and
@@ -230,14 +268,16 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     ) {
         let mut child_parents = parents.to_vec();
         child_parents.push(package);
-        for (module, test) in package.ordered_test_functions() {
-            contexts.push(TestContext {
-                package,
-                parents: parents.to_vec(),
-                module,
-                test,
-                case_index: None,
-            });
+        for module in package.modules().values() {
+            for test in module.test_functions() {
+                contexts.push(TestContext {
+                    package,
+                    parents: parents.to_vec(),
+                    module,
+                    test,
+                    case_index: None,
+                });
+            }
         }
         for child in package.packages().values() {
             Self::collect_test_contexts(child, &child_parents, contexts);
@@ -331,58 +371,46 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         passed
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "scope accounting updates independent lifetime state"
-    )]
     fn cleanup_finished_scopes(
         &mut self,
         py: Python<'_>,
         context: &TestContext<'_>,
-        module_remaining: &mut HashMap<Utf8PathBuf, usize>,
-        package_remaining: &mut HashMap<Utf8PathBuf, usize>,
-        started_modules: &mut HashSet<Utf8PathBuf>,
-        started_packages: &mut HashSet<Utf8PathBuf>,
-        module_start_order: &mut Vec<Utf8PathBuf>,
-        package_start_order: &mut Vec<Utf8PathBuf>,
+        scopes: &mut ScopeLifetimeState,
     ) {
-        if let Some(remaining) = module_remaining.get_mut(context.module.path()) {
+        if let Some(remaining) = scopes.module_remaining.get_mut(context.module.path()) {
             *remaining = remaining.saturating_sub(1);
-            if *remaining == 0 && started_modules.remove(context.module.path()) {
+            if *remaining == 0 && scopes.started_modules.remove(context.module.path()) {
                 self.report_scope_cleanup(py, ScopeKey::Module(context.module.path()));
                 self.active_module = None;
-                module_start_order.retain(|path| path != context.module.path());
+                scopes
+                    .module_start_order
+                    .retain(|path| path != context.module.path());
             }
         }
         let mut package_chain = context.parents.clone();
         package_chain.push(context.package);
         for package in package_chain.into_iter().rev() {
-            if let Some(remaining) = package_remaining.get_mut(package.path()) {
+            if let Some(remaining) = scopes.package_remaining.get_mut(package.path()) {
                 *remaining = remaining.saturating_sub(1);
-                if *remaining == 0 && started_packages.remove(package.path()) {
+                if *remaining == 0 && scopes.started_packages.remove(package.path()) {
                     self.report_scope_cleanup(py, ScopeKey::Package(package.path()));
-                    package_start_order.retain(|path| path != package.path());
+                    scopes
+                        .package_start_order
+                        .retain(|path| path != package.path());
                 }
             }
         }
     }
 
-    fn cleanup_all_started_scopes(
-        &mut self,
-        py: Python<'_>,
-        started_modules: &mut HashSet<Utf8PathBuf>,
-        started_packages: &mut HashSet<Utf8PathBuf>,
-        module_start_order: &mut Vec<Utf8PathBuf>,
-        package_start_order: &mut Vec<Utf8PathBuf>,
-    ) {
-        for module in module_start_order.drain(..).rev() {
+    fn cleanup_all_started_scopes(&mut self, py: Python<'_>, scopes: &mut ScopeLifetimeState) {
+        for module in scopes.module_start_order.drain(..).rev() {
             self.report_scope_cleanup(py, ScopeKey::Module(&module));
         }
-        started_modules.clear();
-        for package in package_start_order.drain(..).rev() {
+        scopes.started_modules.clear();
+        for package in scopes.package_start_order.drain(..).rev() {
             self.report_scope_cleanup(py, ScopeKey::Package(&package));
         }
-        started_packages.clear();
+        scopes.started_packages.clear();
         self.active_module = None;
     }
 
@@ -393,24 +421,14 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         session: &DiscoveredPackage,
         test_plans: &mut CompiledTestPlans,
     ) -> bool {
-        let contexts = Self::ordered_test_contexts(session);
-        let mut module_remaining = HashMap::<Utf8PathBuf, usize>::new();
-        let mut package_remaining = HashMap::<Utf8PathBuf, usize>::new();
-        for context in &contexts {
-            *module_remaining
-                .entry(context.module.path().clone())
-                .or_default() += 1;
-            let mut chain = context.parents.clone();
-            chain.push(context.package);
-            for package in chain {
-                *package_remaining.entry(package.path().clone()).or_default() += 1;
-            }
-        }
-
-        let mut started_modules = HashSet::new();
-        let mut started_packages = HashSet::new();
-        let mut module_start_order = Vec::new();
-        let mut package_start_order = Vec::new();
+        let contexts = if self.context.settings().test().failed_first {
+            Self::ordered_test_contexts(session)
+        } else {
+            let mut contexts = Vec::new();
+            Self::collect_test_contexts(session, &[], &mut contexts);
+            contexts
+        };
+        let mut scopes = ScopeLifetimeState::new(&contexts);
         let mut failed_modules = HashMap::<Utf8PathBuf, TestError>::new();
         let mut failed_packages = HashMap::<Utf8PathBuf, TestError>::new();
         let mut variant_iterators = VariantIterators::new();
@@ -426,8 +444,8 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                     package_error = Some(error.clone());
                     break;
                 }
-                if started_packages.insert(package.path().clone()) {
-                    package_start_order.push(package.path().clone());
+                if scopes.started_packages.insert(package.path().clone()) {
+                    scopes.package_start_order.push(package.path().clone());
                     let result = self.run_auto_use_fixtures(
                         py,
                         &package_chain[..index],
@@ -451,8 +469,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 false
             } else {
                 self.active_module = Some(context.module.path().clone());
-                if started_modules.insert(context.module.path().clone()) {
-                    module_start_order.push(context.module.path().clone());
+                if scopes.started_modules.insert(context.module.path().clone()) {
+                    scopes
+                        .module_start_order
+                        .push(context.module.path().clone());
                     let mut module_parents = context.parents.clone();
                     module_parents.push(context.package);
                     let package_path = context
@@ -493,27 +513,12 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 }
             };
             passed &= test_passed;
-            self.cleanup_finished_scopes(
-                py,
-                context,
-                &mut module_remaining,
-                &mut package_remaining,
-                &mut started_modules,
-                &mut started_packages,
-                &mut module_start_order,
-                &mut package_start_order,
-            );
+            self.cleanup_finished_scopes(py, context, &mut scopes);
             if self.max_fail_reached() {
                 break;
             }
         }
-        self.cleanup_all_started_scopes(
-            py,
-            &mut started_modules,
-            &mut started_packages,
-            &mut module_start_order,
-            &mut package_start_order,
-        );
+        self.cleanup_all_started_scopes(py, &mut scopes);
         passed
     }
 }

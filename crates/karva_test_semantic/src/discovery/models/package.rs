@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use camino::Utf8PathBuf;
 
@@ -56,39 +56,6 @@ impl DiscoveredPackage {
 
     pub(crate) fn test_order(&self) -> &[(Utf8PathBuf, String, Option<usize>)] {
         &self.test_order
-    }
-
-    pub(crate) fn ordered_test_functions(
-        &self,
-    ) -> Vec<(&DiscoveredModule, &crate::discovery::DiscoveredTestFunction)> {
-        let mut ordered = Vec::new();
-        let mut seen: HashSet<(Utf8PathBuf, String)> = HashSet::new();
-        for (path, name, _) in &self.test_order {
-            let Some(module) = self.modules.get(path) else {
-                continue;
-            };
-            let Some(test) = module
-                .test_functions()
-                .iter()
-                .find(|test| test.name().function_name() == name)
-            else {
-                continue;
-            };
-            if seen.insert((path.clone(), name.clone())) {
-                ordered.push((module, test));
-            }
-        }
-        for module in self.modules.values() {
-            for test in module.test_functions() {
-                if seen.insert((
-                    module.path().clone(),
-                    test.name().function_name().to_owned(),
-                )) {
-                    ordered.push((module, test));
-                }
-            }
-        }
-        ordered
     }
 
     pub(crate) fn packages(&self) -> &BTreeMap<Utf8PathBuf, Self> {

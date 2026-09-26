@@ -219,6 +219,96 @@ def test_value(value):
 }
 
 #[test]
+fn failed_first_interleaves_cached_parametrize_case_across_modules() {
+    let context = TestContext::with_files([
+        (
+            "test_a.py",
+            r#"
+from pathlib import Path
+import karva
+
+@karva.tags.parametrize("value", [0, 1])
+def test_a(value):
+    with Path("order").open("a", encoding="utf-8") as output:
+        output.write(f"a{value}\n")
+    assert value != 1 or Path("fixed").exists()
+"#,
+        ),
+        (
+            "test_b.py",
+            r#"
+from pathlib import Path
+
+def test_b():
+    with Path("order").open("a", encoding="utf-8") as output:
+        output.write("b\n")
+    assert Path("fixed").exists()
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_a::test_a(value=1):
+
+    error[test-failure]: Test `test_a` failed
+     --> test_a.py:6:5
+      |
+    6 | def test_a(value):
+      |     ^^^^^^
+    info: Test ran with arguments:
+    info:   `value`: `1`
+    info: Test failed here
+     --> test_a.py:9:5
+      |
+    9 |     assert value != 1 or Path("fixed").exists()
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    test_b::test_b:
+
+    error[test-failure]: Test `test_b` failed
+     --> test_b.py:4:5
+      |
+    4 | def test_b():
+      |     ^^^^^^
+    info: Test failed here
+     --> test_b.py:7:5
+      |
+    7 |     assert Path("fixed").exists()
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    context.write_file("fixed", "");
+    context.write_file("order", "");
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--failed-first", "--status-level=none"]), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    let order = context.read_file("order");
+    let events = order.lines().collect::<Vec<_>>();
+    assert_eq!(events.last(), Some(&"a0"));
+    let mut cached_failures = events[..2].to_vec();
+    cached_failures.sort_unstable();
+    assert_eq!(cached_failures, ["a1", "b"]);
+}
+
+#[test]
 fn failed_first_orders_failures_across_modules_and_preserves_fixture_scopes() {
     let context = TestContext::with_files([
         (

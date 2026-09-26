@@ -373,7 +373,7 @@ pub struct TestCommand {
         num_args = 0..=1,
         help_heading = "Runner options"
     )]
-    pub failed_first: Option<bool>,
+    pub(crate) failed_first: Option<bool>,
 
     /// Run only one partition of the collected tests.
     ///
