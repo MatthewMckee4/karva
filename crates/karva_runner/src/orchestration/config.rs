@@ -54,7 +54,7 @@ pub enum LastFailedSelection {
 
 impl LastFailedSelection {
     /// Returns whether only cached failures should be selected.
-    pub const fn is_last_failed(self) -> bool {
+    pub(crate) const fn is_last_failed(self) -> bool {
         matches!(self, Self::LastFailed)
     }
 }
@@ -82,7 +82,7 @@ pub enum FailurePriority {
 
 impl FailurePriority {
     /// Returns whether cached failures should run before other selected tests.
-    pub const fn is_failed_first(self) -> bool {
+    pub(crate) const fn is_failed_first(self) -> bool {
         matches!(self, Self::FailedFirst)
     }
 }
