@@ -5,6 +5,7 @@ use karva_python_semantic::TestCacheKey;
 
 use super::super::{TestOrdering, partition_collected_tests};
 use super::helpers::collected_package;
+use crate::orchestration::{FailurePriority, LastFailedSelection};
 
 #[test]
 fn partition_selection_filters_after_sorting_by_qualified_name() {
@@ -22,8 +23,8 @@ fn partition_selection_filters_after_sorting_by_qualified_name() {
         1,
         &HashMap::new(),
         &HashSet::new(),
-        false,
-        false,
+        LastFailedSelection::All,
+        FailurePriority::Normal,
         Some(selection),
         TestOrdering::Stable,
     );
@@ -55,8 +56,8 @@ fn last_failed_filters_before_explicit_partition_selection() {
         1,
         &HashMap::new(),
         &last_failed,
-        true,
-        false,
+        LastFailedSelection::LastFailed,
+        FailurePriority::Normal,
         Some(selection),
         TestOrdering::Stable,
     );

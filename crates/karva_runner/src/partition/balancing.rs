@@ -10,6 +10,7 @@ use karva_python_semantic::TestCacheKey;
 use super::collection::{TestInfo, collect_test_paths_recursive};
 use super::ordering::{order_tests_for_partitioning, seeded_order_key};
 use super::{Partition, TestOrdering};
+use crate::orchestration::{FailurePriority, LastFailedSelection};
 
 /// Tests sharing one module import, weighted as a unit before large groups split.
 #[derive(Debug)]
@@ -55,23 +56,23 @@ pub fn partition_collected_tests(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
     previous_durations: &HashMap<TestCacheKey, Duration>,
-    last_failed: &HashSet<TestCacheKey>,
-    last_failed_only: bool,
-    failed_first: bool,
+    last_failed_cache: &HashSet<TestCacheKey>,
+    last_failed: LastFailedSelection,
+    failed_first: FailurePriority,
     partition_selection: Option<PartitionSelection>,
     test_ordering: TestOrdering,
 ) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
-    if last_failed_only && !last_failed.is_empty() {
-        let failed_function_roots = last_failed
+    if matches!(last_failed, LastFailedSelection::LastFailed) && !last_failed_cache.is_empty() {
+        let failed_function_roots = last_failed_cache
             .iter()
             .map(TestCacheKey::test_function_name)
             .collect::<HashSet<_>>();
         test_infos.retain(|info| {
-            last_failed.contains(info.qualified_name.as_str())
-                || last_failed.contains(info.identity.function_root.as_ref())
+            last_failed_cache.contains(info.qualified_name.as_str())
+                || last_failed_cache.contains(info.identity.function_root.as_ref())
                 || (info.qualified_name == info.identity.function_root.as_ref()
                     && failed_function_roots.contains(info.identity.function_root.as_ref()))
         });
@@ -88,10 +89,10 @@ pub fn partition_collected_tests(
         });
     }
 
-    let prioritize_failures = failed_first
+    let prioritize_failures = matches!(failed_first, FailurePriority::FailedFirst)
         && test_infos
             .iter()
-            .any(|test| is_cached_failure(test, last_failed));
+            .any(|test| is_cached_failure(test, last_failed_cache));
 
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
@@ -99,7 +100,7 @@ pub fn partition_collected_tests(
         let mut partitions = partition_shuffled_tests(test_infos, num_workers, seed);
         if prioritize_failures {
             for partition in &mut partitions {
-                partition.prioritize_failures(last_failed, previous_durations);
+                partition.prioritize_failures(last_failed_cache, previous_durations);
             }
         }
         return partitions;
@@ -149,7 +150,7 @@ pub fn partition_collected_tests(
 
     if prioritize_failures {
         for partition in &mut partitions {
-            partition.prioritize_failures(last_failed, previous_durations);
+            partition.prioritize_failures(last_failed_cache, previous_durations);
         }
     }
 
