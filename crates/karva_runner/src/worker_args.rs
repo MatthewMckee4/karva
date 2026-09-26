@@ -116,6 +116,10 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
         cli_args.push(format!("--max-fail={limit}"));
     }
 
+    if settings.test().failed_first {
+        cli_args.push("--worker-failed-first=true".to_string());
+    }
+
     if settings.terminal().show_python_output {
         cli_args.push("-s".to_string());
     }

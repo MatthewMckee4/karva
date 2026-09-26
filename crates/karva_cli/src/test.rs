@@ -105,6 +105,16 @@ pub struct SubTestCommand {
     #[clap(long, value_name = "N", help_heading = "Runner options")]
     pub max_fail: Option<NonZeroU32>,
 
+    /// Internal transport for failed-first scheduling in worker processes.
+    #[clap(
+        long = "worker-failed-first",
+        hide = true,
+        default_missing_value = "true",
+        require_equals = true,
+        num_args = 0..=1
+    )]
+    pub worker_failed_first: Option<bool>,
+
     /// Stop scheduling new tests after the first failure.
     ///
     /// Equivalent to `--max-fail=1`. Use `--no-fail-fast` to keep running
@@ -373,7 +383,7 @@ pub struct TestCommand {
         num_args = 0..=1,
         help_heading = "Runner options"
     )]
-    pub(crate) failed_first: Option<bool>,
+    failed_first: Option<bool>,
 
     /// Run only one partition of the collected tests.
     ///
@@ -553,7 +563,7 @@ impl SubTestCommand {
                 try_import_fixtures: self.try_import_fixtures,
                 doctest_modules: self.doctest_modules,
                 retry: self.retry,
-                failed_first: None,
+                failed_first: self.worker_failed_first,
                 shuffle: None,
                 random_seed: None,
                 flaky_result: self.flaky_result.map(Into::into),

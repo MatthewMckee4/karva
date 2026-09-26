@@ -366,8 +366,20 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let Some(variant) = variant else {
             return false;
         };
-        let passed = self.execute_test_variant(py, variant);
+        let mut passed = self.execute_test_variant(py, variant);
         self.record_outcome(passed);
+        if case_index.is_some() {
+            return passed;
+        }
+
+        for variant in iterator {
+            let variant_passed = self.execute_test_variant(py, variant);
+            self.record_outcome(variant_passed);
+            passed &= variant_passed;
+            if self.max_fail_reached() {
+                break;
+            }
+        }
         passed
     }
 

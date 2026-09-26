@@ -41,27 +41,9 @@ impl<'a> TestFunctionCollector<'a> {
 
         // Collect each file once with all its requested functions
         for (file_path, function_names) in file_to_functions {
-            if let Some(mut module) =
+            if let Some(module) =
                 collect_file(&file_path, self.cwd, &self.settings, &function_names)?
             {
-                let source_names = module
-                    .test_function_defs
-                    .iter()
-                    .map(|function| function.name.as_str())
-                    .collect::<Vec<_>>();
-                if source_names != function_names {
-                    let requested_order = function_names
-                        .iter()
-                        .enumerate()
-                        .map(|(index, name)| (name.as_str(), index))
-                        .collect::<HashMap<_, _>>();
-                    module.test_function_defs.sort_by_key(|function| {
-                        requested_order
-                            .get(function.name.as_str())
-                            .copied()
-                            .unwrap_or(usize::MAX)
-                    });
-                }
                 session_package.add_module(module);
             }
 

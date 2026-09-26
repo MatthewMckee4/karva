@@ -59,6 +59,10 @@ fn seed_failed_test(context: &TestContext) {
 
     ----- stderr -----
     "#);
+    let last_failed = context.root().join(".karva_cache/last-failed.json");
+    assert!(last_failed.exists(), "missing last-failed cache");
+    let cache_contents = std::fs::read_to_string(last_failed).expect("read last-failed cache");
+    assert!(cache_contents.contains("test_order::test_b"));
     context.write_file("fixed", "");
     context.write_file("order", "");
 }
