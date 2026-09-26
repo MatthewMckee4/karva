@@ -91,7 +91,7 @@ pub fn run_parallel_tests(
         config.partition,
         config.test_ordering,
     );
-    let failed_first_active = config.failed_first
+    let failed_first_active = config.failed_first.is_failed_first()
         && partitions
             .iter()
             .any(|partition| partition.has_cached_failure(&last_failed_set));
