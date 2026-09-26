@@ -222,7 +222,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     }
 
     /// Restores EOF on descriptor 0 before each captured test.
-    pub(crate) fn activate_stdin_capture(&self, py: Python<'_>) {
+    fn activate_stdin_capture(&self, py: Python<'_>) {
         if let Some(capture) = &self.stdin_capture
             && let Err(error) = capture.activate(py)
         {
