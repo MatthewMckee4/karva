@@ -21,6 +21,7 @@ use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::fixtures::RejectedFixture;
 use crate::extensions::functions::SnapshotMismatchError;
 use crate::extensions::tags::parametrize::InvalidParametrizeError;
+use crate::output_capture::CapturedStdinError;
 use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
     FixtureResolutionError,
@@ -867,6 +868,11 @@ fn handle_failed_function_call(
             if let Some(hint) = hint {
                 diagnostic.info(hint);
             }
+        } else if error.is_instance_of::<CapturedStdinError>(py) {
+            diagnostic.info(error_string);
+            diagnostic.info(
+                "Pass input explicitly to the code under test, or use --no-capture for an intentional interactive debugging session.",
+            );
         } else {
             diagnostic.info(indent_continuation_lines(&error_string));
         }

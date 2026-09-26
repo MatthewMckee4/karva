@@ -91,7 +91,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let retry_params = self.input.params.clone();
         let first_params = std::mem::take(&mut self.input.params);
         self.begin_pending_coverage_setup();
-        let first_attempt = self.prepare_attempt(first_params, self.start_output_capture());
+        let output_capture = self.start_output_capture();
+        let first_attempt = self.prepare_attempt(first_params, output_capture);
         let settings = if initial_name_is_exact {
             self.settings(
                 &first_attempt.fixtures.function_arguments,
@@ -179,7 +180,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Setup);
-        self.prepare_attempt(params, self.start_output_capture())
+        let output_capture = self.start_output_capture();
+        self.prepare_attempt(params, output_capture)
     }
 
     /// Returns a registered skip result when filters or skip policy exclude this variant.
@@ -224,7 +226,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Starts best-effort Python output capture when terminal output is hidden.
-    fn start_output_capture(&self) -> Option<PythonOutputCapture> {
+    fn start_output_capture(&mut self) -> Option<PythonOutputCapture> {
         if self
             .package_runner
             .context
@@ -236,7 +238,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         }
 
         match PythonOutputCapture::start(self.py) {
-            Ok(capture) => Some(capture),
+            Ok(capture) => {
+                self.package_runner.ensure_stdin_capture(self.py);
+                self.package_runner.activate_stdin_capture(self.py);
+                Some(capture)
+            }
             Err(error) => {
                 tracing::warn!("failed to start Python output capture: {error}");
                 None
