@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use camino::Utf8Path;
-use karva_diagnostic::{Diagnostic, FixtureFailure, FixtureUsage};
+use karva_diagnostic::{Diagnostic, FixtureFailure, FixtureUsage, TestExecutionOutcome};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 
@@ -14,6 +14,7 @@ use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{
     Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
 };
+use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::runner::scoped_storage::ScopeKey;
@@ -318,6 +319,14 @@ impl FixtureSetupError {
             fixture_failures.push(fixture_failure);
         }
         TestError::from_fixture_failures(diagnostic, related, fixture_failures)
+    }
+
+    /// Converts a skip raised by fixture setup into the test's skipped outcome.
+    pub(super) fn skip_outcome(&self, py: Python<'_>) -> Option<TestExecutionOutcome> {
+        let error = &self.first.error.error;
+        is_skip_exception(py, error).then(|| TestExecutionOutcome::Skipped {
+            reason: extract_skip_reason(py, error),
+        })
     }
 }
 

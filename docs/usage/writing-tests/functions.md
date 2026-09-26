@@ -51,6 +51,25 @@ def test_function2():
 
 You can still use `pytest.skip()` to skip tests.
 
+## Import or skip
+
+Use `karva.importorskip()` for tests that need an optional dependency. It
+returns the imported module when available and skips the module when the
+dependency is missing.
+
+```python title="test.py"
+import karva
+
+numpy = karva.importorskip("numpy")
+
+def test_array():
+    assert numpy.array([1, 2]).tolist() == [1, 2]
+```
+
+Pass `reason` to control the skip diagnostic. Missing modules are skipped by
+default; import errors raised inside an installed module remain failures unless
+`exc_type=ImportError` is passed.
+
 ## Fail
 
 If you want to fail a test when its running, use `karva.fail()`.
