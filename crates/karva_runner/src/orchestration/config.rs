@@ -52,6 +52,23 @@ pub enum LastFailedSelection {
     LastFailed,
 }
 
+impl LastFailedSelection {
+    /// Returns whether only cached failures should be selected.
+    pub const fn is_last_failed(self) -> bool {
+        matches!(self, Self::LastFailed)
+    }
+}
+
+impl From<bool> for LastFailedSelection {
+    fn from(last_failed: bool) -> Self {
+        if last_failed {
+            Self::LastFailed
+        } else {
+            Self::All
+        }
+    }
+}
+
 /// Controls ordering of cached failures within the selected suite.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum FailurePriority {
@@ -61,6 +78,23 @@ pub enum FailurePriority {
 
     /// Schedule cached failures before other selected tests.
     FailedFirst,
+}
+
+impl FailurePriority {
+    /// Returns whether cached failures should run before other selected tests.
+    pub const fn is_failed_first(self) -> bool {
+        matches!(self, Self::FailedFirst)
+    }
+}
+
+impl From<bool> for FailurePriority {
+    fn from(failed_first: bool) -> Self {
+        if failed_first {
+            Self::FailedFirst
+        } else {
+            Self::Normal
+        }
+    }
 }
 
 /// Controls whether successful non-retried case bodies remain in memory.

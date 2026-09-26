@@ -12,7 +12,7 @@ use karva_ipc::ControllerServer;
 use karva_logging::Printer;
 use karva_project::Project;
 
-use super::config::{FailurePriority, LastFailedSelection, ParallelTestConfig, RunOutput};
+use super::config::{ParallelTestConfig, RunOutput};
 use super::planning::{collect_tests, last_failed_set, previous_durations, write_last_failed};
 use super::recovery::recover_crashed_workers;
 use super::spawn::{spawn_worker, spawn_workers};
@@ -77,8 +77,8 @@ pub fn run_parallel_tests(
 
     let last_failed_set = last_failed_set(
         &cache_dir,
-        matches!(config.last_failed, LastFailedSelection::LastFailed)
-            || (matches!(config.failed_first, FailurePriority::FailedFirst) && !config.no_cache),
+        config.last_failed.is_last_failed()
+            || (config.failed_first.is_failed_first() && !config.no_cache),
     );
 
     let partitions = partition_collected_tests(
@@ -96,9 +96,7 @@ pub fn run_parallel_tests(
             .iter()
             .any(|partition| partition.has_cached_failure(&last_failed_set));
     let scheduled_cases: usize = partitions.iter().map(Partition::test_count).sum();
-    let scheduled_tests = if matches!(config.last_failed, LastFailedSelection::LastFailed)
-        || config.partition.is_some()
-    {
+    let scheduled_tests = if config.last_failed.is_last_failed() || config.partition.is_some() {
         partitions
             .iter()
             .flat_map(Partition::function_roots)

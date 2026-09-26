@@ -56,11 +56,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let durations = args.durations;
     let result_output = args.result_output.clone();
     let result_format = args.result_format.unwrap_or_default();
-    let last_failed = if args.last_failed {
-        karva_runner::LastFailedSelection::LastFailed
-    } else {
-        karva_runner::LastFailedSelection::All
-    };
+    let last_failed: karva_runner::LastFailedSelection = args.last_failed.into();
     let partition = args.partition;
     let no_cache = args.no_cache.unwrap_or(false);
     let random_seed_selection = args.random_seed();
@@ -86,11 +82,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     }
 
     let project = Project::from_metadata(project_metadata);
-    let failed_first = if project.settings().test().failed_first {
-        karva_runner::FailurePriority::FailedFirst
-    } else {
-        karva_runner::FailurePriority::Normal
-    };
+    let failed_first: karva_runner::FailurePriority = project.settings().test().failed_first.into();
 
     let exclusion_patterns = project
         .settings()
