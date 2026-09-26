@@ -2011,15 +2011,11 @@ def test_with_print():
 fn test_stdin_read_is_rejected_when_captured() {
     let context = TestContext::with_file(
         "test.py",
-        r#"
+        r"
 def test_reads_stdin():
     input('Continue')
-        "#,
+        ",
     );
-
-    let mut snapshot_settings = insta::Settings::clone_current();
-    snapshot_settings.add_filter(r"(?m) +$", "");
-    let _snapshot_settings = snapshot_settings.bind_to_scope();
 
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
