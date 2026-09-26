@@ -15,7 +15,9 @@ mod supervision;
 mod termination;
 mod worker;
 
-pub use config::{ParallelTestConfig, RunOutput, TestResultRetention};
+pub use config::{
+    FailurePriority, LastFailedSelection, ParallelTestConfig, RunOutput, TestResultRetention,
+};
 pub use run::run_parallel_tests;
 
 // Receipt: worker writes and controller reads each advance every 10 ms. With

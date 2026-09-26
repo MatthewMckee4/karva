@@ -7,10 +7,6 @@ use karva_diagnostic::AggregatedResults;
 use crate::partition::TestOrdering;
 
 /// Controller settings that affect worker count, selection, and lifecycle.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "these independent CLI switches are the public runner configuration"
-)]
 pub struct ParallelTestConfig {
     /// Maximum worker processes before capping against collected test count.
     pub num_workers: usize,
@@ -25,11 +21,11 @@ pub struct ParallelTestConfig {
     /// the handler should not be installed (e.g., benchmarks).
     pub create_ctrlc_handler: bool,
 
-    /// When `true`, only tests that failed in the previous run will be executed.
-    pub last_failed: bool,
+    /// Which tests from the previous run should be selected.
+    pub last_failed: LastFailedSelection,
 
-    /// When `true`, cached failures are scheduled before other selected tests.
-    pub failed_first: bool,
+    /// Whether cached failures are scheduled before other selected tests.
+    pub failed_first: FailurePriority,
 
     /// Active configuration profile name. Propagated to workers as
     /// `KARVA_PROFILE`; falls back to `"default"` when `None`.
@@ -43,6 +39,28 @@ pub struct ParallelTestConfig {
 
     /// Which completed test case bodies the controller retains.
     pub result_retention: TestResultRetention,
+}
+
+/// Controls whether the run selects the complete suite or cached failures.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum LastFailedSelection {
+    /// Select every collected test.
+    #[default]
+    All,
+
+    /// Select tests that failed in the previous run.
+    LastFailed,
+}
+
+/// Controls ordering of cached failures within the selected suite.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum FailurePriority {
+    /// Preserve normal duration-aware ordering.
+    #[default]
+    Normal,
+
+    /// Schedule cached failures before other selected tests.
+    FailedFirst,
 }
 
 /// Controls whether successful non-retried case bodies remain in memory.
