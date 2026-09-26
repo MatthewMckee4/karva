@@ -221,6 +221,15 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         }
     }
 
+    /// Restores EOF on descriptor 0 before each captured test.
+    pub(crate) fn activate_stdin_capture(&self, py: Python<'_>) {
+        if let Some(capture) = &self.stdin_capture
+            && let Err(error) = capture.activate(py)
+        {
+            tracing::warn!("failed to activate stdin capture: {error}");
+        }
+    }
+
     /// Restores worker stdin after all captured tests and fixture cleanup finish.
     fn finish_stdin_capture(&mut self, py: Python<'_>) {
         if let Some(capture) = self.stdin_capture.take()

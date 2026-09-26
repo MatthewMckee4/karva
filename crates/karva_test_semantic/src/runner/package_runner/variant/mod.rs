@@ -240,6 +240,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         match PythonOutputCapture::start(self.py) {
             Ok(capture) => {
                 self.package_runner.ensure_stdin_capture(self.py);
+                self.package_runner.activate_stdin_capture(self.py);
                 Some(capture)
             }
             Err(error) => {
