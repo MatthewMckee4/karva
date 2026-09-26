@@ -119,6 +119,13 @@ impl Partition {
         self.tests.len()
     }
 
+    /// Whether this assignment contains a cached failure eligible for priority scheduling.
+    pub(super) fn has_cached_failure(&self, last_failed: &HashSet<TestCacheKey>) -> bool {
+        self.tests
+            .iter()
+            .any(|test| is_scheduled_failure(test, last_failed))
+    }
+
     /// Whether this assignment has any worker selectors.
     pub(super) fn is_empty(&self) -> bool {
         self.tests.is_empty()

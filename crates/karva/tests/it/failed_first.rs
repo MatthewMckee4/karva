@@ -135,7 +135,44 @@ fn failed_first_with_cache_disabled_runs_selected_suite() {
 
     ----- stderr -----
     ");
-    assert_eq!(context.read_file("order").lines().count(), 3);
+    let order = context.read_file("order");
+    assert_eq!(order.lines().next(), Some("a"));
+    assert_eq!(order.lines().count(), 3);
+}
+
+#[test]
+fn failed_first_ignores_stale_cached_failure_for_order() {
+    let context = priority_context(None);
+    seed_failed_test(&context);
+    context.write_file(
+        "test_order.py",
+        r#"
+from pathlib import Path
+
+def test_a():
+    with Path("order").open("a", encoding="utf-8") as output:
+        output.write("a\n")
+
+def test_c():
+    with Path("order").open("a", encoding="utf-8") as output:
+        output.write("c\n")
+"#,
+    );
+    context.write_file("order", "");
+
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--failed-first", "--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert_eq!(
+        context.read_file("order").lines().collect::<Vec<_>>(),
+        ["a", "c"]
+    );
 }
 
 #[test]

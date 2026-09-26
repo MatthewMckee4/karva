@@ -90,6 +90,10 @@ pub fn run_parallel_tests(
         config.partition,
         config.test_ordering,
     );
+    let failed_first_active = config.failed_first
+        && partitions
+            .iter()
+            .any(|partition| partition.has_cached_failure(&last_failed_set));
     let scheduled_cases: usize = partitions.iter().map(Partition::test_count).sum();
     let scheduled_tests = if config.last_failed || config.partition.is_some() {
         partitions
@@ -145,6 +149,7 @@ pub fn run_parallel_tests(
         profile: config.profile.as_deref().unwrap_or("default"),
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
+        failed_first_active,
     };
     let forward_stdout = printer.stream_for_test_result().is_enabled();
     let mut next_worker_id = partitions.len();
