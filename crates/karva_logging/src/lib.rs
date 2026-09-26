@@ -65,9 +65,7 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
         let subscriber = registry.with(
             tracing_subscriber::fmt::layer()
                 .event_format(KarvaFormat {
-                    display_level: true,
                     display_timestamp: level.is_extra_verbose(),
-                    show_spans: false,
                 })
                 .with_writer(std::io::stderr),
         );
@@ -146,12 +144,6 @@ pub struct TracingGuard {
 struct KarvaFormat {
     /// Whether each event starts with local wall-clock time.
     display_timestamp: bool,
-
-    /// Whether each event includes its tracing level.
-    display_level: bool,
-
-    /// Whether events include their enclosing span path.
-    show_spans: bool,
 }
 
 impl<S, N> FormatEvent<S, N> for KarvaFormat
@@ -177,45 +169,19 @@ where
             }
         }
 
-        if self.display_level {
-            let level = meta.level();
-            if ansi {
-                let formatted_level = level.to_string().bold();
-                let coloured_level = match *level {
-                    tracing::Level::TRACE => formatted_level.purple(),
-                    tracing::Level::DEBUG => formatted_level.blue(),
-                    tracing::Level::INFO => formatted_level.green(),
-                    tracing::Level::WARN => formatted_level.yellow(),
-                    tracing::Level::ERROR => formatted_level.red(),
-                };
-                write!(writer, "{coloured_level} ")?;
-            } else {
-                write!(writer, "{level} ")?;
-            }
-        }
-
-        if self.show_spans {
-            let span = event.parent();
-            let mut seen = false;
-
-            let span = span
-                .and_then(|id| ctx.span(id))
-                .or_else(|| ctx.lookup_current());
-
-            let scope = span.into_iter().flat_map(|span| span.scope().from_root());
-
-            for span in scope {
-                seen = true;
-                if ansi {
-                    write!(writer, "{}:", span.metadata().name().bold())?;
-                } else {
-                    write!(writer, "{}:", span.metadata().name())?;
-                }
-            }
-
-            if seen {
-                writer.write_char(' ')?;
-            }
+        let level = meta.level();
+        if ansi {
+            let formatted_level = level.to_string().bold();
+            let coloured_level = match *level {
+                tracing::Level::TRACE => formatted_level.purple(),
+                tracing::Level::DEBUG => formatted_level.blue(),
+                tracing::Level::INFO => formatted_level.green(),
+                tracing::Level::WARN => formatted_level.yellow(),
+                tracing::Level::ERROR => formatted_level.red(),
+            };
+            write!(writer, "{coloured_level} ")?;
+        } else {
+            write!(writer, "{level} ")?;
         }
 
         ctx.field_format().format_fields(writer.by_ref(), event)?;
