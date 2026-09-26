@@ -120,12 +120,6 @@ impl StdinCapture {
         })
     }
 
-    /// Reapplies the EOF source if test code changed file descriptor 0.
-    pub fn activate(&self, py: Python<'_>) -> PyResult<()> {
-        self.os.bind(py).getattr("dup2")?.call1((self.null_fd, 0))?;
-        Ok(())
-    }
-
     /// Restores the inherited descriptor and closes the persistent EOF handle.
     pub fn finish(self, py: Python<'_>) -> PyResult<()> {
         let os = self.os.bind(py);

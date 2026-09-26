@@ -219,11 +219,6 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 Err(error) => tracing::warn!("failed to start stdin capture: {error}"),
             }
         }
-        if let Some(capture) = &self.stdin_capture
-            && let Err(error) = capture.activate(py)
-        {
-            tracing::warn!("failed to activate stdin capture: {error}");
-        }
     }
 
     /// Restores worker stdin after all captured tests and fixture cleanup finish.
