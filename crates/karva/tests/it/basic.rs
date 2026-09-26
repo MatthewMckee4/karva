@@ -2017,6 +2017,10 @@ def test_reads_stdin():
         ",
     );
 
+    let mut snapshot_settings = insta::Settings::clone_current();
+    snapshot_settings.add_filter(r"(?m)^ +$", "");
+    let _snapshot_settings = snapshot_settings.bind_to_scope();
+
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
