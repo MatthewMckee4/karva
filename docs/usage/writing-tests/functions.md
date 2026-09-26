@@ -15,8 +15,9 @@ def test_coordinates():
 ```
 
 Mappings, ordered sequences, complex numbers, and `Decimal` values are
-supported. Set `nan_ok=True` to compare NaN values as equal. This is the direct
-replacement for `pytest.approx()` when migrating tests:
+supported. Nonnumeric values use strict equality, including inside mappings and
+ordered sequences. Set `nan_ok=True` to compare NaN values as equal. Use it as a
+direct replacement for `pytest.approx()` when migrating tests:
 
 ```python
 # pytest

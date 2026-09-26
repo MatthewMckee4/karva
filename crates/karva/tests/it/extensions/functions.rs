@@ -75,81 +75,50 @@ def test_representation_includes_tolerance():
 }
 
 #[test]
-fn test_approx_invalid_value_diagnostic() {
+fn test_approx_accepts_nonnumeric_values() {
     let context = TestContext::with_file(
         "test.py",
         r#"
 import karva
 
-def test_rejects_invalid_sequence_value():
-    karva.approx([1, "two"])
+def test_accepts_nonnumeric_scalar():
+    assert karva.approx("two") == "two"
+    assert "two" == karva.approx("two")
+    assert "other" != karva.approx("two")
 
-def test_rejects_invalid_mapping_value():
-    karva.approx({"count": "two"})
+def test_accepts_mixed_sequence():
+    assert [1.0000001, "two"] == karva.approx([1, "two"])
+    assert [1.0000001, "other"] != karva.approx([1, "two"])
 
-def test_rejects_invalid_scalar_value():
-    karva.approx("two")
+def test_accepts_mixed_mapping():
+    assert {"count": 1.0000001, "label": "two"} == karva.approx(
+        {"count": 1, "label": "two"}
+    )
+    assert {"count": 1.0000001, "label": "other"} != karva.approx(
+        {"count": 1, "label": "two"}
+    )
+
+def test_bool_comparisons_remain_strict():
+    assert True == karva.approx(True)
+    assert 1 != karva.approx(True)
+    assert True != karva.approx(1)
         "#,
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
-    success: false
-    exit_code: 1
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
     ----- stdout -----
-        Starting 3 tests across 1 worker
-            FAIL [TIME] test::test_rejects_invalid_sequence_value
-            FAIL [TIME] test::test_rejects_invalid_mapping_value
-            FAIL [TIME] test::test_rejects_invalid_scalar_value
-
-    failures:
-
-    test::test_rejects_invalid_mapping_value:
-
-    error[test-failure]: Test `test_rejects_invalid_mapping_value` failed
-     --> test.py:7:5
-      |
-    7 | def test_rejects_invalid_mapping_value():
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Test failed here
-     --> test.py:8:5
-      |
-    8 |     karva.approx({"count": "two"})
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: karva.approx() expected a numeric value at key 'count', got str: 'two'
-
-    test::test_rejects_invalid_scalar_value:
-
-    error[test-failure]: Test `test_rejects_invalid_scalar_value` failed
-      --> test.py:10:5
-       |
-    10 | def test_rejects_invalid_scalar_value():
-       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Test failed here
-      --> test.py:11:5
-       |
-    11 |     karva.approx("two")
-       |     ^^^^^^^^^^^^^^^^^^^
-    info: karva.approx() expected a numeric value, got str: 'two'
-
-    test::test_rejects_invalid_sequence_value:
-
-    error[test-failure]: Test `test_rejects_invalid_sequence_value` failed
-     --> test.py:4:5
-      |
-    4 | def test_rejects_invalid_sequence_value():
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: Test failed here
-     --> test.py:5:5
-      |
-    5 |     karva.approx([1, "two"])
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^
-    info: karva.approx() expected a numeric value at index 1, got str: 'two'
-
+        Starting 4 tests across 1 worker
+            PASS [TIME] test::test_accepts_nonnumeric_scalar
+            PASS [TIME] test::test_accepts_mixed_sequence
+            PASS [TIME] test::test_accepts_mixed_mapping
+            PASS [TIME] test::test_bool_comparisons_remain_strict
     ────────────
-         Summary [TIME] 3 tests run: 0 passed, 3 failed, 0 skipped
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 #[test]
