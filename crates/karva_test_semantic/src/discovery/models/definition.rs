@@ -115,6 +115,13 @@ impl TestDefinition {
         }
     }
 
+    pub(super) fn source_range(&self) -> TextRange {
+        match &self.kind {
+            TestDefinitionKind::Function(statement) => statement.range,
+            TestDefinitionKind::Doctest { range } => *range,
+        }
+    }
+
     /// Returns syntax available only for regular Python test functions.
     pub(super) fn function_statement(&self) -> Option<&StmtFunctionDef> {
         match &self.kind {

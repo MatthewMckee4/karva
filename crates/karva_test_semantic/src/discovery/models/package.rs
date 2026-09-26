@@ -90,6 +90,10 @@ impl DiscoveredPackage {
 
     /// Remove empty modules and packages.
     pub(crate) fn shrink(&mut self) {
+        for module in self.modules.values_mut() {
+            module.shrink();
+        }
+
         for package in self.packages.values_mut() {
             package.shrink();
         }

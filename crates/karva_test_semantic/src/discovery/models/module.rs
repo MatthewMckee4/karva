@@ -93,4 +93,9 @@ impl DiscoveredModule {
             && self.fixtures.is_empty()
             && self.rejected_fixtures.is_empty()
     }
+
+    pub(super) fn shrink(&mut self) {
+        self.test_functions
+            .sort_by_key(|function| function.source_range().start());
+    }
 }
