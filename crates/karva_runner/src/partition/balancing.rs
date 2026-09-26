@@ -65,7 +65,7 @@ pub fn partition_collected_tests(
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
-    if matches!(last_failed, LastFailedSelection::LastFailed) && !last_failed_cache.is_empty() {
+    if last_failed.is_last_failed() && !last_failed_cache.is_empty() {
         let failed_function_roots = last_failed_cache
             .iter()
             .map(TestCacheKey::test_function_name)
@@ -89,7 +89,7 @@ pub fn partition_collected_tests(
         });
     }
 
-    let prioritize_failures = matches!(failed_first, FailurePriority::FailedFirst)
+    let prioritize_failures = failed_first.is_failed_first()
         && test_infos
             .iter()
             .any(|test| is_cached_failure(test, last_failed_cache));
