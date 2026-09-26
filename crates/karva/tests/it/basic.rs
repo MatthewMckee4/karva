@@ -2043,8 +2043,7 @@ def test_reads_stdin():
     3 |     input('Continue')
       |     ^^^^^^^^^^^^^^^^^
     info: stdin is unavailable while test output is captured
-
-          Pass input explicitly to the code under test, or use --no-capture for an intentional interactive debugging session.
+    info: Pass input explicitly to the code under test, or use --no-capture for an intentional interactive debugging session.
 
     captured stdout:
     Continue

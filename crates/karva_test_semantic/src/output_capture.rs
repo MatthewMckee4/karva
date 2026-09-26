@@ -1,7 +1,9 @@
-use pyo3::exceptions::{PyOSError, PyRuntimeError};
+use pyo3::exceptions::PyOSError;
 use pyo3::prelude::*;
 
-const STDIN_CAPTURE_ERROR: &str = "stdin is unavailable while test output is captured\n\nPass input explicitly to the code under test, or use --no-capture for an intentional interactive debugging session.";
+const STDIN_CAPTURE_ERROR: &str = "stdin is unavailable while test output is captured";
+
+pyo3::create_exception!(karva, CapturedStdinError, pyo3::exceptions::PyRuntimeError);
 
 /// Python-facing stdin replacement that fails reads instead of waiting on a terminal.
 #[pyclass]
@@ -15,26 +17,26 @@ impl CapturedStdin {
     }
 
     fn __next__(&self) -> PyResult<()> {
-        Err(PyRuntimeError::new_err(STDIN_CAPTURE_ERROR))
+        Err(CapturedStdinError::new_err(STDIN_CAPTURE_ERROR))
     }
 
     #[pyo3(signature = (_size = None))]
     fn read(&self, _size: Option<isize>) -> PyResult<()> {
-        Err(PyRuntimeError::new_err(STDIN_CAPTURE_ERROR))
+        Err(CapturedStdinError::new_err(STDIN_CAPTURE_ERROR))
     }
 
     #[pyo3(signature = (_size = None))]
     fn readline(&self, _size: Option<isize>) -> PyResult<()> {
-        Err(PyRuntimeError::new_err(STDIN_CAPTURE_ERROR))
+        Err(CapturedStdinError::new_err(STDIN_CAPTURE_ERROR))
     }
 
     #[pyo3(signature = (_hint = None))]
     fn readlines(&self, _hint: Option<isize>) -> PyResult<()> {
-        Err(PyRuntimeError::new_err(STDIN_CAPTURE_ERROR))
+        Err(CapturedStdinError::new_err(STDIN_CAPTURE_ERROR))
     }
 
     fn readinto(&self, _buffer: &Bound<'_, PyAny>) -> PyResult<()> {
-        Err(PyRuntimeError::new_err(STDIN_CAPTURE_ERROR))
+        Err(CapturedStdinError::new_err(STDIN_CAPTURE_ERROR))
     }
 
     fn readable(&self) -> bool {
@@ -57,28 +59,91 @@ impl CapturedStdin {
 
 /// Process-global Python stream redirection for one test attempt.
 ///
-/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects,
-/// replaces `sys.stdin` with [`CapturedStdin`], and redirects file descriptor
-/// 0 to an EOF source. Callers must consume the value with [`Self::finish`] to
-/// restore all streams and the descriptor.
+/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects and
+/// replaces `sys.stdin` with [`CapturedStdin`]. Callers must consume the value
+/// with [`Self::finish`] to restore all Python streams.
 pub struct PythonOutputCapture {
     sys: Py<PyModule>,
-    os: Py<PyModule>,
     old_stdout: Py<PyAny>,
     old_stderr: Py<PyAny>,
     old_stdin: Py<PyAny>,
-    old_stdin_fd: Option<i32>,
     stdout: Py<PyAny>,
     stderr: Py<PyAny>,
+}
+
+/// Keeps process stdin at EOF while captured tests execute.
+pub struct StdinCapture {
+    os: Py<PyModule>,
+    old_fd: Option<i32>,
+    null_fd: i32,
+}
+
+impl StdinCapture {
+    /// Saves file descriptor 0 and replaces it with a persistent `/dev/null` handle.
+    pub fn start(py: Python<'_>) -> PyResult<Self> {
+        let os = py.import("os")?.unbind();
+        let os_bound = os.bind(py);
+        let old_fd = match os_bound
+            .getattr("dup")?
+            .call1((0,))
+            .and_then(|value| value.extract::<i32>())
+        {
+            Ok(fd) => Some(fd),
+            Err(error) if is_bad_fd(os_bound, &error)? => None,
+            Err(error) => return Err(error),
+        };
+        let null_fd = match os_bound
+            .getattr("open")?
+            .call1((os_bound.getattr("devnull")?, os_bound.getattr("O_RDONLY")?))?
+            .extract::<i32>()
+        {
+            Ok(fd) => fd,
+            Err(err) => {
+                if let Some(old_fd) = old_fd {
+                    let _ = os_bound.getattr("close")?.call1((old_fd,));
+                }
+                return Err(err);
+            }
+        };
+        if let Err(err) = os_bound.getattr("dup2")?.call1((null_fd, 0)) {
+            let _ = os_bound.getattr("close")?.call1((null_fd,));
+            if let Some(old_fd) = old_fd {
+                let _ = os_bound.getattr("close")?.call1((old_fd,));
+            }
+            return Err(err);
+        }
+
+        Ok(Self {
+            os,
+            old_fd,
+            null_fd,
+        })
+    }
+
+    /// Reapplies the EOF source if test code changed file descriptor 0.
+    pub fn activate(&self, py: Python<'_>) -> PyResult<()> {
+        self.os.bind(py).getattr("dup2")?.call1((self.null_fd, 0))?;
+        Ok(())
+    }
+
+    /// Restores the inherited descriptor and closes the persistent EOF handle.
+    pub fn finish(self, py: Python<'_>) -> PyResult<()> {
+        let os = self.os.bind(py);
+        let restore_result = restore_stdin_fd(os, self.old_fd);
+        let close_result = if self.null_fd == 0 && self.old_fd.is_none() {
+            Ok(())
+        } else {
+            os.getattr("close")?.call1((self.null_fd,)).map(|_| ())
+        };
+        restore_result.and(close_result)
+    }
 }
 
 impl PythonOutputCapture {
     /// Redirects both Python output streams, rolling back stdout if stderr setup fails.
     pub fn start(py: Python<'_>) -> PyResult<Self> {
         let sys = py.import("sys")?.unbind();
-        let os = py.import("os")?.unbind();
         let sys_bound = sys.bind(py);
-        let os_bound = os.bind(py);
         let string_io = py.import("io")?.getattr("StringIO")?;
 
         let old_stdout = sys_bound.getattr("stdout")?.unbind();
@@ -102,22 +167,11 @@ impl PythonOutputCapture {
             return Err(err);
         }
 
-        let old_stdin_fd = match redirect_stdin_fd(os_bound) {
-            Ok(fd) => fd,
-            Err(err) => {
-                restore_stdio(sys_bound, &old_stdout, &old_stderr, py)?;
-                sys_bound.setattr("stdin", old_stdin.bind(py))?;
-                return Err(err);
-            }
-        };
-
         Ok(Self {
             sys,
-            os,
             old_stdout,
             old_stderr,
             old_stdin,
-            old_stdin_fd,
             stdout,
             stderr,
         })
@@ -126,8 +180,6 @@ impl PythonOutputCapture {
     /// Flushes captured streams, restores their original objects, and returns captured text.
     pub fn finish(self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
         let sys = self.sys.bind(py);
-        let os = self.os.bind(py);
-        let fd_result = restore_stdin_fd(os, self.old_stdin_fd);
         flush_current_streams(sys);
 
         let restore_result = restore_stdio(sys, &self.old_stdout, &self.old_stderr, py);
@@ -136,7 +188,6 @@ impl PythonOutputCapture {
         let stderr = self.stderr.bind(py).call_method0("getvalue")?.extract()?;
         restore_result?;
         stdin_result?;
-        fd_result?;
 
         Ok(CapturedPythonOutput { stdout, stderr })
     }
@@ -170,47 +221,6 @@ fn restore_stdio(
 ) -> PyResult<()> {
     sys.setattr("stdout", stdout.bind(py))?;
     sys.setattr("stderr", stderr.bind(py))
-}
-
-fn redirect_stdin_fd(os: &Bound<'_, PyModule>) -> PyResult<Option<i32>> {
-    let old_fd = match os
-        .getattr("dup")?
-        .call1((0,))
-        .and_then(|value| value.extract::<i32>())
-    {
-        Ok(fd) => Some(fd),
-        Err(error) if is_bad_fd(os, &error)? => None,
-        Err(error) => return Err(error),
-    };
-    let null_fd = match os
-        .getattr("open")?
-        .call1((os.getattr("devnull")?, os.getattr("O_RDONLY")?))?
-        .extract::<i32>()
-    {
-        Ok(fd) => fd,
-        Err(err) => {
-            if let Some(old_fd) = old_fd {
-                let _ = os.getattr("close")?.call1((old_fd,));
-            }
-            return Err(err);
-        }
-    };
-    if let Err(err) = os.getattr("dup2")?.call1((null_fd, 0)) {
-        let _ = os.getattr("close")?.call1((null_fd,));
-        if let Some(old_fd) = old_fd {
-            let _ = os.getattr("close")?.call1((old_fd,));
-        }
-        return Err(err);
-    }
-    if null_fd != 0 {
-        if let Err(error) = os.getattr("close")?.call1((null_fd,)) {
-            return match restore_stdin_fd(os, old_fd) {
-                Ok(()) => Err(error),
-                Err(restore_error) => Err(restore_error),
-            };
-        }
-    }
-    Ok(old_fd)
 }
 
 fn restore_stdin_fd(os: &Bound<'_, PyModule>, old_fd: Option<i32>) -> PyResult<()> {
