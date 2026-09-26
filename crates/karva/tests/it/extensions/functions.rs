@@ -428,9 +428,9 @@ fn test_importorskip_returns_available_module() {
     let context = TestContext::with_files([
         (
             "optional_dependency.py",
-            r#"
+            r"
 value = 42
-            "#,
+            ",
         ),
         (
             "test.py",
@@ -478,6 +478,61 @@ def test_never_reached():
     ----- stdout -----
         Starting 1 test across 1 worker
             SKIP [TIME] test::<module>: optional dependency is unavailable
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_missing_module_skips_test() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_optional_dependency():
+    karva.importorskip("optional_dependency", reason="optional dependency is unavailable")
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test::test_optional_dependency: optional dependency is unavailable
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_missing_module_skips_fixture() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def optional_dependency():
+    return karva.importorskip("optional_dependency", reason="optional dependency is unavailable")
+
+def test_optional_dependency(optional_dependency):
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test::test_optional_dependency: optional dependency is unavailable
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 skipped
 
