@@ -5,7 +5,9 @@ mod collection;
 mod ordering;
 mod recovery;
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
 pub use balancing::partition_collected_tests;
 #[cfg(test)]
@@ -117,9 +119,34 @@ impl Partition {
         self.tests.len()
     }
 
+    /// Whether this assignment contains a cached failure eligible for priority scheduling.
+    pub(super) fn has_cached_failure(&self, last_failed: &HashSet<TestCacheKey>) -> bool {
+        self.tests
+            .iter()
+            .any(|test| is_scheduled_failure(test, last_failed))
+    }
+
     /// Whether this assignment has any worker selectors.
     pub(super) fn is_empty(&self) -> bool {
         self.tests.is_empty()
+    }
+
+    /// Puts cached failures first while retaining duration order in each group.
+    fn prioritize_failures(
+        &mut self,
+        last_failed: &HashSet<TestCacheKey>,
+        previous_durations: &HashMap<TestCacheKey, Duration>,
+    ) {
+        self.tests.sort_by(|a, b| {
+            is_scheduled_failure(b, last_failed)
+                .cmp(&is_scheduled_failure(a, last_failed))
+                .then_with(|| {
+                    compare_durations(
+                        scheduled_duration(a, previous_durations),
+                        scheduled_duration(b, previous_durations),
+                    )
+                })
+        });
     }
 
     /// Returns function identities represented by this assignment.
@@ -133,6 +160,33 @@ impl Partition {
     pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
         &self.resume_skip
     }
+}
+
+fn compare_durations(a: Option<Duration>, b: Option<Duration>) -> std::cmp::Ordering {
+    match (a, b) {
+        (Some(duration_a), Some(duration_b)) => duration_b.cmp(&duration_a),
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, _) => std::cmp::Ordering::Greater,
+        (_, None) => std::cmp::Ordering::Less,
+    }
+}
+
+fn is_scheduled_failure(test: &ScheduledTest, last_failed: &HashSet<TestCacheKey>) -> bool {
+    let key = test.cache_key();
+    last_failed.contains(&key)
+        || last_failed.contains(&TestCacheKey::function_name(key.test_function_name()))
+}
+
+fn scheduled_duration(
+    test: &ScheduledTest,
+    previous_durations: &HashMap<TestCacheKey, Duration>,
+) -> Option<Duration> {
+    let key = test.cache_key();
+    previous_durations.get(&key).copied().or_else(|| {
+        previous_durations
+            .get(&TestCacheKey::function_name(key.test_function_name()))
+            .copied()
+    })
 }
 
 /// Counts controller scheduling units, expanding only statically countable cases.

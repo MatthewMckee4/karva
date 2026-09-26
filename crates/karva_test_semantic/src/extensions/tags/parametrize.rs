@@ -491,6 +491,17 @@ impl Iterator for ParameterPlanIterator {
 }
 
 impl ParameterPlanIterator {
+    /// Rewinds the mixed-radix cursor and returns one case by its stable index.
+    ///
+    /// Scheduling can request sparse cases in a different order than their
+    /// natural expansion. Reusing this cursor keeps that operation bounded by
+    /// the number of dimensions instead of materializing the Cartesian product.
+    pub(crate) fn seek(&mut self, index: usize) -> Option<ParametrizationArgs> {
+        self.indices.fill(0);
+        self.complete = self.dimensions.iter().any(Vec::is_empty);
+        self.nth(index)
+    }
+
     /// Advances mixed-radix indices without materializing skipped combinations.
     fn skip(&mut self, mut count: usize) -> bool {
         if self.complete {
@@ -1013,5 +1024,27 @@ mod tests {
             Some("a1-b2".to_string())
         );
         assert!(combinations.nth(usize::MAX).is_none());
+    }
+
+    #[test]
+    fn parameter_plan_seeks_sparse_combinations_without_expanding_them() {
+        let mut combinations = ParameterPlan::new(vec![
+            vec![args("a0"), args("a1")],
+            vec![args("b0"), args("b1"), args("b2")],
+        ])
+        .into_iter();
+
+        assert_eq!(
+            combinations
+                .seek(5)
+                .and_then(|args| args.id().map(str::to_string)),
+            Some("a1-b2".to_string())
+        );
+        assert_eq!(
+            combinations
+                .seek(0)
+                .and_then(|args| args.id().map(str::to_string)),
+            Some("a0-b0".to_string())
+        );
     }
 }

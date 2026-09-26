@@ -26,6 +26,7 @@ fn show_config_default_profile() {
     try-import-fixtures = false
     doctest-modules = false
     retry = 0
+    failed-first = false
     shuffle = false
     flaky-result = "pass"
     no-tests = "auto"

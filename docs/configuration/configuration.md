@@ -971,6 +971,35 @@ applied to the test.
 
 ---
 
+#### `failed-first`
+
+Run tests that failed in the previous run before other selected tests.
+
+Defaults to `false`. Tests are still selected and partitioned normally;
+this only changes scheduling priority.
+
+**Default value**: `false`
+
+**Type**: `true | false`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    failed-first = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    failed-first = true
+    ```
+
+---
+
 #### `flaky-result`
 
 Whether tests that pass only after a retry should fail the run.

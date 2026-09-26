@@ -34,6 +34,11 @@ Behavior when no tests are found to run, equivalent to
 Whether flaky tests pass or fail the run, equivalent to
 `--flaky-result`.
 
+### `KARVA_FAILED_FIRST`
+
+Whether tests that failed in the previous run are scheduled first,
+equivalent to `--failed-first`.
+
 ### `KARVA_STATUS_LEVEL`
 
 Test result statuses to display during the run, equivalent to
