@@ -73,7 +73,8 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             })
             .collect();
 
-        let case_filter = build_case_filter(&test_paths);
+        let case_filter =
+            build_case_filter(&test_paths, self.context.settings().test().failed_first);
         let mut seen_tests = HashSet::new();
         let test_order = test_paths
             .iter()
@@ -236,7 +237,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 ///
 /// Multiple selectors for the same function are unioned: any bare selector
 /// (no `[idx]`) wins and yields `None`; otherwise the indices are merged.
-fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
+fn build_case_filter(test_paths: &[TestPathFunction], preserve_order: bool) -> CaseFilterMap {
     if test_paths
         .iter()
         .all(|test_path| test_path.parametrize_index.is_none())
@@ -267,6 +268,9 @@ fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
     for indices in filter.values_mut().flatten() {
         let mut seen = HashSet::new();
         indices.retain(|index| seen.insert(*index));
+        if !preserve_order {
+            indices.sort_unstable();
+        }
     }
     filter
 }
@@ -397,7 +401,7 @@ mod tests {
             },
         ];
 
-        let filter = build_case_filter(&paths);
+        let filter = build_case_filter(&paths, true);
         assert_eq!(
             filter.get(&(Utf8PathBuf::from("test.py"), "test_case".to_string())),
             Some(&Some(vec![2, 0]))

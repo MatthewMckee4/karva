@@ -487,15 +487,11 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                         .push(context.module.path().clone());
                     let mut module_parents = context.parents.clone();
                     module_parents.push(context.package);
-                    let package_path = context
-                        .parents
-                        .last()
-                        .map_or_else(|| context.module.path(), |package| package.path());
                     if let Err(error) = self.run_auto_use_fixtures(
                         py,
                         &module_parents,
                         context.module,
-                        package_path,
+                        context.package.path(),
                         FixtureScope::Module,
                     ) {
                         failed_modules.insert(context.module.path().clone(), error.clone());
