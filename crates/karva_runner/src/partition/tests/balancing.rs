@@ -5,6 +5,7 @@ use karva_python_semantic::TestCacheKey;
 
 use super::super::{Partition, TestOrdering, partition_collected_tests, scheduled_test_count};
 use super::helpers::{collected_package, collected_package_with_files};
+use crate::orchestration::{FailurePriority, LastFailedSelection};
 
 #[test]
 fn stable_partitioning_preserves_module_order_after_grouping() {
@@ -19,8 +20,8 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
         2,
         &HashMap::new(),
         &HashSet::new(),
-        false,
-        false,
+        LastFailedSelection::All,
+        FailurePriority::Normal,
         None,
         TestOrdering::Stable,
     );
@@ -50,8 +51,8 @@ fn literal_parametrize_cases_split_across_workers() {
         2,
         &HashMap::new(),
         &HashSet::new(),
-        false,
-        false,
+        LastFailedSelection::All,
+        FailurePriority::Normal,
         None,
         TestOrdering::Stable,
     );
@@ -88,8 +89,8 @@ fn failed_first_places_cached_parametrize_case_first() {
         1,
         &HashMap::new(),
         &failed,
-        false,
-        true,
+        LastFailedSelection::All,
+        FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
     );
@@ -116,8 +117,8 @@ fn dynamic_parametrize_cases_remain_one_unit() {
         2,
         &HashMap::new(),
         &HashSet::new(),
-        false,
-        false,
+        LastFailedSelection::All,
+        FailurePriority::Normal,
         None,
         TestOrdering::Stable,
     );
@@ -145,8 +146,8 @@ fn last_failed_case_selects_opaque_dynamic_parameter_function() {
         1,
         &HashMap::new(),
         &last_failed,
-        true,
-        false,
+        LastFailedSelection::LastFailed,
+        FailurePriority::Normal,
         None,
         TestOrdering::Stable,
     );
@@ -176,8 +177,8 @@ fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
         1,
         &durations,
         &HashSet::new(),
-        false,
-        false,
+        LastFailedSelection::All,
+        FailurePriority::Normal,
         None,
         TestOrdering::Stable,
     );
@@ -205,8 +206,8 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
         2,
         &durations,
         &HashSet::new(),
-        false,
-        false,
+        LastFailedSelection::All,
+        FailurePriority::Normal,
         None,
         TestOrdering::Stable,
     );
@@ -245,8 +246,8 @@ fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
         1,
         &durations,
         &last_failed,
-        false,
-        true,
+        LastFailedSelection::All,
+        FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
     );
@@ -256,6 +257,38 @@ fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
         [
             format!("{test_path}::test_b"),
             format!("{test_path}::test_a"),
+            format!("{test_path}::test_c"),
+        ]
+    );
+}
+
+#[test]
+fn last_failed_and_failed_first_select_and_prioritize_together() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "def test_a(): pass\n\
+         def test_b(): pass\n\
+         def test_c(): pass\n",
+    );
+    let last_failed = HashSet::from([
+        TestCacheKey::function_name("test_sample::test_b"),
+        TestCacheKey::function_name("test_sample::test_c"),
+    ]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &HashMap::new(),
+        &last_failed,
+        LastFailedSelection::LastFailed,
+        FailurePriority::FailedFirst,
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{test_path}::test_b"),
             format!("{test_path}::test_c"),
         ]
     );
@@ -277,8 +310,8 @@ fn failed_first_keeps_partition_selection_before_priority_ordering() {
         1,
         &HashMap::new(),
         &last_failed,
-        false,
-        true,
+        LastFailedSelection::All,
+        FailurePriority::FailedFirst,
         Some(selection),
         TestOrdering::Stable,
     );
@@ -315,8 +348,8 @@ fn failed_first_reorders_across_module_groups() {
         1,
         &durations,
         &last_failed,
-        false,
-        true,
+        LastFailedSelection::All,
+        FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
     );
