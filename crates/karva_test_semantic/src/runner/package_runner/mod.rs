@@ -10,6 +10,7 @@ use pyo3::prelude::*;
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
+use crate::output_capture::StdinCapture;
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionError};
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::{CompiledTestPlan, PendingTestPlan, TestVariantIterator};
@@ -45,6 +46,8 @@ pub struct PackageRunner<'context, 'settings> {
     coverage: Option<&'context CoverageSession>,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: u32,
+    /// Process stdin guard shared by all captured test attempts in this worker.
+    stdin_capture: Option<StdinCapture>,
 }
 
 impl<'context, 'settings> PackageRunner<'context, 'settings> {
@@ -61,6 +64,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             finalizer_cache: FinalizerCache::default(),
             coverage,
             failed_count: 0,
+            stdin_capture: None,
         }
     }
 
@@ -203,7 +207,32 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         }
 
         self.execute_package(py, session, &[], &mut test_plans);
+        self.finish_stdin_capture(py);
         self.report_scope_cleanup(py, ScopeKey::Session);
+    }
+
+    /// Starts the worker-wide stdin guard on the first captured test.
+    fn ensure_stdin_capture(&mut self, py: Python<'_>) {
+        if self.stdin_capture.is_none() {
+            match StdinCapture::start(py) {
+                Ok(capture) => self.stdin_capture = Some(capture),
+                Err(error) => tracing::warn!("failed to start stdin capture: {error}"),
+            }
+        }
+        if let Some(capture) = &self.stdin_capture
+            && let Err(error) = capture.activate(py)
+        {
+            tracing::warn!("failed to activate stdin capture: {error}");
+        }
+    }
+
+    /// Restores worker stdin after all captured tests and fixture cleanup finish.
+    fn finish_stdin_capture(&mut self, py: Python<'_>) {
+        if let Some(capture) = self.stdin_capture.take()
+            && let Err(error) = capture.finish(py)
+        {
+            tracing::warn!("failed to finish stdin capture: {error}");
+        }
     }
 
     /// Executes module auto-use fixtures, variants, and module teardown.
