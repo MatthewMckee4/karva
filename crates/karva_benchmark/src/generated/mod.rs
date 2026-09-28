@@ -5,6 +5,7 @@ use camino::Utf8Path;
 use fs_err as fs;
 
 mod dense_fixtures;
+mod many_functions;
 mod many_modules;
 mod nested_fixtures;
 mod parametrized_matrix;
@@ -20,6 +21,9 @@ pub enum GeneratedBenchmark {
 
     /// File discovery, collection, import, and scheduling across many modules.
     ManyModules,
+
+    /// Selected function lookup within one large module.
+    ManyFunctions,
 
     /// Deep fixture dependency resolution.
     NestedFixtures,
@@ -67,6 +71,7 @@ pub fn generate_project(workload: GeneratedBenchmark, project_root: &Utf8Path) -
     match workload {
         GeneratedBenchmark::DenseFixtures => dense_fixtures::generate(&tests),
         GeneratedBenchmark::ManyModules => many_modules::generate(&tests),
+        GeneratedBenchmark::ManyFunctions => many_functions::generate(&tests),
         GeneratedBenchmark::NestedFixtures => nested_fixtures::generate(&tests),
         GeneratedBenchmark::ParametrizedMatrix => parametrized_matrix::generate(&tests),
         GeneratedBenchmark::Snapshots => snapshots::generate(&tests),
@@ -85,6 +90,19 @@ mod tests {
         GeneratedBenchmark, dense_fixtures, generate_project, many_modules, nested_fixtures,
         parametrized_matrix, retries, snapshots, wide_fixtures,
     };
+
+    #[test]
+    fn many_functions_workload_has_selected_tests() {
+        let temp_dir = tempdir().expect("temporary directory");
+        let root = Utf8Path::from_path(temp_dir.path()).expect("UTF-8 path");
+        generate_project(GeneratedBenchmark::ManyFunctions, root).expect("generate functions");
+        let source =
+            fs::read_to_string(root.join("tests/test_functions.py")).expect("read functions");
+        assert_eq!(
+            source.matches("def test_").count(),
+            super::many_functions::TESTS
+        );
+    }
 
     #[test]
     fn generated_projects_isolate_targeted_workloads() {
