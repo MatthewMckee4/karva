@@ -350,6 +350,7 @@ const WERKZEUG_PROJECT: BenchmarkProject = BenchmarkProject {
 pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     DENSE_FIXTURES_PROJECT,
     MANY_MODULES_PROJECT,
+    generated_project("karva-many-functions", GeneratedBenchmark::ManyFunctions),
     NESTED_FIXTURES_PROJECT,
     PARAMETRIZED_MATRIX_PROJECT,
     SNAPSHOTS_PROJECT,
