@@ -60,14 +60,18 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let partition = args.partition;
     let no_cache = args.no_cache.unwrap_or(false);
     let random_seed_selection = args.random_seed();
-    let num_workers = if args.no_parallel.unwrap_or(false) || args.no_capture {
-        1
+    let (num_workers, worker_count_source) = if args.no_parallel.unwrap_or(false) || args.no_capture
+    {
+        (1, karva_runner::WorkerCountSource::Explicit)
     } else if let Some(num_workers) = args.num_workers {
-        num_workers.get()
+        (num_workers.get(), karva_runner::WorkerCountSource::Explicit)
     } else {
-        karva_static::max_parallelism()
-            .context("Failed to determine default worker count")?
-            .get()
+        (
+            karva_static::max_parallelism()
+                .context("Failed to determine default worker count")?
+                .get(),
+            karva_runner::WorkerCountSource::Default,
+        )
     };
 
     let profile = args.profile.clone();
@@ -132,6 +136,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
 
     let config = karva_runner::ParallelTestConfig {
         num_workers,
+        worker_count_source,
         no_cache,
         create_ctrlc_handler: true,
         last_failed,

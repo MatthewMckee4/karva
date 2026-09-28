@@ -54,6 +54,16 @@ pub fn run_parallel_tests(
     let num_workers = config.num_workers.min(max_useful_workers);
 
     if num_workers < config.num_workers {
+        if config.worker_count_source.is_explicit() {
+            let mut stdout = printer.stream_for_message().lock();
+            if let Err(error) = writeln!(
+                stdout,
+                "info: Capped worker count from {} to {} for {} collected tests (targeting about {MIN_TESTS_PER_WORKER} tests per worker)",
+                config.num_workers, num_workers, total_tests,
+            ) {
+                tracing::warn!(target: "karva_runner::orchestration", "failed to write worker cap information: {error}");
+            }
+        }
         tracing::info!(target: "karva_runner::orchestration",
             total_tests,
             requested_workers = config.num_workers,
@@ -237,4 +247,9 @@ pub fn run_parallel_tests(
     })
 }
 
+// Receipt: on an Apple Silicon debug wheel, eight hyperfine runs measured
+// 10 no-op tests at 91.3 ms with one worker and 91.7 ms with two workers;
+// 20 no-op tests took 97.1 ms and 100.5 ms. Six 100 ms tests took 711.7 ms
+// with one worker and 422.5 ms with two. Keep the cap where startup dominates
+// no-op suites while substantive suites still gain parallelism at six tests.
 const MIN_TESTS_PER_WORKER: usize = 5;
