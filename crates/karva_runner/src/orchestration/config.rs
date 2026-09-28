@@ -7,6 +7,10 @@ use karva_diagnostic::AggregatedResults;
 use crate::partition::TestOrdering;
 
 /// Controller settings that affect worker count, selection, and lifecycle.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these independent CLI switches are the public runner configuration"
+)]
 pub struct ParallelTestConfig {
     /// Maximum worker processes before capping against collected test count.
     pub num_workers: usize,
@@ -23,6 +27,9 @@ pub struct ParallelTestConfig {
 
     /// When `true`, only tests that failed in the previous run will be executed.
     pub last_failed: bool,
+
+    /// When `true`, cached failures are scheduled before other selected tests.
+    pub failed_first: bool,
 
     /// Active configuration profile name. Propagated to workers as
     /// `KARVA_PROFILE`; falls back to `"default"` when `None`.

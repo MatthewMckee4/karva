@@ -73,6 +73,10 @@ env_vars! {
         /// `--flaky-result`.
         pub const KARVA_FLAKY_RESULT: &'static str = "KARVA_FLAKY_RESULT";
 
+        /// Whether tests that failed in the previous run are scheduled first,
+        /// equivalent to `--failed-first`.
+        pub const KARVA_FAILED_FIRST: &'static str = "KARVA_FAILED_FIRST";
+
         /// Test result statuses to display during the run, equivalent to
         /// `--status-level`.
         pub const KARVA_STATUS_LEVEL: &'static str = "KARVA_STATUS_LEVEL";

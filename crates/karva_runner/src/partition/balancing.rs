@@ -47,18 +47,24 @@ impl ModuleGroup {
 /// split test-by-test to limit worker skew. Seeded runs instead derive both
 /// order and worker assignment from stable test identities, independent of
 /// duration history and sibling tests.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "partitioning combines independent scheduling inputs"
+)]
 pub fn partition_collected_tests(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
     previous_durations: &HashMap<TestCacheKey, Duration>,
     last_failed: &HashSet<TestCacheKey>,
+    last_failed_only: bool,
+    failed_first: bool,
     partition_selection: Option<PartitionSelection>,
     test_ordering: TestOrdering,
 ) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
-    if !last_failed.is_empty() {
+    if last_failed_only && !last_failed.is_empty() {
         let failed_function_roots = last_failed
             .iter()
             .map(TestCacheKey::test_function_name)
@@ -82,10 +88,21 @@ pub fn partition_collected_tests(
         });
     }
 
+    let prioritize_failures = failed_first
+        && test_infos
+            .iter()
+            .any(|test| is_cached_failure(test, last_failed));
+
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
     if let TestOrdering::SeededShuffle(seed) = test_ordering {
-        return partition_shuffled_tests(test_infos, num_workers, seed);
+        let mut partitions = partition_shuffled_tests(test_infos, num_workers, seed);
+        if prioritize_failures {
+            for partition in &mut partitions {
+                partition.prioritize_failures(last_failed, previous_durations);
+            }
+        }
+        return partitions;
     }
 
     let mut module_groups: Vec<ModuleGroup> = Vec::new();
@@ -127,6 +144,12 @@ pub fn partition_collected_tests(
             let weight = test_weight(test_info.duration);
             let min_partition_idx = find_lightest_partition(&partitions);
             partitions[min_partition_idx].add_test(test_info, weight);
+        }
+    }
+
+    if prioritize_failures {
+        for partition in &mut partitions {
+            partition.prioritize_failures(last_failed, previous_durations);
         }
     }
 
@@ -179,4 +202,13 @@ fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
         (None, _) => std::cmp::Ordering::Greater,
         (_, None) => std::cmp::Ordering::Less,
     }
+}
+
+fn is_cached_failure(test: &TestInfo, last_failed: &HashSet<TestCacheKey>) -> bool {
+    last_failed.contains(test.qualified_name.as_str())
+        || last_failed.contains(test.identity.function_root.as_ref())
+        || (test.qualified_name == test.identity.function_root.as_ref()
+            && last_failed
+                .iter()
+                .any(|key| key.test_function_name() == test.identity.function_root.as_ref()))
 }

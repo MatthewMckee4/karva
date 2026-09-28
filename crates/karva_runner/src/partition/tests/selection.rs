@@ -22,6 +22,8 @@ fn partition_selection_filters_after_sorting_by_qualified_name() {
         1,
         &HashMap::new(),
         &HashSet::new(),
+        false,
+        false,
         Some(selection),
         TestOrdering::Stable,
     );
@@ -53,6 +55,8 @@ fn last_failed_filters_before_explicit_partition_selection() {
         1,
         &HashMap::new(),
         &last_failed,
+        true,
+        false,
         Some(selection),
         TestOrdering::Stable,
     );

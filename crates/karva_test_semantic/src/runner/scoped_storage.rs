@@ -9,7 +9,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 pub(super) enum ScopeKey<'a> {
     Session,
     Package(&'a Utf8Path),
-    Module,
+    Module(&'a Utf8Path),
     Function,
 }
 
@@ -21,7 +21,7 @@ pub(super) enum ScopeKey<'a> {
 pub(super) struct ScopedStorage<T: Default> {
     session: T,
     packages: HashMap<Utf8PathBuf, T>,
-    module: T,
+    modules: HashMap<Utf8PathBuf, T>,
     function: T,
 }
 
@@ -31,7 +31,7 @@ impl<T: Default> ScopedStorage<T> {
         match key {
             ScopeKey::Session => Some(read(&self.session)),
             ScopeKey::Package(path) => self.packages.get(path).map(read),
-            ScopeKey::Module => Some(read(&self.module)),
+            ScopeKey::Module(path) => self.modules.get(path).map(read),
             ScopeKey::Function => Some(read(&self.function)),
         }
     }
@@ -41,7 +41,7 @@ impl<T: Default> ScopedStorage<T> {
         match key {
             ScopeKey::Session => update(&mut self.session),
             ScopeKey::Package(path) => update(self.packages.entry(path.to_path_buf()).or_default()),
-            ScopeKey::Module => update(&mut self.module),
+            ScopeKey::Module(path) => update(self.modules.entry(path.to_path_buf()).or_default()),
             ScopeKey::Function => update(&mut self.function),
         }
     }
@@ -51,7 +51,7 @@ impl<T: Default> ScopedStorage<T> {
         match key {
             ScopeKey::Session => std::mem::take(&mut self.session),
             ScopeKey::Package(path) => self.packages.remove(path).unwrap_or_default(),
-            ScopeKey::Module => std::mem::take(&mut self.module),
+            ScopeKey::Module(path) => self.modules.remove(path).unwrap_or_default(),
             ScopeKey::Function => std::mem::take(&mut self.function),
         }
     }

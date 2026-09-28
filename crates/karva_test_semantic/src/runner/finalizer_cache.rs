@@ -25,12 +25,18 @@ impl FinalizerCache {
     }
 
     /// Adds a finalizer to its declared scope's LIFO stack.
-    pub(super) fn add_finalizer(&mut self, finalizer: Finalizer) {
+    pub(super) fn add_finalizer(
+        &mut self,
+        finalizer: Finalizer,
+        module_owner: Option<&camino::Utf8Path>,
+    ) {
         let package_owner = finalizer.package_owner.clone();
         let scope = match finalizer.scope {
             FixtureScope::Session => ScopeKey::Session,
             FixtureScope::Package => ScopeKey::Package(&package_owner),
-            FixtureScope::Module => ScopeKey::Module,
+            FixtureScope::Module => {
+                ScopeKey::Module(module_owner.map_or(&package_owner, |path| path))
+            }
             FixtureScope::Function => ScopeKey::Function,
         };
         self.storage.with_mut(scope, |finalizers| {

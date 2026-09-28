@@ -13,6 +13,7 @@ mod discovery;
 mod doctest;
 mod durations;
 mod extensions;
+mod failed_first;
 mod filterset;
 mod junit;
 mod last_failed;
