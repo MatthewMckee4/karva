@@ -10,6 +10,7 @@ mod many_modules;
 mod nested_fixtures;
 mod parametrized_matrix;
 mod retries;
+mod shared_conftest;
 mod snapshots;
 mod wide_fixtures;
 
@@ -24,6 +25,9 @@ pub enum GeneratedBenchmark {
 
     /// Selected function lookup within one large module.
     ManyFunctions,
+
+    /// Ancestor configuration reuse across sibling modules.
+    SharedConftest,
 
     /// Deep fixture dependency resolution.
     NestedFixtures,
@@ -72,6 +76,7 @@ pub fn generate_project(workload: GeneratedBenchmark, project_root: &Utf8Path) -
         GeneratedBenchmark::DenseFixtures => dense_fixtures::generate(&tests),
         GeneratedBenchmark::ManyModules => many_modules::generate(&tests),
         GeneratedBenchmark::ManyFunctions => many_functions::generate(&tests),
+        GeneratedBenchmark::SharedConftest => shared_conftest::generate(&tests),
         GeneratedBenchmark::NestedFixtures => nested_fixtures::generate(&tests),
         GeneratedBenchmark::ParametrizedMatrix => parametrized_matrix::generate(&tests),
         GeneratedBenchmark::Snapshots => snapshots::generate(&tests),
@@ -102,6 +107,31 @@ mod tests {
             source.matches("def test_").count(),
             super::many_functions::TESTS
         );
+    }
+
+    #[test]
+    fn shared_conftest_workload_covers_sibling_modules() {
+        let temp_dir = tempdir().expect("temporary directory");
+        let root = Utf8Path::from_path(temp_dir.path()).expect("UTF-8 path");
+        generate_project(GeneratedBenchmark::SharedConftest, root)
+            .expect("generate shared configuration");
+        let source =
+            fs::read_to_string(root.join("tests/conftest.py")).expect("read configuration");
+        assert_eq!(
+            source.matches("@pytest.fixture").count(),
+            super::shared_conftest::FIXTURES
+        );
+        assert_eq!(
+            fs::read_dir(root.join("tests"))
+                .expect("read test directory")
+                .count(),
+            super::shared_conftest::MODULES + 1
+        );
+        let source = fs::read_to_string(root.join("tests/test_0.py")).expect("read test module");
+        assert!(source.contains(&format!(
+            "assert value_{last} == {last}",
+            last = super::shared_conftest::FIXTURES - 1
+        )));
     }
 
     #[test]

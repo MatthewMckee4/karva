@@ -1,6 +1,6 @@
 use karva_collector::{CollectedPackage, CollectionError, CollectionSettings, collect_file};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_project::path::TestPathFunction;
@@ -39,6 +39,8 @@ impl<'a> TestFunctionCollector<'a> {
                 .push(test_path.function_name);
         }
 
+        let mut visited_directories = HashSet::new();
+
         // Collect each file once with all its requested functions
         for (file_path, function_names) in file_to_functions {
             if let Some(module) =
@@ -47,7 +49,11 @@ impl<'a> TestFunctionCollector<'a> {
                 session_package.add_module(module);
             }
 
-            self.collect_parent_configuration(&file_path, &mut session_package)?;
+            self.collect_parent_configuration(
+                &file_path,
+                &mut session_package,
+                &mut visited_directories,
+            )?;
         }
 
         session_package.shrink();
@@ -59,6 +65,7 @@ impl<'a> TestFunctionCollector<'a> {
         &self,
         path: &Utf8Path,
         session_package: &mut CollectedPackage,
+        visited_directories: &mut HashSet<Utf8PathBuf>,
     ) -> Result<(), CollectionError> {
         let mut current_path = if path.is_dir() {
             path
@@ -70,6 +77,10 @@ impl<'a> TestFunctionCollector<'a> {
         };
 
         loop {
+            // A visited directory's ancestors were also collected on its first visit.
+            if !visited_directories.insert(current_path.to_path_buf()) {
+                break;
+            }
             let conftest_path = current_path.join("conftest.py");
             if conftest_path.exists() {
                 let mut package = CollectedPackage::new(current_path.to_path_buf());

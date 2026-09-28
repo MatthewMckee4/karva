@@ -351,6 +351,7 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     DENSE_FIXTURES_PROJECT,
     MANY_MODULES_PROJECT,
     generated_project("karva-many-functions", GeneratedBenchmark::ManyFunctions),
+    generated_project("karva-shared-conftest", GeneratedBenchmark::SharedConftest),
     NESTED_FIXTURES_PROJECT,
     PARAMETRIZED_MATRIX_PROJECT,
     SNAPSHOTS_PROJECT,
