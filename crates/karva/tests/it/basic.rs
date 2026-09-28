@@ -2088,6 +2088,54 @@ def test_subprocess_reads_eof():
 }
 
 #[test]
+fn test_stdin_guards_are_reinstalled_between_tests() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import io
+import os
+import subprocess
+import sys
+
+def test_changes_stdin():
+    sys.stdin = io.StringIO("unexpected\n")
+    fd = os.open(__file__, os.O_RDONLY)
+    os.dup2(fd, 0)
+    os.close(fd)
+
+def test_next_test_still_sees_guards():
+    try:
+        input()
+    except RuntimeError:
+        pass
+    else:
+        assert False, "stdin should remain guarded"
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == "''\n", repr(result.stdout)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_changes_stdin
+            PASS [TIME] test::test_next_test_still_sees_guards
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_no_capture_keeps_stdin_available() {
     let context = TestContext::with_file(
         "test.py",

@@ -59,16 +59,49 @@ impl CapturedStdin {
 
 /// Process-global Python stream redirection for one test attempt.
 ///
-/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects and
-/// replaces `sys.stdin` with [`CapturedStdin`]. Callers must consume the value
-/// with [`Self::finish`] to restore all Python streams.
+/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects.
+/// Callers must consume the value with [`Self::finish`] to restore both streams.
 pub struct PythonOutputCapture {
     sys: Py<PyModule>,
     old_stdout: Py<PyAny>,
     old_stderr: Py<PyAny>,
-    old_stdin: Py<PyAny>,
     stdout: Py<PyAny>,
     stderr: Py<PyAny>,
+}
+
+/// Keeps Python's stdin guard installed for a worker's captured tests.
+pub struct PythonStdinCapture {
+    sys: Py<PyModule>,
+    old_stdin: Py<PyAny>,
+    captured_stdin: Py<PyAny>,
+}
+
+impl PythonStdinCapture {
+    /// Installs the captured stdin guard and saves the original stream.
+    pub fn start(py: Python<'_>) -> PyResult<Self> {
+        let sys = py.import("sys")?.unbind();
+        let sys_bound = sys.bind(py);
+        let old_stdin = sys_bound.getattr("stdin")?.unbind();
+        let captured_stdin = Py::new(py, CapturedStdin)?.into_any();
+        sys_bound.setattr("stdin", captured_stdin.bind(py))?;
+        Ok(Self {
+            sys,
+            old_stdin,
+            captured_stdin,
+        })
+    }
+
+    /// Reinstalls the guard after test code changes `sys.stdin`.
+    pub fn activate(&self, py: Python<'_>) -> PyResult<()> {
+        self.sys
+            .bind(py)
+            .setattr("stdin", self.captured_stdin.bind(py))
+    }
+
+    /// Restores the worker's original Python stdin stream.
+    pub fn finish(self, py: Python<'_>) -> PyResult<()> {
+        self.sys.bind(py).setattr("stdin", self.old_stdin.bind(py))
+    }
 }
 
 /// Keeps process stdin at EOF while captured tests execute.
@@ -148,10 +181,8 @@ impl PythonOutputCapture {
 
         let old_stdout = sys_bound.getattr("stdout")?.unbind();
         let old_stderr = sys_bound.getattr("stderr")?.unbind();
-        let old_stdin = sys_bound.getattr("stdin")?.unbind();
         let stdout = string_io.call0()?.unbind();
         let stderr = string_io.call0()?.unbind();
-        let captured_stdin = Py::new(py, CapturedStdin)?.into_any();
 
         sys_bound.setattr("stdout", stdout.bind(py))?;
         if let Err(err) = sys_bound.setattr("stderr", stderr.bind(py)) {
@@ -162,16 +193,10 @@ impl PythonOutputCapture {
             }
             return Err(err);
         }
-        if let Err(err) = sys_bound.setattr("stdin", captured_stdin.bind(py)) {
-            restore_stdio(sys_bound, &old_stdout, &old_stderr, py)?;
-            return Err(err);
-        }
-
         Ok(Self {
             sys,
             old_stdout,
             old_stderr,
-            old_stdin,
             stdout,
             stderr,
         })
@@ -183,11 +208,9 @@ impl PythonOutputCapture {
         flush_current_streams(sys);
 
         let restore_result = restore_stdio(sys, &self.old_stdout, &self.old_stderr, py);
-        let stdin_result = sys.setattr("stdin", self.old_stdin.bind(py));
         let stdout = self.stdout.bind(py).call_method0("getvalue")?.extract()?;
         let stderr = self.stderr.bind(py).call_method0("getvalue")?.extract()?;
         restore_result?;
-        stdin_result?;
 
         Ok(CapturedPythonOutput { stdout, stderr })
     }
