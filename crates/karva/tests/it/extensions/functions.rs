@@ -98,6 +98,21 @@ def test_accepts_mixed_mapping():
         {"count": 1, "label": "two"}
     )
 
+class Token:
+    def __init__(self, value):
+        self.value = value
+
+    def __eq__(self, other):
+        return isinstance(other, Token) and self.value == other.value
+
+def test_accepts_custom_objects():
+    assert karva.approx(Token("ready")) == Token("ready")
+    assert karva.approx(Token("ready")) != Token("stale")
+
+def test_rejects_mismatched_structures():
+    assert [1, "two"] != karva.approx([1])
+    assert {"label": "two"} != karva.approx({"count": 1})
+
 def test_bool_comparisons_remain_strict():
     assert True == karva.approx(True)
     assert 1 != karva.approx(True)
@@ -109,16 +124,59 @@ def test_bool_comparisons_remain_strict():
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 4 tests across 1 worker
+        Starting 6 tests across 1 worker
             PASS [TIME] test::test_accepts_nonnumeric_scalar
             PASS [TIME] test::test_accepts_mixed_sequence
             PASS [TIME] test::test_accepts_mixed_mapping
+            PASS [TIME] test::test_accepts_custom_objects
+            PASS [TIME] test::test_rejects_mismatched_structures
             PASS [TIME] test::test_bool_comparisons_remain_strict
     ────────────
-         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+         Summary [TIME] 6 tests run: 6 passed, 0 skipped
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_approx_nonnumeric_mismatch_reports_failure() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_nonnumeric_mismatch():
+    assert "other" == karva.approx("two")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_nonnumeric_mismatch
+
+    failures:
+
+    test::test_nonnumeric_mismatch:
+
+    error[test-failure]: Test `test_nonnumeric_mismatch` failed
+     --> test.py:4:5
+      |
+    4 | def test_nonnumeric_mismatch():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     assert "other" == karva.approx("two")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[test]
