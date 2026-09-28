@@ -107,6 +107,7 @@ impl PythonStdinCapture {
 /// Keeps process stdin at EOF while captured tests execute.
 pub struct StdinCapture {
     os: Py<PyModule>,
+    dup2: Py<PyAny>,
     old_fd: Option<i32>,
     null_fd: i32,
 }
@@ -116,6 +117,7 @@ impl StdinCapture {
     pub fn start(py: Python<'_>) -> PyResult<Self> {
         let os = py.import("os")?.unbind();
         let os_bound = os.bind(py);
+        let dup2 = os_bound.getattr("dup2")?.unbind();
         let old_fd = match os_bound
             .getattr("dup")?
             .call1((0,))
@@ -138,7 +140,7 @@ impl StdinCapture {
                 return Err(err);
             }
         };
-        if let Err(err) = os_bound.getattr("dup2")?.call1((null_fd, 0)) {
+        if let Err(err) = dup2.bind(py).call1((null_fd, 0)) {
             let _ = os_bound.getattr("close")?.call1((null_fd,));
             if let Some(old_fd) = old_fd {
                 let _ = os_bound.getattr("close")?.call1((old_fd,));
@@ -148,6 +150,7 @@ impl StdinCapture {
 
         Ok(Self {
             os,
+            dup2,
             old_fd,
             null_fd,
         })
@@ -155,7 +158,7 @@ impl StdinCapture {
 
     /// Reapplies the EOF source if test code changed file descriptor 0.
     pub fn activate(&self, py: Python<'_>) -> PyResult<()> {
-        self.os.bind(py).getattr("dup2")?.call1((self.null_fd, 0))?;
+        self.dup2.bind(py).call1((self.null_fd, 0))?;
         Ok(())
     }
 
