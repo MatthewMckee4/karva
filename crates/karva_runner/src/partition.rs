@@ -5,6 +5,7 @@ mod collection;
 mod ordering;
 mod recovery;
 
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -131,21 +132,18 @@ impl Partition {
         self.tests.is_empty()
     }
 
-    /// Puts cached failures first while retaining duration order in each group.
+    /// Puts cached failures first, then unmeasured tests before descending durations.
+    /// Equal keys retain assignment order; cache lookups run once per test.
     fn prioritize_failures(
         &mut self,
         last_failed: &HashSet<TestCacheKey>,
         previous_durations: &HashMap<TestCacheKey, Duration>,
     ) {
-        self.tests.sort_by(|a, b| {
-            is_scheduled_failure(b, last_failed)
-                .cmp(&is_scheduled_failure(a, last_failed))
-                .then_with(|| {
-                    compare_durations(
-                        scheduled_duration(a, previous_durations),
-                        scheduled_duration(b, previous_durations),
-                    )
-                })
+        self.tests.sort_by_cached_key(|test| {
+            (
+                Reverse(is_scheduled_failure(test, last_failed)),
+                scheduled_duration(test, previous_durations).map(Reverse),
+            )
         });
     }
 
@@ -159,15 +157,6 @@ impl Partition {
     /// Runtime-expanded cases already handled by an earlier worker generation.
     pub(super) fn resume_skip(&self) -> &[TestCacheKey] {
         &self.resume_skip
-    }
-}
-
-fn compare_durations(a: Option<Duration>, b: Option<Duration>) -> std::cmp::Ordering {
-    match (a, b) {
-        (Some(duration_a), Some(duration_b)) => duration_b.cmp(&duration_a),
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, _) => std::cmp::Ordering::Greater,
-        (_, None) => std::cmp::Ordering::Less,
     }
 }
 
