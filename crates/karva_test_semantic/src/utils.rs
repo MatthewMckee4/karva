@@ -34,6 +34,19 @@ import asyncio
 import weakref
 
 
+class TestDeadlineExceeded(TimeoutError):
+    '''The framework cancelled a coroutine at its deadline.'''
+
+
+async def _wait_for(coroutine, seconds):
+    try:
+        return await asyncio.wait_for(coroutine, seconds)
+    except asyncio.TimeoutError as error:
+        if isinstance(error.__cause__, asyncio.CancelledError):
+            raise TestDeadlineExceeded from error
+        raise
+
+
 class UnhandledBackgroundException(RuntimeError):
     '''Work started by a test failed without anything awaiting it.'''
 
@@ -288,7 +301,12 @@ fn run_sync_with_timeout(
     shutdown_kwargs.set_item("wait", false)?;
     executor.call_method("shutdown", (), Some(&shutdown_kwargs))?;
 
-    rebrand_timeout_error(py, &timeout_class, result.map(pyo3::Bound::unbind), seconds)
+    // A body-raised TimeoutError belongs to the completed future, not the deadline.
+    if future.call_method0("done")?.extract::<bool>()? {
+        result.map(pyo3::Bound::unbind)
+    } else {
+        rebrand_timeout_error(py, &timeout_class, result.map(pyo3::Bound::unbind), seconds)
+    }
 }
 
 fn run_async_with_timeout(
@@ -297,10 +315,9 @@ fn run_async_with_timeout(
     kwargs_dict: &Bound<'_, PyDict>,
     seconds: f64,
 ) -> PyResult<Py<PyAny>> {
-    let asyncio = py.import("asyncio")?;
-    let timeout_class = asyncio.getattr("TimeoutError")?;
+    let timeout_class = async_runtime_attr(py, "TestDeadlineExceeded")?;
     let coroutine = function.call(py, (), Some(kwargs_dict))?;
-    let wait_for = asyncio.call_method1("wait_for", (coroutine, seconds))?;
+    let wait_for = async_runtime_attr(py, "_wait_for")?.call1((coroutine, seconds))?;
     rebrand_timeout_error(
         py,
         &timeout_class,
@@ -309,15 +326,8 @@ fn run_async_with_timeout(
     )
 }
 
-/// Replace a `TimeoutError` raised from inside `concurrent.futures` or
-/// `asyncio` with one that has no traceback, so the test failure diagnostic
-/// points at the test function instead of at framework internals.
-///
-/// `timeout_class` is the path-specific timeout exception class
-/// (`concurrent.futures.TimeoutError` for sync, `asyncio.TimeoutError` for
-/// async). On Python >= 3.11 both are aliases of the builtin `TimeoutError`,
-/// but on 3.10 they are distinct classes — checking the imported class is
-/// version-portable.
+/// Replaces framework deadline exceptions with traceback-free test failures.
+/// Wrappers distinguish body-raised exceptions before invoking this helper.
 fn rebrand_timeout_error(
     py: Python<'_>,
     timeout_class: &Bound<'_, PyAny>,
@@ -335,7 +345,7 @@ fn rebrand_timeout_error(
                 }
             };
             if is_timeout {
-                Err(pyo3::exceptions::PyTimeoutError::new_err(format!(
+                Err(TestTimeoutError::new_err(format!(
                     "Test exceeded timeout of {seconds} seconds"
                 )))
             } else {
@@ -676,4 +686,13 @@ mod tests {
             assert_eq!(calls, 0);
         });
     }
+}
+
+pyo3::create_exception!(karva, TestTimeoutError, pyo3::exceptions::PyTimeoutError);
+
+/// Framework failures must never satisfy a test-body expected-failure declaration.
+pub fn is_framework_execution_error(py: Python<'_>, error: &PyErr) -> bool {
+    error.is_instance_of::<TestTimeoutError>(py)
+        || async_runtime_attr(py, "UnhandledBackgroundException")
+            .is_ok_and(|class| error.matches(py, &class).unwrap_or(false))
 }

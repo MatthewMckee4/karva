@@ -43,7 +43,11 @@ def skip(*conditions: bool, reason: str | None = ...) -> Tags:  # noqa: D418
 @overload
 def expect_fail(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
 @overload
-def expect_fail(*conditions: bool, reason: str | None = ...) -> Tags:  # noqa: D418
+def expect_fail(  # noqa: D418
+    *conditions: bool,
+    reason: str | None = ...,
+    raises: type[BaseException] | tuple[type[BaseException], ...] | None = ...,
+) -> Tags:
     """Expect the current test to fail given the conditions."""
 
 

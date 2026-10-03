@@ -150,7 +150,7 @@ def test_crash(crash):
     ERROR Worker 0 failed with exit code 0 in [TIME]
     "###
     );
-    assert_snapshot!(context.read_file("results.json"), @r###"
+    assert_snapshot!(context.read_file("results.json"), @r#"
     {
       "schema_version": 2,
       "status": "failed",
@@ -161,6 +161,7 @@ def test_crash(crash):
         "failed": 0,
         "errors": 1,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },
@@ -180,7 +181,7 @@ def test_crash(crash):
         }
       ]
     }
-    "###);
+    "#);
     assert_snapshot!(normalize_junit_xml(&context.read_file("junit.xml")), @r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <testsuites name="karva-tests" tests="1" failures="0" skipped="0" errors="1" time="[TIME]">
@@ -233,8 +234,8 @@ def test_crash(crash):
     ERROR Worker 0 failed with exit code 0 in [TIME]
     "###
     );
-    assert_snapshot!(context.read_file("results.jsonl"), @r###"
+    assert_snapshot!(context.read_file("results.jsonl"), @r#"
     {"schema_version":2,"type":"test","module":"test","name":"test_crash","full_name":"test::test_crash","status":"error","duration_seconds":"[TIME]","diagnostic":{"code":"worker-crashed","severity":"error","message":"Worker terminated with exit code 0 while running `test::test_crash`","rendered":"error[worker-crashed]: Worker terminated with exit code 0 while running `test::test_crash`\n"}}
-    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":0,"errors":1,"skipped":0,"flaky":0,"slow":0}}
-    "###);
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":0,"errors":1,"skipped":0,"expected_failure":0,"flaky":0,"slow":0}}
+    "#);
 }

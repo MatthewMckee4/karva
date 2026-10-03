@@ -14,6 +14,10 @@ pub struct TestResultStats {
     #[serde(skip_serializing_if = "is_default")]
     passed: usize,
 
+    /// Known failures kept separate in structured reports, included in terminal passes.
+    #[serde(skip_serializing_if = "is_default")]
+    expected_failure: usize,
+
     #[serde(skip_serializing_if = "is_default")]
     failed: usize,
 
@@ -38,7 +42,7 @@ impl TestResultStats {
     /// Total number of tests run. `Flaky` is a marker on a passing test and
     /// is not counted as a separate test.
     pub fn total(&self) -> usize {
-        self.passed() + self.failed() + self.errors() + self.skipped()
+        self.passed() + self.expected_failure() + self.failed() + self.errors() + self.skipped()
     }
 
     /// Whether no failed or errored tests were recorded.
@@ -48,6 +52,11 @@ impl TestResultStats {
 
     pub fn passed(&self) -> usize {
         self.passed
+    }
+
+    /// Number of tests whose bodies failed as declared.
+    pub fn expected_failure(&self) -> usize {
+        self.expected_failure
     }
 
     pub fn failed(&self) -> usize {
@@ -74,6 +83,7 @@ impl TestResultStats {
     pub(super) fn add(&mut self, kind: TestResultKind) {
         match kind {
             TestResultKind::Passed => self.passed += 1,
+            TestResultKind::ExpectedFailure => self.expected_failure += 1,
             TestResultKind::Failed => self.failed += 1,
             TestResultKind::Error => self.errors += 1,
             TestResultKind::Skipped => self.skipped += 1,
@@ -117,14 +127,11 @@ impl fmt::Display for DisplayTestResultStats<'_> {
             write!(f, "{}", label.red().bold())?;
         }
 
+        let passed = self.stats.passed() + self.stats.expected_failure();
         let passed_text = if self.stats.flaky() > 0 {
-            format!(
-                "{} passed ({} flaky)",
-                self.stats.passed(),
-                self.stats.flaky()
-            )
+            format!("{} passed ({} flaky)", passed, self.stats.flaky())
         } else {
-            format!("{} passed", self.stats.passed())
+            format!("{passed} passed")
         };
         let mut parts = vec![passed_text.green().bold().to_string()];
         if self.stats.failed() > 0 {

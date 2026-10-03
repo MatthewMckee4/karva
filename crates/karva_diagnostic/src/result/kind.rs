@@ -5,9 +5,15 @@
 #[derive(Debug, Clone)]
 pub enum IndividualTestResultKind {
     Passed,
+    /// Test body raised the declared expected exception.
+    ExpectedFailure {
+        reason: Option<String>,
+    },
     Failed,
     Error,
-    Skipped { reason: Option<String> },
+    Skipped {
+        reason: Option<String>,
+    },
 }
 
 /// A test result kind suitable for aggregation in [`super::TestResultStats`].
@@ -18,6 +24,8 @@ pub enum IndividualTestResultKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum TestResultKind {
     Passed,
+    /// Known test-body failure, successful for the run but counted separately.
+    ExpectedFailure,
     Failed,
     Error,
     Skipped,
@@ -35,6 +43,7 @@ impl From<IndividualTestResultKind> for TestResultKind {
     fn from(val: IndividualTestResultKind) -> Self {
         match val {
             IndividualTestResultKind::Passed => Self::Passed,
+            IndividualTestResultKind::ExpectedFailure { .. } => Self::ExpectedFailure,
             IndividualTestResultKind::Failed => Self::Failed,
             IndividualTestResultKind::Error => Self::Error,
             IndividualTestResultKind::Skipped { .. } => Self::Skipped,

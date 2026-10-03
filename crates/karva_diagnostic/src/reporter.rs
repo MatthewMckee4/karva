@@ -81,6 +81,7 @@ fn show_for_status_level(level: StatusLevel, kind: &IndividualTestResultKind) ->
             IndividualTestResultKind::Failed
                 | IndividualTestResultKind::Error
                 | IndividualTestResultKind::Passed
+                | IndividualTestResultKind::ExpectedFailure { .. }
         ),
         StatusLevel::Skip | StatusLevel::All => true,
     }
@@ -253,7 +254,9 @@ impl ResultLabel {
 impl From<&IndividualTestResultKind> for ResultLabel {
     fn from(kind: &IndividualTestResultKind) -> Self {
         match kind {
-            IndividualTestResultKind::Passed => Self::Pass,
+            IndividualTestResultKind::Passed | IndividualTestResultKind::ExpectedFailure { .. } => {
+                Self::Pass
+            }
             IndividualTestResultKind::Failed => Self::Fail,
             IndividualTestResultKind::Error => Self::Error,
             IndividualTestResultKind::Skipped { .. } => Self::Skip,

@@ -313,9 +313,15 @@ impl Tag {
             PyTag::Skip { conditions, reason } => {
                 Self::Skip(SkipTag::new(conditions.clone(), reason.clone()))
             }
-            PyTag::ExpectFail { conditions, reason } => {
-                Self::ExpectFail(ExpectFailTag::new(conditions.clone(), reason.clone()))
-            }
+            PyTag::ExpectFail {
+                conditions,
+                reason,
+                raises,
+            } => Self::ExpectFail(ExpectFailTag::new(
+                conditions.clone(),
+                reason.clone(),
+                raises.as_ref().map(|raises| Arc::new(raises.clone_ref(py))),
+            )),
             PyTag::Timeout { seconds } => Self::Timeout(TimeoutTag::new(*seconds)),
             PyTag::FailSlow { seconds } => Self::FailSlow(FailSlowTag::new(*seconds)),
             PyTag::Custom {
@@ -464,14 +470,17 @@ impl Tags {
         Self { inner: tags }
     }
 
-    fn from_py_test_function(py: Python<'_>, test_function: &PyTestFunction) -> Self {
-        let tags = test_function
-            .tags
-            .inner
-            .iter()
-            .map(|tag| Tag::from_karva_tag(py, tag))
-            .collect();
-        Self::new(tags)
+    /// Retains pytest policies on the original callable beneath Karva decorators.
+    fn from_py_test_function(py: Python<'_>, test_function: &PyTestFunction) -> PyResult<Self> {
+        let mut tags = Self::from_py_any(py, &test_function.function, None)?;
+        tags.inner.extend(
+            test_function
+                .tags
+                .inner
+                .iter()
+                .map(|tag| Tag::from_karva_tag(py, tag)),
+        );
+        Ok(tags)
     }
 
     pub(crate) fn extend(&mut self, other: &Self) {
@@ -518,17 +527,11 @@ impl Tags {
         }
 
         if let Ok(py_test_function) = py_function.extract::<Py<PyTestFunction>>(py) {
-            return Ok(Self::from_py_test_function(
-                py,
-                &py_test_function.borrow(py),
-            ));
+            return Self::from_py_test_function(py, &py_test_function.borrow(py));
         } else if let Ok(wrapped) = py_function.getattr(py, "__wrapped__")
             && let Ok(py_wrapped_function) = wrapped.extract::<Py<PyTestFunction>>(py)
         {
-            return Ok(Self::from_py_test_function(
-                py,
-                &py_wrapped_function.borrow(py),
-            ));
+            return Self::from_py_test_function(py, &py_wrapped_function.borrow(py));
         }
 
         let bound_function = py_function.bind(py);

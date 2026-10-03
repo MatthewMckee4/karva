@@ -581,13 +581,27 @@ def test_1():
     );
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=2"), @"
-    success: true
-    exit_code: 0
+    success: false
+    exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_1
+      TRY 1 FAIL [TIME] test::test_1
+      TRY 2 FAIL [TIME] test::test_1
+      TRY 3 FAIL [TIME] test::test_1
+
+    failures:
+
+    test::test_1:
+
+    error[test-returned-value]: Test `test_1` returned `False`
+     --> test.py:5:5
+      |
+    5 | def test_1():
+      |     ^^^^^^
+    info: Test functions must return None. Did you mean to use `assert`?
+
     ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
 
     ----- stderr -----
     ");
@@ -911,4 +925,142 @@ def test_1():
 
     ----- stderr -----
     ");
+}
+
+#[rstest]
+fn expected_exception_matches_subclasses_and_tuples(
+    #[values("karva", "pytest")] framework: &str,
+    #[values("ValueError", "(KeyError, ValueError)")] raises: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+class SpecificError(ValueError): pass
+@{decorator}(raises={raises}, reason='specific bug')
+def test_expected():
+    raise SpecificError('known')
+",
+            decorator = get_expect_fail_decorator(framework)
+        ),
+    );
+    insta::with_settings!({ snapshot_suffix => format!("{framework}_{}", raises.starts_with('(')) }, { assert_cmd_snapshot!(context.command().arg("--retry=1")); });
+}
+
+#[rstest]
+fn expected_failure_does_not_absorb_other_failures(
+    #[values("karva", "pytest")] framework: &str,
+    #[values(
+        "mismatch",
+        "setup",
+        "teardown",
+        "missing",
+        "return",
+        "timeout",
+        "background"
+    )]
+    scenario: &str,
+) {
+    let body = match scenario {
+        "mismatch" => "raise TypeError('unexpected')",
+        "setup" | "teardown" | "missing" => "raise ValueError('expected body')",
+        "return" => "return 1",
+        "timeout" => "await asyncio.sleep(2)",
+        "background" => "asyncio.create_task(broken()); await asyncio.sleep(0)",
+        _ => "pass",
+    };
+    let fixture = match scenario {
+        "setup" => "@karva.fixture\ndef value(): raise ValueError('setup failed')",
+        "teardown" => {
+            "@karva.fixture\ndef value():\n    yield 1\n    raise ValueError('teardown failed')"
+        }
+        _ => "",
+    };
+    let parameter = if matches!(scenario, "setup" | "teardown" | "missing") {
+        "value"
+    } else {
+        ""
+    };
+    let asynchronous = if matches!(scenario, "timeout" | "background") {
+        "async "
+    } else {
+        ""
+    };
+    let timeout = if scenario == "timeout" {
+        "@karva.tags.timeout(0.1)"
+    } else {
+        ""
+    };
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import karva
+import pytest
+import asyncio
+{fixture}
+async def broken(): raise ValueError('background failed')
+{timeout}
+@{decorator}(raises=Exception, reason='body only')
+{asynchronous}def test_expected({parameter}):
+    {body}
+",
+            decorator = get_expect_fail_decorator(framework)
+        ),
+    );
+    // A mismatching declaration must remain an ordinary retryable failure.
+    let source = if scenario == "mismatch" {
+        context
+            .read_file("test.py")
+            .replace("raises=Exception", "raises=ValueError")
+    } else {
+        context.read_file("test.py")
+    };
+    context.write_file("test.py", &source);
+    insta::with_settings!({ snapshot_suffix => format!("{framework}_{scenario}") }, { assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1")); });
+}
+
+#[rstest]
+fn invalid_expected_exception_policy_is_rejected(
+    #[values("karva", "pytest")] framework: &str,
+    #[values("42", "str", "(ValueError, 42)")] raises: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+@{decorator}(raises={raises})
+def test_expected(): pass
+",
+            decorator = get_expect_fail_decorator(framework)
+        ),
+    );
+    insta::with_settings!({ snapshot_suffix => format!("{framework}_{raises}") }, { assert_cmd_snapshot!(context.command()); });
+}
+
+#[rstest]
+fn expected_failure_matches_body_timeout_error(
+    #[values("karva", "pytest")] framework: &str,
+    #[values(false, true)] asynchronous: bool,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import karva
+import pytest
+@karva.tags.timeout(1)
+@{decorator}(raises=TimeoutError, reason='body exception')
+{asynchronous}def test_expected():
+    raise TimeoutError('test body failed')
+",
+            decorator = get_expect_fail_decorator(framework),
+            asynchronous = if asynchronous { "async " } else { "" },
+        ),
+    );
+    insta::with_settings!({ snapshot_suffix => format!("{framework}_{asynchronous}") }, {
+        assert_cmd_snapshot!(context.command_no_parallel());
+    });
 }
