@@ -186,6 +186,7 @@ struct StatsReport {
     failed: usize,
     errors: usize,
     skipped: usize,
+    expected_failure: usize,
     flaky: usize,
     slow: usize,
 }
@@ -198,6 +199,7 @@ impl StatsReport {
             failed: results.stats.failed(),
             errors: results.stats.errors(),
             skipped: results.stats.skipped(),
+            expected_failure: results.stats.expected_failure(),
             flaky: results.stats.flaky(),
             slow: results.stats.slow(),
         }
@@ -219,6 +221,9 @@ struct TestReport<'a> {
     duration_seconds: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     skip_reason: Option<&'a str>,
+    /// Declared reason for a matched expected failure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_failure_reason: Option<&'a str>,
     #[serde(skip_serializing_if = "is_false")]
     flaky: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -239,6 +244,7 @@ impl<'a> TestReport<'a> {
     fn new(case: &'a TestCaseResult) -> Self {
         let (status, skip_reason, diagnostic) = match case.outcome() {
             TestCaseOutcome::Passed => (TestStatus::Passed, None, None),
+            TestCaseOutcome::ExpectedFailure { .. } => (TestStatus::ExpectedFailure, None, None),
             TestCaseOutcome::Failed { diagnostic, .. } => {
                 (TestStatus::Failed, None, Some(diagnostic))
             }
@@ -257,6 +263,10 @@ impl<'a> TestReport<'a> {
             status,
             duration_seconds: case.duration().as_secs_f64(),
             skip_reason,
+            expected_failure_reason: match case.outcome() {
+                TestCaseOutcome::ExpectedFailure { reason } => reason.as_deref(),
+                _ => None,
+            },
             flaky,
             retry,
             captured_output: case.captured_output().map(CapturedOutputReport::new),
@@ -282,6 +292,10 @@ struct AttemptReport<'a> {
 
     status: TestStatus,
 
+    /// Declared reason for a matched expected failure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_failure_reason: Option<&'a str>,
+
     /// Attempt duration in seconds.
     duration_seconds: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -298,6 +312,7 @@ impl<'a> AttemptReport<'a> {
     fn new(attempt: &'a TestCaseAttempt) -> Self {
         let (status, diagnostic) = match attempt.outcome() {
             TestCaseOutcome::Passed => (TestStatus::Passed, None),
+            TestCaseOutcome::ExpectedFailure { .. } => (TestStatus::ExpectedFailure, None),
             TestCaseOutcome::Failed { diagnostic, .. } => {
                 (TestStatus::Failed, Some(DiagnosticReport::new(diagnostic)))
             }
@@ -309,6 +324,10 @@ impl<'a> AttemptReport<'a> {
         Self {
             attempt: attempt.attempt(),
             status,
+            expected_failure_reason: match attempt.outcome() {
+                TestCaseOutcome::ExpectedFailure { reason } => reason.as_deref(),
+                _ => None,
+            },
             duration_seconds: attempt.duration().as_secs_f64(),
             captured_output: attempt.captured_output().map(CapturedOutputReport::new),
             diagnostic,
@@ -329,6 +348,7 @@ impl<'a> AttemptReport<'a> {
 /// Stable serialized outcome vocabulary for tests and attempts.
 enum TestStatus {
     Passed,
+    ExpectedFailure,
     Failed,
     Error,
     Skipped,

@@ -28,6 +28,7 @@ pub enum PyTag {
     ExpectFail {
         conditions: Vec<bool>,
         reason: Option<String>,
+        raises: Option<Py<PyAny>>,
     },
 
     #[pyo3(name = "timeout")]
@@ -61,9 +62,14 @@ impl PyTag {
                 conditions: conditions.clone(),
                 reason: reason.clone(),
             },
-            Self::ExpectFail { conditions, reason } => Self::ExpectFail {
+            Self::ExpectFail {
+                conditions,
+                reason,
+                raises,
+            } => Self::ExpectFail {
                 conditions: conditions.clone(),
                 reason: reason.clone(),
+                raises: raises.as_ref().map(|raises| raises.clone_ref(py)),
             },
             Self::Timeout { seconds } => Self::Timeout { seconds: *seconds },
             Self::FailSlow { seconds } => Self::FailSlow { seconds: *seconds },
@@ -191,7 +197,7 @@ pub mod tags {
         py: Python<'_>,
         conditions: &Bound<'_, PyTuple>,
         reason: Option<String>,
-        make_tag: impl Fn(Vec<bool>, Option<String>) -> PyTag,
+        make_tag: impl FnOnce(Vec<bool>, Option<String>) -> PyTag,
     ) -> PyResult<Py<PyAny>> {
         // Check if the first argument is a function (decorator without parentheses)
         if conditions.len() == 1 {
@@ -247,14 +253,22 @@ pub mod tags {
     }
 
     #[pyfunction]
-    #[pyo3(signature = (*conditions, reason = None))]
+    #[pyo3(signature = (*conditions, reason = None, raises = None))]
     fn expect_fail(
         py: Python<'_>,
         conditions: &Bound<'_, PyTuple>,
         reason: Option<String>,
+        raises: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
+        if let Some(raises) = &raises {
+            super::super::expect_fail::validate_raises(raises.bind(py))?;
+        }
         parse_conditional_tag(py, conditions, reason, |conditions, reason| {
-            PyTag::ExpectFail { conditions, reason }
+            PyTag::ExpectFail {
+                conditions,
+                reason,
+                raises,
+            }
         })
     }
 

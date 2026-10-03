@@ -59,7 +59,7 @@ fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Res
         escape_xml(&settings.report_name),
         results.stats.total() + run_errors,
         results.stats.failed() + flaky_failures,
-        results.stats.skipped(),
+        results.stats.skipped() + results.stats.expected_failure(),
         results.stats.errors() + run_errors,
     )?;
 
@@ -85,7 +85,10 @@ fn write_suite(
         .count();
     let skipped = cases
         .iter()
-        .filter(|case| case.outcome().is_skipped())
+        .filter(|case| {
+            case.outcome().is_skipped()
+                || matches!(case.outcome(), TestCaseOutcome::ExpectedFailure { .. })
+        })
         .count();
     let errors = cases
         .iter()
@@ -115,7 +118,9 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     let time = junit_case_duration(case).as_secs_f64();
     let output = case.captured_output();
     let include_output = match case.outcome() {
-        TestCaseOutcome::Passed => settings.store_success_output,
+        TestCaseOutcome::Passed | TestCaseOutcome::ExpectedFailure { .. } => {
+            settings.store_success_output
+        }
         TestCaseOutcome::Failed { .. } | TestCaseOutcome::Error { .. } => {
             settings.store_failure_output
         }
@@ -177,6 +182,13 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
             related,
             ..
         } => write_diagnostic_element(xml, "error", diagnostic, related, None)?,
+        TestCaseOutcome::ExpectedFailure { reason } => {
+            writeln!(
+                xml,
+                "      <skipped type=\"xfail\" message=\"{}\"/>",
+                escape_xml(reason.as_deref().unwrap_or("Expected failure"))
+            )?;
+        }
         TestCaseOutcome::Skipped { reason } => {
             if let Some(reason) = reason {
                 writeln!(xml, "      <skipped message=\"{}\"/>", escape_xml(reason))?;
@@ -253,7 +265,9 @@ fn write_attempts(xml: &mut String, case: &TestCaseResult) -> Result<()> {
         TestCaseOutcome::Failed { .. } => {
             write_attempt_diagnostics(xml, "rerunFailure", &attempts[1..])
         }
-        TestCaseOutcome::Error { .. } | TestCaseOutcome::Skipped { .. } => {
+        TestCaseOutcome::Error { .. }
+        | TestCaseOutcome::ExpectedFailure { .. }
+        | TestCaseOutcome::Skipped { .. } => {
             write_attempt_diagnostics(xml, "rerunFailure", &attempts[..attempts.len() - 1])
         }
     }
@@ -351,7 +365,9 @@ fn junit_case_duration(case: &TestCaseResult) -> std::time::Duration {
                     .first()
                     .map_or_else(|| case.duration(), TestCaseAttempt::duration);
             }
-            TestCaseOutcome::Error { .. } | TestCaseOutcome::Skipped { .. } => {}
+            TestCaseOutcome::Error { .. }
+            | TestCaseOutcome::ExpectedFailure { .. }
+            | TestCaseOutcome::Skipped { .. } => {}
         }
     }
     case.duration()

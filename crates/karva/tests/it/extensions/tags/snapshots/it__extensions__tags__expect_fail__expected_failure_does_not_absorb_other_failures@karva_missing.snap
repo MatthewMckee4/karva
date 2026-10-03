@@ -1,0 +1,32 @@
+---
+source: crates/karva/tests/it/extensions/tags/expect_fail.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--retry=1"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791047291
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 1 test across 1 worker
+       ERROR [TIME] test::test_expected
+
+failures:
+
+test::test_expected:
+
+error[missing-fixtures]: Test `test_expected` has missing fixtures
+ --> test.py:9:5
+  |
+9 | def test_expected(value):
+  |     ^^^^^^^^^^^^^
+info: Missing fixtures: `value`
+
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+----- stderr -----
