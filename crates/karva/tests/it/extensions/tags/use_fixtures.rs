@@ -181,7 +181,7 @@ def test_use_fixtures_with_parametrize(value):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -462,7 +462,7 @@ def test_pytest_use_fixtures_with_parametrize(value):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----

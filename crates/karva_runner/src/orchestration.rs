@@ -17,7 +17,6 @@ mod worker;
 
 pub use config::{
     FailurePriority, LastFailedSelection, ParallelTestConfig, RunOutput, TestResultRetention,
-    WorkerCountSource,
 };
 pub use run::run_parallel_tests;
 

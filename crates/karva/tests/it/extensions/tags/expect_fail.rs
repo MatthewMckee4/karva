@@ -707,7 +707,7 @@ def test_param(x):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----

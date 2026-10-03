@@ -1613,12 +1613,11 @@ def test_2(): pass
 def test_3(): pass",
     );
 
-    // Avoid idle workers without reducing useful parallelism, and explain the cap.
+    // Avoid idle workers without reducing useful parallelism.
     assert_cmd_snapshot!(context.command().args(["--num-workers", "8", "--status-level=fail"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
-    info: Capped worker count from 8 to 3 (independently schedulable tests: 3)
         Starting 3 tests across 3 workers
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
@@ -1639,16 +1638,22 @@ def test_1(): pass
     assert_cmd_snapshot!(
         context
             .command()
-            .args(["--num-workers=2", "--status-level=none"]),
+            .args(["--num-workers=2", "--status-level=none", "-v"]),
         @"
     success: true
     exit_code: 0
     ----- stdout -----
-    info: Capped worker count from 2 to 1 (independently schedulable tests: 1)
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Capped worker count to avoid underutilized workers total_tests=1 requested_workers=2 capped_workers=1
+    INFO Spawning 1 workers
+    INFO Worker 0 spawned with 1 tests
+    INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+    INFO Worker 0 completed successfully in [TIME]
+    INFO All workers completed
     "
     );
 }

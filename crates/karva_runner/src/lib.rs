@@ -9,7 +9,7 @@ mod worker_args;
 
 pub use orchestration::{
     FailurePriority, LastFailedSelection, ParallelTestConfig, RunOutput, TestResultRetention,
-    WorkerCountSource, run_parallel_tests,
+    run_parallel_tests,
 };
 pub use partition::TestOrdering;
 pub use shutdown::shutdown_receiver;

@@ -11,9 +11,6 @@ pub struct ParallelTestConfig {
     /// Maximum worker processes before capping against collected test count.
     pub num_workers: usize,
 
-    /// How the requested worker count was selected.
-    pub worker_count_source: WorkerCountSource,
-
     /// Whether historical durations and last-failed data may be read.
     pub no_cache: bool,
 
@@ -42,24 +39,6 @@ pub struct ParallelTestConfig {
 
     /// Which completed test case bodies the controller retains.
     pub result_retention: TestResultRetention,
-}
-
-/// Identifies whether the worker count came from an explicit request or a
-/// default selected by the environment and host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkerCountSource {
-    /// The worker count came from Karva's host-dependent default.
-    Default,
-
-    /// The worker count was explicitly requested by the user or configuration.
-    Explicit,
-}
-
-impl WorkerCountSource {
-    /// Returns whether the worker count came from an explicit request.
-    pub(super) const fn is_explicit(self) -> bool {
-        matches!(self, Self::Explicit)
-    }
 }
 
 /// Controls whether the run selects the complete suite or cached failures.

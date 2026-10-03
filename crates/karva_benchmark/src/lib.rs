@@ -431,7 +431,6 @@ pub fn try_run_project(project: &Project) -> Result<RunOutput> {
         num_workers: max_parallelism()
             .context("Failed to determine benchmark worker count")?
             .get(),
-        worker_count_source: karva_runner::WorkerCountSource::Default,
         no_cache: true,
         create_ctrlc_handler: false,
         last_failed: karva_runner::LastFailedSelection::All,

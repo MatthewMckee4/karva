@@ -47,7 +47,7 @@ def fixture():
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+        assert_cmd_snapshot!(context.command(), @r#"
         success: false
         exit_code: 1
         ----- stdout -----
@@ -145,7 +145,7 @@ def test_value(left, right):
 "#,
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    assert_cmd_snapshot!(context.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -238,7 +238,7 @@ def test_kwargs(left, right):
 "#,
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -930,7 +930,7 @@ def test_invalid(
 "#,
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    assert_cmd_snapshot!(context.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1012,7 +1012,7 @@ def test_parametrize_with_fixture(a, fixture_value):
     assert fixture_value == 42"#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1049,7 +1049,7 @@ def test_dict_keys(value):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1249,7 +1249,7 @@ def test_parametrize_with_fixture(a):
     assert a > 0"#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1336,7 +1336,7 @@ def test_function(a: int, b: int):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1408,7 +1408,7 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+        assert_cmd_snapshot!(test_context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1447,7 +1447,7 @@ def test_pair(number, label):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+        assert_cmd_snapshot!(test_context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1498,7 +1498,7 @@ def test_callable(value):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command_no_parallel(), @r#"
+        assert_cmd_snapshot!(test_context.command(), @r#"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1528,7 +1528,7 @@ def test_value(value):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1560,7 +1560,7 @@ def test_values(left, right):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+        assert_cmd_snapshot!(test_context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1598,7 +1598,7 @@ def test_value(value):
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+        assert_cmd_snapshot!(test_context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----
@@ -1633,7 +1633,7 @@ def test_single_arg(a):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1665,7 +1665,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1697,7 +1697,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1729,7 +1729,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1767,7 +1767,7 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1799,7 +1799,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1861,7 +1861,7 @@ def test_single_arg(a):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1947,7 +1947,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1979,7 +1979,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2011,7 +2011,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2049,7 +2049,7 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2083,7 +2083,7 @@ def test_square(input, expected):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2146,7 +2146,7 @@ def test_marks_list(x):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -2273,7 +2273,7 @@ def test_invalid(x):
 ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -2302,7 +2302,7 @@ def test_invalid(x):
 ",
     );
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
     ----- stdout -----

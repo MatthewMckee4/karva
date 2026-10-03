@@ -291,7 +291,7 @@ fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &s
     );
 
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        assert_cmd_snapshot!(context.command(), @"
         success: true
         exit_code: 0
         ----- stdout -----

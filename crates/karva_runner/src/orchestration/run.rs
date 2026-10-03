@@ -54,16 +54,6 @@ pub fn run_parallel_tests(
     let num_workers = config.num_workers.min(max_useful_workers);
 
     if num_workers < config.num_workers {
-        if config.worker_count_source.is_explicit() {
-            let mut stdout = printer.stream_for_message().lock();
-            if let Err(error) = writeln!(
-                stdout,
-                "info: Capped worker count from {} to {} (independently schedulable tests: {})",
-                config.num_workers, num_workers, total_tests,
-            ) {
-                tracing::warn!(target: "karva_runner::orchestration", "failed to write worker cap information: {error}");
-            }
-        }
         tracing::info!(target: "karva_runner::orchestration",
             total_tests,
             requested_workers = config.num_workers,

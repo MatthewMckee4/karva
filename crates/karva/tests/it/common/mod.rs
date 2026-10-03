@@ -177,7 +177,12 @@ impl TestContext {
 
     pub fn command(&self) -> Command {
         let mut command = self.karva_command();
-        command.arg("test").current_dir(self.root());
+        // Keep default scheduling deterministic for snapshots. Explicit worker
+        // requests and tests of the host default can override this environment.
+        command
+            .arg("test")
+            .env("KARVA_MAX_PARALLELISM", "1")
+            .current_dir(self.root());
         command
     }
 

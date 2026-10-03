@@ -18,9 +18,8 @@ karva test --no-parallel
 
 Karva caps the worker count at the number of independently schedulable tests
 to avoid idle workers. It honours smaller requests without assuming how long
-each test takes. When an explicit request is reduced, Karva explains the
-requested and applied counts at the default output level. Host-dependent
-defaults stay quiet when they are reduced.
+each test takes. Worker-count reductions are logged at info level; the normal
+startup line shows the applied count.
 
 ## Parametrized tests
 

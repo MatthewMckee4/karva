@@ -100,7 +100,7 @@ def test_func(a, b):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -143,7 +143,7 @@ def test_func(a, b, c):
 "#,
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
     ----- stdout -----

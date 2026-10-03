@@ -145,7 +145,7 @@ def test_check_same_base(tmp_path_factory):
         ",
     );
 
-    assert_cmd_snapshot!(test_context.command_no_parallel().arg("--status-level=none"), @"
+    assert_cmd_snapshot!(test_context.command().arg("--status-level=none"), @"
     success: true
     exit_code: 0
     ----- stdout -----
