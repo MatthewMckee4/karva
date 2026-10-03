@@ -18,7 +18,10 @@ impl SnapshotFilter {
 }
 
 /// Apply all filters sequentially, copying text only for replacements or the final result.
-pub fn apply_filters(input: &str, filters: &[SnapshotFilter]) -> String {
+pub fn apply_filters<'a>(
+    input: &str,
+    filters: impl IntoIterator<Item = &'a SnapshotFilter>,
+) -> String {
     let mut result = Cow::Borrowed(input);
     for filter in filters {
         if let Cow::Owned(filtered) = filter
