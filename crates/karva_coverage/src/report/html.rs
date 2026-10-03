@@ -191,9 +191,9 @@ fn render_source(
 }
 
 fn line_state(row: &FileRow, line: u32) -> &'static str {
-    if row.excluded.contains(&line) {
+    if row.excluded.binary_search(&line).is_ok() {
         "excluded"
-    } else if row.executed.contains(&line) {
+    } else if row.executed.binary_search(&line).is_ok() {
         if row.branch_missing.iter().any(|arc| {
             arc.from == i32::try_from(line).unwrap_or(i32::MAX)
                 && row.branch_executed.iter().any(|hit| hit.from == arc.from)
@@ -202,7 +202,7 @@ fn line_state(row: &FileRow, line: u32) -> &'static str {
         } else {
             "executed"
         }
-    } else if row.executable.contains(&line) {
+    } else if row.executable.binary_search(&line).is_ok() {
         "missing"
     } else {
         "neutral"
