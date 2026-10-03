@@ -38,6 +38,9 @@ pub struct WorkerSpawn<'a> {
 
     /// Whether each worker must write a coverage artifact.
     pub coverage_enabled: bool,
+
+    /// Whether this run has a selected cached failure to prioritize.
+    pub failed_first_active: bool,
 }
 
 /// Builds one worker command with its resolved controller settings.
@@ -92,7 +95,11 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
         }
     }
 
-    cmd.args(inner_cli_args(spawn.project.settings(), spawn.args));
+    cmd.args(inner_cli_args(
+        spawn.project.settings(),
+        spawn.args,
+        spawn.failed_first_active,
+    ));
 
     if spawn.coverage_enabled {
         let data_file = spawn.artifacts.coverage_data_file(worker_id);
@@ -102,7 +109,11 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     cmd
 }
 
-fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<String> {
+fn inner_cli_args(
+    settings: &ProjectSettings,
+    args: &SubTestCommand,
+    failed_first_active: bool,
+) -> Vec<String> {
     let mut cli_args: Vec<String> = Vec::new();
 
     if let Some(arg) = args.verbosity.level().cli_arg() {
@@ -115,6 +126,8 @@ fn inner_cli_args(settings: &ProjectSettings, args: &SubTestCommand) -> Vec<Stri
     if let Some(limit) = settings.test().max_fail.limit() {
         cli_args.push(format!("--max-fail={limit}"));
     }
+
+    cli_args.push(format!("--worker-failed-first={failed_first_active}"));
 
     if settings.terminal().show_python_output {
         cli_args.push("-s".to_string());
