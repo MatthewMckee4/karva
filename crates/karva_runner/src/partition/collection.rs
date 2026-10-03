@@ -25,7 +25,7 @@ pub(super) struct TestInfo {
 /// Scheduling identity shared by every case collected from one function.
 #[derive(Debug)]
 pub(super) struct TestIdentity {
-    /// Importable module name used to keep cheap modules together.
+    /// Importable module name shared by all tests in a module for load balancing.
     pub(super) module_name: Arc<str>,
 
     /// Worker CLI selector without a statically known parameter-case suffix.
@@ -42,13 +42,13 @@ pub(super) fn collect_test_paths_recursive(
     previous_durations: &HashMap<TestCacheKey, Duration>,
 ) {
     for module in package.modules.values() {
+        let module_name: Arc<str> = module.path.module_name().into();
+        let module_path = module.path.path();
         for test_fn_def in &module.test_function_defs {
-            let module_name: Arc<str> = module.path.module_name().into();
-            let module_path = module.path.path();
             let function_name = test_fn_def.name.as_str();
             let qualified_function: Arc<str> = format!("{module_name}::{function_name}").into();
             let identity = Arc::new(TestIdentity {
-                module_name,
+                module_name: Arc::clone(&module_name),
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
             });
@@ -90,12 +90,10 @@ pub(super) fn collect_test_paths_recursive(
         }
 
         for doctest in &module.doctests {
-            let module_name: Arc<str> = module.path.module_name().into();
-            let module_path = module.path.path();
             let function_name = doctest.name.as_str();
             let qualified_function: Arc<str> = format!("{module_name}::{function_name}").into();
             let identity = Arc::new(TestIdentity {
-                module_name,
+                module_name: Arc::clone(&module_name),
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
             });
