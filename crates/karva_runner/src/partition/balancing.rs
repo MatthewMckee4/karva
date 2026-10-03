@@ -1,5 +1,6 @@
 //! Module-aware worker load balancing.
 
+use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,17 +66,10 @@ pub fn partition_collected_tests(
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
+    let failed_function_roots = OnceCell::new();
     if last_failed.is_last_failed() && !last_failed_cache.is_empty() {
-        let failed_function_roots = last_failed_cache
-            .iter()
-            .map(TestCacheKey::test_function_name)
-            .collect::<HashSet<_>>();
-        test_infos.retain(|info| {
-            last_failed_cache.contains(info.qualified_name.as_str())
-                || last_failed_cache.contains(info.identity.function_root.as_ref())
-                || (info.qualified_name == info.identity.function_root.as_ref()
-                    && failed_function_roots.contains(info.identity.function_root.as_ref()))
-        });
+        test_infos
+            .retain(|info| is_cached_failure(info, last_failed_cache, &failed_function_roots));
     }
 
     // Explicit partitioning uses deterministic ordering of post-filter tests.
@@ -90,9 +84,10 @@ pub fn partition_collected_tests(
     }
 
     let prioritize_failures = failed_first.is_failed_first()
+        && !last_failed_cache.is_empty()
         && test_infos
             .iter()
-            .any(|test| is_cached_failure(test, last_failed_cache));
+            .any(|test| is_cached_failure(test, last_failed_cache, &failed_function_roots));
 
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
@@ -205,11 +200,23 @@ fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
     }
 }
 
-fn is_cached_failure(test: &TestInfo, last_failed: &HashSet<TestCacheKey>) -> bool {
+/// Matches exact cases and legacy function keys, including runtime-expanded
+/// failures for functions whose case count is opaque to the controller. The
+/// borrowed function index is built only when exact and function keys miss.
+fn is_cached_failure<'a>(
+    test: &TestInfo,
+    last_failed: &'a HashSet<TestCacheKey>,
+    failed_function_roots: &OnceCell<HashSet<&'a str>>,
+) -> bool {
     last_failed.contains(test.qualified_name.as_str())
         || last_failed.contains(test.identity.function_root.as_ref())
         || (test.qualified_name == test.identity.function_root.as_ref()
-            && last_failed
-                .iter()
-                .any(|key| key.test_function_name() == test.identity.function_root.as_ref()))
+            && failed_function_roots
+                .get_or_init(|| {
+                    last_failed
+                        .iter()
+                        .map(TestCacheKey::test_function_name)
+                        .collect()
+                })
+                .contains(test.identity.function_root.as_ref()))
 }

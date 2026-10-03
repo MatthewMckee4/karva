@@ -67,3 +67,40 @@ fn last_failed_filters_before_explicit_partition_selection() {
         [format!("{test_path}::test_c")]
     );
 }
+
+#[test]
+fn cached_case_roots_select_opaque_functions_without_selecting_siblings() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "@karva.tags.parametrize('value', [0, 1])\n\
+         def test_value(value): pass\n\
+         @karva.tags.parametrize('value', range(3))\n\
+         def test_dynamic(value): pass\n\
+         def test_value_extra(): pass\n\
+         def test_pass(): pass\n",
+    );
+    let failed = HashSet::from([
+        TestCacheKey::parameter_case_name("test_sample::test_value", 1),
+        TestCacheKey::parameter_case_name("test_sample::test_dynamic", 2),
+        TestCacheKey::parameter_case_name("test_other::test_value", 0),
+        TestCacheKey::parameter_case_name("test_other::test_pass", 0),
+    ]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &HashMap::new(),
+        &failed,
+        LastFailedSelection::LastFailed,
+        FailurePriority::Normal,
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(
+        partitions[0].test_paths().collect::<Vec<_>>(),
+        [
+            format!("{test_path}::test_dynamic"),
+            format!("{test_path}::test_value[1]"),
+        ]
+    );
+}
