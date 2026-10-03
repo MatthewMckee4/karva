@@ -24,4 +24,6 @@ pub use run::run_parallel_tests;
 // no window the cancellation integration test consistently missed the first
 // test checkpoint; five intervals passed 20 consecutive repetitions.
 const CANCELLATION_EVENT_SETTLE: Duration = Duration::from_millis(50);
+// Receipt: five polls fit inside the 50 ms event-settle window, keeping
+// timeout, fail-fast, and cancellation checks responsive without busy-spinning.
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(10);

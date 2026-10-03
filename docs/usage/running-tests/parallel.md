@@ -16,6 +16,11 @@ karva test -n 4
 karva test --no-parallel
 ```
 
+Karva caps the worker count at the number of independently schedulable tests
+to avoid idle workers. It honours smaller requests without assuming how long
+each test takes. Worker-count reductions are logged at info level; the normal
+startup line shows the applied count.
+
 ## Parametrized tests
 
 Karva can distribute cases from one parametrized test across workers when the

@@ -1613,28 +1613,76 @@ def test_2(): pass
 def test_3(): pass",
     );
 
-    // With 3 tests and 8 requested workers, worker capping reduces to 1 worker
-    // (ceil(3/5) = 1). The -v flag shows info logs confirming "Spawning 1 workers".
-    assert_cmd_snapshot!(context.command().args(["-v", "--num-workers", "8"]), @"
+    // Avoid idle workers without reducing useful parallelism.
+    assert_cmd_snapshot!(context.command().args(["--num-workers", "8", "--status-level=fail"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 3 tests across 1 worker
-            PASS [TIME] test_a::test_1
-            PASS [TIME] test_a::test_2
-            PASS [TIME] test_a::test_3
+        Starting 3 tests across 3 workers
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
     ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_parallel_worker_capping_for_one_test() {
+    let context = TestContext::with_file(
+        "test_boundary.py",
+        r"
+def test_1(): pass
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--num-workers=2", "--status-level=none", "-v"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
     INFO Collected all tests in [TIME]
-    INFO Capped worker count to avoid underutilized workers total_tests=3 requested_workers=8 capped_workers=1
+    INFO Capped worker count to avoid underutilized workers total_tests=1 requested_workers=2 capped_workers=1
     INFO Spawning 1 workers
-    INFO Worker 0 spawned with 3 tests
+    INFO Worker 0 spawned with 1 tests
     INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
     INFO Worker 0 completed successfully in [TIME]
     INFO All workers completed
-    ");
+    "
+    );
+}
+
+#[test]
+fn test_parallel_worker_capping_allows_two_workers_for_two_tests() {
+    let context = TestContext::with_file(
+        "test_boundary.py",
+        r"
+def test_1(): pass
+def test_2(): pass
+",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--num-workers=2", "--status-level=fail"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 2 workers
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
 }
 
 #[test]

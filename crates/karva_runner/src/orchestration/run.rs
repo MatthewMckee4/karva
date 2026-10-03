@@ -50,7 +50,7 @@ pub fn run_parallel_tests(
     let collected = collect_tests(project)?;
 
     let total_tests = scheduled_test_count(&collected);
-    let max_useful_workers = total_tests.div_ceil(MIN_TESTS_PER_WORKER).max(1);
+    let max_useful_workers = total_tests.max(1);
     let num_workers = config.num_workers.min(max_useful_workers);
 
     if num_workers < config.num_workers {
@@ -247,5 +247,3 @@ pub fn run_parallel_tests(
         timed_out,
     })
 }
-
-const MIN_TESTS_PER_WORKER: usize = 5;
