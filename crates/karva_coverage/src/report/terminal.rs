@@ -9,7 +9,7 @@ use super::CoverageAnalysis;
 use super::html::{HtmlReportOptions, build_html_report};
 use super::json::{JsonReportOptions, build_json_report};
 use super::lcov::build_lcov_report;
-use super::shared::{FileRow, row_percent, total_percent, totals_row};
+use super::shared::{CoverageTotals, FileRow, row_percent, total_percent};
 use super::xml::build_cobertura_xml;
 
 /// Terminal coverage report representation.
@@ -273,9 +273,9 @@ fn print_report(
     }
 
     writeln!(out, "{rule}")?;
-    let total_pct = total_percent(total_rows);
-    let total = totals_row(total_rows);
-    let total_cover = format!("{:.*}%", precision, row_percent(&total));
+    let total = CoverageTotals::from_rows(total_rows);
+    let total_pct = total.percent();
+    let total_cover = format!("{:.*}%", precision, total.percent());
     let total_stmts_str = total.stmts.to_string();
     let total_miss_str = total.miss.to_string();
     let total_branches_str = total.branches.to_string();
@@ -339,12 +339,12 @@ fn print_markdown_report(
         }
         writeln!(out, " |")?;
     }
-    let total = totals_row(total_rows);
+    let total = CoverageTotals::from_rows(total_rows);
     write!(out, "| **TOTAL** | {} | {}", total.stmts, total.miss)?;
     if show_branches {
         write!(out, " | {} | {}", total.branches, total.branch_partial)?;
     }
-    let total_percent = total_percent(total_rows);
+    let total_percent = total.percent();
     write!(out, " | **{total_percent:.precision$}%**")?;
     if show_missing {
         write!(out, " | ")?;

@@ -7,28 +7,20 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
 
-use super::shared::{FileRow, class_filename, escape_xml, rate};
+use super::shared::{CoverageTotals, FileRow, class_filename, escape_xml, rate};
 
 pub(super) fn build_cobertura_xml(
     cwd: &Utf8Path,
     cwd_real: &std::path::Path,
     rows: &[FileRow],
 ) -> Result<String> {
-    let total_stmts = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
-    let total_hit = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.hit));
+    let total = CoverageTotals::from_rows(rows);
+    let total_stmts = total.stmts;
+    let total_hit = total.hit;
     let line_rate = rate(total_hit, total_stmts);
-    let total_branches = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branches));
-    let total_branch_hit = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_hit));
-    let branch_mode = rows.iter().any(|row| row.branches_enabled);
-    let branch_rate = if branch_mode {
+    let total_branches = total.branches;
+    let total_branch_hit = total.branch_hit;
+    let branch_rate = if total.branches_enabled {
         rate(total_branch_hit, total_branches)
     } else {
         0.0
