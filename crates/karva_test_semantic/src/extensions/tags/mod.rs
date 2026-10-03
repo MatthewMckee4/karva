@@ -7,9 +7,9 @@ use std::{
     sync::Arc,
 };
 
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList, PyTuple};
 use ruff_python_ast::StmtFunctionDef;
 
 use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
@@ -235,6 +235,63 @@ impl Tag {
         }
 
         None
+    }
+
+    fn from_karva_module_value(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Vec<Self>> {
+        let values = if let Ok(list) = value.cast::<PyList>() {
+            list.iter().collect()
+        } else if let Ok(tuple) = value.cast::<PyTuple>() {
+            tuple.iter().collect()
+        } else {
+            vec![value.clone()]
+        };
+
+        values
+            .into_iter()
+            .map(|value| Self::from_karva_module_item(py, &value))
+            .try_fold(Vec::new(), |mut tags, result| {
+                tags.extend(result?);
+                Ok(tags)
+            })
+    }
+
+    fn from_karva_module_item(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Vec<Self>> {
+        if let Ok(tag) = value.cast::<PyTag>() {
+            return Ok(vec![Self::from_karva_tag(py, tag.borrow())]);
+        }
+        if let Ok(tags) = value.cast::<PyTags>() {
+            return Ok(tags
+                .borrow()
+                .inner
+                .iter()
+                .map(|tag| Self::from_karva_tag(py, tag))
+                .collect());
+        }
+        if value.is_callable() {
+            let result = value.call0().map_err(|error| {
+                PyErr::new::<PyTypeError, _>(format!(
+                    "karva_tag callable could not produce a Karva tag: {error}"
+                ))
+            })?;
+            if let Ok(tag) = result.cast::<PyTag>() {
+                return Ok(vec![Self::from_karva_tag(py, tag.borrow())]);
+            }
+            if let Ok(tags) = result.cast::<PyTags>() {
+                return Ok(tags
+                    .borrow()
+                    .inner
+                    .iter()
+                    .map(|tag| Self::from_karva_tag(py, tag))
+                    .collect());
+            }
+            return Err(PyErr::new::<PyTypeError, _>(
+                "karva_tag callable must return a Karva tag",
+            ));
+        }
+
+        Err(PyErr::new::<PyTypeError, _>(
+            "karva_tag must be a Karva tag or a flat list/tuple of Karva tags",
+        ))
     }
 
     /// Converts a Karva Python tag into our internal representation.
@@ -504,6 +561,13 @@ impl Tags {
             tags.push(tag);
         }
         Ok(Some(Self { inner: tags }))
+    }
+
+    pub(crate) fn from_karva_module_value(
+        py: Python<'_>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        Ok(Self::new(Tag::from_karva_module_value(py, value)?))
     }
 
     /// Returns whether the test has at least one parametrize tag.

@@ -18,13 +18,19 @@ from __future__ import annotations
 import builtins
 import re
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pprint import pformat
 from types import TracebackType
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, final, overload
 
 if TYPE_CHECKING:
     from typing import Self
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+_WarningType = type[Warning] | tuple[type[Warning], ...]
+_MatchExpression = str | re.Pattern[str] | None
 
 
 class WarningsRecorder(warnings.catch_warnings):
@@ -114,8 +120,8 @@ class WarningsChecker(WarningsRecorder):
 
     def __init__(
         self,
-        expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning,
-        match_expr: str | re.Pattern[str] | None = None,
+        expected_warning: _WarningType = Warning,
+        match_expr: _MatchExpression = None,
     ) -> None:
         super().__init__()
 
@@ -180,20 +186,87 @@ class WarningsChecker(WarningsRecorder):
                     )
 
 
+@overload
 def warns(
-    expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning,
+    expected_warning: _WarningType = Warning,
+    func: None = None,
     *,
-    match: str | re.Pattern[str] | None = None,
-) -> WarningsRecorder:
-    """Assert that a block emits a matching warning and return all warnings."""
-    return WarningsChecker(expected_warning, match_expr=match)
+    match: _MatchExpression = None,
+) -> WarningsChecker: ...
 
 
-def deprecated_call(*, match: str | re.Pattern[str] | None = None) -> WarningsRecorder:
-    """Assert that a block emits a deprecation-related warning."""
-    return warns(
-        (DeprecationWarning, PendingDeprecationWarning, FutureWarning), match=match
-    )
+@overload
+def warns(
+    expected_warning: _WarningType,
+    func: Callable[_P, _T],
+    *args: _P.args,
+    **kwargs: _P.kwargs,
+) -> _T: ...
+
+
+def warns(
+    expected_warning: _WarningType = Warning,
+    func: Callable[..., Any] | None = None,
+    *args: Any,
+    **kwargs: Any,
+) -> WarningsChecker | Any:
+    """Assert that code emits a matching warning.
+
+    With no callable, return a context manager that records warnings. With a
+    callable, invoke it with the remaining arguments and return its result.
+    In callable mode, all keywords are forwarded to the callable. In context
+    manager mode, ``match`` is used to match warning messages.
+    """
+    if func is None:
+        match = kwargs.pop("match", None)
+        if kwargs:
+            argnames = ", ".join(sorted(kwargs))
+            raise TypeError(
+                f"Unexpected keyword arguments passed to karva.warns: {argnames}\n"
+                "Use context-manager form instead?"
+            )
+        return WarningsChecker(expected_warning, match_expr=match)
+
+    if not callable(func):
+        raise TypeError(f"{func!r} object (type: {type(func)}) must be callable")
+    with WarningsChecker(expected_warning):
+        return func(*args, **kwargs)
+
+
+_DEPRECATION_WARNINGS = (
+    DeprecationWarning,
+    PendingDeprecationWarning,
+    FutureWarning,
+)
+
+
+@overload
+def deprecated_call(*, match: _MatchExpression = None) -> WarningsChecker: ...
+
+
+@overload
+def deprecated_call(
+    func: Callable[_P, _T], *args: _P.args, **kwargs: _P.kwargs
+) -> _T: ...
+
+
+def deprecated_call(
+    func: Callable[..., Any] | None = None,
+    *args: Any,
+    **kwargs: Any,
+) -> WarningsChecker | Any:
+    """Assert that code emits a deprecation-related warning.
+
+    With no callable, return a context manager. With a callable, invoke it
+    with all supplied arguments, including a keyword named ``match``.
+    """
+    if func is None:
+        return warns(_DEPRECATION_WARNINGS, *args, **kwargs)
+
+    if not callable(func):
+        raise TypeError(f"{func!r} object (type: {type(func)}) must be callable")
+    with WarningsChecker(_DEPRECATION_WARNINGS):
+        return func(*args, **kwargs)
 
 
 __all__ = ["WarningsRecorder", "deprecated_call", "warns"]

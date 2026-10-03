@@ -21,6 +21,7 @@
 //! See the pytest license block in the repository `LICENSE` file for the
 //! applicable copyright notice.
 
+use insta::Settings;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -181,6 +182,85 @@ def test_deprecated_call_accepts_deprecation_warnings():
 }
 
 #[test]
+fn test_warning_assertion_callables() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+
+
+def emit_warning(value, *, label, match):
+    warnings.warn(f"{label}: {match}", UserWarning)
+    return value
+
+
+def emit_deprecation(prefix, *, match):
+    warnings.warn(f"{prefix}: {match}", DeprecationWarning)
+    return f"{prefix}: {match}"
+
+
+def raise_after_warning():
+    warnings.warn("before failure", UserWarning)
+    raise ValueError("callback failure")
+
+
+def test_warns_callable_returns_and_forwards_arguments():
+    assert karva.warns(
+        UserWarning,
+        emit_warning,
+        42,
+        label="value 42",
+        match="callable keyword",
+    ) == 42
+
+
+def test_deprecated_call_forwards_match_keyword():
+    assert karva.deprecated_call(emit_deprecation, "old", match="entrypoint") == (
+        "old: entrypoint"
+    )
+
+
+def test_callable_exception_propagates_and_restores_filters():
+    original_filters = warnings.filters[:]
+    with karva.raises(ValueError, match="callback failure"):
+        karva.warns(UserWarning, raise_after_warning)
+    assert warnings.filters == original_filters
+
+
+def test_callable_validation_and_warning_failures():
+    with karva.raises(TypeError, match="must be callable"):
+        karva.warns(UserWarning, 42)
+
+    with karva.raises(TypeError, match="must be callable"):
+        karva.deprecated_call(42)
+
+    with karva.raises(AssertionError, match="No warnings of type"):
+        karva.warns(UserWarning, lambda: None)
+
+    with karva.raises(AssertionError, match="No warnings of type"):
+        karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
+
+
+def test_deprecated_call_context_still_matches():
+    with karva.deprecated_call(match="entrypoint"):
+        warnings.warn("old entrypoint", FutureWarning)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 5 tests run: 5 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_warning_assertion_failures_and_cleanup() {
     let context = TestContext::with_file(
         "test.py",
@@ -299,6 +379,85 @@ def test_warning_message_mismatch():
     captured stderr:
     <temp_dir>/test.py:14: UserWarning: different message
       warnings.warn("different message", UserWarning)
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_warning_assertion_callable_diagnostics() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+
+
+def test_callable_missing_warning():
+    karva.warns(UserWarning, lambda: None)
+
+
+def test_callable_wrong_warning():
+    karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
+"#,
+    );
+
+    let mut settings = Settings::clone_current();
+    settings.add_filter(
+        r"(?i)(?:[a-z]:)?[\\/][^ \n]+[\\/]python[\\/]karva[\\/]_fixtures[\\/]recwarn\.py",
+        "<karva>/python/karva/_fixtures/recwarn.py",
+    );
+    settings.add_filter(
+        r"(?s)info: Test failed here\n\s+--> <karva>/python/karva/_fixtures/recwarn\.py:168:17\n.*?info: DID NOT WARN",
+        "info: Test failed here\n       --> <warning assertion>\ninfo: DID NOT WARN",
+    );
+    settings.add_filter(
+        r"(?s)info: Test failed here\n\s+--> test\.py:\d+:\d+\n.*?info: DID NOT WARN",
+        "info: Test failed here\n       --> <warning assertion>\ninfo: DID NOT WARN",
+    );
+    let _settings_scope = settings.bind_to_scope();
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_callable_missing_warning
+            FAIL [TIME] test::test_callable_wrong_warning
+
+    failures:
+
+    test::test_callable_missing_warning:
+
+    error[test-failure]: Test `test_callable_missing_warning` failed
+     --> test.py:7:5
+      |
+    7 | def test_callable_missing_warning():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+           --> <warning assertion>
+    info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
+           Emitted warnings: [].
+
+    test::test_callable_wrong_warning:
+
+    error[test-failure]: Test `test_callable_wrong_warning` failed
+      --> test.py:11:5
+       |
+    11 | def test_callable_wrong_warning():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+           --> <warning assertion>
+    info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
+           Emitted warnings: [RuntimeWarning('wrong')].
+
+    captured stderr:
+    <temp_dir>/test.py:12: RuntimeWarning: wrong
+      karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped

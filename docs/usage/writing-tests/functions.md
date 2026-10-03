@@ -51,6 +51,25 @@ def test_function2():
 
 You can still use `pytest.skip()` to skip tests.
 
+## Import or skip
+
+Use `karva.importorskip()` for tests that need an optional dependency. It
+returns the imported module when available and skips the module when the
+dependency is missing.
+
+```python title="test.py"
+import karva
+
+numpy = karva.importorskip("numpy")
+
+def test_array():
+    assert numpy.array([1, 2]).tolist() == [1, 2]
+```
+
+Pass `reason` to control the skip diagnostic. Missing modules are skipped by
+default; import errors raised inside an installed module remain failures unless
+`exc_type=ImportError` is passed.
+
 ## Fail
 
 If you want to fail a test when its running, use `karva.fail()`.
@@ -98,6 +117,19 @@ import karva
 def test_function():
     with karva.raises(ValueError, match="something"):
         raise ValueError("something went wrong")
+```
+
+Use `check` to validate structured exception attributes after the type and
+`match` checks pass. The callback receives the raised exception and must return
+`True` for the context to succeed.
+
+```python title="test.py"
+import errno
+import karva
+
+def test_permission_error():
+    with karva.raises(OSError, check=lambda error: error.errno == errno.EACCES):
+        raise OSError(errno.EACCES, "permission denied")
 ```
 
 You can access the exception info by using the `as` keyword. The returned object has `type`, `value`, and `tb` properties.

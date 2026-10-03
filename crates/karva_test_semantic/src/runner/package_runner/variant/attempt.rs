@@ -48,13 +48,18 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 attempt_env_result,
                 &function_arguments,
             ),
-            Err(error) => AttemptBody {
-                outcome: error
-                    .into_test_error(self.py, self.package_runner.context.is_verbose())
-                    .into_outcome(),
-                call_duration: Duration::ZERO,
-                retryable: true,
-            },
+            Err(error) => {
+                let outcome = error.skip_outcome(self.py).unwrap_or_else(|| {
+                    error
+                        .into_test_error(self.py, self.package_runner.context.is_verbose())
+                        .into_outcome()
+                });
+                AttemptBody {
+                    retryable: !outcome.is_skipped(),
+                    outcome,
+                    call_duration: Duration::ZERO,
+                }
+            }
         };
 
         let skipped = body.outcome.is_skipped();

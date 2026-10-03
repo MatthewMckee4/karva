@@ -37,6 +37,7 @@ impl DiscoveredTestFunction {
         py: Python<'_>,
         module: &DiscoveredModule,
         py_module: &Bound<'_, PyModule>,
+        module_tags: &Tags,
         stmt_function_def: Rc<StmtFunctionDef>,
         py_function: Py<PyAny>,
         case_filter: Option<Vec<usize>>,
@@ -47,6 +48,7 @@ impl DiscoveredTestFunction {
         );
 
         let mut tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
+        tags.extend(module_tags);
         if let Ok(marks) = py_module.getattr("pytestmark") {
             tags.extend(
                 &Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
@@ -70,17 +72,19 @@ impl DiscoveredTestFunction {
         py: Python<'_>,
         module: &DiscoveredModule,
         py_module: &Bound<'_, PyModule>,
+        module_tags: &Tags,
         name: String,
         range: TextRange,
         py_function: Py<PyAny>,
     ) -> PyResult<Self> {
         let name = QualifiedFunctionName::new(name, module.module_path().clone());
-        let tags = if let Ok(marks) = py_module.getattr("pytestmark") {
-            Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
-                .unwrap_or_default()
-        } else {
-            Tags::default()
-        };
+        let mut tags = module_tags.clone();
+        if let Ok(marks) = py_module.getattr("pytestmark") {
+            tags.extend(
+                &Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
+                    .unwrap_or_default(),
+            );
+        }
 
         Ok(Self {
             definition: Rc::new(TestDefinition::doctest(name, range, module.source_file())),

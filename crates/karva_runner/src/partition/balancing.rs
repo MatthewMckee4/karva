@@ -10,6 +10,7 @@ use karva_python_semantic::TestCacheKey;
 use super::collection::{TestInfo, collect_test_paths_recursive};
 use super::ordering::{order_tests_for_partitioning, seeded_order_key};
 use super::{Partition, TestOrdering};
+use crate::orchestration::{FailurePriority, LastFailedSelection};
 
 /// Tests sharing one module import, weighted as a unit before large groups split.
 #[derive(Debug)]
@@ -47,25 +48,31 @@ impl ModuleGroup {
 /// split test-by-test to limit worker skew. Seeded runs instead derive both
 /// order and worker assignment from stable test identities, independent of
 /// duration history and sibling tests.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "partitioning combines independent scheduling inputs"
+)]
 pub fn partition_collected_tests(
     package: &karva_collector::CollectedPackage,
     num_workers: usize,
     previous_durations: &HashMap<TestCacheKey, Duration>,
-    last_failed: &HashSet<TestCacheKey>,
+    last_failed_cache: &HashSet<TestCacheKey>,
+    last_failed: LastFailedSelection,
+    failed_first: FailurePriority,
     partition_selection: Option<PartitionSelection>,
     test_ordering: TestOrdering,
 ) -> Vec<Partition> {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
-    if !last_failed.is_empty() {
-        let failed_function_roots = last_failed
+    if last_failed.is_last_failed() && !last_failed_cache.is_empty() {
+        let failed_function_roots = last_failed_cache
             .iter()
             .map(TestCacheKey::test_function_name)
             .collect::<HashSet<_>>();
         test_infos.retain(|info| {
-            last_failed.contains(info.qualified_name.as_str())
-                || last_failed.contains(info.identity.function_root.as_ref())
+            last_failed_cache.contains(info.qualified_name.as_str())
+                || last_failed_cache.contains(info.identity.function_root.as_ref())
                 || (info.qualified_name == info.identity.function_root.as_ref()
                     && failed_function_roots.contains(info.identity.function_root.as_ref()))
         });
@@ -82,10 +89,21 @@ pub fn partition_collected_tests(
         });
     }
 
+    let prioritize_failures = failed_first.is_failed_first()
+        && test_infos
+            .iter()
+            .any(|test| is_cached_failure(test, last_failed_cache));
+
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
     if let TestOrdering::SeededShuffle(seed) = test_ordering {
-        return partition_shuffled_tests(test_infos, num_workers, seed);
+        let mut partitions = partition_shuffled_tests(test_infos, num_workers, seed);
+        if prioritize_failures {
+            for partition in &mut partitions {
+                partition.prioritize_failures(last_failed_cache, previous_durations);
+            }
+        }
+        return partitions;
     }
 
     let mut module_groups: Vec<ModuleGroup> = Vec::new();
@@ -127,6 +145,12 @@ pub fn partition_collected_tests(
             let weight = test_weight(test_info.duration);
             let min_partition_idx = find_lightest_partition(&partitions);
             partitions[min_partition_idx].add_test(test_info, weight);
+        }
+    }
+
+    if prioritize_failures {
+        for partition in &mut partitions {
+            partition.prioritize_failures(last_failed_cache, previous_durations);
         }
     }
 
@@ -179,4 +203,13 @@ fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
         (None, _) => std::cmp::Ordering::Greater,
         (_, None) => std::cmp::Ordering::Less,
     }
+}
+
+fn is_cached_failure(test: &TestInfo, last_failed: &HashSet<TestCacheKey>) -> bool {
+    last_failed.contains(test.qualified_name.as_str())
+        || last_failed.contains(test.identity.function_root.as_ref())
+        || (test.qualified_name == test.identity.function_root.as_ref()
+            && last_failed
+                .iter()
+                .any(|key| key.test_function_name() == test.identity.function_root.as_ref()))
 }

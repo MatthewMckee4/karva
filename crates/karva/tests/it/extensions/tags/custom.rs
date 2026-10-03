@@ -135,6 +135,165 @@ def test_1():
 }
 
 #[test]
+fn test_module_karva_tag_list_supports_parametrize_and_fixtures() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r"
+import karva
+
+@karva.fixture
+def expected():
+    return 2
+",
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+
+karva_tag = [
+    karva.tags.integration,
+    karva.tags.use_fixtures("expected"),
+    karva.tags.parametrize("value", [1, 2]),
+]
+
+def test_module_tags(value, expected):
+    assert value == expected
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_module_tags(value=1, expected=2)
+            PASS [TIME] test::test_module_tags(value=2, expected=2)
+
+    failures:
+
+    test::test_module_tags(value=1, expected=2):
+
+    error[test-failure]: Test `test_module_tags` failed
+      --> test.py:10:5
+       |
+    10 | def test_module_tags(value, expected):
+       |     ^^^^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `value`: `1`
+    info:   `expected`: `2`
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     assert value == expected
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_module_karva_tag_rejects_invalid_value() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+karva_tag = [[karva.tags.integration]]
+
+def test_invalid_module_tag():
+    pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: karva_tag must be a Karva tag or a flat list/tuple of Karva tags
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_module_karva_tag_rejects_self_returning_factory() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+
+def make_tag():
+    return make_tag
+
+karva_tag = make_tag
+
+def test_invalid_module_tag():
+    pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: karva_tag callable must return a Karva tag
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_module_karva_tag_coexists_with_function_tags_and_pytestmark() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+import pytest
+
+karva_tag = karva.tags.module_tag
+pytestmark = pytest.mark.pytest_tag
+
+@karva.tags.function_tag
+def test_all_tags_apply():
+    pass
+",
+    );
+
+    assert_cmd_snapshot!(context.command().args([
+        "-E",
+        "tag(module_tag) & tag(pytest_tag) & tag(function_tag)",
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_all_tags_apply
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_custom_tags_combined_with_builtin_tags() {
     let context = TestContext::with_file(
         "test.py",
@@ -439,6 +598,53 @@ def test_aliases(value):
     13 |     k.param(1, tags=(k.tags.integraiton,)),
        |                             ^^^^^^^^^^^ unregistered tag
     info: Did you mean `integration`?
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn strict_tags_report_module_karva_tag_range() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[tags]
+database = ""
+
+[profile.default.test]
+strict-tags = true
+"#,
+        ),
+        (
+            "test.py",
+            r"
+import karva as k
+
+karva_tag = k.tags.daatbase
+
+def test_module_tag():
+    pass
+",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[unknown-tag]: Tag `daatbase` is not registered
+     --> test.py:4:20
+      |
+    4 | karva_tag = k.tags.daatbase
+      |                    ^^^^^^^^ unregistered tag
+    info: Did you mean `database`?
 
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped

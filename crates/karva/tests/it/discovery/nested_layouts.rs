@@ -130,3 +130,56 @@ def test_path_3(): pass",
     ----- stderr -----
     ");
 }
+
+#[test]
+fn shared_ancestors_preserve_sibling_fixture_overrides() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            "from karva import fixture\n@fixture\ndef root(): return 10\n",
+        ),
+        (
+            "tests/conftest.py",
+            "from karva import fixture\n@fixture\ndef value(root): return root + 1\n",
+        ),
+        (
+            "tests/nested/conftest.py",
+            "from karva import fixture\n@fixture\ndef value(root): return root + 2\n",
+        ),
+        (
+            "tests/test_a.py",
+            "def test_value(value): assert value == 11\n",
+        ),
+        (
+            "tests/test_b.py",
+            "def test_value(value): assert value == 11\n",
+        ),
+        (
+            "tests/nested/test_c.py",
+            "def test_value(value): assert value == 12\n",
+        ),
+        (
+            "tests/nested/test_d.py",
+            "def test_value(value): assert value == 12\n",
+        ),
+        (
+            "tests/sibling/test_e.py",
+            "def test_value(value): assert value == 11\n",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--num-workers=1", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 5 tests run: 5 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}

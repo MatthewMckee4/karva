@@ -393,26 +393,40 @@ impl<'a> FixturePlanCompiler<'a> {
 }
 
 /// Looks up a fixture by name in the current node and parent packages.
-/// The current definition is skipped so a fixture can override and depend on a
-/// same-name fixture from a parent scope. If no override exists, the resolver
-/// handles the dependency as a direct cycle.
+/// Same-name dependencies skip the active provider and all providers nearer to
+/// the test, so each override can reach its immediate ancestor without forming
+/// a false cycle.
 fn lookup_fixture<'a>(
     current_fixture: Option<&DiscoveredFixture>,
     name: &str,
     parents: &'a [&'a DiscoveredPackage],
     current: &'a (dyn HasFixtures<'a> + 'a),
 ) -> FixtureLookup<'a> {
-    match current.lookup_fixture(name) {
-        FixtureLookup::Found(fixture)
-            if current_fixture.is_some_and(|current| current.name() == fixture.name()) => {}
-        FixtureLookup::Missing => {}
-        lookup => return lookup,
+    let parent_start = current_fixture
+        .filter(|active| active.name().function_name() == name)
+        .and_then(|active| {
+            parents.iter().position(|parent| {
+                matches!(
+                    parent.lookup_fixture(active.name().function_name()),
+                    FixtureLookup::Found(candidate) if std::ptr::eq(candidate, active)
+                )
+            })
+        });
+
+    if parent_start.is_none() {
+        match current.lookup_fixture(name) {
+            FixtureLookup::Found(fixture)
+                if current_fixture.is_some_and(|current| std::ptr::eq(current, fixture)) => {}
+            FixtureLookup::Missing => {}
+            lookup => return lookup,
+        }
     }
 
+    let parents = parent_start.map_or(parents, |index| &parents[..index]);
     for parent in parents.iter().rev() {
         match parent.lookup_fixture(name) {
             FixtureLookup::Found(fixture)
-                if current_fixture.is_some_and(|current| current.name() == fixture.name()) => {}
+                if current_fixture.is_some_and(|current| std::ptr::eq(current, fixture)) => {}
             FixtureLookup::Missing => {}
             lookup => return lookup,
         }

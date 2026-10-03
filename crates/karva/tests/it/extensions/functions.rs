@@ -423,6 +423,267 @@ def test_more_gpu():
     ");
 }
 
+#[test]
+fn test_importorskip_returns_available_module() {
+    let context = TestContext::with_files([
+        (
+            "optional_dependency.py",
+            r"
+value = 42
+            ",
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+
+optional = karva.importorskip("optional_dependency")
+
+def test_imported_module_is_available():
+    assert optional.value == 42
+            "#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_imported_module_is_available
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_missing_module_skips_module() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+karva.importorskip("optional_dependency", reason="optional dependency is unavailable")
+
+def test_never_reached():
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test::<module>: optional dependency is unavailable
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_missing_module_skips_test() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_optional_dependency():
+    karva.importorskip("optional_dependency", reason="optional dependency is unavailable")
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test::test_optional_dependency: optional dependency is unavailable
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_missing_module_skips_fixture() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def optional_dependency():
+    return karva.importorskip("optional_dependency", reason="optional dependency is unavailable")
+
+def test_optional_dependency(optional_dependency):
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test::test_optional_dependency: optional dependency is unavailable
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_import_error_propagates_by_default() {
+    let context = TestContext::with_files([
+        (
+            "broken_dependency.py",
+            r#"
+raise ImportError("dependency is broken")
+            "#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+
+karva.importorskip("broken_dependency")
+
+def test_never_reached():
+    assert False
+            "#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: dependency is broken
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_nested_module_not_found_propagates_by_default() {
+    let context = TestContext::with_files([
+        (
+            "broken_dependency.py",
+            r#"
+raise ModuleNotFoundError("transitive dependency is missing", name="transitive_dependency")
+            "#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+
+karva.importorskip("broken_dependency")
+
+def test_never_reached():
+    assert False
+            "#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: transitive dependency is missing
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_can_skip_internal_import_error() {
+    let context = TestContext::with_files([
+        (
+            "broken_dependency.py",
+            r#"
+raise ImportError("dependency is broken")
+            "#,
+        ),
+        (
+            "test.py",
+            r#"
+import karva
+
+karva.importorskip(
+    "broken_dependency", exc_type=ImportError, reason="optional dependency is broken"
+)
+
+def test_never_reached():
+    assert False
+            "#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=skip"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test::<module>: optional dependency is broken
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_importorskip_rejects_invalid_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_invalid_module_name():
+    with karva.raises(ValueError, match="invalid module name"):
+        karva.importorskip("not-a-module")
+
+def test_invalid_exception_type():
+    with karva.raises(TypeError, match="exc_type must be ImportError"):
+        karva.importorskip("math", exc_type=ValueError)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_invalid_module_name
+            PASS [TIME] test::test_invalid_exception_type
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest]
 fn test_runtime_skip_does_not_retry(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
@@ -771,6 +1032,178 @@ def test_raises_subclass():
     ----- stdout -----
         Starting 1 test across 1 worker
             PASS [TIME] test::test_raises_subclass
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_passes_after_match() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_passes_after_match():
+    calls = []
+
+    def check(error):
+        calls.append(str(error))
+        return error.args == (13, "permission denied")
+
+    with karva.raises(OSError, match="permission", check=check) as exc_info:
+        raise OSError(13, "permission denied")
+
+    assert calls == ["[Errno 13] permission denied"]
+    assert exc_info.value.args == (13, "permission denied")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_passes_after_match
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_failure_reports_diagnostic() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_failure():
+    with karva.raises(OSError, check=lambda error: error.errno == 13):
+        raise OSError(2, "not found")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_raises_check_failure
+
+    failures:
+
+    test::test_raises_check_failure:
+
+    error[test-failure]: Test `test_raises_check_failure` failed
+     --> test.py:4:5
+      |
+    4 | def test_raises_check_failure():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     with karva.raises(OSError, check=lambda error: error.errno == 13):
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Raised exception check did not return True
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_exception_propagates() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_exception_propagates():
+    def check(_error):
+        raise RuntimeError("check failed")
+
+    with karva.raises(RuntimeError):
+        with karva.raises(ValueError, check=check):
+            raise ValueError("value")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_exception_propagates
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_rejects_non_callable_check() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_rejects_non_callable_check():
+    with karva.raises(TypeError, match="check must be callable"):
+        karva.raises(ValueError, check=42)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_rejects_non_callable_check
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_raises_check_runs_only_after_type_and_match() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_raises_check_runs_only_after_type_and_match():
+    def unexpected_check(_error):
+        raise AssertionError("check should not run")
+
+    with karva.raises(TypeError):
+        with karva.raises(ValueError, check=unexpected_check):
+            raise TypeError("wrong type")
+
+    with karva.raises(karva.FailError, match="did not match pattern"):
+        with karva.raises(ValueError, match="expected", check=unexpected_check):
+            raise ValueError("wrong message")
+
+    with karva.raises(karva.FailError, match="DID NOT RAISE"):
+        with karva.raises(ValueError, check=unexpected_check):
+            pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_raises_check_runs_only_after_type_and_match
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 

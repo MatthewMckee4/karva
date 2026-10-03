@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -33,13 +34,14 @@ impl ExceptionInfo {
     }
 }
 
-/// Python context manager enforcing exception type and optional message matching.
+/// Python context manager enforcing exception type, message matching, and an optional check.
 ///
 /// Matching exceptions are suppressed; unexpected exception types propagate unchanged.
 #[pyclass]
 pub struct RaisesContext {
     expected_exception: Py<PyAny>,
     match_pattern: Option<String>,
+    check: Option<Py<PyAny>>,
     exc_info: Py<ExceptionInfo>,
 }
 
@@ -88,6 +90,19 @@ impl RaisesContext {
             }
         }
 
+        if let Some(ref check) = self.check {
+            let Some(exception) = exc_val.as_ref() else {
+                return Err(FailError::new_err(
+                    "Raised exception has no value for check callback",
+                ));
+            };
+            if !check.call1(py, (exception,))?.is_truthy(py)? {
+                return Err(FailError::new_err(
+                    "Raised exception check did not return True",
+                ));
+            }
+        }
+
         let mut info = self.exc_info.borrow_mut(py);
         info.exc_type = Some(exc_type_obj);
         info.value = exc_val;
@@ -99,16 +114,24 @@ impl RaisesContext {
 
 /// Assert that a block of code raises a specific exception.
 #[pyfunction]
-#[pyo3(signature = (expected_exception, *, r#match = None))]
+#[pyo3(signature = (expected_exception, *, r#match = None, check = None))]
 pub fn raises(
     py: Python<'_>,
     expected_exception: Py<PyAny>,
     r#match: Option<String>,
+    check: Option<Py<PyAny>>,
 ) -> PyResult<RaisesContext> {
+    if let Some(check) = check.as_ref()
+        && !check.bind(py).is_callable()
+    {
+        return Err(PyTypeError::new_err("check must be callable"));
+    }
+
     let exc_info = Py::new(py, ExceptionInfo::new())?;
     Ok(RaisesContext {
         expected_exception,
         match_pattern: r#match,
+        check,
         exc_info,
     })
 }

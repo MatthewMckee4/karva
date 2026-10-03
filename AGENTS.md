@@ -75,11 +75,15 @@ files and lines, and distinguish blockers from improvements.
 
 ## Tests
 
+- Do not add standalone typing tests or `typing_tests` directories; they are not
+  needed. Cover behavior with runtime tests instead.
 - Add focused tests when existing coverage does not establish changed behavior.
 - Prefer integration tests under `crates/karva/tests/it/` for behavior crossing
   crate, Python, worker, or CLI boundaries.
 - Snapshot command exit code, stdout, and stderr together. Do not call
   `.output()` only to assert success.
+- For new features, test both positive cases where tests pass and negative
+  cases where tests fail, including the expected failure diagnostics.
 - Use `#[rstest]` with `#[values(...)]` instead of loops for repeated cases.
 - Never edit snapshots manually. Regenerate them, review every changed snapshot,
   and check for `.snap.new` files.
@@ -125,3 +129,6 @@ See `CONTRIBUTING.md` for documentation and pull requests.
 
 Use plain descriptive pull request titles without Conventional Commit prefixes
 such as `feat:`, `fix:`, or `test:`.
+
+Always add the smallest appropriate set of labels to pull requests. Label the
+actual scope of the change; avoid unrelated or redundant labels.

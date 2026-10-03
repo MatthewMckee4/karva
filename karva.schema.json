@@ -767,6 +767,13 @@
             }
           ]
         },
+        "failed-first": {
+          "description": "Run tests that failed in the previous run before other selected tests.\n\nDefaults to `false`. Tests are still selected and partitioned normally;\nthis only changes scheduling priority.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "flaky-result": {
           "description": "Whether tests that pass only after a retry should fail the run.",
           "anyOf": [

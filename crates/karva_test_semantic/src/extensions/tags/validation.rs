@@ -62,10 +62,10 @@ fn tag_range(function: &StmtFunctionDef, name: &str) -> Option<TextRange> {
 fn module_tag_range(module_body: &[Stmt], name: &str) -> Option<TextRange> {
     for statement in module_body {
         let value = match statement {
-            Stmt::Assign(assign) if assign.targets.iter().any(is_pytestmark_target) => {
+            Stmt::Assign(assign) if assign.targets.iter().any(is_module_tag_target) => {
                 Some(assign.value.as_ref())
             }
-            Stmt::AnnAssign(assign) if is_pytestmark_target(&assign.target) => {
+            Stmt::AnnAssign(assign) if is_module_tag_target(&assign.target) => {
                 assign.value.as_deref()
             }
             _ => None,
@@ -81,8 +81,8 @@ fn module_tag_range(module_body: &[Stmt], name: &str) -> Option<TextRange> {
     None
 }
 
-fn is_pytestmark_target(expression: &Expr) -> bool {
-    matches!(expression, Expr::Name(name) if name.id == "pytestmark")
+fn is_module_tag_target(expression: &Expr) -> bool {
+    matches!(expression, Expr::Name(name) if matches!(name.id.as_str(), "pytestmark" | "karva_tag"))
 }
 
 struct TagRangeVisitor<'a> {

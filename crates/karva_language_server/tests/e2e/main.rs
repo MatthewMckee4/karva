@@ -95,9 +95,7 @@ impl TestServer {
         let mut params = builder.initialize_params;
         params.capabilities = builder.client_capabilities;
         params.workspace_folders_initialize_params = WorkspaceFoldersInitializeParams {
-            workspace_folders: Some(WorkspaceFolders::WorkspaceFolderList(
-                builder.workspace_folders,
-            )),
+            workspace_folders: builder.workspace_folders,
         };
 
         let initialization_result = server.request::<InitializeRequest>(params);
@@ -397,7 +395,7 @@ impl Drop for TestServer {
 /// Builder for deterministic in-memory LSP servers.
 pub(crate) struct TestServerBuilder {
     client_capabilities: ClientCapabilities,
-    workspace_folders: Vec<WorkspaceFolder>,
+    workspace_folders: Option<WorkspaceFolders>,
     initialize_params: InitializeParams,
 }
 
@@ -405,7 +403,7 @@ impl TestServerBuilder {
     pub(crate) fn new() -> Self {
         Self {
             client_capabilities: ClientCapabilities::default(),
-            workspace_folders: Vec::new(),
+            workspace_folders: Some(WorkspaceFolders::WorkspaceFolderList(Vec::new())),
             initialize_params: InitializeParams::default(),
         }
     }
@@ -416,7 +414,22 @@ impl TestServerBuilder {
     }
 
     pub(crate) fn with_workspace(mut self, folder: WorkspaceFolder) -> Self {
-        self.workspace_folders.push(folder);
+        match self.workspace_folders.as_mut() {
+            Some(WorkspaceFolders::WorkspaceFolderList(folders)) => folders.push(folder),
+            Some(WorkspaceFolders::Null) | None => {
+                self.workspace_folders = Some(WorkspaceFolders::WorkspaceFolderList(vec![folder]));
+            }
+        }
+        self
+    }
+
+    pub(crate) fn without_workspace_folders(mut self) -> Self {
+        self.workspace_folders = None;
+        self
+    }
+
+    pub(crate) fn with_null_workspace_folders(mut self) -> Self {
+        self.workspace_folders = Some(WorkspaceFolders::Null);
         self
     }
 

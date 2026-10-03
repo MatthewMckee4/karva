@@ -1,9 +1,10 @@
 //! Local transport endpoint and lifetime tests.
 
+use std::ffi::OsStr;
 #[cfg(unix)]
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 #[cfg(unix)]
-use std::os::unix::ffi::OsStringExt;
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 #[cfg(unix)]
 use std::path::PathBuf;
 
@@ -36,16 +37,37 @@ fn tcp_fallback_endpoint_argument_roundtrips() {
     assert_eq!(ControllerEndpoint::from_argument(&encoded), Ok(endpoint));
 }
 
-#[cfg(unix)]
 #[test]
-fn endpoint_argument_rejects_missing_transport_and_empty_path() {
+fn endpoint_argument_rejects_invalid_transport_values() {
+    let missing_transport_error = if cfg!(unix) {
+        "controller endpoint must start with `unix:` or `tcp:`"
+    } else {
+        "controller endpoint must start with `tcp:`"
+    };
     assert_eq!(
         ControllerEndpoint::from_argument(OsStr::new("controller.sock")),
-        Err("controller endpoint must start with `unix:` or `tcp:`".to_string())
+        Err(missing_transport_error.to_string())
     );
+    assert_eq!(
+        ControllerEndpoint::from_argument(OsStr::new("tcp:")),
+        Err("TCP controller endpoint must not be empty".to_string())
+    );
+    assert!(matches!(
+        ControllerEndpoint::from_argument(OsStr::new("tcp:not-an-address")),
+        Err(error) if error.starts_with("invalid TCP controller endpoint `not-an-address`:")
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn unix_endpoint_argument_rejects_empty_path_and_invalid_tcp_encoding() {
     assert_eq!(
         ControllerEndpoint::from_argument(OsStr::new("unix:")),
         Err("Unix controller endpoint path must not be empty".to_string())
+    );
+    assert_eq!(
+        ControllerEndpoint::from_argument(OsStr::from_bytes(b"tcp:\xff")),
+        Err("TCP controller endpoint must be valid Unicode".to_string())
     );
 }
 
