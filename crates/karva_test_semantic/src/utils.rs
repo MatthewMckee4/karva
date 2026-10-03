@@ -6,15 +6,11 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{
-    PyAnyMethods, PyBool, PyBytes, PyCFunction, PyComplex, PyDict, PyFloat, PyInt, PyNone,
-    PyString, PyTuple,
+    PyAnyMethods, PyBool, PyBytes, PyComplex, PyDict, PyFloat, PyInt, PyNone, PyString,
 };
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
-use crate::extensions::functions::snapshot::{
-    SnapshotContext, capture_snapshot_thread_state, set_snapshot_thread_state,
-};
 use crate::runner::FixtureArguments;
 
 /// Drives a coroutine with `asyncio.run()` while watching the event loop for
@@ -240,83 +236,15 @@ pub fn run_coroutine(py: Python<'_>, coroutine: Py<PyAny>) -> PyResult<Py<PyAny>
         .unbind())
 }
 
-/// Runs a Python test with a timeout, raising `TimeoutError` if it does not
-/// finish in time.
-///
-/// Sync tests are submitted to a single-worker `ThreadPoolExecutor`; if the
-/// future does not complete within `seconds`, the still-running thread is
-/// abandoned (Python has no safe way to interrupt arbitrary code) and the
-/// executor is shut down without waiting. Async tests are wrapped in
-/// `asyncio.wait_for`, which cancels the coroutine on timeout.
-pub fn run_test_with_timeout(
+/// Runs an asynchronous test with cooperative cancellation at its deadline.
+pub fn run_async_test_with_timeout(
     py: Python<'_>,
     function: &Py<PyAny>,
-    kwargs: &FixtureArguments,
-    is_async: bool,
-    seconds: f64,
-    snapshot_context: &SnapshotContext,
-) -> PyResult<Py<PyAny>> {
-    let kwargs_dict = kwargs.to_kwargs(py)?;
-    if is_async {
-        run_async_with_timeout(py, function, &kwargs_dict, seconds)
-    } else {
-        run_sync_with_timeout(py, function, &kwargs_dict, seconds, snapshot_context)
-    }
-}
-
-fn run_sync_with_timeout(
-    py: Python<'_>,
-    function: &Py<PyAny>,
-    kwargs_dict: &Bound<'_, PyDict>,
-    seconds: f64,
-    snapshot_context: &SnapshotContext,
-) -> PyResult<Py<PyAny>> {
-    let concurrent_futures = py.import("concurrent.futures")?;
-    let timeout_class = concurrent_futures.getattr("TimeoutError")?;
-    let snapshot_state = capture_snapshot_thread_state(snapshot_context.clone());
-    let initializer = PyCFunction::new_closure(
-        py,
-        None,
-        None,
-        move |_args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<()> {
-            set_snapshot_thread_state(snapshot_state.clone());
-            Ok(())
-        },
-    )?;
-    let executor_kwargs = PyDict::new(py);
-    executor_kwargs.set_item("initializer", initializer)?;
-    let executor = concurrent_futures
-        .getattr("ThreadPoolExecutor")?
-        .call((1u32,), Some(&executor_kwargs))?;
-
-    let copied_context = py.import("contextvars")?.call_method0("copy_context")?;
-    let future = executor.call_method(
-        "submit",
-        (copied_context.getattr("run")?, function),
-        Some(kwargs_dict),
-    )?;
-    let result = future.call_method1("result", (seconds,));
-
-    let shutdown_kwargs = PyDict::new(py);
-    shutdown_kwargs.set_item("wait", false)?;
-    executor.call_method("shutdown", (), Some(&shutdown_kwargs))?;
-
-    // A body-raised TimeoutError belongs to the completed future, not the deadline.
-    if future.call_method0("done")?.extract::<bool>()? {
-        result.map(pyo3::Bound::unbind)
-    } else {
-        rebrand_timeout_error(py, &timeout_class, result.map(pyo3::Bound::unbind), seconds)
-    }
-}
-
-fn run_async_with_timeout(
-    py: Python<'_>,
-    function: &Py<PyAny>,
-    kwargs_dict: &Bound<'_, PyDict>,
+    kwargs: Option<&Bound<'_, PyDict>>,
     seconds: f64,
 ) -> PyResult<Py<PyAny>> {
     let timeout_class = async_runtime_attr(py, "TestDeadlineExceeded")?;
-    let coroutine = function.call(py, (), Some(kwargs_dict))?;
+    let coroutine = function.call(py, (), kwargs)?;
     let wait_for = async_runtime_attr(py, "_wait_for")?.call1((coroutine, seconds))?;
     rebrand_timeout_error(
         py,

@@ -4,9 +4,8 @@ use pyo3::types::PyTuple;
 
 /// Represents a per-test timeout limit, in seconds.
 ///
-/// Enforcement is performed by `run_test_with_timeout` in `utils.rs`:
-/// sync tests run in a `ThreadPoolExecutor` worker, async tests are wrapped
-/// in `asyncio.wait_for`.
+/// Synchronous expiry terminates the worker process without Python cleanup.
+/// Async calls use cooperative cancellation through `asyncio.wait_for`.
 #[derive(Debug, Clone, Copy)]
 pub struct TimeoutTag {
     seconds: f64,

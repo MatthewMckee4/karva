@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::{ffi::OsString, io};
 
 use anyhow::Context as _;
@@ -146,6 +146,10 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let (client, selection) =
         WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
     let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
+    let resume_attempts = selection
+        .resume_attempts
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
     // Controller selectors come from collected absolute module paths.
     let test_paths: Vec<Result<TestPath, TestPathError>> = selection
         .test_paths
@@ -166,6 +170,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         reporter: &reporter,
         test_paths,
         resume_skip: &resume_skip,
+        resume_attempts: &resume_attempts,
         coverage: coverage.as_ref(),
         verbose: !verbosity.is_default(),
     });

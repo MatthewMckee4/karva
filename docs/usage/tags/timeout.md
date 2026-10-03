@@ -8,7 +8,7 @@ import time
 
 @karva.tags.timeout(2.0)
 def test_function():
-    time.sleep(5)  # raises TimeoutError after 2 seconds
+    time.sleep(5)  # Karva terminates this worker after 2 seconds
 ```
 
 The threshold accepts fractional seconds (`@karva.tags.timeout(0.5)`).
@@ -18,7 +18,7 @@ The threshold accepts fractional seconds (`@karva.tags.timeout(0.5)`).
 Use the `timeout` setting (or `--timeout=SECONDS` on the CLI) to apply the same hard limit to every test in the project:
 
 ```bash
-karva test --timeout=120
+uv run karva test --timeout=120
 ```
 
 ```toml
@@ -30,7 +30,9 @@ A test-level `@karva.tags.timeout` always wins over the configured default, so i
 
 ## Sync vs async tests
 
-Sync tests are submitted to a single-worker `concurrent.futures.ThreadPoolExecutor`. When the limit elapses, a `TimeoutError` is raised against the test and the worker thread is abandoned — Python has no safe way to interrupt arbitrary code, so any side effects already started will continue. If a test repeatedly times out and leaks resources, fix the test rather than the timeout.
+Sync tests execute on the worker's main Python thread. When the deadline expires, a native watchdog reports the timeout and terminates the worker process. The timed-out code stops, including Python loops, blocking calls, and native calls that hold the GIL. Remaining tests and configured retries run in a fresh interpreter, with completed results preserved.
+
+Hard termination cannot guarantee fixture teardown. Karva says so in the timeout diagnostic and retains captured Python output and available worker stderr. Use `fail-slow` when cleanup must complete rather than imposing a hard deadline.
 
 Async tests are wrapped in `asyncio.wait_for`, which cancels the coroutine via `CancelledError` when the limit elapses.
 

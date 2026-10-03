@@ -20,6 +20,7 @@ const BUFFERED_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
+        resume_attempts: Vec::new(),
         test_paths: test_paths.into_iter().map(Into::into).collect(),
         resume_skip: Vec::new(),
     }
@@ -123,6 +124,7 @@ fn closing_worker_connection_interrupts_a_blocked_selection_write() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                resume_attempts: Vec::new(),
                 test_paths: vec![path; 1_000_000],
                 resume_skip: Vec::new(),
             },
@@ -460,6 +462,7 @@ fn transfers_resume_skip_cases() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                resume_attempts: Vec::new(),
                 test_paths: vec!["mod::test".into()],
                 resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
             },

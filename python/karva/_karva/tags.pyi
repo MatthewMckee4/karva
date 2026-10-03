@@ -54,11 +54,9 @@ def expect_fail(  # noqa: D418
 def timeout(seconds: float) -> Tags:
     """Fail the current test if it runs longer than ``seconds``.
 
-    Sync tests are submitted to a single-worker ``concurrent.futures.ThreadPoolExecutor``;
-    if the test does not finish within the limit, a ``TimeoutError`` is raised
-    against the test and the worker thread is abandoned (Python has no safe
-    way to interrupt arbitrary code, so any side effects already started will
-    continue).
+    Sync tests execute on the worker's main Python thread. A native watchdog
+    terminates the worker when the limit expires; retries and remaining tests
+    run in a fresh interpreter. Hard termination cannot guarantee fixture teardown.
 
     Async tests are wrapped in ``asyncio.wait_for``, which cancels the
     coroutine via ``CancelledError`` when the limit elapses.

@@ -1,0 +1,68 @@
+---
+source: crates/karva/tests/it/extensions/tags/timeout.rs
+expression: "context.read_file(\"results.json\")"
+---
+{
+  "schema_version": 2,
+  "status": "failed",
+  "elapsed_seconds": "[TIME]",
+  "stats": {
+    "total": 1,
+    "passed": 0,
+    "failed": 0,
+    "errors": 1,
+    "skipped": 0,
+    "expected_failure": 0,
+    "flaky": 0,
+    "slow": 0
+  },
+  "tests": [
+    {
+      "module": "test",
+      "name": "test_timeout",
+      "full_name": "test::test_timeout",
+      "status": "error",
+      "duration_seconds": "[TIME]",
+      "retry": {
+        "attempts": 2,
+        "max_attempts": 2
+      },
+      "captured_output": {
+        "stdout": "first attempt timed out\n"
+      },
+      "diagnostic": {
+        "code": "worker-crashed",
+        "severity": "error",
+        "message": "Worker terminated with exit code 17 while running `test::test_timeout`",
+        "rendered": "error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`\n"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "duration_seconds": "[TIME]",
+          "captured_output": {
+            "stdout": "first attempt timed out\n"
+          },
+          "diagnostic": {
+            "code": "test-failure",
+            "severity": "error",
+            "message": "Test `test_timeout` failed",
+            "rendered": "error[test-failure]: Test `test_timeout` failed\n --> test.py:5:5\n  |/n5 | def test_timeout():\n  |     ^^^^^^^^^^^^/ninfo: Test exceeded timeout of 0.1 seconds/ninfo: Worker terminated at the deadline; fixture teardown could not be guaranteed.\n\n"
+          }
+        },
+        {
+          "attempt": 2,
+          "status": "error",
+          "duration_seconds": "[TIME]",
+          "diagnostic": {
+            "code": "worker-crashed",
+            "severity": "error",
+            "message": "Worker terminated with exit code 17 while running `test::test_timeout`",
+            "rendered": "error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`\n"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,21 @@ pub enum WorkerEvent {
         result: Box<TestCaseResult>,
     },
 
+    /// Synchronous deadline expired; the worker exits immediately after flushing this event.
+    TestTimedOut {
+        /// Exact runtime case to retry in a fresh worker or commit as failed.
+        cache_key: TestCacheKey,
+
+        /// Timeout diagnostic, captured output, and attempts consumed by this generation.
+        result: Box<TestCaseResult>,
+
+        /// Whether a later passing retry fails the run as flaky.
+        fail_on_flaky: bool,
+
+        /// Whether `JUnit` reports a later passing retry as a failure.
+        junit_fail_on_flaky: bool,
+    },
+
     /// Diagnostic describing the run rather than one test.
     RunDiagnostic(RenderedDiagnostic),
 
@@ -76,4 +91,8 @@ pub struct WorkerSelection {
 
     /// Runtime-expanded cases already completed by an earlier generation.
     pub resume_skip: Vec<TestCacheKey>,
+
+    /// Next one-based attempt for cases interrupted by a hard timeout.
+    #[serde(default)]
+    pub resume_attempts: Vec<(TestCacheKey, u32)>,
 }

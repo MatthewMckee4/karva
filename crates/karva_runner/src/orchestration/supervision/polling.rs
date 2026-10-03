@@ -11,7 +11,6 @@ use karva_metadata::MaxFail;
 
 use super::super::dispatcher::{CrashCheckpoint, CrashedWorker};
 use super::super::output::termination_description;
-#[cfg(unix)]
 use super::super::process_control;
 use super::super::worker::Worker;
 use super::super::{CANCELLATION_EVENT_SETTLE, WORKER_POLL_INTERVAL};
@@ -49,6 +48,12 @@ impl WorkerSupervisor {
                 #[cfg(not(unix))]
                 let status = worker.child_mut().try_wait();
                 status
+            };
+            let status = match status {
+                Ok(None) if self.dispatcher.worker_timed_out(worker.id()) => {
+                    force_kill_timed_out_worker(&mut worker)
+                }
+                status => status,
             };
             match status {
                 Ok(Some(status)) => {
@@ -109,12 +114,17 @@ impl WorkerSupervisor {
                     } else {
                         let duration = worker.duration();
                         let stderr = worker.join_stderr(true);
-                        tracing::error!(target: "karva_runner::orchestration",
-                            "Worker {} failed with {} in {}",
-                            worker.id(),
-                            termination_description(status),
-                            format_duration(duration),
-                        );
+                        if self.dispatcher.worker_timed_out(worker.id()) {
+                            tracing::info!(target: "karva_runner::orchestration", worker_id = worker.id(),
+                                "worker terminated after reporting a synchronous test timeout");
+                        } else {
+                            tracing::error!(target: "karva_runner::orchestration",
+                                "Worker {} failed with {} in {}",
+                                worker.id(),
+                                termination_description(status),
+                                format_duration(duration),
+                            );
+                        }
                         let checkpoint = match connection_close {
                             WorkerConnectionClose::Complete => CrashCheckpoint::Complete(active),
                             WorkerConnectionClose::Forced => CrashCheckpoint::DrainLimited(active),
@@ -227,6 +237,27 @@ impl WorkerSupervisor {
     }
 }
 
+/// Bypasses native exit handlers after the worker has flushed its timeout result.
+/// Unix leaders remain retained until the whole process group has been killed.
+fn force_kill_timed_out_worker(worker: &mut Worker) -> std::io::Result<Option<ExitStatus>> {
+    #[cfg(unix)]
+    if let Err(error) = process_control::force_kill(worker.child()) {
+        // macOS can reject a group signal while its last member is exiting,
+        // before that exit is waitable. Retain the leader and poll again.
+        if error.kind() == std::io::ErrorKind::PermissionDenied {
+            return reap_exited_process_group(worker);
+        }
+        return Err(error);
+    }
+    #[cfg(not(unix))]
+    if let Err(error) = process_control::force_kill_child(worker.child_mut())
+        && worker.child_mut().try_wait()?.is_none()
+    {
+        return Err(error);
+    }
+    worker.child_mut().wait().map(Some)
+}
+
 /// Observes one child during graceful shutdown without exposing a recycled
 /// Unix process-group id.
 ///
@@ -234,6 +265,9 @@ impl WorkerSupervisor {
 /// deadline or their leader exits. Once a leader exits, any remaining group
 /// members are killed before `wait` releases the numeric process-group id.
 fn shutdown_status(worker: &mut Worker) -> std::io::Result<Option<ExitStatus>> {
+    if let Some(status) = worker.exit_status() {
+        return Ok(Some(status));
+    }
     #[cfg(unix)]
     {
         reap_exited_process_group(worker)

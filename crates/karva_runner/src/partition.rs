@@ -41,6 +41,9 @@ pub struct Partition {
     /// Runtime-expanded cases a replacement worker must not execute again.
     resume_skip: Vec<TestCacheKey>,
 
+    /// Next attempt numbers for cases retried after terminating their interpreter.
+    resume_attempts: Vec<(TestCacheKey, u32)>,
+
     /// Cumulative historical microseconds, using one per unknown test.
     weight: u128,
 
@@ -81,6 +84,7 @@ impl Partition {
         Self {
             tests: Vec::new(),
             resume_skip: Vec::new(),
+            resume_attempts: Vec::new(),
             weight: 0,
             unattributed_retry_baseline: None,
         }
@@ -152,6 +156,11 @@ impl Partition {
         self.tests
             .iter()
             .map(|test| test.identity.function_root.as_ref())
+    }
+
+    /// Attempts forwarded to replacement worker generations.
+    pub(super) fn resume_attempts(&self) -> &[(TestCacheKey, u32)] {
+        &self.resume_attempts
     }
 
     /// Runtime-expanded cases already handled by an earlier worker generation.
