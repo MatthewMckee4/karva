@@ -606,7 +606,8 @@ mod tests {
                 branch_partial: 1,
             }
         );
-        assert!((total.percent() - 4.0 / 7.0 * 100.0).abs() < f64::EPSILON);
+        let expected_percent = 4.0 / 7.0 * 100.0;
+        assert!((total.percent() - expected_percent).abs() < f64::EPSILON);
     }
 
     #[test]
