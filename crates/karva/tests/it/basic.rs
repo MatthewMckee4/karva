@@ -2008,6 +2008,201 @@ def test_with_print():
 }
 
 #[test]
+fn test_stdin_read_is_rejected_when_captured() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_reads_stdin():
+    input('Continue')
+        ",
+    );
+
+    let mut snapshot_settings = insta::Settings::clone_current();
+    snapshot_settings.add_filter(r"(?m)^ +$", "");
+    let _snapshot_settings = snapshot_settings.bind_to_scope();
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_reads_stdin
+
+    failures:
+
+    test::test_reads_stdin:
+
+    error[test-failure]: Test `test_reads_stdin` failed
+     --> test.py:2:5
+      |
+    2 | def test_reads_stdin():
+      |     ^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:3:5
+      |
+    3 |     input('Continue')
+      |     ^^^^^^^^^^^^^^^^^
+    info: stdin is unavailable while test output is captured
+    info: Pass input explicitly to the code under test, or use --no-capture for an intentional interactive debugging session.
+
+    captured stdout:
+    Continue
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_subprocess_stdin_is_eof_when_captured() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import subprocess
+import sys
+
+def test_subprocess_reads_eof():
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == "''\n", repr(result.stdout)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_subprocess_reads_eof
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_stdin_guards_are_reinstalled_between_tests() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import io
+import os
+import subprocess
+import sys
+
+def test_changes_stdin():
+    sys.stdin = io.StringIO("unexpected\n")
+    fd = os.open(__file__, os.O_RDONLY)
+    os.dup2(fd, 0)
+    os.close(fd)
+
+def test_next_test_still_sees_guards():
+    try:
+        input()
+    except RuntimeError:
+        pass
+    else:
+        assert False, "stdin should remain guarded"
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == "''\n", repr(result.stdout)
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_changes_stdin
+            PASS [TIME] test::test_next_test_still_sees_guards
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_stdin_remains_guarded_during_session_teardown() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import subprocess
+import sys
+
+@karva.fixture(scope="session")
+def guarded_session():
+    yield
+    try:
+        input()
+    except RuntimeError:
+        pass
+    else:
+        assert False, "stdin should remain guarded during teardown"
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == "''\n", repr(result.stdout)
+
+def test_session(guarded_session):
+    pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().pass_stdin("unexpected\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_session(guarded_session=None)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_no_capture_keeps_stdin_available() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+def test_reads_stdin():
+    assert input() == "yes"
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--no-capture").pass_stdin("yes\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_reads_stdin
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_retry_flag() {
     let context = TestContext::with_file(
         "test.py",
