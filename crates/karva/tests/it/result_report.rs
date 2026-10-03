@@ -98,6 +98,7 @@ fn writes_json_result_report() {
         "failed": 1,
         "errors": 1,
         "skipped": 1,
+        "expected_failure": 0,
         "flaky": 1,
         "slow": 0
       },
@@ -276,7 +277,7 @@ fn writes_jsonl_result_records() {
     assert_snapshot!(context.read_file("reports/events.jsonl"), @r#"
     {"schema_version":2,"type":"test","module":"test_events","name":"test_fail","full_name":"test_events::test_fail","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_fail` failed","rendered":"error[test-failure]: Test `test_fail` failed\n --> test_events.py:5:5\n  |/n5 | def test_fail():\n  |     ^^^^^^^^^/ninfo: Test failed here\n --> test_events.py:6:5\n  |/n6 |     assert False\n  |     ^^^^^^^^^^^^\n\n"}}
     {"schema_version":2,"type":"test","module":"test_events","name":"test_pass","full_name":"test_events::test_pass","status":"passed","duration_seconds":"[TIME]"}
-    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":2,"passed":1,"failed":1,"errors":0,"skipped":0,"flaky":0,"slow":0}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":2,"passed":1,"failed":1,"errors":0,"skipped":0,"expected_failure":0,"flaky":0,"slow":0}}
     "#);
 }
 
@@ -456,6 +457,7 @@ def test_flaky():
         "failed": 0,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 1,
         "slow": 0
       },
@@ -529,7 +531,7 @@ def test_flaky():
     );
     assert_snapshot!(context.read_file("results.jsonl"), @r#"
     {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
-    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"flaky":1,"slow":0}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"expected_failure":0,"flaky":1,"slow":0}}
     "#);
 }
 
@@ -601,6 +603,7 @@ def test_resource(resource):
         "failed": 1,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },
@@ -670,7 +673,7 @@ def test_resource(resource):
         report,
         @r#"
     {"schema_version":2,"type":"test","module":"test_fail_slow","name":"test_resource(resource=None)","full_name":"test_fail_slow::test_resource(resource=None)","status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"fail-slow-exceeded","severity":"error","message":"Test `test_resource` exceeded its fail-slow budget","rendered":"error[fail-slow-exceeded]: Test `test_resource` exceeded its fail-slow budget\n  --> test_fail_slow.py:11:5\n   |/n11 | def test_resource(resource):\n   |     ^^^^^^^^^^^^^/ninfo: Configured budget: [TIME], actual duration: [TIME] (slowest phase: teardown)\n\n"}}
-    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":1,"errors":0,"skipped":0,"flaky":0,"slow":0}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":1,"errors":0,"skipped":0,"expected_failure":0,"flaky":0,"slow":0}}
     "#
     );
 }
@@ -744,6 +747,7 @@ fn writes_related_test_diagnostics() {
         "failed": 1,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },
@@ -817,6 +821,7 @@ fn keeps_run_diagnostics_separate_from_tests() {
         "failed": 0,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },
@@ -870,7 +875,7 @@ fn writes_jsonl_run_diagnostic_records() {
         context.read_file("reports/import.jsonl"),
         @r#"
     {"schema_version":2,"type":"run_diagnostic","diagnostic":{"code":"failed-to-import-module","severity":"error","message":"Failed to import python module `test_import`: No module named 'missing_result_report_dependency'","rendered":"error[failed-to-import-module]: Failed to import python module `test_import`: No module named 'missing_result_report_dependency'\n\n"}}
-    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":0,"passed":0,"failed":0,"errors":0,"skipped":0,"flaky":0,"slow":0}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":0,"passed":0,"failed":0,"errors":0,"skipped":0,"expected_failure":0,"flaky":0,"slow":0}}
     "#
     );
 }
@@ -908,10 +913,53 @@ fn result_report_status_matches_no_tests_failure() {
         "failed": 0,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },
       "tests": []
     }
     "#);
+}
+
+#[test]
+fn expected_failures_remain_distinct_in_reports_and_cache() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            "[profile.default.junit]\npath = 'reports/results.xml'\n",
+        ),
+        (
+            "test_expected.py",
+            r"
+import karva
+@karva.tags.expect_fail(reason='Known parser bug')
+def test_expected():
+    assert False
+",
+        ),
+    ]);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--result-output=reports/results.json", "--retry=1"])
+    );
+    assert_snapshot!(context.read_file("reports/results.json"));
+    let xml = context.read_file("reports/results.xml");
+    assert!(xml.contains("<skipped type=\"xfail\" message=\"Known parser bug\"/>"));
+    assert!(xml.contains("skipped=\"1\""));
+    assert_cmd_snapshot!(context.command_no_parallel().args([
+        "--result-format=jsonl",
+        "--result-output=reports/results.jsonl",
+        "--status-level=fail",
+        "--final-status-level=fail"
+    ]));
+    assert_snapshot!(context.read_file("reports/results.jsonl"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(
+            &context.read_file(".karva_cache/last-failed.json")
+        )
+        .expect("read last-failed cache"),
+        serde_json::json!([]),
+    );
 }

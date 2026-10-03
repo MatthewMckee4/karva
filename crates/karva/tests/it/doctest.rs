@@ -501,6 +501,7 @@ def broken():
       "schema_version": 2,
       "stats": {
         "errors": 0,
+        "expected_failure": 0,
         "failed": 1,
         "flaky": 0,
         "passed": 3,
@@ -638,6 +639,7 @@ def broken():
         "schema_version": 2,
         "stats": {
           "errors": 0,
+          "expected_failure": 0,
           "failed": 1,
           "flaky": 0,
           "passed": 3,

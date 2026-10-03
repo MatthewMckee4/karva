@@ -95,9 +95,6 @@ pub(super) fn classify_test_result(
         .is_some_and(ExpectFailTag::should_expect_fail);
 
     let error = match test_result {
-        Ok(TestCallOutcome::ReturnedValue(_)) if expect_fail => {
-            return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
-        }
         Ok(TestCallOutcome::ReturnedValue(value)) => {
             let diagnostic = test_returned_value_diagnostic(context.definition, &value);
             return ClassifiedTestResult::new(TestExecutionOutcome::failed(diagnostic), true);
@@ -122,15 +119,22 @@ pub(super) fn classify_test_result(
         );
     }
 
-    if expect_fail {
-        return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
-    }
-
     let missing_arguments = missing_arguments_from_error(
         context.definition.name().function_name(),
         &error.to_string(),
     );
     if missing_arguments.is_empty() {
+        if let Some(policy) = context.expect_fail_tag
+            && policy.matches(py, &error)
+            && !crate::utils::is_framework_execution_error(py, &error)
+        {
+            return ClassifiedTestResult::new(
+                TestExecutionOutcome::ExpectedFailure {
+                    reason: policy.reason(),
+                },
+                false,
+            );
+        }
         let diagnostic = test_failure_diagnostic(
             py,
             context.definition,
@@ -192,7 +196,9 @@ pub(super) fn attach_related_diagnostics(
                 fixture_failures,
             }
         }
-        TestExecutionOutcome::Passed | TestExecutionOutcome::Skipped { .. } => {
+        TestExecutionOutcome::Passed
+        | TestExecutionOutcome::ExpectedFailure { .. }
+        | TestExecutionOutcome::Skipped { .. } => {
             TestExecutionOutcome::error_with_related(first, diagnostics.collect())
         }
     }

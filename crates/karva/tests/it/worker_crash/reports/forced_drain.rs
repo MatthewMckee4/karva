@@ -95,6 +95,7 @@ fn forced_drain_is_reported_consistently_across_machine_reports() {
         "failed": 0,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },
@@ -171,7 +172,7 @@ fn forced_drain_is_reported_consistently_across_machine_reports() {
     assert_snapshot!(context.read_file("results.jsonl"), @r#"
     {"schema_version":2,"type":"test","module":"test","name":"test_a_pass","full_name":"test::test_a_pass","status":"passed","duration_seconds":"[TIME]"}
     {"schema_version":2,"type":"run_diagnostic","diagnostic":{"code":"worker-crashed","severity":"error","message":"Worker 0 terminated with exit code 35 after its 50 ms controller event drain limit expired; the last decoded active checkpoint was `test::test_b_crash`, but later state could not be recovered. Karva preserved 1 completed test result from this assignment and omitted 1 remaining test selection from recovery because their execution state could not be determined safely. They are absent from the results; rerun them only if repeat execution is safe.","rendered":"error[worker-crashed]: Worker 0 terminated with exit code 35 after its 50 ms controller event drain limit expired; the last decoded active checkpoint was `test::test_b_crash`, but later state could not be recovered\n/nKarva preserved 1 completed test result from this assignment and omitted 1 remaining test selection from recovery because their execution state could not be determined safely. They are absent from the results; rerun them only if repeat execution is safe.\n/nWorker stderr:\n[Karva stopped draining worker output after the 50 ms limit; final output and results may be incomplete]\n"}}
-    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"flaky":0,"slow":0}}
+    {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"expected_failure":0,"flaky":0,"slow":0}}
     "#);
 }
 
