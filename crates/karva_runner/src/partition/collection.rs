@@ -57,18 +57,17 @@ pub(super) fn collect_test_paths_recursive(
             if let Some(case_count) = case_count
                 && case_count > 0
             {
+                let fallback_duration = u32::try_from(case_count).ok().and_then(|case_count| {
+                    previous_durations
+                        .get(identity.function_root.as_ref())
+                        .and_then(|duration| duration.checked_div(case_count))
+                });
                 for idx in 0..case_count {
                     let qualified_name = format!("{}[{idx}]", identity.function_root);
                     let duration = previous_durations
                         .get(qualified_name.as_str())
                         .copied()
-                        .or_else(|| {
-                            u32::try_from(case_count).ok().and_then(|case_count| {
-                                previous_durations
-                                    .get(identity.function_root.as_ref())
-                                    .and_then(|duration| duration.checked_div(case_count))
-                            })
-                        });
+                        .or(fallback_duration);
                     test_infos.push(TestInfo {
                         identity: Arc::clone(&identity),
                         qualified_name,

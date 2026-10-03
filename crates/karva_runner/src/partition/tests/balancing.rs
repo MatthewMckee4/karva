@@ -175,3 +175,37 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
         60_000
     );
 }
+
+#[test]
+fn exact_case_duration_overrides_legacy_fallback() {
+    let (_temp_dir, _test_path, package) = collected_package(
+        "@karva.tags.parametrize('value', [0, 1, 2])\n\
+         def test_value(value): pass\n",
+    );
+    let durations = HashMap::from([
+        (
+            TestCacheKey::function_name("test_sample::test_value"),
+            Duration::from_millis(60),
+        ),
+        (
+            TestCacheKey::parameter_case_name("test_sample::test_value", 1),
+            Duration::from_millis(5),
+        ),
+    ]);
+
+    let partitions = partition_collected_tests(
+        &package,
+        1,
+        &durations,
+        &HashSet::new(),
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(partitions[0].weight(), 45_000);
+    assert_eq!(
+        partitions[0].cache_keys().collect::<Vec<_>>(),
+        [0, 2, 1]
+            .map(|index| { TestCacheKey::parameter_case_name("test_sample::test_value", index) })
+    );
+}
