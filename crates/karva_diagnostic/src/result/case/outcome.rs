@@ -14,6 +14,12 @@ pub enum TestCaseOutcome<D = RenderedDiagnostic> {
     /// Test completed without failure.
     Passed,
 
+    /// Test body failed as declared; its reason survives reporting and transport.
+    ExpectedFailure {
+        /// User-provided explanation for the known failure.
+        reason: Option<String>,
+    },
+
     /// Assertion or explicit test failure.
     Failed {
         /// Primary failure diagnostic.
@@ -101,7 +107,7 @@ impl<D> TestCaseOutcome<D> {
     pub fn diagnostic(&self) -> Option<&D> {
         match self {
             Self::Failed { diagnostic, .. } | Self::Error { diagnostic, .. } => Some(diagnostic),
-            Self::Passed | Self::Skipped { .. } => None,
+            Self::Passed | Self::ExpectedFailure { .. } | Self::Skipped { .. } => None,
         }
     }
 
@@ -109,7 +115,7 @@ impl<D> TestCaseOutcome<D> {
     pub fn related_diagnostics(&self) -> &[D] {
         match self {
             Self::Failed { related, .. } | Self::Error { related, .. } => related,
-            Self::Passed | Self::Skipped { .. } => &[],
+            Self::Passed | Self::ExpectedFailure { .. } | Self::Skipped { .. } => &[],
         }
     }
 
@@ -119,7 +125,10 @@ impl<D> TestCaseOutcome<D> {
             Self::Error {
                 fixture_failures, ..
             } => fixture_failures,
-            Self::Passed | Self::Failed { .. } | Self::Skipped { .. } => &[],
+            Self::Passed
+            | Self::ExpectedFailure { .. }
+            | Self::Failed { .. }
+            | Self::Skipped { .. } => &[],
         }
     }
 
@@ -127,6 +136,9 @@ impl<D> TestCaseOutcome<D> {
     pub fn result_kind(&self) -> IndividualTestResultKind {
         match self {
             Self::Passed => IndividualTestResultKind::Passed,
+            Self::ExpectedFailure { reason } => IndividualTestResultKind::ExpectedFailure {
+                reason: reason.clone(),
+            },
             Self::Failed { .. } => IndividualTestResultKind::Failed,
             Self::Error { .. } => IndividualTestResultKind::Error,
             Self::Skipped { reason } => IndividualTestResultKind::Skipped {
@@ -138,6 +150,7 @@ impl<D> TestCaseOutcome<D> {
     pub(super) fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseOutcome<T> {
         match self {
             Self::Passed => TestCaseOutcome::Passed,
+            Self::ExpectedFailure { reason } => TestCaseOutcome::ExpectedFailure { reason },
             Self::Failed {
                 diagnostic,
                 related,

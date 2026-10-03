@@ -98,6 +98,7 @@ def test_recovered():
         "failed": 0,
         "errors": 0,
         "skipped": 0,
+        "expected_failure": 0,
         "flaky": 0,
         "slow": 0
       },

@@ -96,7 +96,12 @@ pub(super) fn classify_test_result(
 
     let error = match test_result {
         Ok(TestCallOutcome::ReturnedValue(_)) if expect_fail => {
-            return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
+            return ClassifiedTestResult::new(
+                TestExecutionOutcome::ExpectedFailure {
+                    reason: context.expect_fail_tag.and_then(ExpectFailTag::reason),
+                },
+                false,
+            );
         }
         Ok(TestCallOutcome::ReturnedValue(value)) => {
             let diagnostic = test_returned_value_diagnostic(context.definition, &value);
@@ -123,7 +128,12 @@ pub(super) fn classify_test_result(
     }
 
     if expect_fail {
-        return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
+        return ClassifiedTestResult::new(
+            TestExecutionOutcome::ExpectedFailure {
+                reason: context.expect_fail_tag.and_then(ExpectFailTag::reason),
+            },
+            false,
+        );
     }
 
     let missing_arguments = missing_arguments_from_error(
@@ -192,7 +202,9 @@ pub(super) fn attach_related_diagnostics(
                 fixture_failures,
             }
         }
-        TestExecutionOutcome::Passed | TestExecutionOutcome::Skipped { .. } => {
+        TestExecutionOutcome::Passed
+        | TestExecutionOutcome::ExpectedFailure { .. }
+        | TestExecutionOutcome::Skipped { .. } => {
             TestExecutionOutcome::error_with_related(first, diagnostics.collect())
         }
     }

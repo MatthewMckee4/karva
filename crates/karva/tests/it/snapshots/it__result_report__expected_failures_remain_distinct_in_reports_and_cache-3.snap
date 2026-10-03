@@ -1,0 +1,20 @@
+---
+source: crates/karva/tests/it/result_report.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--result-format=jsonl"
+    - "--result-output=reports/results.jsonl"
+    - "--status-level=fail"
+    - "--final-status-level=fail"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791047291
+---
+success: true
+exit_code: 0
+----- stdout -----
+    Starting 1 test across 1 worker
+
+----- stderr -----
