@@ -82,8 +82,9 @@ pub fn collect_file(
 
 /// Collects only metadata needed by controller-side test scheduling.
 ///
-/// Source text and the complete syntax tree are discarded before returning.
-/// Test function definitions are moved from the syntax tree instead of cloned.
+/// Source text, the module tree, and test function bodies are discarded before
+/// returning. Test signatures, decorators, names, and source ranges are retained.
+/// Requested fixture definitions remain complete.
 pub fn collect_file_for_scheduling(
     path: &Utf8PathBuf,
     cwd: &Utf8Path,
@@ -137,7 +138,7 @@ fn collect_source_for_scheduling(
     }
 
     for statement in module_body {
-        let Stmt::FunctionDef(function_def) = statement else {
+        let Stmt::FunctionDef(mut function_def) = statement else {
             continue;
         };
         if settings.collect_fixtures && is_fixture_function(&function_def) {
@@ -149,6 +150,7 @@ fn collect_source_for_scheduling(
             &function_names,
             settings.test_function_prefix,
         ) {
+            function_def.body = Vec::new();
             collected_module.add_test_function_def(function_def);
         }
     }
@@ -444,6 +446,54 @@ mod tests {
             function_names(&scheduled.test_function_defs),
             ["helper", "test_last"]
         );
+    }
+
+    #[test]
+    fn scheduling_collection_preserves_metadata_and_doctests_without_test_bodies() {
+        let (_temp_dir, root, path) = python_file(
+            "test_sample.py",
+            r#"
+@fixture
+def db():
+    return 1
+
+@karva.tags.parametrize("a", [1, 2])
+@karva.tags.parametrize("b", [3, 4, 5])
+async def test_metadata(a: int, b: int) -> None:
+    """
+    >>> 1 + 1
+    2
+    """
+    assert a + b > 0
+"#,
+        );
+        let settings = CollectionSettings {
+            collect_fixtures: true,
+            collect_doctests: true,
+            ..settings()
+        };
+        let full = collect_file(&path, &root, &settings, &[])
+            .expect("collect full source")
+            .expect("module should collect");
+        let scheduled = collect_file_for_scheduling(&path, &root, &settings, &[])
+            .expect("collect scheduling metadata")
+            .expect("module should collect");
+        let full_test = &full.test_function_defs[0];
+        let scheduled_test = &scheduled.test_function_defs[0];
+
+        assert!(scheduled_test.body.is_empty());
+        assert!(!full_test.body.is_empty());
+        assert_eq!(scheduled_test.name, full_test.name);
+        assert_eq!(scheduled_test.range, full_test.range);
+        assert_eq!(scheduled_test.is_async, full_test.is_async);
+        assert_eq!(scheduled_test.parameters, full_test.parameters);
+        assert_eq!(scheduled_test.returns, full_test.returns);
+        assert_eq!(scheduled_test.decorator_list, full_test.decorator_list);
+        assert_eq!(count_parametrize_cases(scheduled_test), Some(6));
+        assert_eq!(scheduled.doctests.len(), 1);
+        assert_eq!(scheduled.doctests[0].name, "doctest:test_metadata");
+        assert_eq!(scheduled.doctests[0].range, full.doctests[0].range);
+        assert_eq!(scheduled.fixture_function_defs, full.fixture_function_defs);
     }
 
     #[test]
