@@ -1,6 +1,6 @@
 //! Python test semantics, fixture resolution, extensions, and in-process execution.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) mod collection;
 mod context;
@@ -55,6 +55,9 @@ pub struct RunRequest<'a> {
     /// Cases already committed by an earlier worker generation and therefore
     /// safe to omit during crash recovery.
     pub resume_skip: &'a BTreeSet<TestCacheKey>,
+
+    /// Next attempt numbers for hard-timeout retries in this fresh worker.
+    pub resume_attempts: &'a BTreeMap<TestCacheKey, u32>,
 
     /// Optional coverage configuration for this worker's run.
     pub coverage: Option<&'a CoverageConfig>,

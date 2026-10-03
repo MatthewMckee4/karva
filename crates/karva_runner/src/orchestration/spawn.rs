@@ -64,6 +64,7 @@ pub(super) fn spawn_worker(
                 .then(|| spawn.artifacts.coverage_data_file(worker_id)),
             test_paths: partition.worker_test_paths(),
             resume_skip: partition.resume_skip().to_vec(),
+            resume_attempts: partition.resume_attempts().to_vec(),
         },
     )?;
     let stderr_capture = NamedTempFile::new().context("Failed to create worker stderr spool")?;

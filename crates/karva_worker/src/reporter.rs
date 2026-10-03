@@ -112,6 +112,42 @@ impl Reporter for WorkerReporter {
         self.record_send_result(self.client.send_test_finished(cache_key, &result));
     }
 
+    fn report_test_timed_out(
+        &self,
+        test_name: &QualifiedTestName,
+        result: TestExecutionResult,
+        fail_on_flaky: bool,
+        junit_fail_on_flaky: bool,
+    ) {
+        let attempt = result
+            .retry()
+            .map_or(1, karva_diagnostic::TestCaseRetry::attempts);
+        let max_attempts = result
+            .retry()
+            .map_or(1, karva_diagnostic::TestCaseRetry::max_attempts);
+        if max_attempts > 1 {
+            self.output.report_test_attempt(
+                test_name,
+                attempt,
+                IndividualTestResultKind::Failed,
+                result.duration(),
+            );
+        } else {
+            self.output.report_test_case_result(
+                test_name,
+                IndividualTestResultKind::Failed,
+                result.duration(),
+            );
+        }
+        self.send(WorkerEvent::TestTimedOut {
+            cache_key: test_name.cache_key(),
+            result: Box::new(result.render(&self.cwd, self.diagnostic_config)),
+            fail_on_flaky,
+            junit_fail_on_flaky,
+        });
+        self.record_send_result(self.client.flush());
+    }
+
     fn flush_test_results(&self) {
         self.record_send_result(self.client.flush());
     }

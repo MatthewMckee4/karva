@@ -61,6 +61,7 @@ def test_slow():
     6 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -113,15 +114,13 @@ fn test_timeout_with_retry_eventually_passes() {
     let context = TestContext::with_file(
         "test.py",
         r"
+import os
 import time
 import karva
 
-attempts = [0]
-
 @karva.tags.timeout(0.5)
 def test_slow_then_fast():
-    attempts[0] += 1
-    if attempts[0] == 1:
+    if os.environ['KARVA_ATTEMPT'] == '1':
         time.sleep(2)
         ",
     );
@@ -244,9 +243,8 @@ def test_1(sleep_for):
       |
     7 | def test_1(sleep_for):
       |     ^^^^^^
-    info: Test ran with arguments:
-    info:   `sleep_for`: `2.0`
     info: Test exceeded timeout of 0.3 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
@@ -314,6 +312,7 @@ def test_always_slow():
     6 | def test_always_slow():
       |     ^^^^^^^^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -353,6 +352,7 @@ def test_slow():
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -487,6 +487,7 @@ def test_slow():
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -680,4 +681,131 @@ def test_name(value):
 
     ----- stderr -----
     ");
+}
+
+#[rstest]
+fn hard_timeout_stops_python_and_native_calls_and_preserves_output(
+    #[values(
+        "while True: pass",
+        "time.sleep(3600)",
+        "lock = threading.Lock(); lock.acquire(); lock.acquire()"
+    )]
+    blocking: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import karva
+import os
+import sys
+import time
+import threading
+from pathlib import Path
+
+@karva.fixture
+def resource():
+    yield
+    Path('teardown.txt').write_text('completed')
+
+@karva.tags.timeout(0.1)
+@karva.tags.expect_fail(raises=Exception)
+def test_a_blocking(resource):
+    print('output before deadline')
+    print('stderr before deadline', file=sys.stderr)
+    {blocking}
+
+def test_b_remaining():
+    assert not Path('teardown.txt').exists()
+    print('remaining test ran once')
+"
+        ),
+    );
+    allow_duplicates! {{ assert_cmd_snapshot!(context.command_no_parallel()); }}
+}
+
+#[test]
+fn hard_timeout_retry_uses_fresh_python_state_and_reports_all_attempts() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            "[profile.default.junit]\npath = 'results.xml'\nstore-failure-output = true\n",
+        ),
+        (
+            "test.py",
+            r"
+import karva
+import os
+import time
+state = []
+@karva.tags.timeout(0.1)
+def test_timeout():
+    assert state == []
+    state.append('dirty')
+    attempt = os.environ['KARVA_ATTEMPT']
+    print(f'attempt {attempt}')
+    if attempt == '1':
+        while True: pass
+",
+        ),
+    ]);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--result-output=results.json"])
+    );
+    insta::assert_snapshot!(context.read_file("results.json"));
+    assert!(context.read_file("results.xml").contains("flakyFailure"));
+}
+
+#[test]
+fn hard_timeout_preserves_history_when_retry_crashes() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+import os
+@karva.tags.timeout(0.1)
+def test_timeout():
+    if os.environ['KARVA_ATTEMPT'] == '1':
+        print('first attempt timed out')
+        while True: pass
+    os._exit(17)
+",
+    );
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--result-output=results.json",])
+    );
+    insta::assert_snapshot!(context.read_file("results.json"));
+}
+
+#[cfg(unix)]
+#[test]
+fn hard_timeout_stops_native_call_holding_the_gil() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import ctypes
+import karva
+import os
+
+@karva.tags.timeout(0.1)
+def test_a_native():
+    # Native exit handlers may themselves wait for the GIL held by the test.
+    callback_type = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    exit_callback = callback_type(lambda argument: None)
+    native = ctypes.CDLL(None)
+    native.__cxa_atexit.argtypes = [callback_type, ctypes.c_void_p, ctypes.c_void_p]
+    native.__cxa_atexit(exit_callback, None, None)
+    print('before native call')
+    os.write(2, b'native stderr before deadline\n')
+    ctypes.PyDLL(None).sleep(3600)
+
+def test_b_remaining():
+    pass
+",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel());
 }

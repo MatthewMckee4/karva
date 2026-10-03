@@ -22,6 +22,7 @@ mod identity;
 mod input;
 mod reporting;
 mod settings;
+mod timeout;
 
 use attempt::{PreparedTestAttempt, TestLifecycleAttempt};
 use input::VariantInput;
@@ -113,7 +114,10 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             set_test_name_env(self.py, &settings.identity.qualified_test_name.to_string());
 
         tracing::debug!("Running test `{}`", settings.identity.qualified_test_name);
-        let mut attempt_number = 1;
+        let mut attempt_number = self
+            .package_runner
+            .context
+            .resume_attempt(&settings.identity.qualified_test_name);
         let mut prepared_attempt = Some(first_attempt);
         let mut prior_attempts = Vec::new();
 
@@ -130,7 +134,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 &test_name_env_result,
                 attempt_env_result,
                 prepared,
-                attempt_number,
+                (attempt_number, &prior_attempts),
             );
 
             if attempt.retryable && attempt_number < settings.retry.max_attempts {

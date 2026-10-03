@@ -22,6 +22,7 @@ fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
         configuration: Arc::default(),
         coverage_data_file: None,
+        resume_attempts: Vec::new(),
         test_paths: test_paths.into_iter().map(Into::into).collect(),
         resume_skip: Vec::new(),
     }
@@ -127,6 +128,7 @@ fn closing_worker_connection_interrupts_a_blocked_selection_write() {
             WorkerSelection {
                 configuration: Arc::default(),
                 coverage_data_file: None,
+                resume_attempts: Vec::new(),
                 test_paths: vec![path; 1_000_000],
                 resume_skip: Vec::new(),
             },
@@ -470,6 +472,7 @@ fn transfers_resume_skip_cases() {
             WorkerSelection {
                 configuration: Arc::default(),
                 coverage_data_file: None,
+                resume_attempts: Vec::new(),
                 test_paths: vec!["mod::test".into()],
                 resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
             },

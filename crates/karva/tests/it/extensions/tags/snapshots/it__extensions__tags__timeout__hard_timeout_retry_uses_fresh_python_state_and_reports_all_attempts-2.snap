@@ -1,0 +1,60 @@
+---
+source: crates/karva/tests/it/extensions/tags/timeout.rs
+expression: "context.read_file(\"results.json\")"
+---
+{
+  "schema_version": 2,
+  "status": "passed",
+  "elapsed_seconds": "[TIME]",
+  "stats": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "expected_failure": 0,
+    "flaky": 1,
+    "slow": 0
+  },
+  "tests": [
+    {
+      "module": "test",
+      "name": "test_timeout",
+      "full_name": "test::test_timeout",
+      "status": "passed",
+      "duration_seconds": "[TIME]",
+      "flaky": true,
+      "retry": {
+        "attempts": 2,
+        "max_attempts": 2
+      },
+      "captured_output": {
+        "stdout": "attempt 1/nattempt 2\n"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "duration_seconds": "[TIME]",
+          "captured_output": {
+            "stdout": "attempt 1\n"
+          },
+          "diagnostic": {
+            "code": "test-failure",
+            "severity": "error",
+            "message": "Test `test_timeout` failed",
+            "rendered": "error[test-failure]: Test `test_timeout` failed\n --> test.py:7:5\n  |/n7 | def test_timeout():\n  |     ^^^^^^^^^^^^/ninfo: Test exceeded timeout of 0.1 seconds/ninfo: Worker terminated at the deadline; fixture teardown could not be guaranteed.\n\n"
+          }
+        },
+        {
+          "attempt": 2,
+          "status": "passed",
+          "duration_seconds": "[TIME]",
+          "captured_output": {
+            "stdout": "attempt 2\n"
+          }
+        }
+      ]
+    }
+  ]
+}

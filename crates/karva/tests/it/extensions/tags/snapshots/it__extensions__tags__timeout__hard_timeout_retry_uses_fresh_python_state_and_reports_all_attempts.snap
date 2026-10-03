@@ -1,0 +1,23 @@
+---
+source: crates/karva/tests/it/extensions/tags/timeout.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--retry=1"
+    - "--result-output=results.json"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791047650
+---
+success: true
+exit_code: 0
+----- stdout -----
+    Starting 1 test across 1 worker
+  TRY 1 FAIL [TIME] test::test_timeout
+  TRY 2 PASS [TIME] test::test_timeout
+────────────
+     Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+   FLAKY 2/2 [TIME] test::test_timeout
+
+----- stderr -----

@@ -1,0 +1,39 @@
+---
+source: crates/karva/tests/it/extensions/tags/timeout.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791048401
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 2 tests across 1 worker
+        FAIL [TIME] test::test_a_native
+        PASS [TIME] test::test_b_remaining
+
+failures:
+
+test::test_a_native:
+
+error[test-failure]: Test `test_a_native` failed
+ --> test.py:7:5
+  |
+7 | def test_a_native():
+  |     ^^^^^^^^^^^^^
+info: Test exceeded timeout of 0.1 seconds
+info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
+
+captured stdout:
+before native call
+captured stderr:
+native stderr before deadline
+
+────────────
+     Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+----- stderr -----
+native stderr before deadline

@@ -101,6 +101,85 @@ impl<D> TestCaseResult<D> {
         }
     }
 
+    /// Joins controller-retained timeout attempts with results from a fresh interpreter.
+    /// A single attempt remains an ordinary result; flaky policy applies only to passing retries.
+    #[must_use]
+    pub fn with_previous_attempts(
+        mut self,
+        previous: Vec<TestCaseAttempt<D>>,
+        current_attempt: u32,
+        max_attempts: u32,
+        fail_on_flaky: bool,
+        junit_fail_on_flaky: bool,
+    ) -> Self
+    where
+        D: Clone,
+    {
+        let previous_duration = previous
+            .iter()
+            .map(TestCaseAttempt::duration)
+            .sum::<Duration>();
+        let mut attempts = previous;
+        if self.payload.attempts.is_empty() {
+            attempts.push(TestCaseAttempt::new(
+                current_attempt,
+                self.payload.outcome.clone(),
+                self.payload.duration,
+                self.payload.captured_output.clone(),
+            ));
+        } else {
+            attempts.append(&mut self.payload.attempts);
+        }
+        self.payload.duration = self.payload.duration.saturating_add(previous_duration);
+        if attempts.len() > 1 {
+            let last_attempt = attempts
+                .last()
+                .map_or(current_attempt, TestCaseAttempt::attempt);
+            let passed = matches!(self.payload.outcome, TestCaseOutcome::Passed);
+            self.payload.retry = Some(
+                TestCaseRetry::new(last_attempt, max_attempts).with_failure_policy(
+                    passed && fail_on_flaky,
+                    passed && fail_on_flaky && junit_fail_on_flaky,
+                ),
+            );
+            let mut stdout = String::new();
+            let mut stderr = String::new();
+            for attempt in &attempts {
+                if let Some(output) = attempt.captured_output() {
+                    stdout.push_str(output.stdout());
+                    stderr.push_str(output.stderr());
+                }
+            }
+            let output = CapturedTestOutput::new(stdout, stderr);
+            self.payload.captured_output = (!output.is_empty()).then_some(output);
+            self.payload.attempts = attempts;
+        } else {
+            self.payload.retry = None;
+            self.payload.attempts.clear();
+        }
+        self
+    }
+
+    /// Retains fault-handler or native stderr available when a worker is forcibly stopped.
+    pub fn append_captured_stderr(&mut self, stderr: &str) {
+        if stderr.is_empty() {
+            return;
+        }
+        if let Some(attempt) = self.payload.attempts.last_mut() {
+            attempt.append_captured_stderr(stderr);
+        }
+        let previous = self.payload.captured_output.take();
+        let stdout = previous
+            .as_ref()
+            .map_or("", CapturedTestOutput::stdout)
+            .to_owned();
+        let combined = format!(
+            "{}{stderr}",
+            previous.as_ref().map_or("", CapturedTestOutput::stderr)
+        );
+        self.payload.captured_output = Some(CapturedTestOutput::new(stdout, combined));
+    }
+
     /// Returns the dotted Python module containing the test.
     pub fn module_name(&self) -> &str {
         &self.identity.module_name
@@ -221,6 +300,22 @@ impl<D> TestCaseResultPayload<D> {
                 .map(|attempt| attempt.map_diagnostic(&mut map))
                 .collect(),
         }
+    }
+}
+
+impl TestCaseResult<RenderedDiagnostic> {
+    /// Builds an attributed worker crash for controller-side attempt recovery.
+    pub fn crashed(name: &str, duration: Duration, termination: &str, stderr: &str) -> Self {
+        Self::from_display_name(
+            name,
+            TestCaseOutcome::error(RenderedDiagnostic::worker_crashed(
+                name,
+                termination,
+                stderr,
+            )),
+            duration,
+            None,
+        )
     }
 }
 
