@@ -662,6 +662,27 @@ mod tests {
     }
 
     #[test]
+    fn serialized_python_strings_borrow_utf8_and_preserve_lossy_fallback() -> PyResult<()> {
+        Python::initialize();
+        Python::attach(|py| {
+            let value = PyString::new(py, "snapshot value").into_any().unbind();
+            let serialized = value.bind(py).str()?;
+            assert!(serialized.is(value.bind(py)));
+            let original = serialized.to_string_lossy();
+            let pointer = original.as_ptr();
+            let filtered = apply_active_filters(original)?;
+            assert!(matches!(filtered, Cow::Borrowed(_)));
+            assert_eq!(filtered.as_ptr(), pointer);
+            let value = py.eval(c"chr(0xD800)", None, None)?.unbind();
+            let serialized = value.bind(py).str()?;
+            let lossy = apply_active_filters(serialized.to_string_lossy())?;
+            assert!(matches!(lossy, Cow::Owned(_)));
+            assert_eq!(lossy, "���");
+            Ok(())
+        })
+    }
+
+    #[test]
     fn test_compute_snapshot_name_single() {
         assert_eq!(compute_snapshot_name("test_foo", 0, false), "test_foo");
     }
