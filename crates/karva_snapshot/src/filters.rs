@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use regex::{NoExpand, Regex};
 
 /// A compiled snapshot filter that replaces regex matches with a fixed string.
@@ -15,16 +17,18 @@ impl SnapshotFilter {
     }
 }
 
-/// Apply all filters sequentially to the input string.
+/// Apply all filters sequentially, copying text only for replacements or the final result.
 pub fn apply_filters(input: &str, filters: &[SnapshotFilter]) -> String {
-    let mut result = input.to_string();
+    let mut result = Cow::Borrowed(input);
     for filter in filters {
-        result = filter
+        if let Cow::Owned(filtered) = filter
             .regex
             .replace_all(&result, NoExpand(&filter.replacement))
-            .into_owned();
+        {
+            result = Cow::Owned(filtered);
+        }
     }
-    result
+    result.into_owned()
 }
 
 #[cfg(test)]
@@ -48,6 +52,20 @@ mod tests {
         insta::assert_snapshot!(
             apply_filters("id=550e8400-e29b-41d4-a716-446655440000 date=2024-01-15", &filters),
             @"id=[uuid] date=[date]"
+        );
+    }
+
+    #[test]
+    fn later_filters_match_previous_replacements_after_a_nonmatching_filter() {
+        let filters = vec![
+            SnapshotFilter::new("token", "cost=42".to_string()).expect("valid regex"),
+            SnapshotFilter::new("missing", "unused".to_string()).expect("valid regex"),
+            SnapshotFilter::new(r"cost=\d+", "cost=$1".to_string()).expect("valid regex"),
+        ];
+
+        assert_eq!(
+            apply_filters("before token after", &filters),
+            "before cost=$1 after"
         );
     }
 
