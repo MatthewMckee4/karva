@@ -44,7 +44,7 @@ pub struct CollectedModule {
     /// Complete module statements retained for source-aware semantic checks.
     pub module_body: Box<[Stmt]>,
 
-    /// Test function definitions (functions starting with test prefix)
+    /// Test definitions; scheduling-only collection discards their bodies.
     pub test_function_defs: Vec<StmtFunctionDef>,
 
     /// Docstrings containing doctest examples.
