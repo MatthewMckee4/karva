@@ -83,7 +83,7 @@ pub(super) struct SourceAnalysisSnapshot {
 #[derive(Debug)]
 pub(super) struct PreparedDiagnostics {
     documents: Vec<PreparedDiagnosticDocument>,
-    open_sources: BTreeMap<Utf8PathBuf, String>,
+    open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
     open_python_paths: HashSet<Utf8PathBuf>,
     source_index_revision: SourceIndexRevision,
     cancellation: RequestCancellationToken,
@@ -242,7 +242,7 @@ enum HierarchicalDocumentSymbols {
 #[derive(Debug)]
 pub(super) struct PreparedSourceAnalysis {
     current_path: Utf8PathBuf,
-    current_source: String,
+    current_source: Arc<str>,
     source_index: PreparedSourceIndex,
     document_uri: Uri,
     document_version: i32,
@@ -401,7 +401,7 @@ impl Session {
                 continue;
             };
             open_python_paths.insert(path.clone());
-            open_sources.insert(path.clone(), document.contents().to_owned());
+            open_sources.insert(path.clone(), document.shared_contents());
             if let Ok(project) = self.workspaces.prepare_project_discovery(&uri) {
                 documents.push(PreparedDiagnosticDocument { path, project });
             }
@@ -477,7 +477,7 @@ impl Session {
             .filter_map(|open_document| {
                 uri_to_path(open_document.uri())
                     .ok()
-                    .map(|open_path| (open_path, open_document.contents().to_owned()))
+                    .map(|open_path| (open_path, open_document.shared_contents()))
             })
             .collect::<BTreeMap<_, _>>();
         let source_index_cache = if self.cache_source_indexes {
@@ -500,7 +500,7 @@ impl Session {
 
         Ok(Some(PreparedSourceAnalysis {
             current_path: path,
-            current_source: document.contents().to_owned(),
+            current_source: document.shared_contents(),
             source_index,
             document_uri: uri.clone(),
             document_version: document.version(),
@@ -576,6 +576,52 @@ mod tests {
     use super::Session;
     use crate::workspace::Workspaces;
     use crate::{PositionEncoding, TextDocument};
+
+    #[test]
+    fn request_snapshots_retain_one_text_allocation_per_document() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let mut session = Session::new(
+            PositionEncoding::UTF16,
+            lsp_types::MarkupKind::PlainText,
+            false,
+            false,
+            Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
+        );
+        for name in ["test_first.py", "test_second.py"] {
+            let uri = lsp_types::Uri::from_file_path(temporary.path().join(name))
+                .map_err(|()| anyhow::anyhow!("temporary file URI"))?;
+            session.open_document(TextDocument::new(
+                uri,
+                "def test_example(): pass\n".repeat(1024),
+                1,
+                lsp_types::LanguageKind::Python,
+            ));
+        }
+        let uri = session
+            .open_document_uris()
+            .next()
+            .expect("open document")
+            .clone();
+        let first = session
+            .prepare_source_analysis(&uri)?
+            .expect("Python request");
+        let second = session
+            .prepare_source_analysis(&uri)?
+            .expect("Python request");
+        let first_diagnostics = session.prepare_diagnostics();
+        let second_diagnostics = session.prepare_diagnostics();
+        for (path, source) in &first_diagnostics.open_sources {
+            assert!(std::sync::Arc::ptr_eq(
+                source,
+                &second_diagnostics.open_sources[path]
+            ));
+        }
+        assert!(std::sync::Arc::ptr_eq(
+            &first.current_source,
+            &second.current_source
+        ));
+        Ok(())
+    }
 
     #[test]
     fn shutdown_cancels_prepared_diagnostics() -> anyhow::Result<()> {
