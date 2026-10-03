@@ -15,7 +15,8 @@ use ruff_text_size::{Ranged, TextSize};
 
 use crate::data::BranchArc;
 use crate::executable::{
-    CoverageExclusions, comment_lines_matching, pattern_lines, pragma_no_cover_lines,
+    CoverageExclusions, comment_lines_matching, executable_lines_for_module, pattern_lines,
+    pragma_no_cover_lines,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -85,9 +86,9 @@ fn branch_analysis_for_source(
     let mut excluded_lines = pragma_no_cover_lines(&parsed, source, &line_index);
     excluded_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
     let partial_lines = partial_branch_lines(&parsed, source, &line_index, partials);
-    let module = parsed.into_syntax();
+    let module = parsed.syntax();
     let (executable, built_in_excluded) =
-        crate::executable::executable_lines_for_source_with_exclusions(source, exclusions);
+        executable_lines_for_module(module, &line_index, &excluded_lines);
     excluded_lines.extend(built_in_excluded);
     let mut collector = BranchCollector {
         line_index: &line_index,
@@ -464,6 +465,24 @@ def f(x):
             branch_analysis_for_source(source, &CoverageExclusions::default(), &partials);
 
         assert_eq!(partial, BTreeSet::from([2]));
+    }
+
+    #[test]
+    fn exclusions_preserve_branch_fallthrough() {
+        let source = "\
+def f(value):
+    \"docstring\"
+    if TYPE_CHECKING:
+        missing()
+    if value:  # pragma: no cover
+        return 1
+    if value:
+        return 2
+    ...
+    return 0
+";
+
+        assert_eq!(arcs(source), vec![(7, 8), (7, 10)]);
     }
 
     #[test]
