@@ -72,7 +72,7 @@ fn executable_lines_for_source(source: &str) -> HashSet<u32> {
     executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).0
 }
 
-pub(super) fn executable_lines_for_source_with_exclusions(
+fn executable_lines_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
 ) -> (HashSet<u32>, HashSet<u32>) {
