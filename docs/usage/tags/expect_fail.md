@@ -1,4 +1,4 @@
-The `expect_fail` tag is used to mark a test as expected to fail. When a test marked with `expect_fail` fails, Karva reports `PASS` and counts the result as passed in the terminal. JSON, JSONL, and JUnit reports retain the expected-failure outcome. When a test marked with `expect_fail` passes, it is considered a failure.
+The `expect_fail` tag is used to mark a test as expected to fail. When its test body raises an expected exception, Karva reports `PASS` and counts the result as passed in the terminal. JSON, JSONL, and JUnit reports retain the expected-failure outcome. When a test marked with `expect_fail` passes, it is considered a failure.
 
 ## Basic Usage
 
@@ -57,6 +57,18 @@ def test_function():
 ```
 
 Then running `uv run karva test` will result in one failed test.
+
+## Restricting the expected exception
+
+Use `raises=` to require a particular exception or a tuple of exception classes. Subclasses match normally:
+
+```python
+@karva.tags.expect_fail(reason="Known parser bug", raises=ValueError)
+def test_invalid_input():
+    parse("invalid")
+```
+
+A different exception is a normal failure and follows the retry policy. A matching expected failure is never retried. Without `raises=`, ordinary test-body exceptions are accepted. Fixture setup and teardown errors, missing fixtures, framework timeouts, background exceptions, and non-`None` return values cannot become expected failures.
 
 ## Pytest
 

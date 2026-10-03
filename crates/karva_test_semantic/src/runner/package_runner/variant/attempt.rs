@@ -120,6 +120,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 function_arguments.to_kwargs(self.py).map(Some)
             }
         });
+        let eligible_for_expect_fail = prepared_call.is_ok();
         let (test_result, call_duration) = match prepared_call {
             Ok(keyword_arguments) => {
                 let call_start = Instant::now();
@@ -157,7 +158,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             &OutcomeContext {
                 definition: self.input.test.definition(),
                 function_arguments,
-                expect_fail_tag: settings.execution.expect_fail_tag.as_ref(),
+                expect_fail_tag: eligible_for_expect_fail
+                    .then_some(settings.execution.expect_fail_tag.as_ref())
+                    .flatten(),
                 verbose: self.package_runner.context.is_verbose(),
             },
         );
