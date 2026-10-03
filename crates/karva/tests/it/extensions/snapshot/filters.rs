@@ -370,3 +370,81 @@ def test_empty_filters():
     unchanged
     ");
 }
+
+#[test]
+fn test_snapshot_filter_settings_reentry_preserves_nested_order_and_scope() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_reentry():
+    settings = karva.snapshot_settings(filters=[(r"number=\d+", "number=[id]")])
+    with settings:
+        karva.assert_snapshot("number=1", inline="number=[id]")
+        with karva.snapshot_settings(filters=[(r"\[id\]", "$1")]):
+            karva.assert_snapshot("number=2", inline="number=$1")
+        karva.assert_snapshot("number=3", inline="number=[id]")
+    karva.assert_snapshot("number=4", inline="number=4")
+    with settings:
+        karva.assert_snapshot("number=5", inline="number=[id]")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_reentry
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_invalid_snapshot_filters_remain_lazy_on_reentry() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_lazy_errors():
+    settings = karva.snapshot_settings(filters=[("(unclosed", "unused")])
+    first_error = None
+    with settings:
+        pass
+    with settings:
+        try:
+            karva.assert_snapshot("value", inline="value")
+        except ValueError as error:
+            assert "Invalid regex pattern" in str(error)
+            first_error = error
+        else:
+            raise AssertionError("invalid filter should fail on assertion")
+    with settings:
+        try:
+            karva.assert_snapshot("value", inline="value")
+        except ValueError as error:
+            assert "Invalid regex pattern" in str(error)
+            assert error is not first_error
+        else:
+            raise AssertionError("cached filter error should still fail")
+    karva.assert_snapshot("value", inline="value")
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_lazy_errors
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}

@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io;
 use std::process;
+use std::sync::{Arc, OnceLock};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_snapshot::cmd::{CommandOutput, format_cmd_output};
@@ -46,22 +47,47 @@ impl SnapshotContext {
     }
 }
 
-#[derive(Clone)]
+/// Immutable snapshot policy shared by nested contexts and timeout threads.
 struct ActiveSettings {
+    /// Ordered regex patterns and literal replacements.
     filters: Vec<(String, String)>,
+
+    /// Compile on first assertion; cache error text so each assertion gets a fresh Python error.
+    compiled_filters: OnceLock<Result<Vec<SnapshotFilter>, String>>,
+
     allow_duplicates: bool,
 }
 
-/// Snapshot context and settings copied into a timeout worker thread.
+impl ActiveSettings {
+    /// Borrows compiled filters without changing when invalid-pattern errors surface.
+    fn compiled_filters(&self) -> PyResult<&[SnapshotFilter]> {
+        self.compiled_filters
+            .get_or_init(|| {
+                self.filters
+                    .iter()
+                    .map(|(pattern, replacement)| {
+                        SnapshotFilter::new(pattern, replacement.clone()).map_err(|err| {
+                            format!("Invalid regex pattern in snapshot filter `{pattern}`: {err}")
+                        })
+                    })
+                    .collect()
+            })
+            .as_ref()
+            .map(Vec::as_slice)
+            .map_err(|message| pyo3::exceptions::PyValueError::new_err(message.clone()))
+    }
+}
+
+/// Snapshot context and shared settings passed to a timeout worker thread.
 #[derive(Clone)]
 pub struct SnapshotThreadState {
     context: SnapshotContext,
-    settings: Vec<ActiveSettings>,
+    settings: Vec<Arc<ActiveSettings>>,
 }
 
 thread_local! {
     static SNAPSHOT_CONTEXT: RefCell<Option<SnapshotContext>> = const { RefCell::new(None) };
-    static SNAPSHOT_SETTINGS: RefCell<Vec<ActiveSettings>> = const { RefCell::new(Vec::new()) };
+    static SNAPSHOT_SETTINGS: RefCell<Vec<Arc<ActiveSettings>>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Python context manager applying nested filters and duplicate-name policy.
@@ -69,8 +95,8 @@ thread_local! {
 /// Settings use a thread-local stack, so inner contexts augment outer filters.
 #[pyclass]
 pub struct SnapshotSettings {
-    filters: Vec<(String, String)>,
-    allow_duplicates: bool,
+    /// Retains compiled filters across context re-entry and timeout threads.
+    settings: Arc<ActiveSettings>,
 }
 
 #[pymethods]
@@ -79,17 +105,17 @@ impl SnapshotSettings {
     #[pyo3(signature = (*, filters=None, allow_duplicates=false))]
     fn new(filters: Option<Vec<(String, String)>>, allow_duplicates: bool) -> Self {
         Self {
-            filters: filters.unwrap_or_default(),
-            allow_duplicates,
+            settings: Arc::new(ActiveSettings {
+                filters: filters.unwrap_or_default(),
+                compiled_filters: OnceLock::new(),
+                allow_duplicates,
+            }),
         }
     }
 
     fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         SNAPSHOT_SETTINGS.with(|stack| {
-            stack.borrow_mut().push(ActiveSettings {
-                filters: slf.filters.clone(),
-                allow_duplicates: slf.allow_duplicates,
-            });
+            stack.borrow_mut().push(Arc::clone(&slf.settings));
         });
         slf
     }
@@ -253,19 +279,17 @@ fn apply_active_filters(input: Cow<'_, str>) -> PyResult<Cow<'_, str>> {
         let stack = stack.borrow();
         let mut compiled = Vec::new();
         for settings in stack.iter() {
-            for (pattern, replacement) in &settings.filters {
-                let filter = SnapshotFilter::new(pattern, replacement.clone()).map_err(|err| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "Invalid regex pattern in snapshot filter `{pattern}`: {err}"
-                    ))
-                })?;
-                compiled.push(filter);
+            if !settings.filters.is_empty() {
+                compiled.push(settings.compiled_filters()?);
             }
         }
         if compiled.is_empty() {
             return Ok(input);
         }
-        Ok(Cow::Owned(apply_filters(&input, &compiled)))
+        Ok(Cow::Owned(apply_filters(
+            &input,
+            compiled.into_iter().flatten(),
+        )))
     })
 }
 
