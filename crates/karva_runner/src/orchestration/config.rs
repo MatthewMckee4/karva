@@ -21,8 +21,11 @@ pub struct ParallelTestConfig {
     /// the handler should not be installed (e.g., benchmarks).
     pub create_ctrlc_handler: bool,
 
-    /// When `true`, only tests that failed in the previous run will be executed.
-    pub last_failed: bool,
+    /// Which tests from the previous run should be selected.
+    pub last_failed: LastFailedSelection,
+
+    /// Whether cached failures are scheduled before other selected tests.
+    pub failed_first: FailurePriority,
 
     /// Active configuration profile name. Propagated to workers as
     /// `KARVA_PROFILE`; falls back to `"default"` when `None`.
@@ -36,6 +39,62 @@ pub struct ParallelTestConfig {
 
     /// Which completed test case bodies the controller retains.
     pub result_retention: TestResultRetention,
+}
+
+/// Controls whether the run selects the complete suite or cached failures.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum LastFailedSelection {
+    /// Select every collected test.
+    #[default]
+    All,
+
+    /// Select tests that failed in the previous run.
+    LastFailed,
+}
+
+impl LastFailedSelection {
+    /// Returns whether only cached failures should be selected.
+    pub(crate) const fn is_last_failed(self) -> bool {
+        matches!(self, Self::LastFailed)
+    }
+}
+
+impl From<bool> for LastFailedSelection {
+    fn from(last_failed: bool) -> Self {
+        if last_failed {
+            Self::LastFailed
+        } else {
+            Self::All
+        }
+    }
+}
+
+/// Controls ordering of cached failures within the selected suite.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum FailurePriority {
+    /// Preserve normal duration-aware ordering.
+    #[default]
+    Normal,
+
+    /// Schedule cached failures before other selected tests.
+    FailedFirst,
+}
+
+impl FailurePriority {
+    /// Returns whether cached failures should run before other selected tests.
+    pub(crate) const fn is_failed_first(self) -> bool {
+        matches!(self, Self::FailedFirst)
+    }
+}
+
+impl From<bool> for FailurePriority {
+    fn from(failed_first: bool) -> Self {
+        if failed_first {
+            Self::FailedFirst
+        } else {
+            Self::Normal
+        }
+    }
 }
 
 /// Controls whether successful non-retried case bodies remain in memory.

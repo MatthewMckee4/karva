@@ -16,6 +16,9 @@ pub struct DiscoveredPackage {
     /// Test modules directly in this package, keyed by file path.
     modules: BTreeMap<Utf8PathBuf, DiscoveredModule>,
 
+    /// Test selectors in the scheduler's requested execution order.
+    test_order: Vec<(Utf8PathBuf, String, Option<usize>)>,
+
     /// Sub-packages within this package, keyed by directory path.
     packages: BTreeMap<Utf8PathBuf, Self>,
 
@@ -32,6 +35,7 @@ impl DiscoveredPackage {
         Self {
             path,
             modules: BTreeMap::new(),
+            test_order: Vec::new(),
             packages: BTreeMap::new(),
             configuration_module: None,
             framework_module: None,
@@ -44,6 +48,14 @@ impl DiscoveredPackage {
 
     pub(crate) fn modules(&self) -> &BTreeMap<Utf8PathBuf, DiscoveredModule> {
         &self.modules
+    }
+
+    pub(crate) fn set_test_order(&mut self, test_order: Vec<(Utf8PathBuf, String, Option<usize>)>) {
+        self.test_order = test_order;
+    }
+
+    pub(crate) fn test_order(&self) -> &[(Utf8PathBuf, String, Option<usize>)] {
+        &self.test_order
     }
 
     pub(crate) fn packages(&self) -> &BTreeMap<Utf8PathBuf, Self> {

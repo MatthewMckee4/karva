@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -73,7 +73,20 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             })
             .collect();
 
-        let case_filter = build_case_filter(&test_paths);
+        let case_filter =
+            build_case_filter(&test_paths, self.context.settings().test().failed_first);
+        let mut seen_tests = HashSet::new();
+        let test_order = test_paths
+            .iter()
+            .filter_map(|test_path| {
+                let key = (
+                    test_path.path.clone(),
+                    test_path.function_name.clone(),
+                    test_path.parametrize_index,
+                );
+                seen_tests.insert(key.clone()).then_some(key)
+            })
+            .collect::<Vec<_>>();
 
         let collector =
             TestFunctionCollector::new(self.context.cwd(), self.context.collection_settings());
@@ -91,6 +104,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
         };
 
         let mut session_package = self.convert_package(py, collected_package, &case_filter);
+        session_package.set_test_order(test_order);
 
         session_package.shrink();
 
@@ -223,7 +237,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
 ///
 /// Multiple selectors for the same function are unioned: any bare selector
 /// (no `[idx]`) wins and yields `None`; otherwise the indices are merged.
-fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
+fn build_case_filter(test_paths: &[TestPathFunction], preserve_order: bool) -> CaseFilterMap {
     if test_paths
         .iter()
         .all(|test_path| test_path.parametrize_index.is_none())
@@ -252,10 +266,12 @@ fn build_case_filter(test_paths: &[TestPathFunction]) -> CaseFilterMap {
     }
 
     for indices in filter.values_mut().flatten() {
-        indices.sort_unstable();
-        indices.dedup();
+        let mut seen = HashSet::new();
+        indices.retain(|index| seen.insert(*index));
+        if !preserve_order {
+            indices.sort_unstable();
+        }
     }
-
     filter
 }
 
@@ -356,4 +372,39 @@ fn discover_framework_fixtures(
     }
 
     Some(framework_module)
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+    use karva_project::path::TestPathFunction;
+
+    use super::build_case_filter;
+
+    #[test]
+    fn case_filter_preserves_requested_order_and_deduplicates_nonadjacent_indices() {
+        let paths = [
+            TestPathFunction {
+                path: Utf8PathBuf::from("test.py"),
+                function_name: "test_case".to_string(),
+                parametrize_index: Some(2),
+            },
+            TestPathFunction {
+                path: Utf8PathBuf::from("test.py"),
+                function_name: "test_case".to_string(),
+                parametrize_index: Some(0),
+            },
+            TestPathFunction {
+                path: Utf8PathBuf::from("test.py"),
+                function_name: "test_case".to_string(),
+                parametrize_index: Some(2),
+            },
+        ];
+
+        let filter = build_case_filter(&paths, true);
+        assert_eq!(
+            filter.get(&(Utf8PathBuf::from("test.py"), "test_case".to_string())),
+            Some(&Some(vec![2, 0]))
+        );
+    }
 }

@@ -1,5 +1,7 @@
 //! Fast, syntax-only collection of Python test and fixture definitions.
 
+use std::collections::HashSet;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use ruff_python_ast::{Expr, PythonVersion, Stmt};
@@ -118,6 +120,7 @@ fn collect_source_for_scheduling(
     let parse_options =
         ParseOptions::from(Mode::Module).with_target_version(settings.python_version);
     let parsed = parse_unchecked(source_text, parse_options).try_into_module()?;
+    let function_names: HashSet<&str> = function_names.iter().map(String::as_str).collect();
     let module_body = parsed.into_suite();
     let doctests = if settings.collect_doctests && module_type == ModuleType::Test {
         collect_doctests(&module_body, source_text)
@@ -128,7 +131,7 @@ fn collect_source_for_scheduling(
         CollectedModule::new(module_path, module_type, Box::default(), String::new());
 
     for doctest in doctests {
-        if function_names.is_empty() || function_names.iter().any(|name| name == &doctest.name) {
+        if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {
             collected_module.add_doctest(doctest);
         }
     }
@@ -143,7 +146,7 @@ fn collect_source_for_scheduling(
         }
         if is_test_function_to_collect(
             &function_def.name,
-            function_names,
+            &function_names,
             settings.test_function_prefix,
         ) {
             collected_module.add_test_function_def(function_def);
@@ -173,6 +176,7 @@ pub fn collect_source(
 
     let parsed = parse_unchecked(&source_text, parse_options).try_into_module()?;
 
+    let function_names: HashSet<&str> = function_names.iter().map(String::as_str).collect();
     let module_body = parsed.into_suite();
     let function_defs = module_body
         .iter()
@@ -185,7 +189,7 @@ pub fn collect_source(
             }
             is_test_function_to_collect(
                 &function_def.name,
-                function_names,
+                &function_names,
                 settings.test_function_prefix,
             )
             .then(|| function_def.clone())
@@ -202,8 +206,7 @@ pub fn collect_source(
         for doctest in
             collect_doctests(&collected_module.module_body, &collected_module.source_text)
         {
-            if function_names.is_empty() || function_names.iter().any(|name| name == &doctest.name)
-            {
+            if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {
                 collected_module.add_doctest(doctest);
             }
         }
@@ -215,13 +218,7 @@ pub fn collect_source(
             continue;
         }
 
-        if is_test_function_to_collect(
-            &function_def.name,
-            function_names,
-            settings.test_function_prefix,
-        ) {
-            collected_module.add_test_function_def(function_def);
-        }
+        collected_module.add_test_function_def(function_def);
     }
 
     Some(collected_module)
@@ -345,11 +342,11 @@ fn prompt_range(source_text: &str, range: TextRange) -> Option<TextRange> {
 /// When `explicit_names` is empty, any function whose name starts with
 /// `prefix` is considered a test. When `explicit_names` is provided,
 /// only functions whose name appears in the list are collected.
-fn is_test_function_to_collect(name: &str, explicit_names: &[String], prefix: &str) -> bool {
+fn is_test_function_to_collect(name: &str, explicit_names: &HashSet<&str>, prefix: &str) -> bool {
     if explicit_names.is_empty() {
         name.starts_with(prefix)
     } else {
-        explicit_names.iter().any(|n| n == name)
+        explicit_names.contains(name)
     }
 }
 
@@ -419,6 +416,34 @@ mod tests {
             .expect("module should collect");
 
         assert_eq!(function_names(&module.test_function_defs), ["helper"]);
+    }
+
+    #[test]
+    fn explicit_selection_preserves_source_order_and_ignores_duplicates() {
+        let (_temp_dir, root, path) = python_file(
+            "test_sample.py",
+            "def helper(): pass\ndef test_excluded(): pass\ndef test_last(): pass\n",
+        );
+        let names = [
+            "test_last".to_string(),
+            "helper".to_string(),
+            "helper".to_string(),
+        ];
+        let module = collect_file(&path, &root, &settings(), &names)
+            .expect("collect file")
+            .expect("module should collect");
+        let scheduled = collect_file_for_scheduling(&path, &root, &settings(), &names)
+            .expect("collect scheduling metadata")
+            .expect("module should collect");
+
+        assert_eq!(
+            function_names(&module.test_function_defs),
+            ["helper", "test_last"]
+        );
+        assert_eq!(
+            function_names(&scheduled.test_function_defs),
+            ["helper", "test_last"]
+        );
     }
 
     #[test]
