@@ -48,7 +48,7 @@ impl TextDocument {
 
     /// Returns the latest editor contents, including unsaved changes.
     #[cfg(test)]
-    pub(crate) fn contents(&self) -> &str {
+    fn contents(&self) -> &str {
         &self.contents
     }
 
