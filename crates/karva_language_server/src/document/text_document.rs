@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use lsp_types::{
     LanguageKind, TextDocumentContentChangeEvent, TextDocumentContentChangePartial,
     TextDocumentContentChangeWholeDocument, Uri,
@@ -23,7 +25,7 @@ pub(crate) enum DocumentChangeError {
 #[derive(Debug, Clone)]
 pub struct TextDocument {
     uri: Uri,
-    contents: String,
+    contents: Arc<str>,
     version: i32,
     language_id: LanguageKind,
 }
@@ -33,7 +35,7 @@ impl TextDocument {
     pub(crate) fn new(uri: Uri, contents: String, version: i32, language_id: LanguageKind) -> Self {
         Self {
             uri,
-            contents,
+            contents: contents.into(),
             version,
             language_id,
         }
@@ -45,8 +47,14 @@ impl TextDocument {
     }
 
     /// Returns the latest editor contents, including unsaved changes.
+    #[cfg(test)]
     pub(crate) fn contents(&self) -> &str {
         &self.contents
+    }
+
+    /// Shares immutable text with background tasks without copying its bytes.
+    pub(crate) fn shared_contents(&self) -> Arc<str> {
+        Arc::clone(&self.contents)
     }
 
     /// Returns the client-managed document version.
@@ -79,12 +87,12 @@ impl TextDocument {
             ),
         ] = changes.as_slice()
         {
-            self.contents.clone_from(text);
+            self.contents = Arc::from(text.as_str());
             self.version = new_version;
             return Ok(());
         }
 
-        let mut new_contents = self.contents.clone();
+        let mut new_contents = self.contents.to_string();
         let mut index = LineIndex::from_source_text(&new_contents);
 
         for change in changes {
@@ -103,7 +111,7 @@ impl TextDocument {
             index = LineIndex::from_source_text(&new_contents);
         }
 
-        self.contents = new_contents;
+        self.contents = new_contents.into();
         self.version = new_version;
         Ok(())
     }
@@ -136,6 +144,30 @@ mod tests {
                 ..TextDocumentContentChangePartial::default()
             },
         )
+    }
+
+    #[rstest]
+    fn snapshots_share_text_until_an_edit(#[values(false, true)] whole: bool) {
+        let mut document = document("old");
+        let snapshot = document.clone();
+        let shared = document.shared_contents();
+        assert!(Arc::ptr_eq(&shared, &snapshot.shared_contents()));
+        let change = if whole {
+            TextDocumentContentChangeEvent::TextDocumentContentChangeWholeDocument(
+                TextDocumentContentChangeWholeDocument {
+                    text: "new".to_owned(),
+                },
+            )
+        } else {
+            partial(0, 0, 3, "new")
+        };
+        document
+            .apply_changes(vec![change], 2, PositionEncoding::UTF16)
+            .expect("edit should apply");
+        assert_eq!(&*shared, "old");
+        assert_eq!(snapshot.contents(), "old");
+        assert_eq!(document.contents(), "new");
+        assert!(!Arc::ptr_eq(&shared, &document.shared_contents()));
     }
 
     #[test]

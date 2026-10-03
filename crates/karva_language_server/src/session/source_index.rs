@@ -46,7 +46,7 @@ pub(super) enum SourceIndexScope {
 pub(super) struct PreparedSourceIndex {
     project_root: Utf8PathBuf,
     include_paths: Vec<String>,
-    open_sources: BTreeMap<Utf8PathBuf, String>,
+    open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
     settings: SourceAnalysisSettings,
     respect_ignore_files: bool,
     scope: SourceIndexScope,
@@ -59,7 +59,7 @@ impl PreparedSourceIndex {
     fn new(
         project_root: Utf8PathBuf,
         include_paths: Vec<String>,
-        open_sources: BTreeMap<Utf8PathBuf, String>,
+        open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
         settings: SourceAnalysisSettings,
         respect_ignore_files: bool,
     ) -> Self {
@@ -77,7 +77,7 @@ impl PreparedSourceIndex {
     pub(super) fn with_cache(
         project_root: Utf8PathBuf,
         include_paths: Vec<String>,
-        open_sources: BTreeMap<Utf8PathBuf, String>,
+        open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
         settings: SourceAnalysisSettings,
         respect_ignore_files: bool,
         scope: SourceIndexScope,
@@ -203,7 +203,7 @@ impl PreparedSourceIndex {
         for path in paths {
             check_cancelled(cancellation)?;
             let source_text = if let Some(source_text) = open_sources.get(&path) {
-                source_text.clone()
+                source_text.to_string()
             } else {
                 read_count += 1;
                 fs::read_to_string(&path).map_err(|source| SourceIndexError::ReadSource {
@@ -371,7 +371,7 @@ fn python_file_types() -> Result<Types, SourceIndexError> {
 fn add_ancestor_conftests(
     project_root: &Utf8Path,
     path: &Utf8Path,
-    open_sources: &BTreeMap<Utf8PathBuf, String>,
+    open_sources: &BTreeMap<Utf8PathBuf, Arc<str>>,
     paths: &mut BTreeSet<Utf8PathBuf>,
     respect_ignore_files: bool,
     cancellation: &RequestCancellationToken,
@@ -517,7 +517,10 @@ mod tests {
             PreparedSourceIndex::new(
                 self.root.clone(),
                 include_paths,
-                open_sources,
+                open_sources
+                    .into_iter()
+                    .map(|(path, source)| (path, Arc::from(source)))
+                    .collect(),
                 Self::settings(),
                 respect_ignore_files,
             )
@@ -532,7 +535,10 @@ mod tests {
             PreparedSourceIndex::with_cache(
                 self.root.clone(),
                 Vec::new(),
-                open_sources,
+                open_sources
+                    .into_iter()
+                    .map(|(path, source)| (path, Arc::from(source)))
+                    .collect(),
                 Self::settings(),
                 true,
                 SourceIndexScope::OpenDocuments,
