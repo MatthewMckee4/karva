@@ -1,3 +1,8 @@
+use std::collections::{HashMap, HashSet};
+use std::time::Duration;
+
+use karva_python_semantic::TestCacheKey;
+
 use super::super::collection::TestInfo;
 use super::super::{Partition, TestOrdering, order_tests_for_partitioning};
 use super::helpers::{test_info, test_info_with_duration};
@@ -95,4 +100,55 @@ fn seeded_partitioning_reproduces_worker_assignment_and_order() {
     assert!(first[0].test_paths().eq(repeated[0].test_paths()));
     assert!(first[1].test_paths().eq(repeated[1].test_paths()));
     assert_eq!(first.iter().map(Partition::test_count).sum::<usize>(), 6);
+}
+
+#[test]
+fn failed_first_preserves_unknown_duration_priority_and_equal_duration_order() {
+    let mut partition = Partition::new();
+    for name in [
+        "test_module::test_pass_tie_b",
+        "test_module::test_pass_slow",
+        "test_module::test_fail_fast",
+        "test_module::test_pass_unknown",
+        "test_module::test_fail_unknown",
+        "test_module::test_pass_tie_a",
+    ] {
+        partition.add_test(test_info(name), 1);
+    }
+    let failed = HashSet::from([
+        TestCacheKey::function_name("test_module::test_fail_fast"),
+        TestCacheKey::function_name("test_module::test_fail_unknown"),
+    ]);
+    let durations = HashMap::from([
+        (
+            TestCacheKey::function_name("test_module::test_pass_slow"),
+            Duration::from_millis(30),
+        ),
+        (
+            TestCacheKey::function_name("test_module::test_pass_tie_a"),
+            Duration::from_millis(20),
+        ),
+        (
+            TestCacheKey::function_name("test_module::test_pass_tie_b"),
+            Duration::from_millis(20),
+        ),
+        (
+            TestCacheKey::function_name("test_module::test_fail_fast"),
+            Duration::from_millis(1),
+        ),
+    ]);
+
+    partition.prioritize_failures(&failed, &durations);
+
+    assert_eq!(
+        partition.test_paths().collect::<Vec<_>>(),
+        [
+            "test_module::test_fail_unknown",
+            "test_module::test_fail_fast",
+            "test_module::test_pass_unknown",
+            "test_module::test_pass_slow",
+            "test_module::test_pass_tie_b",
+            "test_module::test_pass_tie_a",
+        ]
+    );
 }
