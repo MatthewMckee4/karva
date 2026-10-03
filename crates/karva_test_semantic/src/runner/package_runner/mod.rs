@@ -265,9 +265,9 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         }
 
         self.execute_ordered(py, session, &mut test_plans);
+        self.report_scope_cleanup(py, ScopeKey::Session);
         self.finish_python_stdin_capture(py);
         self.finish_stdin_capture(py);
-        self.report_scope_cleanup(py, ScopeKey::Session);
     }
 
     /// Starts the worker-wide file descriptor stdin guard on the first captured test.

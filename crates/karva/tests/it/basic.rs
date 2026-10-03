@@ -2136,6 +2136,50 @@ def test_next_test_still_sees_guards():
 }
 
 #[test]
+fn test_stdin_remains_guarded_during_session_teardown() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import subprocess
+import sys
+
+@karva.fixture(scope="session")
+def guarded_session():
+    yield
+    try:
+        input()
+    except RuntimeError:
+        pass
+    else:
+        assert False, "stdin should remain guarded during teardown"
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == "''\n", repr(result.stdout)
+
+def test_session(guarded_session):
+    pass
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().pass_stdin("unexpected\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_session(guarded_session=None)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_no_capture_keeps_stdin_available() {
     let context = TestContext::with_file(
         "test.py",
