@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Write};
 
-use super::shared::{FileRow, escape_html, row_percent, total_percent, totals_row};
+use super::shared::{CoverageTotals, FileRow, escape_html, row_percent};
 
 /// Presentation settings for an annotated HTML coverage report.
 #[derive(Debug)]
@@ -69,13 +69,13 @@ fn render_index(
     let mut html = String::new();
     document_start(&mut html, &options.title)?;
     writeln!(html, "  <h1>{}</h1>", escape_html(&options.title))?;
-    let total = totals_row(all_rows);
+    let total = CoverageTotals::from_rows(all_rows);
     let total_hit = total.hit.saturating_add(total.branch_hit);
     let total_valid = total.stmts.saturating_add(total.branches);
     writeln!(
         html,
         "  <p>Total coverage: <strong>{:.precision$}%</strong> ({total_hit}/{total_valid})</p>",
-        row_percent(&total),
+        total.percent(),
         precision = options.precision
     )?;
     let show_branches = all_rows.iter().any(|row| row.branches_enabled);
@@ -128,7 +128,7 @@ fn render_index(
     writeln!(
         html,
         "<td class=\"num\"><strong>{:.precision$}%</strong></td><td></td></tr>",
-        total_percent(all_rows),
+        total.percent(),
         precision = options.precision
     )?;
     writeln!(html, "    </tbody>")?;

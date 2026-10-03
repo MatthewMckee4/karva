@@ -366,69 +366,51 @@ pub(super) fn build_rows(
         .collect()
 }
 
-pub(super) fn total_percent(rows: &[FileRow]) -> f64 {
-    let total_stmts = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
-    let total_miss = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.miss));
-    let total_branches = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branches));
-    let total_branch_miss = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_miss));
-    percent(
-        total_stmts.saturating_add(total_branches),
-        total_miss.saturating_add(total_branch_miss),
-    )
+/// Aggregate counts across files, without file-specific source or line data.
+///
+/// Counts saturate independently at `u32::MAX`, matching report row arithmetic.
+#[derive(Debug, Default, Eq, PartialEq)]
+pub(super) struct CoverageTotals {
+    pub(super) stmts: u32,
+    pub(super) hit: u32,
+    pub(super) miss: u32,
+
+    /// Retains branch mode even when every file has zero branches.
+    pub(super) branches_enabled: bool,
+
+    pub(super) branches: u32,
+    pub(super) branch_hit: u32,
+    pub(super) branch_miss: u32,
+    pub(super) branch_partial: u32,
 }
 
-pub(super) fn totals_row(rows: &[FileRow]) -> FileRow {
-    let stmts = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.stmts));
-    let hit = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.hit));
-    let miss = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.miss));
-    let missing = rows.iter().flat_map(missing_lines).collect::<Vec<_>>();
-    let branches = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branches));
-    let branch_hit = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_hit));
-    let branch_miss = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_miss));
-    let branch_partial = rows
-        .iter()
-        .fold(0_u32, |acc, row| acc.saturating_add(row.branch_partial));
-    FileRow {
-        name: "TOTAL".to_string(),
-        absolute_name: String::new(),
-        stmts,
-        hit,
-        miss,
-        missing: collapse_ranges(&missing.iter().copied().collect()),
-        executable: Vec::new(),
-        excluded: Vec::new(),
-        executed: Vec::new(),
-        contexts: BTreeMap::new(),
-        branches_enabled: rows.iter().any(|row| row.branches_enabled),
-        branches,
-        branch_hit,
-        branch_miss,
-        branch_partial,
-        branch_possible: Vec::new(),
-        branch_executed: Vec::new(),
-        branch_missing: Vec::new(),
-        arc_contexts: BTreeMap::new(),
+impl CoverageTotals {
+    /// Accumulates report counts without inspecting source observations.
+    pub(super) fn from_rows(rows: &[FileRow]) -> Self {
+        rows.iter().fold(Self::default(), |mut total, row| {
+            total.stmts = total.stmts.saturating_add(row.stmts);
+            total.hit = total.hit.saturating_add(row.hit);
+            total.miss = total.miss.saturating_add(row.miss);
+            total.branches_enabled |= row.branches_enabled;
+            total.branches = total.branches.saturating_add(row.branches);
+            total.branch_hit = total.branch_hit.saturating_add(row.branch_hit);
+            total.branch_miss = total.branch_miss.saturating_add(row.branch_miss);
+            total.branch_partial = total.branch_partial.saturating_add(row.branch_partial);
+            total
+        })
     }
+
+    /// Percentage covering both statements and branches; empty input is fully covered.
+    pub(super) fn percent(&self) -> f64 {
+        percent(
+            self.stmts.saturating_add(self.branches),
+            self.miss.saturating_add(self.branch_miss),
+        )
+    }
+}
+
+pub(super) fn total_percent(rows: &[FileRow]) -> f64 {
+    CoverageTotals::from_rows(rows).percent()
 }
 
 pub(super) fn missing_lines(row: &FileRow) -> Vec<u32> {
@@ -580,6 +562,111 @@ pub(super) fn escape_html(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn totals_count_each_files_lines_and_branches() {
+        let taken = BranchArc { from: 1, to: 2 };
+        let missing = BranchArc { from: 1, to: 3 };
+        let rows = build_rows(
+            std::path::Path::new("/project"),
+            &BTreeMap::from([
+                (
+                    "/project/a.py".to_owned(),
+                    CombinedFile {
+                        executable: BTreeSet::from([1, 2, 3]),
+                        executed: BTreeSet::from([1, 2]),
+                        branches_enabled: true,
+                        branch_possible: BTreeSet::from([taken, missing]),
+                        branch_executed: BTreeSet::from([taken]),
+                        ..CombinedFile::default()
+                    },
+                ),
+                (
+                    "/project/b.py".to_owned(),
+                    CombinedFile {
+                        executable: BTreeSet::from([1, 2]),
+                        executed: BTreeSet::from([1]),
+                        ..CombinedFile::default()
+                    },
+                ),
+            ]),
+            false,
+        );
+        let total = CoverageTotals::from_rows(&rows);
+        assert_eq!(
+            total,
+            CoverageTotals {
+                stmts: 5,
+                hit: 3,
+                miss: 2,
+                branches_enabled: true,
+                branches: 2,
+                branch_hit: 1,
+                branch_miss: 1,
+                branch_partial: 1,
+            }
+        );
+        let expected_percent = 4.0 / 7.0 * 100.0;
+        assert!((total.percent() - expected_percent).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn totals_preserve_branch_mode_without_branches() {
+        let rows = build_rows(
+            std::path::Path::new("/project"),
+            &BTreeMap::from([(
+                "/project/empty.py".to_owned(),
+                CombinedFile {
+                    branches_enabled: true,
+                    ..CombinedFile::default()
+                },
+            )]),
+            false,
+        );
+        let total = CoverageTotals::from_rows(&rows);
+        assert_eq!(
+            total,
+            CoverageTotals {
+                branches_enabled: true,
+                ..CoverageTotals::default()
+            }
+        );
+        assert!((total.percent() - 100.0).abs() < f64::EPSILON);
+        let empty = CoverageTotals::from_rows(&[]);
+        assert_eq!(empty, CoverageTotals::default());
+        assert!((empty.percent() - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn totals_saturate_counts_independently() {
+        let mut rows = build_rows(
+            std::path::Path::new("/project"),
+            &BTreeMap::from([("/project/a.py".to_owned(), CombinedFile::default())]),
+            false,
+        );
+        let row = rows.first_mut().expect("one source row");
+        row.stmts = u32::MAX;
+        row.hit = u32::MAX;
+        row.miss = u32::MAX;
+        row.branches = u32::MAX;
+        row.branch_hit = u32::MAX;
+        row.branch_miss = u32::MAX;
+        row.branch_partial = u32::MAX;
+        rows.push(rows[0].clone());
+        assert_eq!(
+            CoverageTotals::from_rows(&rows),
+            CoverageTotals {
+                stmts: u32::MAX,
+                hit: u32::MAX,
+                miss: u32::MAX,
+                branches_enabled: false,
+                branches: u32::MAX,
+                branch_hit: u32::MAX,
+                branch_miss: u32::MAX,
+                branch_partial: u32::MAX,
+            }
+        );
+    }
 
     #[test]
     fn percent_full_coverage() {

@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::data::BranchArc;
 
-use super::shared::{FileRow, missing_lines, percent, row_percent, totals_row};
+use super::shared::{CoverageTotals, FileRow, missing_lines, percent, row_percent};
 
 #[derive(Serialize)]
 struct JsonFileSummary {
@@ -117,7 +117,7 @@ pub(super) fn build_json_report(rows: &[FileRow], options: &JsonReportOptions) -
         })
         .collect();
 
-    let totals_row = totals_row(rows);
+    let totals = CoverageTotals::from_rows(rows);
     let report = JsonReport {
         meta: JsonMeta {
             format: 2,
@@ -125,7 +125,7 @@ pub(super) fn build_json_report(rows: &[FileRow], options: &JsonReportOptions) -
             show_contexts: options.show_contexts,
         },
         files,
-        totals: json_totals_summary(&totals_row),
+        totals: json_totals_summary(&totals),
     };
 
     if options.pretty_print {
@@ -153,11 +153,11 @@ fn json_summary(row: &FileRow) -> JsonFileSummary {
     }
 }
 
-fn json_totals_summary(row: &FileRow) -> JsonTotalsSummary {
+fn json_totals_summary(row: &CoverageTotals) -> JsonTotalsSummary {
     JsonTotalsSummary {
         covered_lines: row.hit,
         num_statements: row.stmts,
-        percent_covered: row_percent(row),
+        percent_covered: row.percent(),
         num_branches: row.branches_enabled.then_some(row.branches),
         num_partial_branches: row.branches_enabled.then_some(row.branch_partial),
         covered_branches: row.branches_enabled.then_some(row.branch_hit),
