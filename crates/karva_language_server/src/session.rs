@@ -11,11 +11,13 @@ mod request_queue;
 mod source_index;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_ide::{SourceAnalysis, SourceAnalysisSettings, SourceDiagnostic, WorkspaceSourceIndex};
+use karva_project::Project;
 use lsp_types::{LanguageKind, MarkupKind, TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
+use once_cell::sync::OnceCell;
 
 use crate::workspace::{WorkspaceError, Workspaces, uri_to_path};
 use crate::{PositionEncoding, PreparedProjectDiscovery, TextDocument};
@@ -43,6 +45,8 @@ pub(crate) struct DocumentSnapshotVersion {
     pub(super) uri: Uri,
     document_version: i32,
     source_index_revision: SourceIndexRevision,
+    /// Resolved metadata published by the worker only for this source revision.
+    project: Arc<OnceCell<Arc<Project>>>,
 }
 
 /// Failure to apply a document or workspace notification.
@@ -63,6 +67,10 @@ pub enum SessionError {
     /// Project discovery or configuration resolution failed.
     #[error(transparent)]
     Workspace(#[from] WorkspaceError),
+
+    /// A prior worker panic poisoned the source-index cache registry.
+    #[error("language-server source-index cache lock poisoned")]
+    CachePoisoned,
 
     /// Workspace source discovery or collection failed.
     #[error(transparent)]
@@ -243,7 +251,11 @@ enum HierarchicalDocumentSymbols {
 pub(super) struct PreparedSourceAnalysis {
     current_path: Utf8PathBuf,
     current_source: Arc<str>,
-    source_index: PreparedSourceIndex,
+    project_discovery: PreparedProjectDiscovery,
+    project: Arc<OnceCell<Arc<Project>>>,
+    open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
+    scope: SourceIndexScope,
+    source_indexes: Option<SharedSourceIndexes>,
     document_uri: Uri,
     document_version: i32,
     source_index_revision: SourceIndexRevision,
@@ -258,6 +270,7 @@ impl PreparedSourceAnalysis {
         DocumentSnapshotVersion {
             uri: self.document_uri.clone(),
             document_version: self.document_version,
+            project: Arc::clone(&self.project),
             source_index_revision: self.source_index_revision.clone(),
         }
     }
@@ -267,7 +280,40 @@ impl PreparedSourceAnalysis {
         self,
         cancellation: &RequestCancellationToken,
     ) -> Result<Arc<WorkspaceSourceIndex>, SessionError> {
-        Ok(self.source_index.build(cancellation)?)
+        if cancellation.is_cancelled() {
+            return Err(SourceIndexError::Cancelled.into());
+        }
+        let project = self.project_discovery.discover()?;
+        if cancellation.is_cancelled() {
+            return Err(SourceIndexError::Cancelled.into());
+        }
+        let project_root = project.cwd().clone();
+        let cache = if let Some(caches) = self.source_indexes {
+            caches
+                .lock()
+                .map_err(|_| SessionError::CachePoisoned)?
+                .entry((project_root.clone(), self.scope))
+                .or_default()
+                .clone()
+        } else {
+            SourceIndexCache::default()
+        };
+        let index = PreparedSourceIndex::with_cache(
+            project_root,
+            project.settings().src().include_paths.clone(),
+            self.open_sources,
+            SourceAnalysisSettings {
+                python_version: project.metadata().python_version(),
+                test_function_prefix: project.settings().test().test_function_prefix.clone(),
+                try_import_fixtures: project.settings().test().try_import_fixtures,
+            },
+            project.settings().src().respect_ignore_files,
+            self.scope,
+            cache,
+        )
+        .build(cancellation)?;
+        let _ = self.project.set(project);
+        Ok(index)
     }
 
     /// Reads provider files and computes source semantics away from the event loop.
@@ -287,6 +333,10 @@ impl PreparedSourceAnalysis {
     }
 }
 
+/// Cache registry shared only within one immutable source revision.
+/// Discovery happens before locking; no filesystem or analysis work holds the lock.
+type SharedSourceIndexes = Arc<Mutex<HashMap<(Utf8PathBuf, SourceIndexScope), SourceIndexCache>>>;
+
 /// Mutable state owned by the language-server event loop.
 #[derive(Debug)]
 pub struct Session {
@@ -300,7 +350,7 @@ pub struct Session {
     workspaces: Workspaces,
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
-    source_indexes: HashMap<(Utf8PathBuf, SourceIndexScope), SourceIndexCache>,
+    source_indexes: SharedSourceIndexes,
     source_index_revision: SourceIndexRevision,
     diagnostic_cancellation: RequestCancellationToken,
 }
@@ -328,7 +378,7 @@ impl Session {
             workspaces,
             published_diagnostic_paths: HashSet::new(),
             cache_source_indexes: false,
-            source_indexes: HashMap::new(),
+            source_indexes: Arc::default(),
             source_index_revision: SourceIndexRevision::default(),
             diagnostic_cancellation: RequestCancellationToken::default(),
         }
@@ -433,7 +483,7 @@ impl Session {
     /// Captures open-document and project state without reading or parsing
     /// provider source files.
     pub(super) fn prepare_source_analysis(
-        &mut self,
+        &self,
         uri: &Uri,
     ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
         self.prepare_source_analysis_with_scope(uri, SourceIndexScope::TestSelection)
@@ -441,14 +491,14 @@ impl Session {
 
     /// Captures source state for a project-wide symbol query.
     pub(super) fn prepare_project_source_analysis(
-        &mut self,
+        &self,
         uri: &Uri,
     ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
         self.prepare_source_analysis_with_scope(uri, SourceIndexScope::Project)
     }
 
     fn prepare_source_analysis_with_scope(
-        &mut self,
+        &self,
         uri: &Uri,
         scope: SourceIndexScope,
     ) -> Result<Option<PreparedSourceAnalysis>, SessionError> {
@@ -462,13 +512,7 @@ impl Session {
         }
 
         let path = uri_to_path(uri)?;
-        let project = self.workspaces.project_for_uri(uri)?;
-        let project_root = project.cwd().clone();
-        let settings = SourceAnalysisSettings {
-            python_version: project.metadata().python_version(),
-            test_function_prefix: project.settings().test().test_function_prefix.clone(),
-            try_import_fixtures: project.settings().test().try_import_fixtures,
-        };
+        let project_discovery = self.workspaces.prepare_project_discovery(uri)?;
 
         let open_sources = self
             .index
@@ -480,28 +524,16 @@ impl Session {
                     .map(|open_path| (open_path, open_document.shared_contents()))
             })
             .collect::<BTreeMap<_, _>>();
-        let source_index_cache = if self.cache_source_indexes {
-            self.source_indexes
-                .entry((project_root.clone(), scope))
-                .or_default()
-                .clone()
-        } else {
-            SourceIndexCache::default()
-        };
-        let source_index = PreparedSourceIndex::with_cache(
-            project_root,
-            project.settings().src().include_paths.clone(),
-            open_sources,
-            settings,
-            project.settings().src().respect_ignore_files,
-            scope,
-            source_index_cache,
-        );
-
         Ok(Some(PreparedSourceAnalysis {
             current_path: path,
             current_source: document.shared_contents(),
-            source_index,
+            project_discovery,
+            project: Arc::default(),
+            open_sources,
+            scope,
+            source_indexes: self
+                .cache_source_indexes
+                .then(|| Arc::clone(&self.source_indexes)),
             document_uri: uri.clone(),
             document_version: document.version(),
             source_index_revision: self.source_index_revision.clone(),
@@ -553,6 +585,17 @@ impl Session {
         Arc::ptr_eq(&self.source_index_revision.0, &revision.0)
     }
 
+    /// Retains worker-resolved metadata only while its request snapshot is current.
+    pub(super) fn retain_project_metadata(&mut self, version: &DocumentSnapshotVersion) {
+        if self.cache_source_indexes
+            && self.is_document_snapshot_current(version)
+            && let Some(project) = version.project.get()
+        {
+            self.workspaces
+                .retain_project(&version.uri, Arc::clone(project));
+        }
+    }
+
     pub(super) fn enable_source_index_cache(&mut self) {
         self.cache_source_indexes = true;
     }
@@ -564,7 +607,7 @@ impl Session {
     }
 
     fn invalidate_source_indexes(&mut self) {
-        self.source_indexes.clear();
+        self.source_indexes = Arc::default();
         self.source_index_revision = SourceIndexRevision::default();
     }
 }
@@ -576,6 +619,64 @@ mod tests {
     use super::Session;
     use crate::workspace::Workspaces;
     use crate::{PositionEncoding, TextDocument};
+
+    #[test]
+    fn cold_project_configuration_is_read_only_by_worker() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let config = temporary.path().join("karva.toml");
+        std::fs::write(&config, "invalid TOML [")?;
+        let uri = lsp_types::Uri::from_file_path(temporary.path().join("test_example.py"))
+            .map_err(|()| anyhow::anyhow!("temporary file URI"))?;
+        let mut session = Session::new(
+            PositionEncoding::UTF16,
+            lsp_types::MarkupKind::PlainText,
+            false,
+            false,
+            Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
+        );
+        session.open_document(TextDocument::new(
+            uri.clone(),
+            "def test_example(): pass\n".to_owned(),
+            1,
+            lsp_types::LanguageKind::Python,
+        ));
+        let prepared = session
+            .prepare_source_analysis(&uri)?
+            .expect("Python request");
+        let cancellation = super::RequestCancellationToken::default();
+        cancellation.cancel();
+        assert!(matches!(
+            prepared.analyze(&cancellation),
+            Err(super::SessionError::SourceIndex(
+                super::SourceIndexError::Cancelled
+            ))
+        ));
+        let prepared = session
+            .prepare_source_analysis(&uri)?
+            .expect("Python request");
+        // An edit still applies before discovery, even with malformed cold configuration.
+        session.update_document(&uri, Vec::new(), 2)?;
+        assert!(matches!(
+            prepared.analyze(&super::RequestCancellationToken::default()),
+            Err(super::SessionError::Workspace(_))
+        ));
+        // Discovery reads the worker-time configuration, not the preparation-time file.
+        let prepared = session
+            .prepare_source_analysis(&uri)?
+            .expect("Python request");
+        let version = prepared.response_version();
+        std::fs::write(&config, "")?;
+        assert!(
+            prepared
+                .analyze(&super::RequestCancellationToken::default())?
+                .is_some()
+        );
+        assert!(version.project.get().is_some());
+        session.update_document(&uri, Vec::new(), 3)?;
+        assert!(!session.is_document_snapshot_current(&version));
+        session.retain_project_metadata(&version);
+        Ok(())
+    }
 
     #[test]
     fn request_snapshots_retain_one_text_allocation_per_document() -> anyhow::Result<()> {
@@ -608,13 +709,8 @@ mod tests {
         let second = session
             .prepare_source_analysis(&uri)?
             .expect("Python request");
-        let first_diagnostics = session.prepare_diagnostics();
-        let second_diagnostics = session.prepare_diagnostics();
-        for (path, source) in &first_diagnostics.open_sources {
-            assert!(std::sync::Arc::ptr_eq(
-                source,
-                &second_diagnostics.open_sources[path]
-            ));
+        for (path, source) in &first.open_sources {
+            assert!(std::sync::Arc::ptr_eq(source, &second.open_sources[path]));
         }
         assert!(std::sync::Arc::ptr_eq(
             &first.current_source,
