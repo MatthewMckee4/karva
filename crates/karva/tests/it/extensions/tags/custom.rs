@@ -571,7 +571,7 @@ def test_aliases(value):
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----

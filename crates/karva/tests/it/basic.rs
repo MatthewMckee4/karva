@@ -1613,17 +1613,13 @@ def test_2(): pass
 def test_3(): pass",
     );
 
-    // With 3 tests and 8 requested workers, worker capping reduces to 1 worker
-    // (ceil(3/5) = 1) and explains the reduction at the default verbosity.
-    assert_cmd_snapshot!(context.command().args(["--num-workers", "8"]), @"
+    // Avoid idle workers without reducing useful parallelism, and explain the cap.
+    assert_cmd_snapshot!(context.command().args(["--num-workers", "8", "--status-level=fail"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
-    info: Capped worker count from 8 to 1 for 3 collected tests (targeting about 5 tests per worker)
-        Starting 3 tests across 1 worker
-            PASS [TIME] test_a::test_1
-            PASS [TIME] test_a::test_2
-            PASS [TIME] test_a::test_3
+    info: Capped worker count from 8 to 3 (independently schedulable tests: 3)
+        Starting 3 tests across 3 workers
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -1632,15 +1628,11 @@ def test_3(): pass",
 }
 
 #[test]
-fn test_parallel_worker_capping_at_boundary() {
+fn test_parallel_worker_capping_for_one_test() {
     let context = TestContext::with_file(
         "test_boundary.py",
         r"
 def test_1(): pass
-def test_2(): pass
-def test_3(): pass
-def test_4(): pass
-def test_5(): pass
 ",
     );
 
@@ -1652,9 +1644,9 @@ def test_5(): pass
     success: true
     exit_code: 0
     ----- stdout -----
-    info: Capped worker count from 2 to 1 for 5 collected tests (targeting about 5 tests per worker)
+    info: Capped worker count from 2 to 1 (independently schedulable tests: 1)
     ────────────
-         Summary [TIME] 5 tests run: 5 passed, 0 skipped
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
     "
@@ -1662,29 +1654,26 @@ def test_5(): pass
 }
 
 #[test]
-fn test_parallel_worker_capping_allows_two_workers_after_boundary() {
+fn test_parallel_worker_capping_allows_two_workers_for_two_tests() {
     let context = TestContext::with_file(
         "test_boundary.py",
         r"
 def test_1(): pass
 def test_2(): pass
-def test_3(): pass
-def test_4(): pass
-def test_5(): pass
-def test_6(): pass
 ",
     );
 
     assert_cmd_snapshot!(
         context
             .command()
-            .args(["--num-workers=2", "--status-level=none"]),
+            .args(["--num-workers=2", "--status-level=fail"]),
         @"
     success: true
     exit_code: 0
     ----- stdout -----
+        Starting 2 tests across 2 workers
     ────────────
-         Summary [TIME] 6 tests run: 6 passed, 0 skipped
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
     "

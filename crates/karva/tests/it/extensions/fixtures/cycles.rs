@@ -310,7 +310,7 @@ def test_cycle_two():
 "#,
     );
 
-    assert_cmd_snapshot!(context.command(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -384,7 +384,7 @@ def test_nested_cycle():
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----

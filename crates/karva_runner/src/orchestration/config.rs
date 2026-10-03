@@ -57,7 +57,7 @@ pub enum WorkerCountSource {
 
 impl WorkerCountSource {
     /// Returns whether the worker count came from an explicit request.
-    pub(crate) const fn is_explicit(self) -> bool {
+    pub(super) const fn is_explicit(self) -> bool {
         matches!(self, Self::Explicit)
     }
 }

@@ -181,7 +181,7 @@ def test_pass_with_escaped_child():
 
 fn run_with_descendant(context: &TestContext) -> Output {
     let mut karva = context
-        .command()
+        .command_no_parallel()
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

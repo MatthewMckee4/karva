@@ -315,6 +315,7 @@ def test_value(value):
     success: true
     exit_code: 0
     ----- stdout -----
+    info: Capped worker count from 2 to 1 (independently schedulable tests: 1)
     ────────────
          Summary [TIME] 10 tests run: 10 passed, 0 skipped
 

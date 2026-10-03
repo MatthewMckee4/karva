@@ -16,10 +16,11 @@ karva test -n 4
 karva test --no-parallel
 ```
 
-When an explicit worker count is larger than the collected test suite can use
-efficiently, Karva reduces it and explains the requested and applied counts at
-the default output level. Host-dependent defaults stay quiet when they are
-reduced.
+Karva caps the worker count at the number of independently schedulable tests
+to avoid idle workers. It honours smaller requests without assuming how long
+each test takes. When an explicit request is reduced, Karva explains the
+requested and applied counts at the default output level. Host-dependent
+defaults stay quiet when they are reduced.
 
 ## Parametrized tests
 
