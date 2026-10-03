@@ -1,5 +1,10 @@
-use pyo3::exceptions::PyOSError;
+use std::sync::{Arc, Mutex};
+
+use karva_diagnostic::CapturedTestOutput;
+use pyo3::exceptions::{PyOSError, PyRuntimeError};
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyCFunction, PyDict, PyString, PyTuple};
 
 const STDIN_CAPTURE_ERROR: &str = "stdin is unavailable while test output is captured";
 
@@ -205,6 +210,15 @@ impl PythonOutputCapture {
         })
     }
 
+    /// Mirrors timed synchronous output in Rust so a watchdog can read it without the GIL.
+    /// Ordinary captures retain the existing `StringIO` path and its allocation behavior.
+    pub(super) fn watchdog_output(&mut self, py: Python<'_>) -> PyResult<SharedCapturedOutput> {
+        let sys = self.sys.bind(py);
+        let stdout = mirror_stream(py, sys, "stdout", &mut self.stdout)?;
+        let stderr = mirror_stream(py, sys, "stderr", &mut self.stderr)?;
+        Ok(SharedCapturedOutput { stdout, stderr })
+    }
+
     /// Flushes captured streams, restores their original objects, and returns captured text.
     pub fn finish(self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
         let sys = self.sys.bind(py);
@@ -273,4 +287,92 @@ fn is_bad_fd(os: &Bound<'_, PyModule>, error: &PyErr) -> PyResult<bool> {
     }
     let bad_fd = py.import("errno")?.getattr("EBADF")?.extract::<i32>()?;
     Ok(error.value(py).getattr("errno")?.extract::<i32>()? == bad_fd)
+}
+
+/// Captured text available to native deadline handling without acquiring Python.
+#[derive(Clone)]
+pub struct SharedCapturedOutput {
+    stdout: Arc<Mutex<String>>,
+    stderr: Arc<Mutex<String>>,
+}
+
+impl SharedCapturedOutput {
+    pub(super) fn snapshot(&self) -> Option<CapturedTestOutput> {
+        let stdout = self.stdout.lock().ok()?.clone();
+        let stderr = self.stderr.lock().ok()?.clone();
+        let output = CapturedTestOutput::new(stdout, stderr);
+        (!output.is_empty()).then_some(output)
+    }
+}
+
+/// `StringIO` semantics are preserved; only timed calls pay for a native text mirror.
+fn mirror_stream(
+    py: Python<'_>,
+    sys: &Bound<'_, PyModule>,
+    name: &str,
+    stream: &mut Py<PyAny>,
+) -> PyResult<Arc<Mutex<String>>> {
+    static CLASS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    let class = CLASS.get_or_try_init(py, || {
+        let code = cr"
+import io
+
+class TimeoutCapture(io.StringIO):
+    def __init__(self, initial, record):
+        super().__init__(initial)
+        self.seek(0, 2)
+        self._length = len(initial)
+        self._record = record
+
+    def write(self, text):
+        append = self.tell() == self._length
+        written = super().write(text)
+        self._length = max(self._length, self.tell())
+        self._record(text if append else self.getvalue(), not append)
+        return written
+
+    def truncate(self, size=None):
+        result = super().truncate(size)
+        self._length = len(self.getvalue())
+        self._record(self.getvalue(), True)
+        return result
+";
+        let module = PyModule::from_code(
+            py,
+            code,
+            c"karva_timeout_capture.py",
+            c"karva_timeout_capture",
+        )?;
+        Ok::<_, PyErr>(module.getattr("TimeoutCapture")?.unbind())
+    })?;
+    let initial = stream
+        .bind(py)
+        .call_method0("getvalue")?
+        .extract::<String>()?;
+    let shared = Arc::new(Mutex::new(initial.clone()));
+    let captured = Arc::clone(&shared);
+    let callback = PyCFunction::new_closure(
+        py,
+        None,
+        None,
+        move |args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<()> {
+            let text = args.get_item(0)?.cast_into::<PyString>()?;
+            let text = text.to_string_lossy();
+            let replace = args.get_item(1)?.extract::<bool>()?;
+            let mut captured = captured
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("timeout output capture lock poisoned"))?;
+            if replace {
+                captured.clear();
+            }
+            captured.push_str(&text);
+            Ok(())
+        },
+    )?;
+    let mirrored = class.bind(py).call1((initial, callback))?.unbind();
+    if sys.getattr(name)?.is(stream.bind(py)) {
+        sys.setattr(name, mirrored.bind(py))?;
+    }
+    *stream = mirrored;
+    Ok(shared)
 }

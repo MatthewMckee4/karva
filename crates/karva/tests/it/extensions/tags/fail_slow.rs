@@ -666,6 +666,7 @@ def test_slow():
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

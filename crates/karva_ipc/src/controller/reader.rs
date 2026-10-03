@@ -112,7 +112,8 @@ pub(super) fn read_worker(
             }
         };
         match event.as_ref() {
-            WorkerEvent::TestFinished { cache_key, .. } => {
+            WorkerEvent::TestFinished { cache_key, .. }
+            | WorkerEvent::TestTimedOut { cache_key, .. } => {
                 checkpoint.complete(worker_id, cache_key)?;
             }
             WorkerEvent::WorkerFinished => {
