@@ -1,5 +1,7 @@
 //! Language Server Protocol support for Karva.
 
+use std::sync::Arc;
+
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_metadata::{Options, ProjectMetadata, ProjectOptionsOverrides};
@@ -25,17 +27,24 @@ struct PreparedProjectDiscovery {
     workspace_root: Utf8PathBuf,
     python_version: PythonVersion,
     profile: Option<String>,
+    /// Previously resolved metadata, valid for this captured source revision.
+    cached_projects: Vec<Arc<Project>>,
 }
 
 impl PreparedProjectDiscovery {
     /// Reads project configuration and applies initialization overrides.
-    fn discover(self) -> Result<Project, workspace::WorkspaceError> {
-        discover_project(
+    fn discover(self) -> Result<Arc<Project>, workspace::WorkspaceError> {
+        let project = discover_project(
             &self.path,
             &self.workspace_root,
             self.python_version,
             self.profile.as_deref(),
-        )
+        )?;
+        Ok(self
+            .cached_projects
+            .into_iter()
+            .find(|cached| cached.cwd() == project.cwd())
+            .unwrap_or_else(|| Arc::new(project)))
     }
 }
 

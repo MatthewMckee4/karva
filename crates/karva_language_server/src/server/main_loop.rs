@@ -99,6 +99,7 @@ impl Server {
                 }
                 NextEvent::Action(Action::SendVersionedResponse { response, version }) => {
                     let response = if self.session.is_document_snapshot_current(&version) {
+                        self.session.retain_project_metadata(&version);
                         response
                     } else {
                         Response::new_err(

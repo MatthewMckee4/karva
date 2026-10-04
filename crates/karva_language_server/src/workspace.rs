@@ -56,6 +56,7 @@ impl Workspace {
         }
     }
 
+    #[cfg(test)]
     fn project_for_path(
         &mut self,
         path: &Utf8Path,
@@ -126,7 +127,8 @@ impl Workspaces {
         self.folders.iter()
     }
 
-    pub(super) fn project_for_uri(&mut self, uri: &Uri) -> Result<Arc<Project>, WorkspaceError> {
+    #[cfg(test)]
+    fn project_for_uri(&mut self, uri: &Uri) -> Result<Arc<Project>, WorkspaceError> {
         let path = uri_to_path(uri)?;
         let workspace = self
             .roots
@@ -149,17 +151,36 @@ impl Workspaces {
         Ok(project)
     }
 
+    /// Stores immutable metadata resolved on a worker without performing discovery.
+    pub(super) fn retain_project(&mut self, uri: &Uri, project: Arc<Project>) {
+        let Ok(path) = uri_to_path(uri) else {
+            return;
+        };
+        if let Some(workspace) = self
+            .roots
+            .iter_mut()
+            .filter(|workspace| path.starts_with(&workspace.root))
+            .max_by_key(|workspace| workspace.root.components().count())
+        {
+            workspace.projects.insert(project.cwd().clone(), project);
+        }
+    }
+
     /// Captures project-discovery inputs without reading the filesystem.
     pub(super) fn prepare_project_discovery(
         &self,
         uri: &Uri,
     ) -> Result<crate::PreparedProjectDiscovery, WorkspaceError> {
         let path = uri_to_path(uri)?;
-        let workspace_root = self
+        let workspace = self
             .roots
             .iter()
             .filter(|workspace| path.starts_with(&workspace.root))
-            .max_by_key(|workspace| workspace.root.components().count())
+            .max_by_key(|workspace| workspace.root.components().count());
+        let cached_projects = workspace
+            .map(|workspace| workspace.projects.values().cloned().collect())
+            .unwrap_or_default();
+        let workspace_root = workspace
             .map(|workspace| workspace.root.clone())
             .or_else(|| path.parent().map(Utf8Path::to_path_buf))
             .ok_or_else(|| WorkspaceError::MissingParent(path.clone()))?;
@@ -168,6 +189,7 @@ impl Workspaces {
             workspace_root,
             python_version: self.python_version,
             profile: self.profile.clone(),
+            cached_projects,
         })
     }
 
