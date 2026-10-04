@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Write};
 
+use crate::data::BranchArc;
+
 use super::shared::{CoverageTotals, FileRow, escape_html, row_percent};
 
 /// Presentation settings for an annotated HTML coverage report.
@@ -211,12 +213,20 @@ fn line_state(row: &FileRow, line: u32) -> &'static str {
     }
 }
 
+/// Unions line contexts with every branch originating on that line.
+///
+/// Branch arcs are ordered by origin then destination, including exit sentinels.
 fn line_contexts(row: &FileRow, line: u32) -> BTreeSet<String> {
     let mut contexts = row.contexts.get(&line).cloned().unwrap_or_default();
-    for (arc, arc_contexts) in &row.arc_contexts {
-        if arc.from == i32::try_from(line).unwrap_or(i32::MAX) {
-            contexts.extend(arc_contexts.iter().cloned());
-        }
+    let from = i32::try_from(line).unwrap_or(i32::MAX);
+    let first = BranchArc { from, to: i32::MIN };
+    let last = BranchArc { from, to: i32::MAX };
+    for arc_contexts in row
+        .arc_contexts
+        .range(first..=last)
+        .map(|(_, contexts)| contexts)
+    {
+        contexts.extend(arc_contexts.iter().cloned());
     }
     contexts
 }
@@ -259,8 +269,6 @@ fn document_end(html: &mut String) -> Result<(), fmt::Error> {
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
-
-    use crate::data::BranchArc;
 
     use super::*;
 
@@ -309,6 +317,37 @@ mod tests {
         .expect("render source page");
 
         insta::assert_snapshot!(page);
+
+        row.contexts
+            .insert(3, BTreeSet::from(["shared".to_owned(), "line".to_owned()]));
+        row.arc_contexts = BTreeMap::from([
+            (
+                BranchArc { from: 2, to: 3 },
+                BTreeSet::from(["unrelated".to_owned()]),
+            ),
+            (
+                BranchArc { from: 3, to: -1 },
+                BTreeSet::from(["shared".to_owned(), "exit".to_owned()]),
+            ),
+            (
+                missing_arc,
+                BTreeSet::from(["shared".to_owned(), "branch".to_owned()]),
+            ),
+            (
+                BranchArc { from: 4, to: 5 },
+                BTreeSet::from(["unrelated".to_owned()]),
+            ),
+        ]);
+        assert_eq!(
+            line_contexts(&row, 3),
+            BTreeSet::from([
+                "branch".to_owned(),
+                "exit".to_owned(),
+                "line".to_owned(),
+                "shared".to_owned()
+            ])
+        );
+        assert!(line_contexts(&row, 5).is_empty());
 
         row.arc_contexts
             .insert(missing_arc, BTreeSet::from(["branch<&>".to_owned()]));
