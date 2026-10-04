@@ -159,10 +159,8 @@ fn render_source(
     for (index, text) in source.lines().enumerate() {
         let line = u32::try_from(index + 1).unwrap_or(u32::MAX);
         let state = line_state(row, line);
-        let missing_branches: Vec<String> = row
-            .branch_missing
+        let missing_branches: Vec<String> = line_arcs(&row.branch_missing, line)
             .iter()
-            .filter(|arc| arc.from == i32::try_from(line).unwrap_or(i32::MAX))
             .map(|arc| arc.to.to_string())
             .collect();
         write!(
@@ -198,10 +196,9 @@ fn line_state(row: &FileRow, line: u32) -> &'static str {
     if row.excluded.binary_search(&line).is_ok() {
         "excluded"
     } else if row.executed.binary_search(&line).is_ok() {
-        if row.branch_missing.iter().any(|arc| {
-            arc.from == i32::try_from(line).unwrap_or(i32::MAX)
-                && row.branch_executed.iter().any(|hit| hit.from == arc.from)
-        }) {
+        if !line_arcs(&row.branch_missing, line).is_empty()
+            && !line_arcs(&row.branch_executed, line).is_empty()
+        {
             "partial"
         } else {
             "executed"
@@ -211,6 +208,15 @@ fn line_state(row: &FileRow, line: u32) -> &'static str {
     } else {
         "neutral"
     }
+}
+
+/// Borrows arcs with one origin from a slice sorted by origin then destination.
+fn line_arcs(arcs: &[BranchArc], line: u32) -> &[BranchArc] {
+    let from = i32::try_from(line).unwrap_or(i32::MAX);
+    let start = arcs.partition_point(|arc| arc.from < from);
+    let remaining = &arcs[start..];
+    let end = remaining.partition_point(|arc| arc.from == from);
+    &remaining[..end]
 }
 
 /// Unions line contexts with every branch originating on that line.
@@ -271,6 +277,24 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use super::*;
+
+    #[test]
+    fn line_arcs_preserve_destinations_and_exclude_neighboring_origins() {
+        let arcs = [
+            BranchArc { from: 1, to: 2 },
+            BranchArc { from: 3, to: -1 },
+            BranchArc { from: 3, to: 4 },
+            BranchArc { from: 3, to: 6 },
+            BranchArc { from: 5, to: 6 },
+        ];
+        assert_eq!(line_arcs(&arcs, 3), &arcs[1..4]);
+        assert!(line_arcs(&arcs, 4).is_empty());
+    }
+
+    #[test]
+    fn empty_arcs_have_no_line_annotations() {
+        assert!(line_arcs(&[], 1).is_empty());
+    }
 
     #[test]
     fn source_filenames_are_deterministic_and_path_safe() {

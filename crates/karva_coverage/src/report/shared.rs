@@ -58,9 +58,15 @@ pub(super) struct FileRow {
     pub branch_hit: u32,
     pub branch_miss: u32,
     pub branch_partial: u32,
+    /// Possible arcs, sorted by origin then destination without duplicates.
     pub branch_possible: Vec<BranchArc>,
+
+    /// Executed arcs, sorted by origin then destination without duplicates.
     pub branch_executed: Vec<BranchArc>,
+
+    /// Missing arcs, sorted by origin then destination without duplicates.
     pub branch_missing: Vec<BranchArc>,
+
     pub arc_contexts: BTreeMap<BranchArc, BTreeSet<String>>,
 }
 
