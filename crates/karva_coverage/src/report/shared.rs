@@ -40,9 +40,15 @@ pub(super) struct FileRow {
     pub hit: u32,
     pub miss: u32,
     pub missing: String,
+    /// Executable source lines, sorted in ascending order without duplicates.
     pub executable: Vec<u32>,
+
+    /// Excluded source lines, sorted in ascending order without duplicates.
     pub excluded: Vec<u32>,
+
+    /// Executed source lines, sorted in ascending order without duplicates.
     pub executed: Vec<u32>,
+
     pub contexts: BTreeMap<u32, BTreeSet<String>>,
 
     /// Whether branch metrics should appear, even when this file has no branches.
