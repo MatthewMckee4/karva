@@ -19,7 +19,7 @@ use ruff_python_ast::visitor::source_order::{
     SourceOrderVisitor, walk_decorator, walk_elif_else_clause, walk_except_handler,
     walk_match_case, walk_stmt,
 };
-use ruff_python_ast::{Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Stmt};
+use ruff_python_ast::{Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, ModModule, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
@@ -72,7 +72,7 @@ fn executable_lines_for_source(source: &str) -> HashSet<u32> {
     executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).0
 }
 
-pub(super) fn executable_lines_for_source_with_exclusions(
+fn executable_lines_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
 ) -> (HashSet<u32>, HashSet<u32>) {
@@ -83,10 +83,21 @@ pub(super) fn executable_lines_for_source_with_exclusions(
     let line_index = LineIndex::from_source_text(source);
     let mut excluded_head_lines = pragma_no_cover_lines(&parsed, source, &line_index);
     excluded_head_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
-    let module = parsed.into_syntax();
+    executable_lines_for_module(parsed.syntax(), &line_index, &excluded_head_lines)
+}
+
+/// Reuses a parsed module and its source index for line and branch analysis.
+///
+/// Exclusion heads come from source comments and configured patterns; builtin
+/// exclusions are applied here. The second result includes excluded body lines.
+pub(super) fn executable_lines_for_module(
+    module: &ModModule,
+    line_index: &LineIndex,
+    excluded_head_lines: &HashSet<u32>,
+) -> (HashSet<u32>, HashSet<u32>) {
     let mut visitor = ExecutableLineVisitor {
-        line_index: &line_index,
-        excluded_head_lines: &excluded_head_lines,
+        line_index,
+        excluded_head_lines,
         builtins: true,
         lines: HashSet::new(),
     };
@@ -94,7 +105,7 @@ pub(super) fn executable_lines_for_source_with_exclusions(
     let executable = visitor.lines;
     let no_exclusions = HashSet::new();
     let mut baseline = ExecutableLineVisitor {
-        line_index: &line_index,
+        line_index,
         excluded_head_lines: &no_exclusions,
         builtins: false,
         lines: HashSet::new(),
