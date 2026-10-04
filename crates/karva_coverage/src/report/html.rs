@@ -163,7 +163,6 @@ fn render_source(
             .filter(|arc| arc.from == i32::try_from(line).unwrap_or(i32::MAX))
             .map(|arc| arc.to.to_string())
             .collect();
-        let contexts = line_contexts(row, line);
         write!(
             html,
             "<span class=\"line {state}\"><a id=\"L{line}\" href=\"#L{line}\" class=\"number\">{line:>5}</a> <code>{}</code>",
@@ -176,12 +175,15 @@ fn render_source(
                 escape_html(&missing_branches.join(", "))
             )?;
         }
-        if options.show_contexts && !contexts.is_empty() {
-            write!(
-                html,
-                " <span class=\"contexts\">{}</span>",
-                escape_html(&contexts.into_iter().collect::<Vec<_>>().join(", "))
-            )?;
+        if options.show_contexts {
+            let contexts = line_contexts(row, line);
+            if !contexts.is_empty() {
+                write!(
+                    html,
+                    " <span class=\"contexts\">{}</span>",
+                    escape_html(&contexts.into_iter().collect::<Vec<_>>().join(", "))
+                )?;
+            }
         }
         writeln!(html, "</span>")?;
     }
@@ -273,7 +275,7 @@ mod tests {
     #[test]
     fn source_page_annotates_and_escapes_coverage_details() {
         let missing_arc = BranchArc { from: 3, to: 5 };
-        let row = FileRow {
+        let mut row = FileRow {
             name: "src/<app>.py".to_owned(),
             absolute_name: "/project/src/<app>.py".to_owned(),
             stmts: 3,
@@ -294,9 +296,10 @@ mod tests {
             branch_missing: vec![missing_arc],
             arc_contexts: BTreeMap::new(),
         };
+        let source = "hit = '<&>'\nmiss = 2\nif hit:\n    excluded = 4\n";
         let page = render_source(
             &row,
-            "hit = '<&>'\nmiss = 2\nif hit:\n    excluded = 4\n",
+            source,
             &HtmlReportOptions {
                 title: "Coverage <report>".to_owned(),
                 show_contexts: true,
@@ -306,5 +309,17 @@ mod tests {
         .expect("render source page");
 
         insta::assert_snapshot!(page);
+
+        row.arc_contexts
+            .insert(missing_arc, BTreeSet::from(["branch<&>".to_owned()]));
+        let options = HtmlReportOptions::default();
+        let hidden = render_source(&row, source, &options).expect("render hidden contexts");
+        assert!(!hidden.contains("class=\"contexts\""));
+        row.contexts.clear();
+        row.arc_contexts.clear();
+        assert_eq!(
+            hidden,
+            render_source(&row, source, &options).expect("render without contexts")
+        );
     }
 }
