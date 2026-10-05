@@ -56,7 +56,39 @@ fn test_cov_annotation_only_local_declaration(#[values(false, true)] branch: boo
     let mut settings = insta::Settings::clone_current();
     settings.set_snapshot_suffix(if branch { "branch" } else { "line" });
     let _guard = settings.bind_to_scope();
-    assert_cmd_snapshot!(command);
+    if branch {
+        assert_cmd_snapshot!(command, @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        Name         Stmts   Miss   Branch   BrPart   Cover   Missing
+        [LONG-LINE]
+        example.py       3      0        0        0    100%
+        [LONG-LINE]
+        TOTAL            3      0        0        0    100%
+
+        ----- stderr -----
+        ");
+    } else {
+        assert_cmd_snapshot!(command, @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        Name         Stmts   Miss   Cover   Missing
+        [LONG-LINE]
+        example.py       3      0    100%
+        [LONG-LINE]
+        TOTAL            3      0    100%
+
+        ----- stderr -----
+        ");
+    }
     insta::assert_snapshot!(context.read_file("karva.json"));
 }
 
