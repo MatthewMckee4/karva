@@ -1,0 +1,29 @@
+---
+source: crates/karva/tests/it/coverage.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--cov=example.py"
+    - "--cov-report=term-missing"
+    - "--cov-report=json:karva.json"
+    - "--cov-fail-under=100"
+    - "--status-level=none"
+    - tests
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791232041
+---
+success: true
+exit_code: 0
+----- stdout -----
+────────────
+     Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+Name         Stmts   Miss   Cover   Missing
+[LONG-LINE]
+example.py       3      0    100%
+[LONG-LINE]
+TOTAL            3      0    100%
+
+----- stderr -----

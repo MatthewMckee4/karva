@@ -293,8 +293,8 @@ impl BranchCollector<'_> {
         skip_docstring(body)
             .iter()
             .filter(|stmt| !self.line_has_pragma(stmt_line_offset(stmt)))
-            .find_map(|stmt| self.line(stmt_line_offset(stmt)))
-            .filter(|line| self.executable.contains(line))
+            .filter_map(|stmt| self.line(stmt_line_offset(stmt)))
+            .find(|line| self.executable.contains(line))
     }
 
     fn add_branch<const N: usize>(&mut self, from: Option<u32>, targets: [Option<i32>; N]) {
@@ -365,6 +365,20 @@ def f(x):
 ";
 
         assert_eq!(arcs(source), vec![(2, 3), (2, 4)]);
+    }
+
+    #[test]
+    fn branch_targets_skip_bare_local_annotations() {
+        let source = "\
+def f(flag):
+    if flag:
+        positive: str
+        return 'yes'
+    negative: str
+    return 'no'
+";
+
+        assert_eq!(arcs(source), vec![(2, 4), (2, 6)]);
     }
 
     #[test]
