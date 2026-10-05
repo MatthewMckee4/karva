@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use rstest::rstest;
 
 use crate::common::TestContext;
 
@@ -2719,4 +2720,67 @@ def test_only_covered():
     ----- stderr -----
     "
     );
+}
+
+#[rstest]
+fn test_cov_multiline_condition(
+    #[values("all", "first", "neither")] outcome: &str,
+    #[values(false, true)] branches: bool,
+) {
+    let calls = match outcome {
+        "first" => "assert choose(True, False) == 1",
+        "neither" => "assert choose(False, False) == 0",
+        _ => {
+            "assert choose(True, False) == 1\n    assert choose(False, True) == 1\n    assert choose(False, False) == 0"
+        }
+    };
+    let test = format!("from example import choose\n\ndef test_choose():\n    {calls}\n");
+    let context = TestContext::with_files([
+        (
+            "example.py",
+            "def choose(first, second):\n    if (\n        first\n        or second\n    ):\n        return 1\n    return 0\n",
+        ),
+        ("test_example.py", test.as_str()),
+    ]);
+    let mut command = context.command_no_parallel();
+    command.args([
+        "--cov=example.py",
+        "--cov-context=test",
+        "--cov-report=json",
+        "--status-level=none",
+        "test_example.py",
+    ]);
+    if branches {
+        command.arg("--cov-branch");
+    }
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    let report: serde_json::Value =
+        serde_json::from_str(&context.read_file("coverage.json")).expect("coverage JSON");
+    let file = &report["files"]["example.py"];
+    let (executed, missing, arcs, missing_arcs) = match outcome {
+        "first" => (vec![1, 2, 6], vec![7], vec![[2, 6]], vec![[2, 7]]),
+        "neither" => (vec![1, 2, 7], vec![6], vec![[2, 7]], vec![[2, 6]]),
+        _ => (vec![1, 2, 6, 7], vec![], vec![[2, 6], [2, 7]], vec![]),
+    };
+    assert_eq!(file["executed_lines"], serde_json::json!(executed));
+    assert_eq!(file["missing_lines"], serde_json::json!(missing));
+    assert_eq!(
+        file["contexts"]["2"],
+        serde_json::json!(["test_example::test_choose|run"])
+    );
+    if branches {
+        assert_eq!(file["executed_branches"], serde_json::json!(arcs));
+        assert_eq!(file["missing_branches"], serde_json::json!(missing_arcs));
+    }
+    if outcome == "all" {
+        assert_eq!(file["summary"]["percent_covered"], 100.0);
+    }
 }
