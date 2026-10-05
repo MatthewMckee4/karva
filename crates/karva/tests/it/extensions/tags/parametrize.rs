@@ -1813,21 +1813,27 @@ def test_square(input, expected):
     ");
 }
 
-#[test]
-fn test_parametrize_with_pytest_param_false_keyword_xfail_condition() {
+#[rstest]
+fn test_parametrize_with_pytest_param_false_keyword_condition(
+    #[values("skipif", "xfail")] mark: &str,
+    #[values("condition=False", "True, condition=False", "condition='False'")] condition: &str,
+) {
     let test_context = TestContext::with_file(
         "test.py",
-        r#"
+        &format!(
+            r#"
 import pytest
 
 @pytest.mark.parametrize("value", [
-    pytest.param(1, marks=pytest.mark.xfail(condition=False, reason="not broken")),
+    pytest.param(1, marks=pytest.mark.{mark}({condition}, reason="not broken")),
 ])
 def test_value(value):
     assert value == 1
-"#,
+"#
+        ),
     );
 
+    allow_duplicates! {
     assert_cmd_snapshot!(test_context.command(), @"
     success: true
     exit_code: 0
@@ -1839,6 +1845,7 @@ def test_value(value):
 
     ----- stderr -----
     ");
+    }
 }
 
 #[test]

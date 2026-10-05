@@ -289,19 +289,24 @@ def test_1():
     ");
 }
 
-#[test]
-fn test_pytest_skipif_boolean_condition_without_reason_rejected() {
+#[rstest]
+fn test_pytest_skipif_boolean_condition_without_reason_rejected(
+    #[values("False", "condition=False", "condition=True")] condition: &str,
+) {
     let context = TestContext::with_file(
         "test.py",
-        r"
+        &format!(
+            r"
 import pytest
 
-@pytest.mark.skipif(False)
+@pytest.mark.skipif({condition})
 def test_1():
     assert True
-",
+"
+        ),
     );
 
+    allow_duplicates! {
     assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
@@ -316,6 +321,7 @@ def test_1():
 
     ----- stderr -----
     ");
+    }
 }
 
 #[rstest]
@@ -581,19 +587,24 @@ def test_1():
     ");
 }
 
-#[test]
-fn test_pytest_skipif_non_string_keyword_reason_rejected() {
+#[rstest]
+fn test_pytest_skipif_non_string_keyword_reason_rejected(
+    #[values("True", "condition=True")] condition: &str,
+) {
     let context = TestContext::with_file(
         "test.py",
-        r"
+        &format!(
+            r"
 import pytest
 
-@pytest.mark.skipif(True, reason=123)
+@pytest.mark.skipif({condition}, reason=123)
 def test_1():
     assert False
-",
+"
+        ),
     );
 
+    allow_duplicates! {
     assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
@@ -608,21 +619,27 @@ def test_1():
 
     ----- stderr -----
     ");
+    }
 }
 
-#[test]
-fn test_pytest_skipif_false_condition_allows_non_string_reason() {
+#[rstest]
+fn test_pytest_skipif_false_condition_allows_non_string_reason(
+    #[values("False", "condition=False")] condition: &str,
+) {
     let context = TestContext::with_file(
         "test.py",
-        r"
+        &format!(
+            r"
 import pytest
 
-@pytest.mark.skipif(False, reason=123)
+@pytest.mark.skipif({condition}, reason=123)
 def test_1():
     assert True
-",
+"
+        ),
     );
 
+    allow_duplicates! {
     assert_cmd_snapshot!(context.command(), @"
     success: true
     exit_code: 0
@@ -634,21 +651,27 @@ def test_1():
 
     ----- stderr -----
     ");
+    }
 }
 
-#[test]
-fn test_pytest_skipif_empty_list_condition_does_not_skip() {
+#[rstest]
+fn test_pytest_skipif_empty_list_condition_does_not_skip(
+    #[values("[]", "condition=[]")] condition: &str,
+) {
     let context = TestContext::with_file(
         "test.py",
-        r"
+        &format!(
+            r"
 import pytest
 
-@pytest.mark.skipif([], reason='empty list is false')
+@pytest.mark.skipif({condition}, reason='empty list is false')
 def test_1():
     assert True
-",
+"
+        ),
     );
 
+    allow_duplicates! {
     assert_cmd_snapshot!(context.command(), @"
     success: true
     exit_code: 0
@@ -660,23 +683,29 @@ def test_1():
 
     ----- stderr -----
     ");
+    }
 }
 
-#[test]
-fn test_pytest_skipif_string_condition_uses_module_globals() {
+#[rstest]
+fn test_pytest_skipif_string_condition_uses_module_globals(
+    #[values("'SHOULD_SKIP'", "condition='SHOULD_SKIP'")] condition: &str,
+) {
     let context = TestContext::with_file(
         "test.py",
-        r"
+        &format!(
+            r"
 import pytest
 
 SHOULD_SKIP = False
 
-@pytest.mark.skipif('SHOULD_SKIP', reason='module global')
+@pytest.mark.skipif({condition}, reason='module global')
 def test_1():
     assert True
-",
+"
+        ),
     );
 
+    allow_duplicates! {
     assert_cmd_snapshot!(context.command(), @"
     success: true
     exit_code: 0
@@ -688,4 +717,37 @@ def test_1():
 
     ----- stderr -----
     ");
+    }
+}
+
+#[rstest]
+fn test_pytest_skipif_true_keyword_condition(
+    #[values("condition=True", "False, condition=True", "condition='True'")] condition: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import pytest
+
+@pytest.mark.skipif({condition}, reason='Condition is true')
+def test_1():
+    assert False
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command().arg("--status-level=all"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                SKIP [TIME] test::test_1: Condition is true
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+        ----- stderr -----
+        ");
+    }
 }

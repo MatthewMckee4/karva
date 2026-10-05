@@ -36,7 +36,7 @@ use use_fixtures::UseFixturesTag;
 ///
 /// Used by both `SkipTag` and `ExpectFailTag` which share identical parsing logic.
 pub struct ParsedMarkArgs {
-    /// Evaluated positional conditions; empty means an unconditional mark.
+    /// Evaluated conditions; empty means an unconditional mark.
     pub conditions: Vec<bool>,
 
     /// Explicit reason or generated description of a true string condition.
@@ -48,15 +48,19 @@ pub struct ParsedMarkArgs {
 
 /// Extract conditions and reason from a pytest mark object.
 ///
-/// Pytest marks store truthy/falsy conditions as positional args and an optional
-/// `reason` as a keyword argument. String conditions are evaluated with the
-/// owning function's globals when available.
+/// A `condition` keyword overrides positional conditions, matching pytest.
+/// String conditions are evaluated with the owning function's globals when
+/// available; other conditions use Python truthiness.
 pub fn parse_pytest_mark_args(
     py_mark: &Bound<'_, PyAny>,
     globals: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<ParsedMarkArgs> {
     let kwargs = py_mark.getattr("kwargs")?;
-    let args = py_mark.getattr("args")?;
+    let args = if let Ok(condition) = kwargs.get_item("condition") {
+        PyTuple::new(py_mark.py(), [condition])?.into_any()
+    } else {
+        py_mark.getattr("args")?
+    };
 
     let mut conditions = Vec::new();
     let mut condition_reason = None;
