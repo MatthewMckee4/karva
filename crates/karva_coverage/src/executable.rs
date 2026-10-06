@@ -99,6 +99,7 @@ pub(super) fn executable_lines_for_module(
         line_index,
         excluded_head_lines,
         builtins: true,
+        in_function: false,
         lines: HashSet::new(),
     };
     visitor.visit_body(&module.body);
@@ -108,6 +109,7 @@ pub(super) fn executable_lines_for_module(
         line_index,
         excluded_head_lines: &no_exclusions,
         builtins: false,
+        in_function: false,
         lines: HashSet::new(),
     };
     baseline.visit_body(&module.body);
@@ -187,6 +189,10 @@ struct ExecutableLineVisitor<'a> {
     line_index: &'a LineIndex,
     excluded_head_lines: &'a HashSet<u32>,
     builtins: bool,
+
+    /// Bare local annotations emit no bytecode; module and class annotations do.
+    in_function: bool,
+
     lines: HashSet<u32>,
 }
 
@@ -239,6 +245,13 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
     /// the head and the entire body — we skip recording and stop walking
     /// the subtree.
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
+        if self.in_function
+            && let Stmt::AnnAssign(assign) = stmt
+            && assign.value.is_none()
+            && matches!(&*assign.target, Expr::Name(_))
+        {
+            return;
+        }
         if self.builtins && is_builtin_exclusion(stmt) {
             return;
         }
@@ -248,7 +261,14 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
             _ => stmt.range().start(),
         };
         if self.record_unless_pragma(offset) {
+            let in_function = self.in_function;
+            match stmt {
+                Stmt::FunctionDef(_) => self.in_function = true,
+                Stmt::ClassDef(_) => self.in_function = false,
+                _ => {}
+            }
             walk_stmt(self, stmt);
+            self.in_function = in_function;
         }
     }
 
@@ -409,6 +429,44 @@ runtime = 2
         assert_eq!(
             lines_with_exclusions(source, &["(?s)if debug:.*second = 2"]),
             (vec![1, 5], vec![2, 3, 4])
+        );
+    }
+
+    #[test]
+    fn skips_bare_local_annotations_without_excluding_them() {
+        let source = "def make_value():\n    value: str\n    value = \"hello\"\n    return value\n";
+
+        assert_eq!(lines_with_exclusions(source, &[]), (vec![1, 3, 4], vec![]));
+    }
+
+    #[test]
+    fn annotation_execution_follows_the_innermost_scope() {
+        let source = "\
+module_value: str
+async def outer():
+    local: str
+    assigned: str = 'hello'
+    obj.attr: str
+    items[0]: str
+    if assigned:
+        conditional: str
+    class Nested:
+        class_value: str
+        def method(self):
+            method_value: str
+            return 'hello'
+    after_class: str
+    def inner():
+        inner_value: str
+        return 'hello'
+    after_function: str
+    return assigned
+module_after: str
+";
+
+        assert_eq!(
+            lines(source),
+            vec![1, 2, 4, 5, 6, 7, 9, 10, 11, 13, 15, 17, 19, 20]
         );
     }
 
