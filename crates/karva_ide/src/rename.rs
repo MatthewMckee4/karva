@@ -1,3 +1,5 @@
+use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
+use ruff_python_ast::{Expr, StmtFunctionDef};
 use ruff_text_size::TextRange;
 
 use crate::{
@@ -18,7 +20,9 @@ pub fn is_valid_fixture_name(name: &str) -> bool {
 ///
 /// Every occurrence resolving to the same provider must have one complete edit
 /// range. Implicitly concatenated string literals therefore disable the whole
-/// rename instead of producing a partial workspace edit.
+/// rename instead of producing a partial workspace edit. Parameters used in
+/// function bodies also disable rename until Python binding references can be
+/// updated safely, including references captured by nested scopes.
 pub fn prepare_fixture_rename(
     index: &WorkspaceSourceIndex,
     current: &FixtureOccurrence,
@@ -60,6 +64,7 @@ fn editable_fixture_occurrences(
         if matching
             .iter()
             .any(|occurrence| occurrence.edit_range.is_none())
+            || has_unindexed_parameter_references(&analysis, &matching)
             || new_name.is_some_and(|new_name| {
                 fixture_name_conflicts(&analysis, &matching, &current.fixture, new_name)
             })
@@ -76,6 +81,57 @@ fn editable_fixture_occurrences(
         );
     }
     (!occurrences.is_empty()).then_some(occurrences)
+}
+
+/// Refuses partial parameter edits: the fixture index does not resolve Python
+/// name bindings, so body references cannot yet be renamed without risking
+/// shadowed locals or captured names in nested scopes.
+fn has_unindexed_parameter_references(
+    analysis: &SourceAnalysis,
+    occurrences: &[FixtureOccurrence],
+) -> bool {
+    analysis
+        .module
+        .test_function_defs
+        .iter()
+        .chain(&analysis.module.fixture_function_defs)
+        .any(|function| {
+            function
+                .parameters
+                .iter_non_variadic_params()
+                .any(|parameter| {
+                    occurrences.iter().any(|occurrence| {
+                        matches!(
+                            occurrence.kind,
+                            FixtureOccurrenceKind::Dependency
+                                | FixtureOccurrenceKind::TestParameter
+                        ) && occurrence.range == parameter.parameter.name.range
+                    }) && parameter_is_used(function, parameter.parameter.name.as_str())
+                })
+        })
+}
+
+fn parameter_is_used(function: &StmtFunctionDef, name: &str) -> bool {
+    let mut visitor = ParameterUseVisitor { name, used: false };
+    source_order::walk_body(&mut visitor, &function.body);
+    visitor.used
+}
+
+struct ParameterUseVisitor<'a> {
+    name: &'a str,
+    used: bool,
+}
+
+impl SourceOrderVisitor<'_> for ParameterUseVisitor<'_> {
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if let Expr::Name(name) = expression
+            && name.id.as_str() == self.name
+        {
+            self.used = true;
+        } else {
+            source_order::walk_expr(self, expression);
+        }
+    }
 }
 
 fn fixture_name_conflicts(
