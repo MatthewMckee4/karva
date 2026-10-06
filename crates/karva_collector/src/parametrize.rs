@@ -4,9 +4,9 @@ use ruff_python_ast::{Expr, StmtFunctionDef};
 /// its `@parametrize` decorators are applied.
 ///
 /// Returns `Some(n)` when at least one recognized decorator exists and every
-/// `argvalues` expression is a literal list or tuple. Returns `None` when no
-/// parametrize decorator exists or any `argvalues` is dynamic; callers should
-/// treat the function as one opaque scheduling unit.
+/// `argvalues` expression is a literal list or tuple without unpacking. Returns
+/// `None` when no parametrize decorator exists or any `argvalues` is dynamic;
+/// callers should treat the function as one opaque scheduling unit.
 pub fn count_parametrize_cases(stmt: &StmtFunctionDef) -> Option<usize> {
     let mut total: usize = 1;
     let mut found = false;
@@ -71,11 +71,15 @@ fn argvalues_arg(call: &ruff_python_ast::ExprCall) -> Option<&Expr> {
 /// Returns the element count of a list or tuple literal, or `None` if the
 /// expression isn't a literal sequence we can count statically.
 fn literal_sequence_len(expr: &Expr) -> Option<usize> {
-    match expr {
-        Expr::List(list) => Some(list.elts.len()),
-        Expr::Tuple(tuple) => Some(tuple.elts.len()),
-        _ => None,
-    }
+    let elements = match expr {
+        Expr::List(list) => &list.elts,
+        Expr::Tuple(tuple) => &tuple.elts,
+        _ => return None,
+    };
+    (!elements
+        .iter()
+        .any(|element| matches!(element, Expr::Starred(_))))
+    .then_some(elements.len())
 }
 
 #[cfg(test)]

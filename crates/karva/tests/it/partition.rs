@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use rstest::rstest;
 
 use crate::common::TestContext;
 
@@ -354,4 +355,38 @@ def test_value(value):
         .expect("rerun failed case");
     assert!(second.status.success(), "{second:?}");
     assert_eq!(context.read_file("executed"), "1");
+}
+
+#[rstest]
+fn unpacked_parametrize_cases_are_not_dropped(
+    #[values("'value', [*values]", "'value', (*values,)", "*names, [*values]")] arguments: &str,
+) {
+    let context = TestContext::with_file(
+        "test_mod.py",
+        &format!(
+            r#"
+import karva
+
+values = [1, 2, 3]
+names = ["value"]
+
+@karva.tags.parametrize({arguments})
+def test_value(value):
+    assert value in values
+"#,
+        ),
+    );
+
+    assert_cmd_snapshot!(
+        context.command().args(["--num-workers=2", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
 }
