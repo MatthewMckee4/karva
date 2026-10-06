@@ -1,12 +1,13 @@
 use std::process::Command;
+use std::sync::Arc;
 
 use camino::Utf8PathBuf;
 
 use karva_cache::{RunArtifacts, RunHash};
 use karva_cli::SubTestCommand;
-use karva_ipc::ControllerEndpoint;
+use karva_ipc::{ControllerEndpoint, WorkerConfiguration};
 use karva_logging::TerminalColor;
-use karva_metadata::{EnvironmentVariable, ProjectSettings};
+use karva_metadata::EnvironmentVariable;
 use karva_project::Project;
 use karva_static::{EnvVars, PythonEnvVars, WorkerEnvVars};
 
@@ -24,8 +25,11 @@ pub struct WorkerSpawn<'a> {
     /// Identifier shared by controller and all workers in this run.
     pub run_hash: &'a RunHash,
 
-    /// User CLI options that must be forwarded to workers.
+    /// Invocation controls for process environment, color, and early logging.
     pub args: &'a SubTestCommand,
+
+    /// Run configuration delivered through the authenticated controller connection.
+    pub configuration: Arc<WorkerConfiguration>,
 
     /// Effective worker count exposed to test processes.
     pub num_workers: usize,
@@ -38,12 +42,9 @@ pub struct WorkerSpawn<'a> {
 
     /// Whether each worker must write a coverage artifact.
     pub coverage_enabled: bool,
-
-    /// Whether this run has a selected cached failure to prioritize.
-    pub failed_first_active: bool,
 }
 
-/// Builds one worker command with its resolved controller settings.
+/// Builds one worker command with process identity, presentation, and environment.
 pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     let mut cmd = Command::new(spawn.worker_binary);
     cmd.arg("--controller-address")
@@ -95,11 +96,17 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
         }
     }
 
-    cmd.args(inner_cli_args(
-        spawn.project.settings(),
-        spawn.args,
-        spawn.failed_first_active,
-    ));
+    if let Some(verbosity) = spawn.args.verbosity.level().cli_arg() {
+        cmd.arg(verbosity);
+    }
+    let color = spawn.args.color.or_else(|| {
+        colored::control::SHOULD_COLORIZE
+            .should_colorize()
+            .then_some(TerminalColor::Always)
+    });
+    if let Some(color) = color {
+        cmd.arg("--color").arg(color.as_str());
+    }
 
     if spawn.coverage_enabled {
         let data_file = spawn.artifacts.coverage_data_file(worker_id);
@@ -109,155 +116,102 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     cmd
 }
 
-fn inner_cli_args(
-    settings: &ProjectSettings,
+/// Captures merged options once for initial and replacement workers.
+pub fn worker_configuration(
+    project: &Project,
     args: &SubTestCommand,
     failed_first_active: bool,
-) -> Vec<String> {
-    let mut cli_args: Vec<String> = Vec::new();
-
-    if let Some(arg) = args.verbosity.level().cli_arg() {
-        cli_args.push(arg.to_string());
-    }
-
-    // Forward the resolved max-fail limit to workers. Omitting the flag
-    // means "no limit", which matches the default when the user supplies
-    // neither `--max-fail` nor a `max-fail` entry in `karva.toml`.
-    if let Some(limit) = settings.test().max_fail.limit() {
-        cli_args.push(format!("--max-fail={limit}"));
-    }
-
-    cli_args.push(format!("--worker-failed-first={failed_first_active}"));
-
-    if settings.terminal().show_python_output {
-        cli_args.push("-s".to_string());
-    }
-
-    push_value_arg(
-        &mut cli_args,
-        "--output-format",
-        settings.terminal().output_format.as_str(),
-    );
-
-    push_value_arg(
-        &mut cli_args,
-        "--status-level",
-        settings.terminal().status_level.as_str(),
-    );
-
-    push_value_arg(
-        &mut cli_args,
-        "--final-status-level",
-        settings.terminal().final_status_level.as_str(),
-    );
-
-    let color = args.color.or_else(|| {
-        colored::control::SHOULD_COLORIZE
-            .should_colorize()
-            .then_some(TerminalColor::Always)
-    });
-    if let Some(color) = color {
-        push_value_arg(&mut cli_args, "--color", color.as_str());
-    }
-
-    if settings.test().try_import_fixtures {
-        cli_args.push("--try-import-fixtures".to_string());
-    }
-
-    if settings.test().doctest_modules {
-        cli_args.push("--doctest-modules".to_string());
-    }
-
-    if settings.test().strict_tags {
-        cli_args.push("--strict-tags=true".to_string());
-        for name in settings.tags().keys() {
-            push_value_arg(&mut cli_args, "--registered-tag", name);
+) -> Arc<WorkerConfiguration> {
+    let mut options = project.metadata().options.clone();
+    options.env.clear();
+    // Runtime ordering is active only when the selected assignment has a cached failure.
+    options.test.get_or_insert_default().failed_first = Some(failed_first_active);
+    if let Some(coverage) = &mut options.coverage {
+        // CLI-only disablement is not serialized by the configuration schema.
+        if coverage.disabled.take().unwrap_or_default() {
+            coverage.sources = Some(Vec::new());
         }
     }
-
-    if args.snapshot_update.unwrap_or(false) {
-        cli_args.push("--snapshot-update".to_string());
+    if let Some(src) = &mut options.src {
+        src.include = None;
     }
-
-    if settings.test().retry > 0 {
-        push_value_arg(&mut cli_args, "--retry", settings.test().retry);
-    }
-
-    push_value_arg(
-        &mut cli_args,
-        "--flaky-result",
-        settings.test().flaky_result.as_str(),
-    );
-
-    push_value_arg(
-        &mut cli_args,
-        "--junit-flaky-fail-status",
-        settings.junit().flaky_fail_status.as_str(),
-    );
-
-    if let Some(threshold) = settings.test().slow_timeout {
-        push_value_arg(&mut cli_args, "--slow-timeout", threshold.as_secs_f64());
-    }
-
-    if let Some(budget) = settings.test().fail_slow {
-        push_value_arg(&mut cli_args, "--fail-slow", budget.as_secs_f64());
-    }
-
-    if let Some(timeout) = settings.test().timeout {
-        push_value_arg(&mut cli_args, "--timeout", timeout.as_secs_f64());
-    }
-
-    for expr in &args.filter_expressions {
-        push_value_arg(&mut cli_args, "--filter", expr);
-    }
-
-    if let Some(mode) = args.run_ignored {
-        push_value_arg(&mut cli_args, "--run-ignored", mode.as_str());
-    }
-
-    for source in &settings.coverage().sources {
-        cli_args.push(format!("--cov={source}"));
-    }
-
-    for pattern in &settings.coverage().exclude_lines {
-        cli_args.push(format!("--cov-exclude-line={}", pattern.as_str()));
-    }
-
-    for pattern in &settings.coverage().partial_branches {
-        cli_args.push(format!("--cov-partial-branch={}", pattern.as_str()));
-    }
-
-    if let Some(context) = &settings.coverage().context {
-        cli_args.push(format!("--cov-static-context={context}"));
-    }
-
-    if let Some(context) = args.cov_context {
-        push_value_arg(&mut cli_args, "--cov-context", context.as_str());
-    }
-
-    if settings.coverage().branch {
-        cli_args.push("--cov-branch".to_string());
-    }
-
-    for ovr in settings.overrides() {
-        let json = serde_json::json!({
-            "filter": ovr.filter.as_str(),
-            "retries": ovr.retries,
-            "flaky-result": ovr.flaky_result,
-            "junit": {
-                "flaky-fail-status": ovr.junit_flaky_fail_status,
-            },
-            "timeout": ovr.timeout.map(|t| t.0),
-            "slow-timeout": ovr.slow_timeout.map(|t| t.0),
-            "fail-slow": ovr.fail_slow.map(|t| t.0),
-        });
-        push_value_arg(&mut cli_args, "--override-json", json);
-    }
-
-    cli_args
+    Arc::new(WorkerConfiguration {
+        options,
+        tags: project.settings().tags().clone(),
+        filter_expressions: args.filter_expressions.clone(),
+        run_ignored: args.run_ignored.map(Into::into).unwrap_or_default(),
+        coverage_test_contexts: args.cov_context == Some(karva_cli::CovContext::Test),
+    })
 }
 
-fn push_value_arg(args: &mut Vec<String>, flag: &'static str, value: impl std::fmt::Display) {
-    args.push(flag.to_string());
-    args.push(value.to_string());
+#[cfg(test)]
+mod tests {
+    use karva_cli::SubTestCommand;
+    use karva_metadata::ProjectMetadata;
+    use karva_project::Project;
+    use rstest::rstest;
+    use ruff_python_ast::PythonVersion;
+
+    use super::worker_configuration;
+
+    #[rstest]
+    fn configuration_preserves_options_without_environment_or_test_paths(
+        #[values(false, true)] disable_coverage: bool,
+        #[values(false, true)] failed_first_active: bool,
+    ) {
+        let mut metadata = ProjectMetadata::new("/project".into(), PythonVersion::default());
+        metadata.options = serde_json::from_value(serde_json::json!({
+            "env": {"SECRET": "process-only"},
+            "src": {"include": ["tests"], "respect-ignore-files": false},
+            "test": {"test-function-prefix": "check", "retry": 2, "failed-first": true},
+            "overrides": [{"filter": "tag(slow)", "timeout": 0.0}],
+            "coverage": {"sources": ["src"]},
+        }))
+        .expect("valid options");
+        metadata
+            .options
+            .coverage
+            .as_mut()
+            .expect("coverage options")
+            .disabled = Some(disable_coverage);
+        let project = Project::from_metadata(metadata);
+        let args = SubTestCommand {
+            filter_expressions: vec!["tag(slow)".to_owned()],
+            run_ignored: Some(karva_cli::RunIgnored::All),
+            cov_context: Some(karva_cli::CovContext::Test),
+            ..SubTestCommand::default()
+        };
+
+        let configuration = worker_configuration(&project, &args, failed_first_active);
+        let mut expected = project.metadata().options.clone();
+        expected.env.clear();
+        expected.test.as_mut().expect("test options").failed_first = Some(failed_first_active);
+        expected.src.as_mut().expect("source options").include = None;
+        let coverage = expected.coverage.as_mut().expect("coverage options");
+        coverage.disabled = None;
+        if disable_coverage {
+            coverage.sources = Some(Vec::new());
+        }
+        assert_eq!(configuration.options, expected);
+        let encoded = serde_json::to_vec(&configuration.options).expect("encode worker options");
+        let received: karva_metadata::Options =
+            serde_json::from_slice(&encoded).expect("decode worker options");
+        assert_eq!(received, expected);
+        assert_eq!(
+            received.to_settings().test().failed_first,
+            failed_first_active
+        );
+        assert_eq!(
+            received.to_settings().coverage().sources,
+            project.settings().coverage().sources
+        );
+        assert_eq!(configuration.filter_expressions, args.filter_expressions);
+        assert_eq!(
+            configuration.run_ignored,
+            karva_metadata::RunIgnoredMode::All
+        );
+        assert!(configuration.coverage_test_contexts);
+        assert_eq!(project.metadata().options.env.len(), 1);
+        assert_eq!(project.settings().src().include_paths, ["tests"]);
+    }
 }

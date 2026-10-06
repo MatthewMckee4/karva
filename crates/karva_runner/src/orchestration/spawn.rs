@@ -1,6 +1,7 @@
 //! Worker selection registration and child-process construction.
 
 use std::process::Stdio;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use karva_ipc::{ControllerServer, WorkerSelection};
@@ -57,6 +58,7 @@ pub(super) fn spawn_worker(
     controller.register_worker_selection(
         worker_id,
         WorkerSelection {
+            configuration: Arc::clone(&spawn.configuration),
             test_paths: partition.worker_test_paths(),
             resume_skip: partition.resume_skip().to_vec(),
         },

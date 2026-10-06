@@ -21,8 +21,7 @@ pub use coverage::{
     CoverageXmlCommand,
 };
 pub use enums::{
-    CovContext, CovReport, FlakyResult, JunitFlakyFailStatus, NoTests, OutputFormat, ResultFormat,
-    RunIgnored,
+    CovContext, CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored,
 };
 pub use exit_status::ExitStatus;
 pub use partition::PartitionSelection;

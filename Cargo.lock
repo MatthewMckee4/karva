@@ -1072,7 +1072,6 @@ dependencies = [
  "karva_metadata",
  "karva_static",
  "karva_version",
- "serde_json",
 ]
 
 [[package]]
@@ -1178,6 +1177,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "karva_diagnostic",
+ "karva_metadata",
  "karva_python_semantic",
  "rstest",
  "serde",
@@ -1327,6 +1327,7 @@ dependencies = [
  "karva_static",
  "karva_version",
  "libc",
+ "rstest",
  "ruff_python_ast",
  "serde_json",
  "siphasher",
@@ -1401,8 +1402,8 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",
- "karva_static",
  "karva_test_semantic",
+ "serde_json",
  "tracing",
  "wild",
 ]

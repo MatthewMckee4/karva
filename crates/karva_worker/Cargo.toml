@@ -23,7 +23,6 @@ karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
 karva_project = { workspace = true }
 karva_python_semantic = { workspace = true, features = ["python-runtime"] }
-karva_static = { workspace = true }
 karva_test_semantic = { workspace = true }
 
 anyhow = { workspace = true }
@@ -33,6 +32,9 @@ clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 tracing = { workspace = true }
 wild = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

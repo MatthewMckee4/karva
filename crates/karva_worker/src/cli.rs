@@ -5,17 +5,16 @@ use anyhow::Context as _;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use colored::Colorize;
-use karva_cli::{ExitStatus, SubTestCommand, Verbosity};
+use karva_cli::{ExitStatus, Verbosity};
 use karva_diagnostic::{
     DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
 };
-use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerEvent};
-use karva_logging::{Printer, set_colored_override, setup_tracing};
+use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerConfiguration, WorkerEvent};
+use karva_logging::{Printer, TerminalColor, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
-use karva_metadata::{OutputFormat, RunIgnoredMode};
+use karva_metadata::{OutputFormat, ProjectSettings};
 use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::{current_python_version, enable_faulthandler};
-use karva_static::EnvVars;
 
 use crate::reporter::WorkerReporter;
 
@@ -38,16 +37,17 @@ struct Args {
     #[arg(long)]
     worker_id: usize,
 
-    /// Shared test execution options inherited from the main CLI.
+    /// Logging verbosity needed before the controller handshake.
     #[clap(flatten)]
-    sub_command: SubTestCommand,
-}
+    verbosity: Verbosity,
 
-impl Args {
-    /// Returns verbosity inherited from the controller invocation.
-    pub fn verbosity(&self) -> &Verbosity {
-        &self.sub_command.verbosity
-    }
+    /// Resolved color policy for worker output.
+    #[arg(long)]
+    color: Option<TerminalColor>,
+
+    /// Per-worker coverage artifact, present only when measurement is enabled.
+    #[arg(long)]
+    cov_data_file: Option<Utf8PathBuf>,
 }
 
 /// Runs one worker invocation, translating broken pipes into successful exits.
@@ -93,45 +93,32 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
 
     let args = Args::parse_from(args);
 
-    if args.sub_command.snapshot_update.unwrap_or(false) {
-        enable_snapshot_update_env_var();
-    }
-
-    let verbosity = args.verbosity().level();
-
-    set_colored_override(args.sub_command.color);
-
-    let printer = Printer::new(
-        args.sub_command.status_level.unwrap_or_default(),
-        args.sub_command.final_status_level.unwrap_or_default(),
-    );
-
+    let verbosity = args.verbosity.level();
+    set_colored_override(args.color);
     let _guard = setup_tracing(verbosity);
-
     let cwd = cwd()?;
-
     let python_version = current_python_version();
     enable_faulthandler().context("Failed to enable Python faulthandler")?;
 
-    let filter = FiltersetSet::new(&args.sub_command.filter_expressions)
-        .context("invalid `--filter` expression")?;
-
-    let run_ignored = args
-        .sub_command
-        .run_ignored
-        .map(RunIgnoredMode::from)
-        .unwrap_or_default();
-
-    let coverage = worker_coverage_config(&args.sub_command)?;
-    let registered_tags = args.sub_command.registered_tag.clone();
-    let mut settings = args.sub_command.into_options().to_settings().with_tags(
-        registered_tags
-            .into_iter()
-            .map(|name| (name, String::new()))
-            .collect(),
-    );
+    let controller_endpoint =
+        ControllerEndpoint::from_argument(&args.controller_endpoint).map_err(anyhow::Error::msg)?;
+    let (client, selection) =
+        WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
+    let configuration = selection.configuration;
+    let filter = FiltersetSet::new(&configuration.filter_expressions)
+        .context("invalid worker test filter expression")?;
+    let mut settings = configuration
+        .options
+        .to_settings()
+        .with_tags(configuration.tags.clone());
     settings.set_filter(filter);
-    settings.set_run_ignored(run_ignored);
+    settings.set_run_ignored(configuration.run_ignored);
+    let printer = Printer::new(
+        settings.terminal().status_level,
+        settings.terminal().final_status_level,
+    );
+    let coverage = worker_coverage_config(&settings, &configuration, args.cov_data_file)?;
+    drop(configuration);
 
     let diagnostic_format = match settings.terminal().output_format {
         OutputFormat::Full => DiagnosticFormat::Full,
@@ -141,10 +128,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         diagnostic_format,
         colored::control::SHOULD_COLORIZE.should_colorize(),
     );
-    let controller_endpoint =
-        ControllerEndpoint::from_argument(&args.controller_endpoint).map_err(anyhow::Error::msg)?;
-    let (client, selection) =
-        WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
     let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
     // Controller selectors come from collected absolute module paths.
     let test_paths: Vec<Result<TestPath, TestPathError>> = selection
@@ -184,18 +167,6 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     Ok(ExitStatus::Success)
 }
 
-#[expect(
-    unsafe_code,
-    reason = "worker startup sets this before concurrent test execution"
-)]
-fn enable_snapshot_update_env_var() {
-    // SAFETY: This is called during single-threaded initialization before any
-    // concurrent work begins. The env var is read later by `assert_snapshot`.
-    unsafe {
-        std::env::set_var(EnvVars::KARVA_SNAPSHOT_UPDATE, "1");
-    }
-}
-
 /// Get the current working directory as a UTF-8 path.
 fn cwd() -> anyhow::Result<Utf8PathBuf> {
     let cwd = std::env::current_dir().context("Failed to get the current working directory")?;
@@ -209,109 +180,96 @@ fn cwd() -> anyhow::Result<Utf8PathBuf> {
 
 /// Builds worker coverage settings and rejects incomplete controller arguments.
 fn worker_coverage_config(
-    sub_command: &SubTestCommand,
+    settings: &ProjectSettings,
+    configuration: &WorkerConfiguration,
+    data_file: Option<Utf8PathBuf>,
 ) -> anyhow::Result<Option<karva_test_semantic::CoverageConfig>> {
-    if sub_command.cov.is_empty() {
+    let coverage = settings.coverage();
+    if coverage.sources.is_empty() {
         return Ok(None);
     }
 
-    let Some(data_file) = sub_command.cov_data_file.clone() else {
-        anyhow::bail!("karva-worker requires `--cov-data-file` when `--cov` is set");
+    let Some(data_file) = data_file else {
+        anyhow::bail!(
+            "karva-worker requires `--cov-data-file` when coverage sources are configured"
+        );
     };
 
     Ok(Some(karva_test_semantic::CoverageConfig {
-        sources: sub_command.cov.clone(),
+        sources: coverage.sources.clone(),
         data_file,
-        contexts: sub_command.cov_context == Some(karva_cli::CovContext::Test),
-        static_context: sub_command.cov_static_context.clone(),
-        branches: sub_command.cov_branch,
-        exclude_lines: sub_command.cov_exclude_line.clone(),
-        partial_branches: sub_command.cov_partial_branch.clone(),
+        contexts: configuration.coverage_test_contexts,
+        static_context: coverage.context.clone(),
+        branches: coverage.branch,
+        exclude_lines: coverage
+            .exclude_lines
+            .iter()
+            .map(|pattern| pattern.as_str().to_owned())
+            .collect(),
+        partial_branches: coverage
+            .partial_branches
+            .iter()
+            .map(|pattern| pattern.as_str().to_owned())
+            .collect(),
     }))
 }
 
 #[cfg(test)]
 mod tests {
     use camino::Utf8PathBuf;
-    use karva_cli::SubTestCommand;
+    use karva_ipc::WorkerConfiguration;
 
     use super::worker_coverage_config;
 
     #[test]
     fn coverage_config_is_absent_without_sources() {
-        let sub_command = SubTestCommand::default();
-
-        let coverage = worker_coverage_config(&sub_command).expect("coverage config");
-
-        assert!(coverage.is_none());
-    }
-
-    #[test]
-    fn coverage_config_requires_data_file_when_sources_are_set() {
-        let sub_command = SubTestCommand {
-            cov: vec!["src".to_string()],
-            ..SubTestCommand::default()
-        };
-
-        let err = worker_coverage_config(&sub_command)
-            .expect_err("missing worker coverage data file should be rejected");
-
-        assert_eq!(
-            err.to_string(),
-            "karva-worker requires `--cov-data-file` when `--cov` is set"
+        let configuration = WorkerConfiguration::default();
+        let settings = configuration.options.to_settings();
+        assert!(
+            worker_coverage_config(&settings, &configuration, None)
+                .expect("coverage config")
+                .is_none()
         );
     }
 
     #[test]
-    fn coverage_config_preserves_sources_and_data_file() {
-        let data_file = Utf8PathBuf::from(".coverage.worker-0");
-        let sub_command = SubTestCommand {
-            cov: vec![String::new(), "pkg".to_string()],
-            cov_data_file: Some(data_file.clone()),
-            ..SubTestCommand::default()
+    fn coverage_config_requires_worker_artifact() {
+        let configuration = WorkerConfiguration {
+            options: serde_json::from_value(serde_json::json!({"coverage": {"sources": ["src"]}}))
+                .expect("valid options"),
+            ..WorkerConfiguration::default()
         };
+        let settings = configuration.options.to_settings();
+        let error = worker_coverage_config(&settings, &configuration, None)
+            .expect_err("missing coverage artifact");
+        assert_eq!(
+            error.to_string(),
+            "karva-worker requires `--cov-data-file` when coverage sources are configured"
+        );
+    }
 
-        let coverage = worker_coverage_config(&sub_command)
+    #[test]
+    fn coverage_config_preserves_measurement_settings() {
+        let configuration = WorkerConfiguration {
+            options: serde_json::from_value(serde_json::json!({"coverage": {
+                "sources": ["", "pkg"], "branch": true, "context": "CI",
+                "exclude-lines": ["# excluded"], "partial-branches": ["# partial"],
+            }}))
+            .expect("valid options"),
+            coverage_test_contexts: true,
+            ..WorkerConfiguration::default()
+        };
+        let settings = configuration.options.to_settings();
+        let data_file = Utf8PathBuf::from(".coverage.worker-0");
+        let coverage = worker_coverage_config(&settings, &configuration, Some(data_file.clone()))
             .expect("coverage config")
-            .expect("coverage should be enabled");
-
-        assert_eq!(coverage.sources, vec![String::new(), "pkg".to_string()]);
+            .expect("enabled coverage");
+        assert_eq!(coverage.sources, ["", "pkg"]);
         assert_eq!(coverage.data_file, data_file);
-        assert!(!coverage.contexts);
-        assert!(!coverage.branches);
-    }
-
-    #[test]
-    fn coverage_config_preserves_context_mode() {
-        let data_file = Utf8PathBuf::from(".coverage.worker-0");
-        let sub_command = SubTestCommand {
-            cov: vec!["pkg".to_string()],
-            cov_context: Some(karva_cli::CovContext::Test),
-            cov_data_file: Some(data_file),
-            ..SubTestCommand::default()
-        };
-
-        let coverage = worker_coverage_config(&sub_command)
-            .expect("coverage config")
-            .expect("coverage should be enabled");
-
         assert!(coverage.contexts);
-    }
-
-    #[test]
-    fn coverage_config_preserves_branch_mode() {
-        let data_file = Utf8PathBuf::from(".coverage.worker-0");
-        let sub_command = SubTestCommand {
-            cov: vec!["pkg".to_string()],
-            cov_branch: true,
-            cov_data_file: Some(data_file),
-            ..SubTestCommand::default()
-        };
-
-        let coverage = worker_coverage_config(&sub_command)
-            .expect("coverage config")
-            .expect("coverage should be enabled");
-
         assert!(coverage.branches);
+        assert_eq!(coverage.static_context.as_deref(), Some("CI"));
+        assert_eq!(coverage.exclude_lines, ["# excluded"]);
+        assert_eq!(coverage.partial_branches, ["# partial"]);
     }
 }

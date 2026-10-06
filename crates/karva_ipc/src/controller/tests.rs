@@ -20,6 +20,7 @@ const BUFFERED_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
+        configuration: Arc::default(),
         test_paths: test_paths.into_iter().map(Into::into).collect(),
         resume_skip: Vec::new(),
     }
@@ -123,6 +124,7 @@ fn closing_worker_connection_interrupts_a_blocked_selection_write() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                configuration: Arc::default(),
                 test_paths: vec![path; 1_000_000],
                 resume_skip: Vec::new(),
             },
@@ -334,7 +336,11 @@ fn rejects_wrong_run_id() {
         let error = WorkerClient::connect(&address, "wrong", 0)
             .err()
             .expect("wrong run id should close connection");
-        assert!(error.to_string().contains("before sending test paths"));
+        assert!(
+            error
+                .to_string()
+                .contains("before sending worker configuration and test paths")
+        );
     });
 
     accept_connections(&mut server, 1);
@@ -460,6 +466,7 @@ fn transfers_resume_skip_cases() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                configuration: Arc::default(),
                 test_paths: vec!["mod::test".into()],
                 resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
             },
@@ -593,6 +600,77 @@ fn buffered_event_reaches_controller_before_worker_completes() {
     assert_eq!(event.worker_id, 7);
     assert!(matches!(*event.event, WorkerEvent::TestSlow));
     event_received.send(()).expect("release worker");
+    worker.join().expect("join worker");
+    server.finish().expect("finish readers");
+}
+
+#[test]
+fn transfers_worker_configuration_after_authentication() {
+    let configuration = Arc::new(crate::WorkerConfiguration {
+        options: serde_json::from_value(serde_json::json!({
+            "src": {"respect-ignore-files": false},
+            "terminal": {"status-level": "none", "output-format": "concise"},
+            "test": {
+                "test-function-prefix": "check", "strict-tags": true,
+                "max-fail": 3, "retry": 2, "flaky-result": "fail",
+                "timeout": 0.5, "slow-timeout": 0.25, "fail-slow": 1.5,
+            },
+            "junit": {"flaky-fail-status": "success"},
+            "coverage": {
+                "sources": ["", "package with spaces"], "branch": true,
+                "exclude-lines": ["# ignored"], "partial-branches": ["# partial"],
+                "context": "CI context",
+            },
+            "overrides": [
+                {"filter": "tag(slow)", "timeout": 0.0, "retries": 0,
+                 "junit": {"flaky-fail-status": "failure"}},
+                {"filter": "test(check)", "timeout": 2.5, "flaky-result": "pass"},
+            ],
+        }))
+        .expect("valid worker options"),
+        tags: [("slow".to_owned(), "Slow tests".to_owned())].into(),
+        filter_expressions: vec!["tag(slow) | test(check)".to_owned()],
+        run_ignored: karva_metadata::RunIgnoredMode::All,
+        coverage_test_contexts: true,
+    });
+    let expected = Arc::clone(&configuration);
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(
+            7,
+            WorkerSelection {
+                configuration,
+                ..selection(vec!["mod::check".to_owned()])
+            },
+        )
+        .expect("register worker configuration");
+    let address = server.endpoint();
+    let worker = thread::spawn(move || {
+        let (client, selection) =
+            WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
+        let received = selection.configuration;
+        assert_eq!(received.options, expected.options);
+        assert_eq!(received.tags, expected.tags);
+        assert_eq!(received.filter_expressions, expected.filter_expressions);
+        assert_eq!(received.run_ignored, expected.run_ignored);
+        assert!(received.coverage_test_contexts);
+        let settings = received.options.to_settings();
+        let context = karva_metadata::filter::EvalContext {
+            test_name: "mod::check",
+            tags: &["slow"],
+        };
+        assert!(settings.test().strict_tags);
+        assert_eq!(settings.test().test_function_prefix, "check");
+        assert!(!settings.src().respect_ignore_files);
+        assert_eq!(settings.retry_for(&context), 0);
+        assert_eq!(settings.timeout_for(&context), None);
+        assert_eq!(
+            settings.flaky_result_for(&context),
+            karva_metadata::FlakyResult::Pass
+        );
+        client.complete().expect("complete worker");
+    });
+    accept_connections(&mut server, 1);
     worker.join().expect("join worker");
     server.finish().expect("finish readers");
 }

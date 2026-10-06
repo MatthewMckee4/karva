@@ -2,10 +2,7 @@ use std::str::FromStr;
 
 use camino::Utf8PathBuf;
 
-use karva_metadata::{
-    FlakyResult as FlakyResultMode, JunitFlakyFailStatus as JunitFlakyFailStatusMode, NoTestsMode,
-    RunIgnoredMode,
-};
+use karva_metadata::{FlakyResult as FlakyResultMode, NoTestsMode, RunIgnoredMode};
 
 /// Coverage report selection parsed from `--cov-report`.
 #[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -210,25 +207,6 @@ impl From<FlakyResult> for FlakyResultMode {
         match value {
             FlakyResult::Pass => Self::Pass,
             FlakyResult::Fail => Self::Fail,
-        }
-    }
-}
-
-/// `JUnit` outcome assigned to attempts that fail before a later retry passes.
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum JunitFlakyFailStatus {
-    /// Emit failed attempts as `JUnit` failures.
-    Failure,
-
-    /// Preserve the final successful outcome without `JUnit` failures.
-    Success,
-}
-
-impl From<JunitFlakyFailStatus> for JunitFlakyFailStatusMode {
-    fn from(value: JunitFlakyFailStatus) -> Self {
-        match value {
-            JunitFlakyFailStatus::Failure => Self::Failure,
-            JunitFlakyFailStatus::Success => Self::Success,
         }
     }
 }

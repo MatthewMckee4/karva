@@ -91,7 +91,7 @@ macro_rules! impl_duration_secs_deserialize {
     };
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Runtime selection for tests marked ignored or skipped.
 pub enum RunIgnoredMode {
     /// Preserve configured skip behavior.

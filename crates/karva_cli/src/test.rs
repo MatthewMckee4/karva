@@ -5,19 +5,16 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, FailSlowSecs, JunitOptions, MaxFail, Options, OverrideOptions,
-    RunTimeoutSecs, SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs,
-    TestOptions, TestTimeoutSecs,
+    CovFailUnder, CoverageOptions, FailSlowSecs, MaxFail, Options, RunTimeoutSecs, SlowTimeoutSecs,
+    SrcOptions, TerminalOptions, TerminationGracePeriodSecs, TestOptions, TestTimeoutSecs,
 };
 use karva_static::EnvVars;
 
-use crate::enums::{
-    CovReport, FlakyResult, JunitFlakyFailStatus, NoTests, OutputFormat, ResultFormat, RunIgnored,
-};
+use crate::enums::{CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored};
 use crate::partition::PartitionSelection;
 use crate::verbosity::Verbosity;
 
-/// Shared test execution options that can be used by both main CLI and worker processes
+/// User-facing test selection, execution, and reporting arguments.
 #[derive(Debug, Parser, Clone, Default)]
 pub struct SubTestCommand {
     /// List of files or directories to test.
@@ -38,14 +35,6 @@ pub struct SubTestCommand {
     /// The prefix of the test functions.
     #[clap(long, help_heading = "Filter options")]
     pub test_prefix: Option<String>,
-
-    /// Internal transport for resolved strict-tag validation.
-    #[arg(long, hide = true)]
-    pub strict_tags: Option<bool>,
-
-    /// Internal transport for one registered custom tag name.
-    #[arg(long, hide = true, action = clap::ArgAction::Append)]
-    pub registered_tag: Vec<String>,
 
     /// When set, .gitignore files will not be respected.
     #[clap(long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Filter options")]
@@ -105,16 +94,6 @@ pub struct SubTestCommand {
     #[clap(long, value_name = "N", help_heading = "Runner options")]
     pub max_fail: Option<NonZeroU32>,
 
-    /// Internal transport for failed-first scheduling in worker processes.
-    #[clap(
-        long = "worker-failed-first",
-        hide = true,
-        default_missing_value = "true",
-        require_equals = true,
-        num_args = 0..=1
-    )]
-    pub worker_failed_first: Option<bool>,
-
     /// Stop scheduling new tests after the first failure.
     ///
     /// Equivalent to `--max-fail=1`. Use `--no-fail-fast` to keep running
@@ -142,10 +121,6 @@ pub struct SubTestCommand {
         help_heading = "Runner options"
     )]
     pub flaky_result: Option<FlakyResult>,
-
-    /// Internal transport for the resolved `JUnit` flaky status.
-    #[arg(long, hide = true)]
-    pub junit_flaky_fail_status: Option<JunitFlakyFailStatus>,
 
     /// Threshold in seconds after which a test is flagged as slow.
     ///
@@ -326,46 +301,12 @@ pub struct SubTestCommand {
         help_heading = "Coverage options"
     )]
     pub cov_fail_under: Option<f64>,
-
-    /// Internal: per-worker coverage data file path.
-    ///
-    /// Set automatically by the runner when `--cov` is enabled. Not intended
-    /// for direct use.
-    #[clap(long, hide = true, value_name = "PATH")]
-    pub cov_data_file: Option<Utf8PathBuf>,
-
-    /// Internal: validated exclusion expression forwarded to workers.
-    #[clap(long, hide = true, action = clap::ArgAction::Append)]
-    pub cov_exclude_line: Vec<String>,
-
-    /// Internal: validated partial-branch expression forwarded to workers.
-    #[clap(long, hide = true, action = clap::ArgAction::Append)]
-    pub cov_partial_branch: Vec<String>,
-
-    /// Internal: static coverage context forwarded to workers.
-    #[clap(long, hide = true)]
-    pub cov_static_context: Option<String>,
-
-    /// Internal: a single per-test override entry, encoded as JSON.
-    ///
-    /// Workers receive overrides from the main process via this flag, one
-    /// entry per occurrence. Users configure overrides via
-    /// `[[profile.<name>.overrides]]` in `karva.toml` rather than this
-    /// flag.
-    #[clap(
-        long = "override-json",
-        hide = true,
-        value_name = "JSON",
-        action = clap::ArgAction::Append,
-        value_parser = parse_override_json,
-    )]
-    pub override_json: Vec<OverrideOptions>,
 }
 
 #[derive(Debug, Parser)]
-/// Controller-only test options layered above worker-compatible test options.
+/// Test invocation options layered above selection, execution, and reporting arguments.
 pub struct TestCommand {
-    /// Options forwarded to each worker process.
+    /// Test selection, execution, and reporting arguments.
     #[clap(flatten)]
     pub sub_command: SubTestCommand,
 
@@ -557,13 +498,13 @@ impl SubTestCommand {
             }),
             test: Some(TestOptions {
                 test_function_prefix: self.test_prefix,
-                strict_tags: self.strict_tags,
+                strict_tags: None,
                 fail_fast,
                 max_fail,
                 try_import_fixtures: self.try_import_fixtures,
                 doctest_modules: self.doctest_modules,
                 retry: self.retry,
-                failed_first: self.worker_failed_first,
+                failed_first: None,
                 shuffle: None,
                 random_seed: None,
                 flaky_result: self.flaky_result.map(Into::into),
@@ -571,10 +512,7 @@ impl SubTestCommand {
                 slow_timeout: self.slow_timeout.map(SlowTimeoutSecs),
                 fail_slow: self.fail_slow.map(FailSlowSecs),
                 timeout: self.timeout.map(TestTimeoutSecs),
-                // `run-timeout` is a main-process-only option and is never
-                // forwarded to workers, so it lives on `TestCommand` rather
-                // than this worker-shared struct. `TestCommand::into_options`
-                // sets the real value.
+                // Invocation-wide limits are set by `TestCommand::into_options`.
                 run_timeout: None,
                 termination_grace_period: None,
             }),
@@ -596,11 +534,8 @@ impl SubTestCommand {
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),
-            junit: self.junit_flaky_fail_status.map(|status| JunitOptions {
-                flaky_fail_status: Some(status.into()),
-                ..JunitOptions::default()
-            }),
-            overrides: self.override_json,
+            junit: None,
+            overrides: Vec::new(),
         }
     }
 }
@@ -661,15 +596,6 @@ impl std::str::FromStr for RandomSeed {
             format!("`{value}` is not a valid random seed; expected an integer or `last`: {error}")
         })
     }
-}
-
-/// Parse a `--override-json` argument from its JSON encoding.
-///
-/// The main process forwards each `[[profile.<name>.overrides]]` entry to
-/// the worker via this flag, so the JSON must round-trip the
-/// [`OverrideOptions`] schema (including filter validation).
-fn parse_override_json(raw: &str) -> Result<OverrideOptions, String> {
-    serde_json::from_str(raw).map_err(|err| err.to_string())
 }
 
 fn parse_fail_slow(raw: &str) -> Result<f64, String> {
