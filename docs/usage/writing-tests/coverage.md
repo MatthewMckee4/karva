@@ -1,15 +1,14 @@
 # Coverage
 
-Karva measures line coverage natively. There is no plugin to install, no `.coveragerc`, and no separate `coverage` binary on the path — coverage is part of `karva test`.
-
-The implementation runs in the test worker on top of `sys.monitoring` (Python 3.12+) or `sys.settrace` (older versions), records every executed line under the configured source roots, and prints a `Name / Stmts / Miss / Cover` table at the end of the run.
+Karva measures line and branch coverage without a plugin. Choose source roots
+with `--cov` and report formats with `--cov-report`.
 
 ## Quick start
 
 Pass `--cov` to measure the current working directory:
 
 ```bash
-karva test --cov
+uv run karva test --cov
 ```
 
 ```text
@@ -42,7 +41,7 @@ An empty entry (`""`) measures the cwd, matching `pytest-cov`'s bare `--cov`.
 Pass `--cov-branch` to measure branch destinations as well as lines:
 
 ```bash
-karva test --cov --cov-branch --cov-report=term-missing
+uv run karva test --cov --cov-branch --cov-report=term-missing
 ```
 
 ```text
@@ -68,7 +67,7 @@ branch = true
 `--cov-report=term` (the default) prints the compact table above. `--cov-report=term-missing` adds a `Missing` column listing the uncovered line numbers per file:
 
 ```bash
-karva test --cov --cov-report=term-missing
+uv run karva test --cov --cov-report=term-missing
 ```
 
 ```text
@@ -82,8 +81,8 @@ TOTAL                10      4     60%
 `--cov-report=xml[:PATH]` writes Cobertura XML for CI integrations. If `PATH` is omitted, karva writes `coverage.xml` in the project root:
 
 ```bash
-karva test --cov=src --cov-report=xml
-karva test --cov=src --cov-report=xml:build/coverage.xml
+uv run karva test --cov=src --cov-report=xml
+uv run karva test --cov=src --cov-report=xml:build/coverage.xml
 ```
 
 Persisted native coverage data can produce the same report after the test run:
@@ -107,8 +106,8 @@ report-path = "build/coverage.xml"
 `--cov-report=json[:PATH]` writes a machine-readable JSON report. If `PATH` is omitted, karva writes `coverage.json` in the project root:
 
 ```bash
-karva test --cov=src --cov-report=json
-karva test --cov=src --cov-report=json:build/coverage.json
+uv run karva test --cov=src --cov-report=json
+uv run karva test --cov=src --cov-report=json:build/coverage.json
 ```
 
 Pass `--cov-context=test` to record qualified test names and lifecycle phases. Execution outside a test uses `session`; test execution uses `setup`, `run`, or `teardown`:
@@ -185,8 +184,8 @@ uv run karva coverage erase
 `--cov-report=html[:DIR]` writes a simple browsable HTML report. If `DIR` is omitted, karva writes `htmlcov/` in the project root:
 
 ```bash
-karva test --cov=src --cov-report=html
-karva test --cov=src --cov-report=html:build/htmlcov
+uv run karva test --cov=src --cov-report=html
+uv run karva test --cov=src --cov-report=html:build/htmlcov
 ```
 
 Files that were never imported during the run still appear, at `0%`, so dead modules under your source root show up rather than silently inflating the total.
@@ -196,7 +195,7 @@ Files that were never imported during the run still appear, at `0%`, so dead mod
 Use `--cov-include` and `--cov-omit` to keep generated files, migrations, vendored code, or other non-target paths out of the report:
 
 ```bash
-karva test --cov=src --cov-include='src/**' --cov-omit='**/migrations/*'
+uv run karva test --cov=src --cov-include='src/**' --cov-omit='**/migrations/*'
 ```
 
 Globs match the project-relative file path shown in the coverage report. When include filters are set, only matching files are reported. Omit filters are applied after include filters.
@@ -215,7 +214,7 @@ omit = ["**/migrations/*"]
 `--cov-fail-under=N` exits non-zero when total coverage drops below `N`, even if every test passed:
 
 ```bash
-karva test --cov --cov-fail-under=90
+uv run karva test --cov --cov-fail-under=90
 ```
 
 `N` accepts any value in `0..=100`, fractional values included. The flag has no effect when tests already failed — the exit code is already non-zero in that case.
@@ -230,10 +229,10 @@ fail-under = 90
 `--no-cov` overrides any `--cov` flag and any `[coverage] sources` configured in `karva.toml`:
 
 ```bash
-karva test --no-cov
+uv run karva test --no-cov
 ```
 
-Use it when iterating locally without editing config — for example, to skip the tracer overhead on a tight feedback loop while CI keeps coverage on.
+Use this to skip coverage locally without changing configuration.
 
 ## Excluding code
 
@@ -289,20 +288,20 @@ Each worker writes its own JSON file. After the run, the main process unions the
 A typical CI invocation pins a minimum and prints the missing lines:
 
 ```bash
-karva test --cov=src --cov-report=term-missing --cov-fail-under=85
+uv run karva test --cov=src --cov-report=term-missing --cov-fail-under=85
 ```
 
 For XML-consuming tools such as SonarQube or Codecov:
 
 ```bash
-karva test --cov=src --cov-report=xml:build/coverage.xml --cov-fail-under=85
+uv run karva test --cov=src --cov-report=xml:build/coverage.xml --cov-fail-under=85
 ```
 
 For machine-readable JSON or a browsable HTML summary:
 
 ```bash
-karva test --cov=src --cov-report=json:build/coverage.json --cov-fail-under=85
-karva test --cov=src --cov-report=html:build/htmlcov --cov-fail-under=85
+uv run karva test --cov=src --cov-report=json:build/coverage.json --cov-fail-under=85
+uv run karva test --cov=src --cov-report=html:build/htmlcov --cov-fail-under=85
 ```
 
 Or, equivalently, in `pyproject.toml`:
@@ -315,5 +314,5 @@ fail-under = 85
 ```
 
 ```bash
-karva test --profile ci
+uv run karva test --profile ci
 ```

@@ -1,11 +1,8 @@
 # Project Non-Goals
 
-Karva is intentionally narrower than pytest. The goal is not to run every
-pytest suite unchanged; the goal is a fast, explicit test runner with a smaller
-surface area.
-
-This page documents features Karva does not plan to support. If a feature is
-not listed here, that does not mean it is planned.
+Karva does not plan to support the features below.
+Other pytest features may also be unsupported; absence from this list does
+not mean support is planned.
 
 ## Class-Based Tests
 
@@ -70,10 +67,5 @@ def test_query(database):
 
 ## Pytest Plugin Compatibility
 
-Karva will not implement pytest's plugin or hook system as a compatibility
-layer. Pytest plugins depend on pytest's collection tree, config object,
-request object, and hook lifecycle, which are not part of Karva's design.
-
-Karva can still provide first-party features inspired by common pytest plugins
-when they fit the project. Those features should be designed as Karva features,
-not as pytest plugin emulation.
+Karva does not support pytest plugins or hooks. Common plugin features may
+be built into Karva directly.

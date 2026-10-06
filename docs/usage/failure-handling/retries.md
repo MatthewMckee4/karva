@@ -1,13 +1,13 @@
 # Retries
 
-Some tests fail nondeterministically — a flaky network call, a timing-sensitive assertion, a race against a background task. Retrying lets the run continue without rewriting the test or quarantining it behind a tag.
+Use retries for known intermittent failures, such as unreliable network calls.
 
 ## Enabling retries
 
 Pass `--retry N` to retry each failed test up to `N` more times:
 
 ```bash
-karva test --retry 3
+uv run karva test --retry 3
 ```
 
 ```toml
@@ -39,10 +39,10 @@ uv run karva test --retry 2 --flaky-result fail
 To see the per-attempt lines in the run output, raise the status level:
 
 ```bash
-karva test --retry 3 --status-level=retry --final-status-level=retry
+uv run karva test --retry 3 --status-level=retry --final-status-level=retry
 ```
 
-The summary line then includes a `N retried` counter so flake patterns are visible at a glance.
+The summary includes an `N retried` count.
 
 ## Per-test retry overrides
 
@@ -106,4 +106,5 @@ Both variables are always set, even when retries are disabled. See [Environment 
 
 ## When not to retry
 
-Retries hide regressions. Reach for them on tests that are flaky for known infrastructure reasons; do not blanket-enable them across the suite to suppress real failures. If a test is flaky for reasons you control, prefer fixing the root cause.
+Retries can hide regressions. Fix flaky tests where possible, and limit retries
+to known infrastructure failures.

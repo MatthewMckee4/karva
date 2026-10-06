@@ -216,7 +216,7 @@ def test_greeting():
 ```
 
 ```bash
-karva test --snapshot-update
+uv run karva test --snapshot-update
 ```
 
 Karva rewrites your source file, replacing `inline=""` with the actual value.
@@ -253,7 +253,7 @@ All three assertion functions support `inline=`:
 When you intentionally change the output of your code, use `--snapshot-update` to update all snapshots in place without creating pending files:
 
 ```bash
-karva test --snapshot-update
+uv run karva test --snapshot-update
 ```
 
 This writes directly to `.snap` files and the tests pass immediately.

@@ -1,19 +1,21 @@
 # Parallel execution
 
-Karva runs tests across multiple worker processes by default. Each worker is a separate Python interpreter, so tests are isolated from each other at the process level — a crash, signal, or interpreter-state mutation in one test cannot bleed into another.
+Karva runs tests in parallel Python worker processes. Tests in the same worker
+share an interpreter; tests in different workers do not.
 
 ## Worker count
 
 The default is one worker per CPU core. Override with `-n` / `--num-workers`:
 
 ```bash
-karva test -n 4
+uv run karva test -n 4
 ```
 
-`--no-parallel` is a shorthand for `-n 1` and is what you want when debugging, attaching a debugger, or running tests that share resources you cannot partition:
+Use `--no-parallel` (equivalent to `-n 1`) when debugging or testing shared
+resources that cannot be partitioned:
 
 ```bash
-karva test --no-parallel
+uv run karva test --no-parallel
 ```
 
 Karva caps the worker count at the number of independently schedulable tests
@@ -48,7 +50,7 @@ All cases still run; only their distribution across workers changes.
 
 ## Partitioning shared resources
 
-Workers do not coordinate. If your tests touch a shared resource — a database, a port, a temp directory — partition it on `KARVA_WORKER_ID` rather than locking:
+Give each worker its own database, port, or directory using `KARVA_WORKER_ID`:
 
 ```python
 import os
@@ -70,22 +72,24 @@ While output is captured, stdin reads fail immediately with a diagnostic instead
 `--no-capture` disables capture entirely and forces a single worker, since uncaptured output from concurrent workers cannot safely interleave:
 
 ```bash
-karva test --no-capture
+uv run karva test --no-capture
 ```
 
-Reach for `--no-capture` when debugging with `print` statements or attaching `pdb`. For ad-hoc inspection without giving up parallelism, prefer `-s` / `--show-output`, which keeps capture on but prints the captured output for every test.
+Use `--no-capture` for `pdb` or live output. Use `-s` / `--show-output` to
+print every test's captured output while keeping parallel execution.
 
 ## Splitting a run across CI jobs
 
 `--partition slice:M/N` runs only slice `M` of `N` total slices. Tests are sorted by qualified name and distributed round-robin: test 1 to slice 1, test 2 to slice 2, ..., test `N+1` to slice 1, and so on. Running every `slice:1/N` through `slice:N/N` together covers every collected test exactly once.
 
 ```bash
-karva test --partition slice:1/3
-karva test --partition slice:2/3
-karva test --partition slice:3/3
+uv run karva test --partition slice:1/3
+uv run karva test --partition slice:2/3
+uv run karva test --partition slice:3/3
 ```
 
-Slices are computed deterministically from the current test set, so the same revision splits the same way on every machine. Adding or removing tests can shift which slice a given test falls into, so this is less stable per-test than a hash-based scheme but does not need any historical data.
+The same test set produces the same slices. Adding or removing tests can
+move other tests between slices.
 
 Use `hash:M/N` when stable assignment matters more than even slices. Each
 qualified test name maps to one stable bucket, so adding or removing a test

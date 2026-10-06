@@ -1,6 +1,7 @@
 # Cache
 
-Karva keeps only reusable history on disk: per-test durations for parallel scheduling and the test names used by `--last-failed`. Worker test selections, live state, and complete results travel over loopback IPC and remain in memory.
+Karva caches test durations for scheduling and failed test names for
+`--last-failed`.
 
 The cache lives in `.karva_cache` under the project root. Coverage runs also write per-worker coverage artifacts there.
 
@@ -12,7 +13,7 @@ The cache lives in `.karva_cache` under the project root. Coverage runs also wri
 uv run karva test --last-failed
 ```
 
-A typical fix-it-up loop:
+After fixing failures, run the full suite again:
 
 ```bash
 uv run karva test                # see the failures
@@ -38,11 +39,11 @@ uv run karva test --no-cache
 
 ## Managing the cache
 
-Two `karva cache` subcommands manage cache contents directly:
+Two `uv run karva cache` subcommands manage cache contents directly:
 
 ```bash
 uv run karva cache prune  # keep only the newest coverage/legacy run directory
 uv run karva cache clean  # remove the cache directory entirely
 ```
 
-`prune` preserves reusable history. Reach for `clean` if the cache gets corrupted or after a cache-format change.
+`prune` preserves test history. Use `clean` to reset it.

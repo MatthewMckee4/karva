@@ -1,130 +1,54 @@
-The `skip` tag allows us to mark test functions to be skipped during test execution.
+# Skip
 
-When a test is skipped, it will not be run but will be counted in the test results.
-
-## Basic Usage
+`@karva.tags.skip` skips a test and counts it in the results.
 
 ```python title="test.py"
 import karva
 
-@karva.tags.skip
-def test_function():
+@karva.tags.skip(reason="Not implemented yet")
+def test_export():
     assert False
 ```
 
-Then running `uv run karva test` will result in one skipped test.
+Use `@karva.tags.skip` or `@karva.tags.skip()` without a reason.
+A reason can also be positional: `@karva.tags.skip("Not implemented yet")`.
+
+## Conditions
+
+Pass boolean conditions to skip a test only when all are true:
 
 ```python title="test.py"
+import sys
 import karva
 
-@karva.tags.skip()
-def test_function():
-    assert False
+@karva.tags.skip(sys.platform == "win32", reason="Requires Unix")
+def test_unix_permissions():
+    assert sys.platform != "win32"
 ```
 
-Then running `uv run karva test` will result in one skipped test.
+`@karva.tags.skip(True, False)` does not skip the test.
 
 ## Running skipped tests
 
-Use `--run-ignored=only` to run only tests whose skip condition is active, or
-`--run-ignored=all` to run them alongside normal tests. Active skip decorators
-are ignored for these tests, so their bodies run and can pass or fail normally.
+Run only tests with active skip conditions, or include them with other tests:
 
 ```bash
 uv run karva test --run-ignored=only
 uv run karva test --run-ignored=all
 ```
 
+Their skip decorators are ignored, so they can pass or fail normally.
 Tests with false skip conditions are not considered ignored.
-
-## Reason
-
-You can provide a `str` reason as a positional or keyword argument.
-
-```python title="test.py"
-import karva
-
-@karva.tags.skip("This test is not implemented yet")
-def test_function():
-    assert False
-```
-
-Then running `uv run karva test` will result in one skipped test.
-
-```python title="test.py"
-import karva
-
-@karva.tags.skip(reason="Waiting for feature X to be implemented")
-def test_function():
-    assert False
-```
-
-Then running `uv run karva test` will result in one skipped test.
 
 ## Pytest
 
-You can also still use `@pytest.mark.skip`.
+`@pytest.mark.skip` and `@pytest.mark.skipif` are also supported:
 
 ```python title="test.py"
+import sys
 import pytest
 
-@pytest.mark.skip(reason="Waiting for feature X to be implemented")
-def test_function():
-    assert False
+@pytest.mark.skipif(sys.platform == "win32", reason="Requires Unix")
+def test_unix_permissions():
+    assert sys.platform != "win32"
 ```
-
-Then running `uv run karva test` will result in one skipped test.
-
-## Conditions
-
-We can provide `bool` conditions as a positional arguments.
-
-Then the test will only be skipped if all conditions are `True`.
-
-```python title="test.py"
-import karva
-
-@karva.tags.skip(True)
-def test_function():
-    assert False
-```
-
-Then running `uv run karva test` will result in one skipped test.
-
-You can still provide a reason as a keyword argument.
-
-```python title="test.py"
-import karva
-
-@karva.tags.skip(True, reason="Waiting for feature X to be implemented")
-def test_function():
-    assert False
-```
-
-Then running `uv run karva test` will result in one skipped test.
-
-### Multiple Conditions
-
-```python title="test.py"
-import karva
-
-@karva.tags.skip(True, False) # This will not be skipped
-def test_function():
-    assert False
-```
-
-Then running `uv run karva test` will result in one failed test.
-
-### Pytest
-
-You can also still use `@pytest.mark.skipif`.
-
-```python title="test.py"
-import pytest
-
-@pytest.mark.skipif(True, reason="Waiting for feature X to be implemented")
-def test_function():
-    assert False
-```
-
-Then running `uv run karva test` will result in one skipped test.

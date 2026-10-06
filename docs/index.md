@@ -7,26 +7,23 @@ description: A Python test framework, written in Rust.
   <div class="home-intro">
     <h1>Karva</h1>
     <p class="home-lede">A Python test framework, written in Rust.</p>
-    <p>Run familiar function-based tests with parallel workers, process
-    isolation, and the tools a serious test suite needs built in.</p>
+    <p>Run Python tests in parallel.</p>
+    <p>In alpha. <a href="usage/non-goals/">Check compatibility</a> before migrating.</p>
     <p class="hero-actions">
       <a class="md-button md-button--primary" href="get-started/tutorial/">Run your first test</a>
       <a class="md-button" href="usage/">Read the guide</a>
     </p>
   </div>
   <div class="command-panel">
-    <span>Try it in an existing project</span>
+    <span>Get started</span>
     <pre><code><span>uv add --dev karva</span><span>uv run karva test</span></code></pre>
   </div>
 </div>
 
 <section class="evidence-section">
   <div>
-    <span>Performance</span>
-    <h2>Look at the measurements.</h2>
-    <p>Performance depends on the suite. This benchmark separates collection
-    from execution so the comparison stays visible instead of becoming a vague
-    speed claim.</p>
+    <h2>Benchmarks</h2>
+    <p>Results depend on your suite and machine.</p>
   </div>
   <div class="benchmark-chart" role="group" aria-label="Benchmark runtime comparison">
     <div class="benchmark-row benchmark-row--karva">
@@ -42,32 +39,16 @@ description: A Python test framework, written in Rust.
   </div>
 </section>
 
-<section class="principle-section">
-  <div>
-    <span>Why Karva</span>
-    <h2>Fast by design. Small on purpose.</h2>
-  </div>
-  <div>
-    <p>Karva keeps discovery, scheduling, reporting, and coverage in a Rust
-    process. Python workers focus on running tests.</p>
-    <p>Compatibility stops where pytest behavior would make suites harder to
-    understand or maintain. The smaller surface is deliberate.</p>
-    <a href="usage/non-goals/">Read the project non-goals</a>
-  </div>
-</section>
-
 <section class="built-in-section">
   <div class="section-heading">
-    <h2>Useful features belong in the runner.</h2>
-    <p>Karva owns the complete test run, so common workflows work together
-    without a stack of third-party plugins.</p>
+    <h2>Built in</h2>
   </div>
   <div class="capability-grid">
-    <a href="usage/running-tests/parallel/"><strong>Parallel execution</strong><span>Isolated workers by default</span></a>
+    <a href="usage/running-tests/parallel/"><strong>Parallel execution</strong><span>Separate Python workers</span></a>
     <a href="usage/running-tests/filtering/"><strong>Filtering</strong><span>Select tests with expressions</span></a>
     <a href="usage/running-tests/watch/"><strong>Watch mode</strong><span>Rerun after source changes</span></a>
     <a href="usage/writing-tests/coverage/"><strong>Coverage</strong><span>Native line coverage</span></a>
     <a href="usage/writing-tests/snapshots/"><strong>Snapshots</strong><span>File and inline snapshots</span></a>
-    <a href="usage/fixtures/fixtures/"><strong>Fixtures</strong><span>Familiar dependency injection</span></a>
+    <a href="usage/fixtures/fixtures/"><strong>Fixtures</strong><span>Share setup and teardown</span></a>
   </div>
 </section>

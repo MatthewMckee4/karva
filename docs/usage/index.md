@@ -1,34 +1,22 @@
 # Usage
 
-These guides cover daily work after the [Tutorial](../get-started/tutorial.md).
-Start with the section that matches what you need to do.
+New to Karva? Start with the [tutorial](../get-started/tutorial.md).
 
-You can run many existing pytest tests with Karva, but full pytest compatibility
-is not a goal. If you hit unsupported behavior, check the [Project
-Non-Goals](non-goals.md) first. If it is not covered there, [open an
-issue](https://github.com/MatthewMckee4/karva/issues/new).
+| Task | Guide |
+| --- | --- |
+| Select tests | [Filtering](running-tests/filtering.md) |
+| Run across workers or CI jobs | [Parallel execution](running-tests/parallel.md) |
+| Rerun on save | [Watch mode](running-tests/watch.md) |
+| Rerun failures | [Cache](running-tests/cache.md) |
+| Stop after failures | [Failing fast](failure-handling/fail-fast.md) |
+| Retry flaky tests | [Retries](failure-handling/retries.md) |
+| Find slow tests | [Slow tests](failure-handling/slow-tests.md) |
+| Write tests | [Basics](writing-tests/tests.md) |
+| Save expected output | [Snapshots](writing-tests/snapshots.md) |
+| Measure coverage | [Coverage](writing-tests/coverage.md) |
+| Share setup and teardown | [Fixtures](fixtures/fixtures.md) |
+| Test multiple inputs | [Parametrize](tags/parametrize.md) |
 
-## Running tests
-
-Select tests, distribute work across workers, rerun on file changes, and reuse
-cached results. Start with [Filtering tests](running-tests/filtering.md).
-
-## Failure handling
-
-Choose when a run stops, retry failures, and find slow tests. Start with
-[Failing fast](failure-handling/fail-fast.md).
-
-## Writing tests
-
-Capture complex values, measure coverage, and use Karva's test helpers. Start
-with [Snapshots](writing-tests/snapshots.md).
-
-## Fixtures
-
-Share setup and teardown between tests, and use built-ins for common context.
-Start with [Fixtures](fixtures/fixtures.md).
-
-## Tags
-
-Parametrize inputs, skip cases, mark expected failures, and set per-test
-timeouts. Start with [Parametrize](tags/parametrize.md).
+Karva runs many pytest tests, but full compatibility is not a goal.
+Check the [non-goals](non-goals.md) for unsupported features, or
+[open an issue](https://github.com/MatthewMckee4/karva/issues/new).

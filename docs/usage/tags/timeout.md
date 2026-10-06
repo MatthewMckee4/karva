@@ -18,7 +18,7 @@ The threshold accepts fractional seconds (`@karva.tags.timeout(0.5)`).
 Use the `timeout` setting (or `--timeout=SECONDS` on the CLI) to apply the same hard limit to every test in the project:
 
 ```bash
-karva test --timeout=120
+uv run karva test --timeout=120
 ```
 
 ```toml

@@ -1,9 +1,6 @@
 # Profiles
 
-Karva organizes configuration into named **profiles**, modeled after
-[`cargo nextest`](https://nexte.st/docs/configuration/). A profile is a named
-group of settings that tailors a test run for a particular context — fast local
-iteration, CI, a soak run, and so on.
+Profiles group settings for different runs, such as local development and CI.
 
 Configuration lives in `karva.toml` (or the `[tool.karva]` table in
 `pyproject.toml`); the path can be overridden with `--config-file`.
@@ -60,7 +57,7 @@ retry = 1
 retry = 5
 ```
 
-`karva test --profile ci` runs with `test-function-prefix = "test"`
+`uv run karva test --profile ci` runs with `test-function-prefix = "test"`
 (inherited from `default`) and `retry = 5` (overridden by `ci`).
 
 ## Hierarchical configuration
@@ -79,14 +76,11 @@ error that lists the profiles that are available.
 
 ## Inspecting the resolved configuration
 
-Use `karva show-config` to print the configuration Karva would actually run
-with for a given profile, formatted as TOML. This is helpful when debugging
-precedence between built-in defaults, `[profile.default]`, the selected
-profile, and any CLI overrides.
+Use `uv run karva show-config` to print the resolved configuration as TOML:
 
 ```bash
-karva show-config              # default profile
-karva show-config --profile ci
+uv run karva show-config              # default profile
+uv run karva show-config --profile ci
 ```
 
 ## See also
