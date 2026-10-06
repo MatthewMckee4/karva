@@ -9,7 +9,15 @@ Add Karva to the project's UV development dependencies:
 uv add --dev karva
 ```
 
-Install this directory with Zed's `Install Dev Extension` command, then enable
+From the repository root, install the extension build target for the pinned
+Rust toolchain before installing the development extension:
+
+```sh
+rustup target add wasm32-wasip2
+```
+
+A target installed for a different toolchain (including `stable`) does not
+satisfy this requirement. Install this directory with Zed's `Install Dev Extension` command, then enable
 Karva in `settings.json`:
 
 ```json
@@ -73,6 +81,7 @@ it.
 Check and build the extension from the repository root:
 
 ```sh
+rustup target add wasm32-wasip2
 cargo test --manifest-path editors/zed/Cargo.toml
 cargo build --manifest-path editors/zed/Cargo.toml --target wasm32-wasip2
 ```
