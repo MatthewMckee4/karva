@@ -7,7 +7,7 @@
 //! leading docstring of every body — `CPython` stores docstrings as
 //! bytecode constants rather than executable statements.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
@@ -28,7 +28,7 @@ use ruff_text_size::{Ranged, TextSize};
 #[cfg(test)]
 fn executable_lines(path: &Path) -> io::Result<HashSet<u32>> {
     executable_lines_with_exclusions(path, &CoverageExclusions::default())
-        .map(|(executable, _)| executable)
+        .map(|analysis| analysis.executable)
 }
 
 /// Compiled source exclusion expressions shared by line and branch analysis.
@@ -54,11 +54,23 @@ impl CoverageExclusions {
     }
 }
 
-/// Analyze executable and excluded lines using configured expressions.
+/// Source lines and the translation from Python's physical lines to logical lines.
+pub(crate) struct SourceLines {
+    /// Statement heads included in coverage metrics.
+    pub(super) executable: HashSet<u32>,
+
+    /// Statement heads removed by builtins or configured exclusions.
+    pub(super) excluded: HashSet<u32>,
+
+    /// Continuation lines map to the first line of their logical statement.
+    pub(super) continuations: HashMap<u32, u32>,
+}
+
+/// Analyze executable, excluded, and continuation lines using configured expressions.
 pub(crate) fn executable_lines_with_exclusions(
     path: &Path,
     exclusions: &CoverageExclusions,
-) -> io::Result<(HashSet<u32>, HashSet<u32>)> {
+) -> io::Result<SourceLines> {
     let source = fs::read_to_string(path)?;
     Ok(executable_lines_for_source_with_exclusions(
         &source, exclusions,
@@ -69,21 +81,57 @@ pub(crate) fn executable_lines_with_exclusions(
 /// so unit tests can avoid touching the filesystem.
 #[cfg(test)]
 fn executable_lines_for_source(source: &str) -> HashSet<u32> {
-    executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).0
+    executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).executable
 }
 
 fn executable_lines_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
-) -> (HashSet<u32>, HashSet<u32>) {
+) -> SourceLines {
     let Some(parsed) = parse_unchecked(source, ParseOptions::from(Mode::Module)).try_into_module()
     else {
-        return (HashSet::new(), HashSet::new());
+        return SourceLines {
+            executable: HashSet::new(),
+            excluded: HashSet::new(),
+            continuations: HashMap::new(),
+        };
     };
     let line_index = LineIndex::from_source_text(source);
     let mut excluded_head_lines = pragma_no_cover_lines(&parsed, source, &line_index);
     excluded_head_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
-    executable_lines_for_module(parsed.syntax(), &line_index, &excluded_head_lines)
+    let (executable, excluded) =
+        executable_lines_for_module(parsed.syntax(), &line_index, &excluded_head_lines);
+    let mut continuations = HashMap::new();
+    let mut first_line = None;
+    for token in parsed.tokens() {
+        match token.kind() {
+            TokenKind::Comment
+            | TokenKind::NonLogicalNewline
+            | TokenKind::Indent
+            | TokenKind::Dedent
+            | TokenKind::EndOfFile => {}
+            TokenKind::Newline => {
+                first_line = None;
+            }
+            _ => {
+                let Ok(start) = u32::try_from(line_index.line_index(token.start()).get()) else {
+                    continue;
+                };
+                let Ok(end) = u32::try_from(line_index.line_index(token.end()).get()) else {
+                    continue;
+                };
+                let first = *first_line.get_or_insert(start);
+                for line in start.max(first.saturating_add(1))..=end {
+                    continuations.insert(line, first);
+                }
+            }
+        }
+    }
+    SourceLines {
+        executable,
+        excluded,
+        continuations,
+    }
 }
 
 /// Reuses a parsed module and its source index for line and branch analysis.
@@ -332,6 +380,8 @@ fn is_type_checking(expression: &Expr) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     fn lines(source: &str) -> Vec<u32> {
@@ -343,8 +393,11 @@ mod tests {
     fn lines_with_exclusions(source: &str, patterns: &[&str]) -> (Vec<u32>, Vec<u32>) {
         let patterns = patterns.iter().map(ToString::to_string).collect::<Vec<_>>();
         let exclusions = CoverageExclusions::new(&patterns).expect("valid exclusions");
-        let (executable, excluded) =
-            executable_lines_for_source_with_exclusions(source, &exclusions);
+        let SourceLines {
+            executable,
+            excluded,
+            ..
+        } = executable_lines_for_source_with_exclusions(source, &exclusions);
         let mut executable = executable.into_iter().collect::<Vec<_>>();
         executable.sort_unstable();
         let mut excluded = excluded.into_iter().collect::<Vec<_>>();
@@ -372,6 +425,24 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    #[rstest]
+    fn continuation_lines_map_to_logical_start(
+        #[values(
+            "value = (\n    first\n    or second\n)\nnext_value = 1\n",
+            "value = first \\\n    or second \\\n    or third \\\n    or fourth\nnext_value = 1\n",
+            "value = \"\"\"first\nsecond\nthird\nfourth\"\"\"\nnext_value = 1\n"
+        )]
+        source: &str,
+    ) {
+        let analysis =
+            executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default());
+        assert_eq!(
+            analysis.continuations,
+            HashMap::from([(2, 1), (3, 1), (4, 1)])
+        );
+        assert_eq!(analysis.executable, HashSet::from([1, 5]));
     }
 
     #[test]

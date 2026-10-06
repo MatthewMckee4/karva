@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 use crate::branches::{CoveragePartials, branch_analysis_with_exclusions};
 use crate::context::{PENDING_SETUP_CONTEXT, SESSION_CONTEXT, compose_context};
 use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
-use crate::executable::{CoverageExclusions, executable_lines_with_exclusions};
+use crate::executable::{CoverageExclusions, SourceLines, executable_lines_with_exclusions};
 
 /// Configuration for a single worker's coverage measurement.
 #[derive(Debug, Clone)]
@@ -1025,7 +1025,22 @@ fn save_data(
 
     let mut files = BTreeMap::new();
     for (path, hits) in executed {
-        let (executable, excluded) = executable_lines_with_exclusions(&path, exclusions)?;
+        let SourceLines {
+            executable,
+            excluded,
+            continuations,
+        } = executable_lines_with_exclusions(&path, exclusions)?;
+        let logical_line = |line: u32| continuations.get(&line).copied().unwrap_or(line);
+        let logical_arc = |arc: BranchArc| {
+            let translate = |line: i32| {
+                u32::try_from(line).map_or(line, |line| line_to_i32(logical_line(line)))
+            };
+            BranchArc {
+                from: translate(arc.from),
+                to: translate(arc.to),
+            }
+        };
+        let hits = hits.into_iter().map(logical_line).collect::<HashSet<_>>();
         if executable.is_empty() {
             continue;
         }
@@ -1033,25 +1048,35 @@ fn save_data(
         executed_lines.sort_unstable();
         let mut executable_lines_vec: Vec<u32> = executable.into_iter().collect();
         executable_lines_vec.sort_unstable();
-        let context_lines = contexts
-            .remove(&path)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|(line, _)| executed_lines.binary_search(line).is_ok())
-            .map(|(line, contexts)| (line, contexts.into_iter().collect::<BTreeSet<_>>()))
-            .collect();
+        let mut context_lines = BTreeMap::<_, BTreeSet<_>>::new();
+        for (line, contexts) in contexts.remove(&path).unwrap_or_default() {
+            let line = logical_line(line);
+            if executed_lines.binary_search(&line).is_ok() {
+                context_lines.entry(line).or_default().extend(contexts);
+            }
+        }
         let branches = if branches {
             let (possible, partial) = branch_analysis_with_exclusions(&path, exclusions, partials)?;
-            let executed_arcs = arcs.remove(&path).unwrap_or_default();
+            let executed_arcs = arcs
+                .remove(&path)
+                .unwrap_or_default()
+                .into_iter()
+                .map(logical_arc)
+                .filter(|arc| arc.from != arc.to)
+                .collect::<HashSet<_>>();
             let mut possible_vec: Vec<BranchArc> = possible.iter().copied().collect();
             possible_vec.sort_unstable();
             let mut executed_vec: Vec<BranchArc> = executed_arcs.iter().copied().collect();
             executed_vec.sort_unstable();
-            let contexts = arc_contexts
-                .remove(&path)
-                .unwrap_or_default()
+            let mut normalized_contexts = BTreeMap::<_, BTreeSet<_>>::new();
+            for (arc, contexts) in arc_contexts.remove(&path).unwrap_or_default() {
+                let arc = logical_arc(arc);
+                if executed_arcs.contains(&arc) {
+                    normalized_contexts.entry(arc).or_default().extend(contexts);
+                }
+            }
+            let contexts = normalized_contexts
                 .into_iter()
-                .filter(|(arc, _)| executed_arcs.contains(arc))
                 .map(|(arc, contexts)| BranchContextEntry {
                     arc,
                     contexts: contexts.into_iter().collect(),
