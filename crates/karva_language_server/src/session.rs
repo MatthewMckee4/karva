@@ -131,7 +131,7 @@ impl PreparedDiagnostics {
                     errors_by_path
                         .entry(document.path)
                         .or_default()
-                        .push(error.to_string());
+                        .push(format!("{:#}", anyhow::Error::new(error)));
                     continue;
                 }
             };
@@ -174,11 +174,12 @@ impl PreparedDiagnostics {
                     if cancellation.is_cancelled() {
                         return None;
                     }
+                    let message = format!("{:#}", anyhow::Error::new(error));
                     for path in paths {
                         errors_by_path
                             .entry(path)
                             .or_default()
-                            .push(error.to_string());
+                            .push(message.clone());
                     }
                     continue;
                 }
