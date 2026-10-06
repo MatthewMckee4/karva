@@ -368,7 +368,10 @@ fn get_fixture_function<'py>(function: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     Err(PyAttributeError::new_err(MISSING_FIXTURE_INFO))
 }
 
-/// Resolves visible auto-use fixtures with nearer definitions shadowing parent names.
+/// Resolves auto-use names through the visible fixture provider chain.
+///
+/// An inherited auto-use name also activates a nearer non-auto-use override;
+/// rejected nearer definitions prevent the parent implementation from running.
 pub fn get_auto_use_fixtures<'a>(
     parents: &'a [&'a DiscoveredPackage],
     current: &'a dyn HasFixtures<'a>,
@@ -378,13 +381,32 @@ pub fn get_auto_use_fixtures<'a>(
     let parent_fixtures = parents
         .iter()
         .rev()
-        .flat_map(|parent| parent.auto_use_fixtures(&[scope]));
+        .flat_map(|parent| parent.auto_use_fixtures(scope.scopes_above()));
 
     let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
     current_fixtures
         .into_iter()
         .chain(parent_fixtures)
         .filter(|fixture| seen.insert(fixture.name().function_name()))
+        .filter_map(|fixture| {
+            let name = fixture.name().function_name();
+            let lookup = std::iter::once(current.lookup_fixture(name))
+                .chain(
+                    parents
+                        .iter()
+                        .rev()
+                        .map(|parent| parent.lookup_fixture(name)),
+                )
+                .find(|lookup| !matches!(lookup, FixtureLookup::Missing));
+            match lookup {
+                Some(FixtureLookup::Found(visible))
+                    if scope.scopes_above().contains(&visible.scope()) =>
+                {
+                    Some(visible)
+                }
+                _ => None,
+            }
+        })
         .collect()
 }
 
