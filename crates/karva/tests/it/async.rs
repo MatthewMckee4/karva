@@ -91,6 +91,7 @@ async def test_async_fails():
     6 |     assert False, 'async test failed'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: async test failed
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

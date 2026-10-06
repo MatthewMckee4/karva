@@ -24,6 +24,7 @@ use karva_diagnostic::{Diagnostic, Reporter};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::TestCacheKey;
+use pyo3::types::PyAnyMethods;
 use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::failed_to_start_coverage_diagnostic;
@@ -78,6 +79,13 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
     let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {
+        if let Err(error) = py
+            .import("karva._assertions")
+            .and_then(|module| module.call_method1("install", (context.cwd().as_str(),)))
+        {
+            tracing::warn!("failed to install assertion instrumentation: {error}");
+        }
+
         let cov_session =
             coverage.and_then(|cfg| match CoverageSession::start(py, context.cwd(), cfg) {
                 Ok(session) => Some(session),

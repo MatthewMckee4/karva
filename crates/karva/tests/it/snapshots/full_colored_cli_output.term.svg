@@ -1,4 +1,4 @@
-<svg width="827px" height="1442px" xmlns="http://www.w3.org/2000/svg">
+<svg width="827px" height="1460px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { fill: #000000 }
@@ -83,105 +83,107 @@
 </tspan>
     <tspan x="10px" y="532px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-blue bold">^^^^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="550px">
+    <tspan x="10px" y="550px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: assert 1 == 2</tspan>
 </tspan>
-    <tspan x="10px" y="568px"><tspan>test_output::test_error:</tspan>
+    <tspan x="10px" y="568px">
 </tspan>
-    <tspan x="10px" y="586px">
+    <tspan x="10px" y="586px"><tspan>test_output::test_error:</tspan>
 </tspan>
-    <tspan x="10px" y="604px"><tspan class="fg-bright-red bold">error[missing-fixtures]</tspan><tspan class="bold">: Test `test_error` has missing fixtures</tspan>
+    <tspan x="10px" y="604px">
 </tspan>
-    <tspan x="10px" y="622px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:32:5</tspan>
+    <tspan x="10px" y="622px"><tspan class="fg-bright-red bold">error[missing-fixtures]</tspan><tspan class="bold">: Test `test_error` has missing fixtures</tspan>
 </tspan>
-    <tspan x="10px" y="640px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="640px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:32:5</tspan>
 </tspan>
-    <tspan x="10px" y="658px"><tspan class="fg-bright-blue bold">32</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan> def test_error(missing_fixture):</tspan>
+    <tspan x="10px" y="658px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="676px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-red bold">^^^^^^^^^^</tspan>
+    <tspan x="10px" y="676px"><tspan class="fg-bright-blue bold">32</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan> def test_error(missing_fixture):</tspan>
 </tspan>
-    <tspan x="10px" y="694px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Missing fixtures: `missing_fixture`</tspan>
+    <tspan x="10px" y="694px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-red bold">^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="712px">
+    <tspan x="10px" y="712px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Missing fixtures: `missing_fixture`</tspan>
 </tspan>
-    <tspan x="10px" y="730px"><tspan>test_output::test_new_snapshot:</tspan>
+    <tspan x="10px" y="730px">
 </tspan>
-    <tspan x="10px" y="748px">
+    <tspan x="10px" y="748px"><tspan>test_output::test_new_snapshot:</tspan>
 </tspan>
-    <tspan x="10px" y="766px"><tspan class="fg-bright-red bold">error[test-failure]</tspan><tspan class="bold">: Test `test_new_snapshot` failed</tspan>
+    <tspan x="10px" y="766px">
 </tspan>
-    <tspan x="10px" y="784px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:29:5</tspan>
+    <tspan x="10px" y="784px"><tspan class="fg-bright-red bold">error[test-failure]</tspan><tspan class="bold">: Test `test_new_snapshot` failed</tspan>
 </tspan>
-    <tspan x="10px" y="802px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="802px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:29:5</tspan>
 </tspan>
-    <tspan x="10px" y="820px"><tspan class="fg-bright-blue bold">29</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan> def test_new_snapshot():</tspan>
+    <tspan x="10px" y="820px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="838px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-red bold">^^^^^^^^^^^^^^^^^</tspan>
+    <tspan x="10px" y="838px"><tspan class="fg-bright-blue bold">29</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan> def test_new_snapshot():</tspan>
 </tspan>
-    <tspan x="10px" y="856px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Test failed here</tspan>
+    <tspan x="10px" y="856px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-red bold">^^^^^^^^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="874px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:30:5</tspan>
+    <tspan x="10px" y="874px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Test failed here</tspan>
 </tspan>
-    <tspan x="10px" y="892px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="892px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:30:5</tspan>
 </tspan>
-    <tspan x="10px" y="910px"><tspan class="fg-bright-blue bold">30</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     karva.assert_snapshot("new")</tspan>
+    <tspan x="10px" y="910px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="928px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-blue bold">^^^^^^^^^^^^^^^^^^^^^^^^^^^^</tspan>
+    <tspan x="10px" y="928px"><tspan class="fg-bright-blue bold">30</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     karva.assert_snapshot("new")</tspan>
 </tspan>
-    <tspan x="10px" y="946px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: New snapshot for 'test_new_snapshot' in snapshots/test_output__test_new_snapshot.snap.new.</tspan>
+    <tspan x="10px" y="946px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-blue bold">^^^^^^^^^^^^^^^^^^^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="964px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.</tspan>
+    <tspan x="10px" y="964px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: New snapshot for 'test_new_snapshot' in snapshots/test_output__test_new_snapshot.snap.new.</tspan>
 </tspan>
-    <tspan x="10px" y="982px">
+    <tspan x="10px" y="982px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.</tspan>
 </tspan>
-    <tspan x="10px" y="1000px"><tspan>test_output::test_snapshot_failure:</tspan>
+    <tspan x="10px" y="1000px">
 </tspan>
-    <tspan x="10px" y="1018px">
+    <tspan x="10px" y="1018px"><tspan>test_output::test_snapshot_failure:</tspan>
 </tspan>
-    <tspan x="10px" y="1036px"><tspan class="fg-bright-red bold">error[test-failure]</tspan><tspan class="bold">: Test `test_snapshot_failure` failed</tspan>
+    <tspan x="10px" y="1036px">
 </tspan>
-    <tspan x="10px" y="1054px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:26:5</tspan>
+    <tspan x="10px" y="1054px"><tspan class="fg-bright-red bold">error[test-failure]</tspan><tspan class="bold">: Test `test_snapshot_failure` failed</tspan>
 </tspan>
-    <tspan x="10px" y="1072px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="1072px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:26:5</tspan>
 </tspan>
-    <tspan x="10px" y="1090px"><tspan class="fg-bright-blue bold">26</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan> def test_snapshot_failure():</tspan>
+    <tspan x="10px" y="1090px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="1108px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-red bold">^^^^^^^^^^^^^^^^^^^^^</tspan>
+    <tspan x="10px" y="1108px"><tspan class="fg-bright-blue bold">26</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan> def test_snapshot_failure():</tspan>
 </tspan>
-    <tspan x="10px" y="1126px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Test failed here</tspan>
+    <tspan x="10px" y="1126px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-red bold">^^^^^^^^^^^^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="1144px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:27:5</tspan>
+    <tspan x="10px" y="1144px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Test failed here</tspan>
 </tspan>
-    <tspan x="10px" y="1162px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="1162px"><tspan>  </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>test_output.py:27:5</tspan>
 </tspan>
-    <tspan x="10px" y="1180px"><tspan class="fg-bright-blue bold">27</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     karva.assert_snapshot("changed")</tspan>
+    <tspan x="10px" y="1180px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="1198px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-blue bold">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</tspan>
+    <tspan x="10px" y="1198px"><tspan class="fg-bright-blue bold">27</tspan><tspan> </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     karva.assert_snapshot("changed")</tspan>
 </tspan>
-    <tspan x="10px" y="1216px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Snapshot mismatch for 'test_snapshot_failure'.</tspan>
+    <tspan x="10px" y="1216px"><tspan>   </tspan><tspan class="fg-bright-blue bold">|</tspan><tspan>     </tspan><tspan class="fg-bright-blue bold">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</tspan>
 </tspan>
-    <tspan x="10px" y="1234px"><tspan> </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>snapshots/test_output__test_snapshot_failure.snap:4:1</tspan>
+    <tspan x="10px" y="1234px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Snapshot mismatch for 'test_snapshot_failure'.</tspan>
 </tspan>
-    <tspan x="10px" y="1252px"><tspan>  </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="1252px"><tspan> </tspan><tspan class="fg-bright-blue bold">--&gt; </tspan><tspan>snapshots/test_output__test_snapshot_failure.snap:4:1</tspan>
 </tspan>
-    <tspan x="10px" y="1270px"><tspan class="fg-bright-blue bold">4</tspan><tspan> </tspan><tspan class="fg-bright-red">- original</tspan>
+    <tspan x="10px" y="1270px"><tspan>  </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="1288px"><tspan class="fg-bright-blue bold">4</tspan><tspan> </tspan><tspan class="fg-bright-green">+ changed</tspan>
+    <tspan x="10px" y="1288px"><tspan class="fg-bright-blue bold">4</tspan><tspan> </tspan><tspan class="fg-bright-red">- original</tspan>
 </tspan>
-    <tspan x="10px" y="1306px"><tspan>  </tspan><tspan class="fg-bright-blue bold">|</tspan>
+    <tspan x="10px" y="1306px"><tspan class="fg-bright-blue bold">4</tspan><tspan> </tspan><tspan class="fg-bright-green">+ changed</tspan>
 </tspan>
-    <tspan x="10px" y="1324px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.</tspan>
+    <tspan x="10px" y="1324px"><tspan>  </tspan><tspan class="fg-bright-blue bold">|</tspan>
 </tspan>
-    <tspan x="10px" y="1342px">
+    <tspan x="10px" y="1342px"><tspan class="fg-bright-blue bold">info</tspan><tspan class="bold">: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.</tspan>
 </tspan>
-    <tspan x="10px" y="1360px"><tspan>────────────</tspan>
+    <tspan x="10px" y="1360px">
 </tspan>
-    <tspan x="10px" y="1378px"><tspan class="fg-red bold">     Summary</tspan><tspan> [TIME] 6 tests run: </tspan><tspan class="fg-green bold">1 passed</tspan><tspan>, </tspan><tspan class="fg-red bold">3 failed</tspan><tspan>, </tspan><tspan class="fg-red bold">1 error</tspan><tspan>, </tspan><tspan class="fg-yellow bold">1 skipped</tspan>
+    <tspan x="10px" y="1378px"><tspan>────────────</tspan>
 </tspan>
-    <tspan x="10px" y="1396px">
+    <tspan x="10px" y="1396px"><tspan class="fg-red bold">     Summary</tspan><tspan> [TIME] 6 tests run: </tspan><tspan class="fg-green bold">1 passed</tspan><tspan>, </tspan><tspan class="fg-red bold">3 failed</tspan><tspan>, </tspan><tspan class="fg-red bold">1 error</tspan><tspan>, </tspan><tspan class="fg-yellow bold">1 skipped</tspan>
 </tspan>
-    <tspan x="10px" y="1414px"><tspan>----- stderr -----</tspan>
+    <tspan x="10px" y="1414px">
 </tspan>
-    <tspan x="10px" y="1432px">
+    <tspan x="10px" y="1432px"><tspan>----- stderr -----</tspan>
+</tspan>
+    <tspan x="10px" y="1450px">
 </tspan>
   </text>
 

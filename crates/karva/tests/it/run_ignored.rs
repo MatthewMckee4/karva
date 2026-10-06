@@ -42,6 +42,7 @@ fn runignored_runs_only_skipped_tests() {
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     test::test_skipped_with_reason:
 
@@ -55,6 +56,7 @@ fn runignored_runs_only_skipped_tests() {
        |
     10 |     assert False
        |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 0 passed, 2 failed, 1 skipped
@@ -89,6 +91,7 @@ fn runignored_all_runs_skipped_alongside_normal() {
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     test::test_skipped_with_reason:
 
@@ -102,6 +105,7 @@ fn runignored_all_runs_skipped_alongside_normal() {
        |
     10 |     assert False
        |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped

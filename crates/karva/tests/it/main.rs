@@ -1,5 +1,6 @@
 pub(crate) mod common;
 
+mod assertions;
 mod r#async;
 mod basic;
 mod cache;

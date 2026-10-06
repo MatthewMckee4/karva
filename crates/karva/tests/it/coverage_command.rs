@@ -713,6 +713,7 @@ def test_failure():
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

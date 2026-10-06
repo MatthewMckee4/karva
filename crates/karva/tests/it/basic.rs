@@ -207,6 +207,7 @@ fn test_one_test_fail() {
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -414,6 +415,7 @@ fn test_failure_diagnostic_uses_discovered_source_after_file_is_deleted() {
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -516,6 +518,7 @@ fn test_two_test_fails() {
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     tests.test_fail::test_fail2:
 
@@ -530,6 +533,7 @@ fn test_two_test_fails() {
     6 |     assert False, 'Test failed'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
@@ -583,6 +587,7 @@ fn test_file_importing_another_file() {
     4 |         assert False, 'Data validation failed'
       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Data validation failed
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -679,6 +684,7 @@ fn test_failed_output_is_captured() {
        |
     10 |     assert False
        |     ^^^^^^^^^^^^
+    info: assert False
 
     captured stdout:
     stdout from failure
@@ -811,6 +817,7 @@ fn test_quiet_output_failing() {
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -916,6 +923,10 @@ fn test_fixture_generator_two_yields_failing_test() {
        |
     10 |     assert fixture_generator == 2
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert fixture_generator == 2
+          
+          Differing values:
+            fixture_generator: 1
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -1111,6 +1122,7 @@ fn test_failfast() {
     3 |     assert False, 'First test fails'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: First test fails
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1201,6 +1213,7 @@ def test_9():
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1331,6 +1344,7 @@ def test_1(fixture_very_very_very_very_very_long_name):
       |
     9 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -1884,6 +1898,7 @@ def test_fourth_skipped():
     3 |     assert False, 'boom 1'
       |     ^^^^^^^^^^^^^^^^^^^^^^
     info: boom 1
+    info: assert False
 
     test_max_fail::test_second_fail:
 
@@ -1898,6 +1913,7 @@ def test_fourth_skipped():
     6 |     assert False, 'boom 2'
       |     ^^^^^^^^^^^^^^^^^^^^^^
     info: boom 2
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
@@ -1947,6 +1963,7 @@ def test_c():
     3 |     assert False, 'a boom'
       |     ^^^^^^^^^^^^^^^^^^^^^^
     info: a boom
+    info: assert False
 
     test_no_fail_fast::test_b:
 
@@ -1961,6 +1978,7 @@ def test_c():
     6 |     assert False, 'b boom'
       |     ^^^^^^^^^^^^^^^^^^^^^^
     info: b boom
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -2010,6 +2028,7 @@ def test_third():
     6 |     assert False, 'stop here'
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^
     info: stop here
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -2325,6 +2344,12 @@ def test_needs_retry():
       |
     5 |     assert os.environ["KARVA_ATTEMPT"] == "2"
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert os.environ["KARVA_ATTEMPT"] == "2"
+          
+          Differing values:
+            string diff:
+            - 1
+            + 2
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2659,6 +2684,7 @@ def test_2(): assert False
       |
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -2698,6 +2724,7 @@ def test_fail(): assert False
       |
     2 | def test_fail(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2739,6 +2766,7 @@ def test_always_fails(): assert False
       |
     2 | def test_always_fails(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -2939,6 +2967,7 @@ def test_always_fails(): assert False
        |
     11 | def test_always_fails(): assert False
        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed (1 flaky), 1 failed, 0 skipped
@@ -3038,6 +3067,7 @@ def test_always_fails(): assert False
       |
     2 | def test_always_fails(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -3379,6 +3409,7 @@ def test_3(): pass
       |
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     test::test_2:
 
@@ -3392,6 +3423,7 @@ def test_3(): pass
       |
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -3435,6 +3467,7 @@ def test_3(): pass
       |
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -3479,6 +3512,7 @@ def test_3(): assert False
       |
     2 | def test_1(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     test::test_2:
 
@@ -3492,6 +3526,7 @@ def test_3(): assert False
       |
     3 | def test_2(): assert False
       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped

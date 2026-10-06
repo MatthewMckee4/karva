@@ -633,6 +633,7 @@ def test_c():
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     test::test_b:
 
@@ -646,6 +647,7 @@ def test_c():
       |
     6 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
@@ -736,6 +738,7 @@ def test_second():
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -793,6 +796,7 @@ def test_third():
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     test::test_third:
 
@@ -806,6 +810,7 @@ def test_third():
       |
     9 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -1364,6 +1369,7 @@ def test_second():
       |
     3 |     assert False
       |     ^^^^^^^^^^^^
+    info: assert False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
