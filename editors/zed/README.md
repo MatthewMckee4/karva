@@ -65,6 +65,17 @@ to pytest by default. A project can bind the same runnable tag to Karva with
 ]
 ```
 
+Karva runs top-level test functions. Zed also detects class methods with the
+same runnable tag; their gutter actions are not supported by Karva and fail
+with an unsupported-selector error. Move Karva tests to top-level functions,
+or keep Zed's default pytest task for projects using test classes. Functions
+with a custom Karva prefix are not detected by Zed's native `test_*` query; run
+them from the task picker with an exact selection, for example:
+
+```sh
+uv run karva test tests/test_example.py::check_example
+```
+
 This file changes only the gutter action; the language server does not require
 it.
 

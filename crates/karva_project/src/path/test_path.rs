@@ -85,7 +85,13 @@ fn parse_function_spec(value: &str) -> Result<Option<TestPathFunction>, TestPath
         )));
     }
 
-    let path = try_convert_to_py_path(&Utf8PathBuf::from(file_part))?;
+    let path = try_convert_to_py_path(&Utf8PathBuf::from(file_part)).map_err(|error| {
+        if file_part.contains("::") {
+            TestPathError::UnsupportedNestedSelector(value.to_owned())
+        } else {
+            error
+        }
+    })?;
 
     if !path.is_file() {
         return Err(TestPathError::InvalidUtf8Path(path));
@@ -230,6 +236,11 @@ pub enum TestPathError {
     InvalidUtf8Path(Utf8PathBuf),
     #[error("path `{0}` is missing a function name")]
     MissingFunctionName(Utf8PathBuf),
+    /// Karva selects top-level functions, not test classes or nested functions.
+    #[error(
+        "test selector `{0}` is unsupported: Karva only runs top-level test functions; use `path.py::test_function` instead of a class or nested selector"
+    )]
+    UnsupportedNestedSelector(String),
     #[error("function selector `{0}` has a malformed parametrize index")]
     MalformedCaseIndex(String),
     #[error("glob `{pattern}` is invalid: {error}")]

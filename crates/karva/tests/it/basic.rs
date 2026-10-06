@@ -3830,3 +3830,23 @@ def test_typeerror():
     ----- stderr -----
     "#);
 }
+
+#[rstest::rstest]
+fn rejects_unsupported_class_method_selector(
+    #[values(
+        "test.py::TestCheckout::test_total",
+        "test.py::TestCheckout::test_total[0]"
+    )]
+    selector: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        "class TestCheckout:\n    def test_total(self): assert True\n",
+    );
+    let name = if selector.ends_with("[0]") {
+        "unsupported_class_method_case"
+    } else {
+        "unsupported_class_method"
+    };
+    assert_cmd_snapshot!(name, context.command().arg(selector));
+}
