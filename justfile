@@ -1,7 +1,7 @@
 # https://just.systems
 
 test *args:
-    uvx maturin build
+    uvx maturin build --out target/wheels
     @if command -v cargo-nextest > /dev/null 2>&1; then \
         cargo nextest run {{args}}; \
     else \
