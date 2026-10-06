@@ -73,6 +73,13 @@ files and lines, and distinguish blockers from improvements.
 - Prefer `if let` and let chains for fallibility.
 - Use `#[expect(...)]` rather than `#[allow(...)]` when suppressing a lint.
 
+## Public Documentation
+
+Keep public docs concise and human-readable. Use plain language, lead with
+what readers need to do, and cut filler, slogans, repetition, and unnecessary
+examples. Prefer fewer words when they convey the same information. Keep the
+home page brief; put details in the guides.
+
 ## Tests
 
 - Add focused tests when existing coverage does not establish changed behavior.
