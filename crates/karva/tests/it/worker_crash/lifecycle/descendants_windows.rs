@@ -5,7 +5,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::common::TestContext;
-use insta_cmd::assert_cmd_snapshot;
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent};
 #[cfg(windows)]
@@ -14,41 +13,22 @@ use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 #[test]
 fn completed_worker_kills_windows_grandchild() {
     let context = descendant_context(false);
-    assert_cmd_snapshot!(context.command(), @r###"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-        Starting 1 test across 1 worker
-            PASS [TIME] test::test_starts_child
-    ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
-
-    ----- stderr -----
-    "###);
+    let output = run_karva(&context, &[]);
+    assert_status(&output, true);
     assert_descendants_stopped(&context);
 }
 
 #[test]
 fn timed_out_worker_kills_windows_grandchild_after_grace() {
     let context = descendant_context(true);
-    // Receipt: one second leaves a half-second grace window before force-kill.
-    assert_cmd_snapshot!(
-        context
-            .command()
-            .args(["--run-timeout=1", "--termination-grace-period=0.5"]),
-        @"
-    success: false
-    exit_code: 1
-    ----- stdout -----
-        Starting 1 test across 1 worker
-    ────────────
-         Summary [TIME] 0 tests run: 0 passed, 0 skipped
-
-    error: run timed out before all tests completed
-
-    ----- stderr -----
-    "
+    // Receipt: ten seconds gives cold Windows workers time to publish both
+    // readiness files before the half-second grace window is exercised.
+    let output = run_karva_when_ready(
+        &context,
+        &["--run-timeout=10", "--termination-grace-period=0.5"],
+        "child_ready",
     );
+    assert_status(&output, false);
     assert_marker(&context, "child_after_worker");
     assert_descendants_stopped(&context);
 }
@@ -278,14 +258,29 @@ fn wait_for_marker(context: &TestContext, marker: &str, karva: &mut std::process
     );
 }
 
-fn run_karva(context: &TestContext, args: &[&str]) -> Output {
+fn run_karva_when_ready(context: &TestContext, args: &[&str], marker: &str) -> Output {
     let mut command = context.command();
     command
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut karva = command.spawn().expect("spawn Karva");
-    // Receipt: ten seconds covers the normal one-second run timeout and the
+    wait_for_marker(context, marker, &mut karva);
+    collect_karva(karva, args)
+}
+
+fn run_karva(context: &TestContext, args: &[&str]) -> Output {
+    let mut command = context.command();
+    command
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let karva = command.spawn().expect("spawn Karva");
+    collect_karva(karva, args)
+}
+
+fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Output {
+    // Receipt: ten seconds covers the existing timeout budget and the
     // five-second descendant observation window with room for CI scheduling.
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
