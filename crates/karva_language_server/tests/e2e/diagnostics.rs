@@ -1,7 +1,8 @@
 use lsp_types::{
     ClientCapabilities, DiagnosticsCapabilities, DidChangeTextDocumentNotification,
-    DidChangeTextDocumentParams, DidCloseTextDocumentNotification, DidCloseTextDocumentParams,
-    DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind,
+    DidChangeTextDocumentParams, DidChangeWatchedFilesNotification, DidChangeWatchedFilesParams,
+    DidCloseTextDocumentNotification, DidCloseTextDocumentParams, DidOpenTextDocumentNotification,
+    DidOpenTextDocumentParams, FileChangeType, FileEvent, LanguageKind,
     PublishDiagnosticsClientCapabilities, PublishDiagnosticsNotification,
     TextDocumentClientCapabilities, TextDocumentContentChangeEvent,
     TextDocumentContentChangeWholeDocument, TextDocumentIdentifier, TextDocumentItem,
@@ -138,6 +139,59 @@ fn does_not_analyze_an_open_conftest_as_its_own_parent() {
     let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
 
     insta::assert_json_snapshot!(workspace.normalize(diagnostics));
+}
+
+#[rstest::rstest]
+fn reports_configuration_parse_cause_and_recovers(
+    #[values("karva.toml", "pyproject.toml")] config: &str,
+) {
+    let workspace = Workspace::new();
+    let mut server = TestServer::with_workspace(capabilities(), workspace.folder());
+    let section = if config == "karva.toml" {
+        "profile.default.test"
+    } else {
+        "tool.karva.profile.default.test"
+    };
+    workspace.write(
+        config,
+        &format!("[{section}]\ntest-function-prefix = 123\n"),
+    );
+    let uri = workspace.uri("test_example.py");
+    server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: LanguageKind::Python,
+            version: 1,
+            text: "def test_example(): pass\n".to_owned(),
+        },
+    });
+    let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
+    let message = &diagnostics
+        .diagnostics
+        .first()
+        .expect("config error should be published")
+        .message;
+    let message = serde_json::to_value(message).expect("message should serialize");
+    let message = message
+        .as_str()
+        .expect("diagnostic message should be plain text");
+    assert!(message.contains(config), "{message}");
+    assert!(message.contains("test-function-prefix = 123"), "{message}");
+    assert!(message.contains("expected a string"), "{message}");
+
+    workspace.write(
+        config,
+        &format!("[{section}]\ntest-function-prefix = 'test'\n"),
+    );
+    server.notify::<DidChangeWatchedFilesNotification>(DidChangeWatchedFilesParams {
+        changes: vec![FileEvent {
+            uri: workspace.uri(config),
+            kind: FileChangeType::Changed,
+        }],
+    });
+    let recovered = server.receive_notification::<PublishDiagnosticsNotification>();
+    assert_eq!(recovered.uri, uri);
+    assert!(recovered.diagnostics.is_empty());
 }
 
 fn capabilities() -> ClientCapabilities {
