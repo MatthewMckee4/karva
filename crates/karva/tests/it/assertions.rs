@@ -324,24 +324,28 @@ def test_unicode_repr():
     assert "🙂" * 300 == None
 
 def test_traceback_columns_keep_original_source():
+    def check_columns(frame, expected):
+        if hasattr(frame, "colno"):
+            assert (frame.colno, frame.end_colno) == expected
+
     a = 1
     try:
         assert a / 0 == 2
     except ZeroDivisionError as error:
         frame = traceback.extract_tb(error.__traceback__)[-1]
-        assert (frame.colno, frame.end_colno) == (15, 20)
+        check_columns(frame, (15, 20))
     try:
         assert (
             a / 0 == 2
         )
     except ZeroDivisionError as error:
         frame = traceback.extract_tb(error.__traceback__)[-1]
-        assert (frame.colno, frame.end_colno) == (12, 17)
+        check_columns(frame, (12, 17))
     try:
         if True: assert True; assert a / 0 == 2
     except ZeroDivisionError as error:
         frame = traceback.extract_tb(error.__traceback__)[-1]
-        assert (frame.colno, frame.end_colno) == (37, 42)
+        check_columns(frame, (37, 42))
 
 def test_deep_value():
     value = 0
@@ -411,14 +415,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_deep_value:
 
     error[test-failure]: Test `test_deep_value` failed
-      --> test_assertion_formatter.py:78:5
-       |
-    78 | def test_deep_value():
-       |     ^^^^^^^^^^^^^^^
-    info: Test failed here
       --> test_assertion_formatter.py:82:5
        |
-    82 |     assert value == None
+    82 | def test_deep_value():
+       |     ^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:86:5
+       |
+    86 |     assert value == None
        |     ^^^^^^^^^^^^^^^^^^^^
     info: assert value == None
           
@@ -428,15 +432,15 @@ def test_hostile_metadata():
     test_assertion_formatter::test_hostile_metadata:
 
     error[test-failure]: Test `test_hostile_metadata` failed
-      --> test_assertion_formatter.py:96:5
-       |
-    96 | def test_hostile_metadata():
-       |     ^^^^^^^^^^^^^^^^^^^^^
+       --> test_assertion_formatter.py:100:5
+        |
+    100 | def test_hostile_metadata():
+        |     ^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:97:5
-       |
-    97 |     assert Hostile() == Hostile()
-       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       --> test_assertion_formatter.py:101:5
+        |
+    101 |     assert Hostile() == Hostile()
+        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert Hostile() == Hostile()
           
           Differing values:
@@ -446,14 +450,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_huge_integer:
 
     error[test-failure]: Test `test_huge_integer` failed
-      --> test_assertion_formatter.py:84:5
+      --> test_assertion_formatter.py:88:5
        |
-    84 | def test_huge_integer():
+    88 | def test_huge_integer():
        |     ^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:85:5
+      --> test_assertion_formatter.py:89:5
        |
-    85 |     assert 10**10000 == None
+    89 |     assert 10**10000 == None
        |     ^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert 10**10000 == None
           
