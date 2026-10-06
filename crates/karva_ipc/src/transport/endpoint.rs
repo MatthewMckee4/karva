@@ -20,7 +20,7 @@ pub enum ControllerEndpoint {
 }
 
 impl fmt::Display for ControllerEndpoint {
-    /// Renders a diagnostic label; subprocess arguments use the lossless encoding.
+    /// Renders a diagnostic label; process bootstrap uses the lossless encoding.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Tcp(address) => address.fmt(formatter),
@@ -32,7 +32,7 @@ impl fmt::Display for ControllerEndpoint {
 
 impl ControllerEndpoint {
     /// Encodes this endpoint without losing non-Unicode Unix path bytes.
-    pub fn to_argument(&self) -> OsString {
+    pub fn encode(&self) -> OsString {
         match self {
             Self::Tcp(address) => format!("tcp:{address}").into(),
             #[cfg(unix)]
@@ -44,8 +44,8 @@ impl ControllerEndpoint {
         }
     }
 
-    /// Decodes the private worker argument used for this platform's transport.
-    pub fn from_argument(value: &OsStr) -> Result<Self, String> {
+    /// Decodes the private bootstrap value used for this platform's transport.
+    pub fn decode(value: &OsStr) -> Result<Self, String> {
         #[cfg(unix)]
         {
             let value = value.as_bytes();

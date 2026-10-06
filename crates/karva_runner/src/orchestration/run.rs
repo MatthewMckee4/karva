@@ -20,7 +20,7 @@ use super::supervision::WaitOutcome;
 use crate::binary::find_karva_worker_binary;
 use crate::partition::{Partition, partition_collected_tests, scheduled_test_count};
 use crate::shutdown::shutdown_receiver;
-use crate::worker_args::WorkerSpawn;
+use crate::worker_args::{WorkerSpawn, worker_configuration};
 
 /// Collects, partitions, executes, and aggregates one controller-side test run.
 pub fn run_parallel_tests(
@@ -141,6 +141,7 @@ pub fn run_parallel_tests(
 
     let worker_binary = find_karva_worker_binary(project.cwd())?;
     let spawn = WorkerSpawn {
+        configuration: worker_configuration(project, args, failed_first_active),
         project,
         artifacts: &artifacts,
         controller_endpoint: controller.endpoint(),
@@ -150,7 +151,6 @@ pub fn run_parallel_tests(
         profile: config.profile.as_deref().unwrap_or("default"),
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
-        failed_first_active,
     };
     let forward_stdout = printer.stream_for_test_result().is_enabled();
     let mut next_worker_id = partitions.len();

@@ -46,21 +46,6 @@ pub enum StatusLevel {
     All,
 }
 
-impl StatusLevel {
-    /// Returns the canonical configuration and CLI spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Fail => "fail",
-            Self::Retry => "retry",
-            Self::Slow => "slow",
-            Self::Pass => "pass",
-            Self::Skip => "skip",
-            Self::All => "all",
-        }
-    }
-}
-
 impl Combine for StatusLevel {
     #[inline(always)]
     fn combine_with(&mut self, _other: Self) {}
@@ -114,21 +99,6 @@ pub enum FinalStatusLevel {
 
     /// Always display every summary status.
     All,
-}
-
-impl FinalStatusLevel {
-    /// Returns the canonical configuration and CLI spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Fail => "fail",
-            Self::Retry => "retry",
-            Self::Slow => "slow",
-            Self::Pass => "pass",
-            Self::Skip => "skip",
-            Self::All => "all",
-        }
-    }
 }
 
 impl Combine for FinalStatusLevel {

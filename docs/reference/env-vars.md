@@ -74,6 +74,11 @@ Always set to `"1"`. The cheapest signal that test code is running
 under Karva, useful for fixtures and helpers that want to detect
 the runner without heavier introspection.
 
+### `KARVA_CONTROLLER_ENDPOINT`
+
+Private controller endpoint used to bootstrap the worker connection.
+Run configuration is received over IPC after authentication.
+
 ### `KARVA_WORKER_ID`
 
 0-indexed worker number. The canonical way to partition shared

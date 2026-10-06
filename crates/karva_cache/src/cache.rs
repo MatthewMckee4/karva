@@ -30,7 +30,7 @@ impl RunArtifacts {
     }
 
     /// Path to the per-worker coverage data file. The main process passes this
-    /// to a worker via `--cov-data-file`; the worker writes the file when its
+    /// to a worker in its IPC assignment; the worker writes the file when its
     /// coverage session ends.
     pub fn coverage_data_file(&self, worker_id: usize) -> Utf8PathBuf {
         CacheFile::Coverage.path_in(&self.worker_dir(worker_id))

@@ -1,8 +1,12 @@
 //! Wire protocol shared by the Karva controller and worker processes.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use camino::Utf8PathBuf;
 use karva_diagnostic::{RenderedDiagnostic, TestCaseResult};
+use karva_logging::{TerminalColor, VerbosityLevel};
+use karva_metadata::{Options, RunIgnoredMode};
 use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
 
@@ -40,7 +44,7 @@ pub enum WireMessage {
         worker_id: usize,
     },
 
-    /// Selection and resume state sent by the controller after authentication.
+    /// Configuration, selection, and resume state sent after authentication.
     TestSelection(WorkerSelection),
 
     /// Crash-durable identity for a test entering setup or execution.
@@ -68,9 +72,44 @@ pub enum WireMessage {
     Event(Box<WorkerEvent>),
 }
 
-/// Work owned by one worker generation.
+/// Run-wide configuration delivered after worker authentication.
+///
+/// Both processes resolve the same merged options instead of reconstructing
+/// configuration through the user-facing CLI. Environment changes are applied
+/// at process creation and omitted here; test selectors live in the assignment.
+#[derive(Default, Serialize, Deserialize)]
+pub struct WorkerConfiguration {
+    /// Resolved terminal color policy for test output and diagnostics.
+    pub color: Option<TerminalColor>,
+
+    /// Logging and test output verbosity, installed after authentication.
+    pub verbosity: VerbosityLevel,
+
+    /// Effective profile and CLI options, using the validated configuration schema.
+    pub options: Options,
+
+    /// Registered custom tags available during strict-tag validation.
+    pub tags: BTreeMap<String, String>,
+
+    /// Runtime-only test filters supplied by the invocation.
+    pub filter_expressions: Vec<String>,
+
+    /// Runtime-only selection of ignored tests.
+    pub run_ignored: RunIgnoredMode,
+
+    /// Whether coverage observations carry their test lifecycle context.
+    pub coverage_test_contexts: bool,
+}
+
+/// Work and configuration owned by one worker generation.
 #[derive(Serialize, Deserialize)]
 pub struct WorkerSelection {
+    /// Shared run configuration, also used by replacement workers.
+    pub configuration: Arc<WorkerConfiguration>,
+
+    /// Per-generation coverage artifact path, absent when measurement is disabled.
+    pub coverage_data_file: Option<Utf8PathBuf>,
+
     /// Exact test selectors in execution order, shared with controller recovery state.
     pub test_paths: Vec<Arc<str>>,
 

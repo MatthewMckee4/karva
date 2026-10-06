@@ -38,7 +38,7 @@ struct WorkerConnection {
 }
 
 impl WorkerClient {
-    /// Connects to the controller and receives this worker's owned test selection.
+    /// Connects to the controller and receives this worker's configuration and test selection.
     pub fn connect(
         endpoint: &ControllerEndpoint,
         run_id: &str,
@@ -150,9 +150,11 @@ fn read_test_selection(stream: ControllerStream) -> Result<WorkerSelection> {
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(message) = messages.next() else {
-        bail!("Karva controller connection closed before sending test paths");
+        bail!(
+            "Karva controller connection closed before sending worker configuration and test paths"
+        );
     };
-    match message.context("failed to read Karva worker test paths")? {
+    match message.context("failed to read Karva worker configuration and test paths")? {
         WireMessage::TestSelection(selection) => Ok(selection),
         WireMessage::Hello { .. } | WireMessage::TestCheckpoint { .. } | WireMessage::Event(_) => {
             bail!("Karva controller sent an invalid worker startup message")

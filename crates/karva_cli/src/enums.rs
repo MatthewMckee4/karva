@@ -2,10 +2,7 @@ use std::str::FromStr;
 
 use camino::Utf8PathBuf;
 
-use karva_metadata::{
-    FlakyResult as FlakyResultMode, JunitFlakyFailStatus as JunitFlakyFailStatusMode, NoTestsMode,
-    RunIgnoredMode,
-};
+use karva_metadata::{FlakyResult as FlakyResultMode, NoTestsMode, RunIgnoredMode};
 
 /// Coverage report selection parsed from `--cov-report`.
 #[derive(Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -129,15 +126,6 @@ pub enum CovContext {
     Test,
 }
 
-impl CovContext {
-    /// Returns the value forwarded to coverage configuration.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Test => "test",
-        }
-    }
-}
-
 /// Whether to run ignored/skipped tests.
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum RunIgnored {
@@ -146,16 +134,6 @@ pub enum RunIgnored {
 
     /// Run both ignored and non-ignored tests.
     All,
-}
-
-impl RunIgnored {
-    /// Returns the canonical CLI spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Only => "only",
-            Self::All => "all",
-        }
-    }
 }
 
 impl From<RunIgnored> for RunIgnoredMode {
@@ -210,25 +188,6 @@ impl From<FlakyResult> for FlakyResultMode {
         match value {
             FlakyResult::Pass => Self::Pass,
             FlakyResult::Fail => Self::Fail,
-        }
-    }
-}
-
-/// `JUnit` outcome assigned to attempts that fail before a later retry passes.
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum JunitFlakyFailStatus {
-    /// Emit failed attempts as `JUnit` failures.
-    Failure,
-
-    /// Preserve the final successful outcome without `JUnit` failures.
-    Success,
-}
-
-impl From<JunitFlakyFailStatus> for JunitFlakyFailStatusMode {
-    fn from(value: JunitFlakyFailStatus) -> Self {
-        match value {
-            JunitFlakyFailStatus::Failure => Self::Failure,
-            JunitFlakyFailStatus::Success => Self::Success,
         }
     }
 }

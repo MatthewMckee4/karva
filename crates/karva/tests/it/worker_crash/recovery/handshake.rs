@@ -215,18 +215,11 @@ fn handshake_failure_command(context: &TestContext, failure: &str) -> Command {
 }
 
 const FAKE_WORKER: &str = r#"#!/bin/sh
-worker_id=
-controller_address=
-run_id=
-previous=
-for argument in "$@"; do
-    case "$previous" in
-        --worker-id) worker_id=$argument ;;
-        --controller-address) controller_address=$argument ;;
-        --run-id) run_id=$argument ;;
-    esac
-    previous=$argument
-done
+# The controller must launch every worker with no command-line arguments.
+[ "$#" -eq 0 ] || exit 39
+worker_id=$KARVA_WORKER_ID
+controller_address=$KARVA_CONTROLLER_ENDPOINT
+run_id=$KARVA_RUN_ID
 
 if [ "$worker_id" != "0" ]; then
     exec "$VIRTUAL_ENV/bin/karva-worker" "$@"

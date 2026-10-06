@@ -1,4 +1,4 @@
-//! Authentication, selection transfer, and frame intake for one connection.
+//! Authentication, configuration and selection transfer, and frame intake.
 
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, ErrorKind, Read, Write};
@@ -14,7 +14,7 @@ use super::{ControllerEvent, Incoming};
 use crate::protocol::{WireMessage, WorkerEvent};
 use crate::transport::ControllerStream;
 
-/// Authenticates one stream, transfers its selection, then decodes its events.
+/// Authenticates one stream, transfers configuration and selection, then reads events.
 pub(super) fn read_worker(
     reader: InterruptibleReader<'_, ControllerStream>,
     expected_run_id: &str,

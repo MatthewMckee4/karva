@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use tracing_subscriber::filter::LevelFilter;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default, Serialize, Deserialize)]
 /// Bounded logging verbosity selected by repeated `-v` flags.
 pub enum VerbosityLevel {
     /// Default output level. Only shows karva events up to the [`WARN`](tracing::Level::WARN).
@@ -40,15 +41,5 @@ impl VerbosityLevel {
 
     pub(super) fn is_extra_verbose(self) -> bool {
         matches!(self, Self::ExtraVerbose)
-    }
-
-    /// Returns the CLI flags needed to reproduce this level in a worker.
-    pub fn cli_arg(self) -> Option<&'static str> {
-        match self {
-            Self::Default => None,
-            Self::Verbose => Some("-v"),
-            Self::ExtraVerbose => Some("-vv"),
-            Self::Trace => Some("-vvv"),
-        }
     }
 }

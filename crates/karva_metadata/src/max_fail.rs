@@ -56,11 +56,6 @@ impl MaxFail {
     pub(super) fn is_unlimited(&self) -> bool {
         self.0.is_none()
     }
-
-    /// Returns the configured limit as a raw `u32`, if any.
-    pub fn limit(self) -> Option<NonZeroU32> {
-        self.0
-    }
 }
 
 impl From<Option<NonZeroU32>> for MaxFail {

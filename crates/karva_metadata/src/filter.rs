@@ -121,7 +121,8 @@ impl ValidatedFilter {
         Ok(Self { raw, compiled })
     }
 
-    pub fn as_str(&self) -> &str {
+    #[cfg(test)]
+    pub(super) fn as_str(&self) -> &str {
         &self.raw
     }
 

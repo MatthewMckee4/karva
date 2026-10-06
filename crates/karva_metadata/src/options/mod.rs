@@ -972,7 +972,7 @@ pub struct JunitOptions {
             path = "reports/test-results.xml"
         "#
     )]
-    pub path: Option<String>,
+    path: Option<String>,
 
     /// Name of the top-level `JUnit` test suite collection.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -983,7 +983,7 @@ pub struct JunitOptions {
             report-name = "karva-tests"
         "#
     )]
-    pub report_name: Option<String>,
+    report_name: Option<String>,
 
     /// Whether to include captured stdout and stderr for passing tests.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -994,7 +994,7 @@ pub struct JunitOptions {
             store-success-output = true
         "#
     )]
-    pub store_success_output: Option<bool>,
+    store_success_output: Option<bool>,
 
     /// Whether to include captured stdout and stderr for failing tests.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1005,7 +1005,7 @@ pub struct JunitOptions {
             store-failure-output = true
         "#
     )]
-    pub store_failure_output: Option<bool>,
+    store_failure_output: Option<bool>,
 
     /// How flaky tests configured to fail are represented in `JUnit`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1016,7 +1016,7 @@ pub struct JunitOptions {
             flaky-fail-status = "success"
         "#
     )]
-    pub flaky_fail_status: Option<JunitFlakyFailStatus>,
+    flaky_fail_status: Option<JunitFlakyFailStatus>,
 }
 
 impl JunitOptions {
@@ -1099,16 +1099,6 @@ pub enum OutputFormat {
 
     /// One diagnostic per line.
     Concise,
-}
-
-impl OutputFormat {
-    /// Returns canonical configuration spelling.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Full => "full",
-            Self::Concise => "concise",
-        }
-    }
 }
 
 impl Combine for OutputFormat {

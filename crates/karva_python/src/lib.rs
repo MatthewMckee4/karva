@@ -4,7 +4,7 @@ use std::ffi::OsString;
 
 use karva::karva_main;
 use karva_test_semantic::init_module;
-use karva_worker::cli::karva_worker_main;
+use karva_worker::runtime::karva_worker_main;
 use pyo3::prelude::*;
 
 /// Skip the interpreter path and an optional leading `"python"` argument.
@@ -29,9 +29,9 @@ pub(crate) fn karva_run() -> i32 {
 }
 
 #[pyfunction]
-/// Runs worker using Python process arguments and returns its exit code.
+/// Runs worker using controller bootstrap identity and returns its exit code.
 pub(crate) fn karva_worker_run() -> i32 {
-    karva_worker_main(filter_args).to_i32()
+    karva_worker_main().to_i32()
 }
 
 #[pymodule]
