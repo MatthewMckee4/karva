@@ -721,7 +721,38 @@ def test_b_remaining():
 "
         ),
     );
-    allow_duplicates! {{ assert_cmd_snapshot!(context.command_no_parallel()); }}
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                FAIL [TIME] test::test_a_blocking(resource=None)
+                PASS [TIME] test::test_b_remaining
+
+        failures:
+
+        test::test_a_blocking(resource=None):
+
+        error[test-failure]: Test `test_a_blocking` failed
+          --> test.py:16:5
+           |
+        16 | def test_a_blocking(resource):
+           |     ^^^^^^^^^^^^^^^
+        info: Test exceeded timeout of 0.1 seconds
+        info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
+
+        captured stdout:
+        output before deadline
+        captured stderr:
+        stderr before deadline
+
+        ────────────
+             Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
 }
 
 #[test]
@@ -752,9 +783,78 @@ def test_timeout():
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--retry=1", "--result-output=results.json"])
+            .args(["--retry=1", "--result-output=results.json"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_timeout
+      TRY 2 PASS [TIME] test::test_timeout
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_timeout
+
+    ----- stderr -----
+    "
     );
-    insta::assert_snapshot!(context.read_file("results.json"));
+    insta::assert_snapshot!(context.read_file("results.json"), @r#"
+    {
+      "schema_version": 2,
+      "status": "passed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failure": 0,
+        "flaky": 1,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test",
+          "name": "test_timeout",
+          "full_name": "test::test_timeout",
+          "status": "passed",
+          "duration_seconds": "[TIME]",
+          "flaky": true,
+          "retry": {
+            "attempts": 2,
+            "max_attempts": 2
+          },
+          "captured_output": {
+            "stdout": "attempt 1/nattempt 2\n"
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "attempt 1\n"
+              },
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_timeout` failed",
+                "rendered": "error[test-failure]: Test `test_timeout` failed\n --> test.py:7:5\n  |/n7 | def test_timeout():\n  |     ^^^^^^^^^^^^/ninfo: Test exceeded timeout of 0.1 seconds/ninfo: Worker terminated at the deadline; fixture teardown could not be guaranteed.\n\n"
+              }
+            },
+            {
+              "attempt": 2,
+              "status": "passed",
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "attempt 2\n"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    "#);
     assert!(context.read_file("results.xml").contains("flakyFailure"));
 }
 
@@ -776,9 +876,96 @@ def test_timeout():
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--retry=1", "--result-output=results.json",])
+            .args(["--retry=1", "--result-output=results.json",]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_timeout
+           CRASH [TIME] test::test_timeout
+
+    failures:
+
+    test::test_timeout:
+
+    error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`
+
+    captured stdout:
+    first attempt timed out
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 1 failed with exit code 17 in [TIME]
+    "
     );
-    insta::assert_snapshot!(context.read_file("results.json"));
+    insta::assert_snapshot!(context.read_file("results.json"), @r#"
+    {
+      "schema_version": 2,
+      "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 0,
+        "failed": 0,
+        "errors": 1,
+        "skipped": 0,
+        "expected_failure": 0,
+        "flaky": 0,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test",
+          "name": "test_timeout",
+          "full_name": "test::test_timeout",
+          "status": "error",
+          "duration_seconds": "[TIME]",
+          "retry": {
+            "attempts": 2,
+            "max_attempts": 2
+          },
+          "captured_output": {
+            "stdout": "first attempt timed out\n"
+          },
+          "diagnostic": {
+            "code": "worker-crashed",
+            "severity": "error",
+            "message": "Worker terminated with exit code 17 while running `test::test_timeout`",
+            "rendered": "error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`\n"
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "first attempt timed out\n"
+              },
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_timeout` failed",
+                "rendered": "error[test-failure]: Test `test_timeout` failed\n --> test.py:5:5\n  |/n5 | def test_timeout():\n  |     ^^^^^^^^^^^^/ninfo: Test exceeded timeout of 0.1 seconds/ninfo: Worker terminated at the deadline; fixture teardown could not be guaranteed.\n\n"
+              }
+            },
+            {
+              "attempt": 2,
+              "status": "error",
+              "duration_seconds": "[TIME]",
+              "diagnostic": {
+                "code": "worker-crashed",
+                "severity": "error",
+                "message": "Worker terminated with exit code 17 while running `test::test_timeout`",
+                "rendered": "error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`\n"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    "#);
 }
 
 #[cfg(unix)]
@@ -807,5 +994,35 @@ def test_b_remaining():
     pass
 ",
     );
-    assert_cmd_snapshot!(context.command_no_parallel());
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_a_native
+            PASS [TIME] test::test_b_remaining
+
+    failures:
+
+    test::test_a_native:
+
+    error[test-failure]: Test `test_a_native` failed
+     --> test.py:7:5
+      |
+    7 | def test_a_native():
+      |     ^^^^^^^^^^^^^
+    info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
+
+    captured stdout:
+    before native call
+    captured stderr:
+    native stderr before deadline
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    native stderr before deadline
+    ");
 }
