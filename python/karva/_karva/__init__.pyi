@@ -16,7 +16,7 @@ def karva_run() -> int:
     """Run Karva using the current process arguments."""
 
 
-class FixtureFunctionMarker(Generic[_P, _T]):
+class FixtureFunctionMarker:
     """Mark a function as a fixture."""
 
     def __call__(
@@ -42,7 +42,7 @@ def fixture(
     scope: _ScopeName = "function",
     name: str | None = ...,
     auto_use: bool = ...,
-) -> FixtureFunctionMarker[_P, _T]: ...
+) -> FixtureFunctionMarker: ...
 
 
 class TestFunction(Generic[_P, _T]):
