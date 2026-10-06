@@ -689,3 +689,58 @@ def test_1():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn unittest_skip_test_preserves_cleanup_and_other_failures() {
+    let context = TestContext::with_file(
+        "test_stdlib_skip.py",
+        r#"
+import unittest
+import karva
+
+class CustomSkip(unittest.SkipTest):
+    pass
+
+@karva.fixture
+def resource():
+    yield
+    print("resource cleaned up")
+
+@karva.fixture
+def skipped_fixture():
+    raise unittest.SkipTest("fixture unavailable")
+
+def test_skip_body(resource):
+    raise unittest.SkipTest("example unavailable")
+
+def test_skip_subclass():
+    raise CustomSkip("custom skip")
+
+def test_skip_fixture(skipped_fixture):
+    assert False, "must not be reached"
+
+def test_ordinary_failure():
+    raise ValueError("ordinary failure")
+"#,
+    );
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--status-level=all", "--show-output=true"])
+    );
+}
+
+#[test]
+fn unittest_skip_test_during_module_import() {
+    let context = TestContext::with_file(
+        "test_stdlib_skip.py",
+        r#"
+import unittest
+raise unittest.SkipTest("optional example dependency unavailable")
+
+def test_example():
+    assert False, "must not be reached"
+"#,
+    );
+    assert_cmd_snapshot!(context.command().arg("--status-level=all"));
+}

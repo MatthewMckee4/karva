@@ -1,0 +1,43 @@
+---
+source: crates/karva/tests/it/extensions/tags/skip.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=all"
+    - "--show-output=true"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/adam/Library/Caches/karva/test-cache/shared-venv-144d35e57a23c671-py3.13-e81feeae4e1b6c56
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 4 tests across 1 worker
+resource cleaned up
+        SKIP [TIME] test_stdlib_skip::test_skip_body(resource=None): example unavailable
+        SKIP [TIME] test_stdlib_skip::test_skip_subclass: custom skip
+        SKIP [TIME] test_stdlib_skip::test_skip_fixture: fixture unavailable
+        FAIL [TIME] test_stdlib_skip::test_ordinary_failure
+
+failures:
+
+test_stdlib_skip::test_ordinary_failure:
+
+error[test-failure]: Test `test_ordinary_failure` failed
+  --> test_stdlib_skip.py:26:5
+   |
+26 | def test_ordinary_failure():
+   |     ^^^^^^^^^^^^^^^^^^^^^
+info: Test failed here
+  --> test_stdlib_skip.py:27:5
+   |
+27 |     raise ValueError("ordinary failure")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: ordinary failure
+
+────────────
+     Summary [TIME] 4 tests run: 0 passed, 1 failed, 3 skipped
+
+----- stderr -----

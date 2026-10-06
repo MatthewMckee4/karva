@@ -1,0 +1,20 @@
+---
+source: crates/karva/tests/it/extensions/tags/skip.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--status-level=all"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/adam/Library/Caches/karva/test-cache/shared-venv-144d35e57a23c671-py3.13-e81feeae4e1b6c56
+---
+success: true
+exit_code: 0
+----- stdout -----
+    Starting 1 test across 1 worker
+        SKIP [TIME] test_stdlib_skip::<module>: optional example dependency unavailable
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+----- stderr -----

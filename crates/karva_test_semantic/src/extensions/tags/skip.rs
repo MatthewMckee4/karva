@@ -118,17 +118,23 @@ pub fn is_skip_exception(py: Python<'_>, err: &PyErr) -> bool {
         return true;
     }
 
-    // Check for pytest skip exception
-    if let Ok(pytest_module) = py.import("_pytest.outcomes")
-        && let Ok(skipped) = pytest_module.getattr("Skipped")
+    // External evaluators can use the standard-library skip exception even
+    // when their tests are collected as regular Python functions.
+    for (module_name, exception_name) in [("_pytest.outcomes", "Skipped"), ("unittest", "SkipTest")]
     {
-        return match err.matches(py, &skipped) {
-            Ok(is_skipped) => is_skipped,
-            Err(match_err) => {
-                tracing::warn!("Failed to classify pytest skip exception: {match_err}");
-                false
+        if let Ok(module) = py.import(module_name)
+            && let Ok(skipped) = module.getattr(exception_name)
+        {
+            match err.matches(py, &skipped) {
+                Ok(true) => return true,
+                Ok(false) => {}
+                Err(match_err) => {
+                    tracing::warn!(
+                        "Failed to classify {module_name}.{exception_name}: {match_err}"
+                    );
+                }
             }
-        };
+        }
     }
 
     false
