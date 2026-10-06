@@ -607,3 +607,69 @@ def test_both_fixtures_run():
         ");
     }
 }
+
+#[rstest]
+fn inherited_autouse_uses_non_autouse_override(
+    #[values("pytest", "karva")] framework: &str,
+    #[values("nested/conftest.py", "nested/test_example.py")] override_path: &str,
+    #[values("function", "module")] parent_scope: &str,
+    #[values("function", "module")] override_scope: &str,
+) {
+    let context = TestContext::with_file(
+        "conftest.py",
+        &format!(
+            r#"
+from pathlib import Path
+import {framework}
+
+@{framework}.fixture(scope="{parent_scope}", {auto_use_kw}=True)
+def selected_fixture():
+    Path("parent-ran").touch()
+    return "parent"
+"#,
+            auto_use_kw = get_auto_use_kw(framework),
+        ),
+    );
+    context.write_file(
+        override_path,
+        &format!(
+            r#"
+from pathlib import Path
+import {framework}
+
+@{framework}.fixture(scope="{override_scope}")
+def selected_fixture():
+    Path("override-ran").touch()
+    yield "override"
+    Path("override-ran").unlink()
+"#,
+        ),
+    );
+    let tests = r#"
+from pathlib import Path
+
+def test_inherited_autouse():
+    assert Path("override-ran").exists()
+    assert not Path("parent-ran").exists()
+
+def test_inherited_autouse_again():
+    assert Path("override-ran").exists()
+    assert not Path("parent-ran").exists()
+"#;
+    if override_path.ends_with("conftest.py") {
+        context.write_file("nested/test_example.py", tests);
+    } else {
+        let source = context.read_file(override_path);
+        context.write_file(override_path, &format!("{source}\n{tests}"));
+    }
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
