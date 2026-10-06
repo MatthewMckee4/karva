@@ -7,9 +7,9 @@ use insta::assert_snapshot;
 use crate::common::TestContext;
 
 #[test]
-fn completed_worker_kills_portable_grandchild() {
+fn completed_worker_kills_portable_grandchild() -> Result<(), String> {
     let context = descendant_context(false);
-    let output = run_karva(&context, &[]);
+    let output = run_karva(&context, &[])?;
 
     assert_snapshot!(snapshot_output(&output), @r###"
     success: true
@@ -23,16 +23,17 @@ fn completed_worker_kills_portable_grandchild() {
     ----- stderr -----
     "###);
     assert_descendants_stopped(&context);
+    Ok(())
 }
 
 #[test]
-fn timed_out_worker_kills_portable_grandchild() {
+fn timed_out_worker_kills_portable_grandchild() -> Result<(), String> {
     let context = descendant_context(true);
     let output = run_karva_when_ready(
         &context,
-        &["--run-timeout=10", "--termination-grace-period=0.5"],
+        &["--run-timeout=5", "--termination-grace-period=0.5"],
         "child_ready",
-    );
+    )?;
 
     assert_snapshot!(snapshot_output(&output), @r###"
     success: false
@@ -47,6 +48,7 @@ fn timed_out_worker_kills_portable_grandchild() {
     ----- stderr -----
     "###);
     assert_descendants_stopped(&context);
+    Ok(())
 }
 
 fn descendant_context(sleep_in_worker: bool) -> TestContext {
@@ -110,7 +112,7 @@ def test_starts_child():
     context
 }
 
-fn run_karva(context: &TestContext, args: &[&str]) -> Output {
+fn run_karva(context: &TestContext, args: &[&str]) -> Result<Output, String> {
     let mut command = context.command();
     command
         .args(args)
@@ -120,7 +122,11 @@ fn run_karva(context: &TestContext, args: &[&str]) -> Output {
     collect_karva(karva, args)
 }
 
-fn run_karva_when_ready(context: &TestContext, args: &[&str], marker: &str) -> Output {
+fn run_karva_when_ready(
+    context: &TestContext,
+    args: &[&str],
+    marker: &str,
+) -> Result<Output, String> {
     let mut command = context.command();
     command
         .args(args)
@@ -131,26 +137,47 @@ fn run_karva_when_ready(context: &TestContext, args: &[&str], marker: &str) -> O
     // handshake measured by the existing lifecycle integration tests.
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline && !context.root().join(marker).exists() {
-        assert!(
-            karva.try_wait().expect("poll Karva").is_none(),
-            "Karva exited before {marker}"
-        );
+        if karva.try_wait().expect("poll Karva").is_some() {
+            let output = karva.wait_with_output().expect("collect Karva output");
+            return Err(format!(
+                "Karva exited before {marker}:\n{}",
+                snapshot_output(&output)
+            ));
+        }
         thread::sleep(Duration::from_millis(10));
     }
-    assert!(
-        context.root().join(marker).exists(),
-        "child did not become ready before the timeout test"
-    );
+    if !context.root().join(marker).exists() {
+        let _ = Command::new(if cfg!(windows) { "taskkill" } else { "kill" })
+            .args(if cfg!(windows) {
+                vec![
+                    "/PID".to_string(),
+                    karva.id().to_string(),
+                    "/T".to_string(),
+                    "/F".to_string(),
+                ]
+            } else {
+                vec!["-KILL".to_string(), karva.id().to_string()]
+            })
+            .status();
+        let output = karva
+            .wait_with_output()
+            .expect("collect stalled Karva output");
+        return Err(format!(
+            "child did not become ready before the timeout test:\n{}",
+            snapshot_output(&output)
+        ));
+    }
     collect_karva(karva, args)
 }
 
-fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Output {
-    // Receipt: ten seconds covers the timeout budget and the five-second
+fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Result<Output, String> {
+    // Receipt: ten seconds leaves a five-second cleanup budget after the timeout
+    // and covers the five-second
     // descendant observation window with room for CI scheduling.
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         if karva.try_wait().expect("poll Karva").is_some() {
-            return karva.wait_with_output().expect("collect Karva output");
+            return Ok(karva.wait_with_output().expect("collect Karva output"));
         }
         if Instant::now() >= deadline {
             let _ = Command::new(if cfg!(windows) { "taskkill" } else { "kill" })
@@ -168,12 +195,10 @@ fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Output {
             let output = karva
                 .wait_with_output()
                 .expect("collect stalled Karva output");
-            assert!(
-                false,
+            return Err(format!(
                 "Karva stalled: {args:?}\n{}",
                 snapshot_output(&output)
-            );
-            return output;
+            ));
         }
         thread::sleep(Duration::from_millis(10));
     }

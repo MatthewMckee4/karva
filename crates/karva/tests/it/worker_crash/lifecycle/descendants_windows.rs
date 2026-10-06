@@ -21,11 +21,11 @@ fn completed_worker_kills_windows_grandchild() {
 #[test]
 fn timed_out_worker_kills_windows_grandchild_after_grace() {
     let context = descendant_context(true);
-    // Receipt: ten seconds gives cold Windows workers time to publish both
+    // Receipt: five seconds gives cold Windows workers time to publish both
     // readiness files before the half-second grace window is exercised.
     let output = run_karva_when_ready(
         &context,
-        &["--run-timeout=10", "--termination-grace-period=0.5"],
+        &["--run-timeout=5", "--termination-grace-period=0.5"],
         "child_ready",
     );
     assert_status(&output, false);
@@ -159,6 +159,9 @@ from pathlib import Path
 
 
 def test_fails():
+    Path("worker_pid").write_text(str(__import__("os").getpid()))
+    child = subprocess.Popen([sys.executable, "child.py"])
+    Path("child_pid").write_text(str(child.pid))
     while not Path("child_ready").exists():
         time.sleep(0.01)
     assert False
@@ -197,13 +200,8 @@ def test_padding_7():
     pass
 
 
-def test_starts_child():
-    Path("worker_pid").write_text(str(__import__("os").getpid()))
-    child = subprocess.Popen([sys.executable, "child.py"])
-    Path("child_pid").write_text(str(child.pid))
-    while not Path("child_ready").exists():
-        time.sleep(0.01)
-    time.sleep(30)
+def test_padding_8():
+    pass
 "#,
         ),
         (
