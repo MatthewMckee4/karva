@@ -57,13 +57,13 @@ impl CoverageExclusions {
 /// Source lines and the translation from Python's physical lines to logical lines.
 pub(crate) struct SourceLines {
     /// Statement heads included in coverage metrics.
-    pub(crate) executable: HashSet<u32>,
+    pub(super) executable: HashSet<u32>,
 
     /// Statement heads removed by builtins or configured exclusions.
-    pub(crate) excluded: HashSet<u32>,
+    pub(super) excluded: HashSet<u32>,
 
     /// Continuation lines map to the first line of their logical statement.
-    pub(crate) continuations: HashMap<u32, u32>,
+    pub(super) continuations: HashMap<u32, u32>,
 }
 
 /// Analyze executable, excluded, and continuation lines using configured expressions.
