@@ -13,8 +13,9 @@ use camino::Utf8Path;
 use pyo3::class::basic::CompareOp;
 use pyo3::prelude::*;
 use pyo3::types::{
-    PyAnyMethods, PyBool, PyBytes, PyDict, PyDictMethods, PyFloat, PyFrozenSet, PyInt, PyList,
-    PyListMethods, PySet, PyString, PyStringMethods, PyTuple, PyTupleMethods,
+    PyAnyMethods, PyBool, PyBytes, PyDict, PyDictMethods, PyFloat, PyFrozenSet, PyFrozenSetMethods,
+    PyInt, PyList, PyListMethods, PySet, PySetMethods, PyString, PyStringMethods, PyTuple,
+    PyTupleMethods,
 };
 use ruff_python_ast::visitor::{Visitor, walk_stmt};
 use ruff_python_ast::{CmpOp, Expr, PythonVersion, Stmt};
@@ -52,6 +53,7 @@ struct CaptureMetadata {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ComparisonKind {
     Other,
+    Equality,
     Comparison,
     Identity,
 }
@@ -61,7 +63,6 @@ struct AssertionMetadata {
     /// The compiled `Assert` location; `test_location` selects same-line failures.
     location: Location,
     test_location: Location,
-    source: String,
     captures: Vec<CaptureMetadata>,
     comparison: ComparisonKind,
     missing_name: String,
@@ -70,7 +71,6 @@ struct AssertionMetadata {
 #[derive(Debug)]
 struct AssertionPlan {
     test_range: TextRange,
-    source: String,
     captures: Vec<CaptureMetadata>,
     comparison: ComparisonKind,
 }
@@ -125,7 +125,6 @@ impl<'a> AssertionCollector<'a> {
     }
 
     fn collect_assert(&mut self, assertion: &ruff_python_ast::StmtAssert) {
-        let source = self.source_slice(assertion.test.range()).trim().to_string();
         let comparison = match assertion.test.as_ref() {
             Expr::Compare(compare)
                 if compare
@@ -135,6 +134,9 @@ impl<'a> AssertionCollector<'a> {
             {
                 ComparisonKind::Identity
             }
+            Expr::Compare(compare) if compare.ops.iter().all(|op| matches!(op, CmpOp::Eq)) => {
+                ComparisonKind::Equality
+            }
             Expr::Compare(_) => ComparisonKind::Comparison,
             _ => ComparisonKind::Other,
         };
@@ -142,7 +144,6 @@ impl<'a> AssertionCollector<'a> {
         self.collect_expr(&assertion.test, false, &mut captures);
         self.plans.push(AssertionPlan {
             test_range: assertion.test.range(),
-            source,
             captures,
             comparison,
         });
@@ -613,7 +614,6 @@ fn compile_and_exec<'py>(
         .map(|(plan, (location, test_location))| AssertionMetadata {
             location,
             test_location,
-            source: plan.source,
             captures: plan.captures,
             comparison: plan.comparison,
             missing_name: missing_name.clone(),
@@ -658,7 +658,7 @@ fn safe_repr_inner(value: &Bound<'_, PyAny>, depth: usize, budget: &mut usize) -
             .repr()
             .ok()
             .and_then(|repr| repr.extract::<String>().ok())
-            .map_or_else(|| "<unavailable>".to_string(), |repr| clip(&repr));
+            .map_or_else(|| "<unavailable>".to_string(), |repr| clip_quoted(&repr));
     }
     if value.is_exact_instance_of::<PyBytes>() {
         let Ok(bytes) = value.cast::<PyBytes>() else {
@@ -791,24 +791,43 @@ fn clip(value: &str) -> String {
     }
 }
 
-fn preview_text(value: &str) -> String {
-    let mut characters = value.chars();
-    let prefix = characters.by_ref().take(MAX_TEXT).collect::<String>();
-    if characters.next().is_none() {
-        return prefix;
+/// Keeps the closing quote visible when an escaped string preview is shortened.
+fn clip_quoted(value: &str) -> String {
+    if value.chars().count() <= MAX_TEXT {
+        return value.to_string();
     }
-    let suffix = value
-        .chars()
-        .rev()
-        .take(MAX_TEXT / 2)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>();
+    let closing = value.chars().last().unwrap_or('\'');
     format!(
-        "{}…{}",
-        prefix.chars().take(MAX_TEXT / 2).collect::<String>(),
-        suffix
+        "{}…{closing}",
+        value.chars().take(MAX_TEXT - 2).collect::<String>()
+    )
+}
+
+fn preview_text(value: &str) -> String {
+    preview_text_around(value, None)
+}
+
+fn preview_text_around(value: &str, focus: Option<usize>) -> String {
+    let character_count = value.chars().count();
+    if character_count <= MAX_TEXT {
+        return value.to_string();
+    }
+    let window = MAX_TEXT.saturating_sub(2);
+    let focus = focus.unwrap_or(0).min(character_count - 1);
+    let mut start = focus.saturating_sub(window / 2);
+    if start + window > character_count {
+        start = character_count - window;
+    }
+    let body = value.chars().skip(start).take(window).collect::<String>();
+    format!(
+        "{}{}{}",
+        if start > 0 { "…" } else { "" },
+        body,
+        if start + window < character_count {
+            "…"
+        } else {
+            ""
+        }
     )
 }
 
@@ -854,7 +873,25 @@ fn known_equal(
         || right.is_exact_instance_of::<PyInt>()
         || right.is_exact_instance_of::<PyFloat>();
     if left.get_type().as_ptr() != right.get_type().as_ptr() && !(left_numeric && right_numeric) {
-        return Some(false);
+        let left_builtin = left.is_none()
+            || left.is_exact_instance_of::<PyBool>()
+            || left.is_exact_instance_of::<PyInt>()
+            || left.is_exact_instance_of::<PyFloat>()
+            || left.is_exact_instance_of::<PyString>()
+            || left.is_exact_instance_of::<PyBytes>()
+            || left.is_exact_instance_of::<PyList>()
+            || left.is_exact_instance_of::<PyTuple>()
+            || left.is_exact_instance_of::<PyDict>();
+        let right_builtin = right.is_none()
+            || right.is_exact_instance_of::<PyBool>()
+            || right.is_exact_instance_of::<PyInt>()
+            || right.is_exact_instance_of::<PyFloat>()
+            || right.is_exact_instance_of::<PyString>()
+            || right.is_exact_instance_of::<PyBytes>()
+            || right.is_exact_instance_of::<PyList>()
+            || right.is_exact_instance_of::<PyTuple>()
+            || right.is_exact_instance_of::<PyDict>();
+        return (left_builtin && right_builtin).then_some(false);
     }
     if left.is_none()
         || left.is_exact_instance_of::<PyBool>()
@@ -902,87 +939,294 @@ fn known_equal(
     None
 }
 
-fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
+fn supported_key(value: &Bound<'_, PyAny>) -> bool {
+    value.is_none()
+        || value.is_exact_instance_of::<PyBool>()
+        || value.is_exact_instance_of::<PyInt>()
+        || value.is_exact_instance_of::<PyFloat>()
+        || value.is_exact_instance_of::<PyString>()
+        || value.is_exact_instance_of::<PyBytes>()
+}
+
+fn path_index(path: &str, index: usize) -> String {
+    format!("{path}[{index}]")
+}
+
+fn path_key(path: &str, key: &Bound<'_, PyAny>) -> String {
+    format!("{path}[{}]", safe_repr(key))
+}
+
+fn exact_builtin_dict(dict: &Bound<'_, PyDict>) -> bool {
+    dict.iter().all(|(key, _)| supported_key(&key))
+}
+
+fn same_builtin_container(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> bool {
+    (left.is_exact_instance_of::<PyDict>() && right.is_exact_instance_of::<PyDict>())
+        || (left.is_exact_instance_of::<PyList>() && right.is_exact_instance_of::<PyList>())
+        || (left.is_exact_instance_of::<PyTuple>() && right.is_exact_instance_of::<PyTuple>())
+}
+
+fn set_contains(set: &Bound<'_, PyAny>, item: &Bound<'_, PyAny>) -> Option<bool> {
+    if let Ok(set) = set.cast::<PySet>() {
+        return set.contains(item).ok();
+    }
+    set.cast::<PyFrozenSet>().ok()?.contains(item).ok()
+}
+
+fn difference_at(path: &str, left: &str, right: &str) -> Vec<String> {
+    let header = if path.is_empty() {
+        "Difference:".to_string()
+    } else {
+        format!("Difference at {path}:")
+    };
+    vec![
+        header,
+        format!("  left: {left}"),
+        format!("  right: {right}"),
+    ]
+}
+
+fn different_lengths(path: &str, left: usize, right: usize) -> Vec<String> {
+    if path.is_empty() {
+        vec![
+            "Different lengths:".to_string(),
+            format!("  left: {left}"),
+            format!("  right: {right}"),
+        ]
+    } else {
+        vec![
+            format!("Difference at {path}:"),
+            "  Different lengths:".to_string(),
+            format!("    left: {left}"),
+            format!("    right: {right}"),
+        ]
+    }
+}
+
+fn focused_diff_inner(
+    left: &Bound<'_, PyAny>,
+    right: &Bound<'_, PyAny>,
+    path: &str,
+    depth: usize,
+) -> Option<Vec<String>> {
+    if depth > MAX_DEPTH {
+        return None;
+    }
     if let (Ok(left), Ok(right)) = (left.cast::<PyDict>(), right.cast::<PyDict>()) {
-        let mut result = Vec::new();
-        for (left_key, left_value) in left.iter().take(MAX_NODES) {
-            let supported_key = left_key.is_none()
-                || left_key.is_exact_instance_of::<PyBool>()
-                || left_key.is_exact_instance_of::<PyInt>()
-                || left_key.is_exact_instance_of::<PyFloat>()
-                || left_key.is_exact_instance_of::<PyString>()
-                || left_key.is_exact_instance_of::<PyBytes>();
-            if !supported_key {
-                continue;
-            }
-            let left_key_repr = safe_repr(&left_key);
+        // Looking up a key can call arbitrary equality methods.  Only use the
+        // focused mapping view when every key on both sides is an exact scalar
+        // whose hash/equality is builtin and bounded.
+        if !exact_builtin_dict(left) || !exact_builtin_dict(right) {
+            return None;
+        }
+        for (left_key, left_value) in left.iter() {
+            let key_path = path_key(path, &left_key);
             let Ok(Some(right_value)) = right.get_item(&left_key) else {
-                continue;
+                return Some(difference_at(
+                    &key_path,
+                    &safe_repr(&left_value),
+                    "<missing>",
+                ));
             };
-            if known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone()) == Some(false) {
-                result.push(format!(
-                    "actual[{left_key_repr}]: {}",
-                    safe_repr(&left_value)
-                ));
-                result.push(format!(
-                    "expected[{left_key_repr}]: {}",
-                    safe_repr(&right_value)
-                ));
-                return result;
+            let nested_container = same_builtin_container(&left_value, &right_value);
+            let known = known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone());
+            if known == Some(false) || nested_container {
+                if let Some(diff) =
+                    focused_diff_inner(&left_value, &right_value, &key_path, depth + 1)
+                {
+                    return Some(diff);
+                }
+                if known == Some(false) {
+                    return Some(difference_at(
+                        &key_path,
+                        &safe_repr(&left_value),
+                        &safe_repr(&right_value),
+                    ));
+                }
             }
+        }
+        for (right_key, right_value) in right.iter() {
+            if left.get_item(&right_key).ok().flatten().is_some() {
+                continue;
+            }
+            let key_path = path_key(path, &right_key);
+            return Some(difference_at(
+                &key_path,
+                "<missing>",
+                &safe_repr(&right_value),
+            ));
+        }
+        if left.len() != right.len() {
+            return Some(different_lengths(path, left.len(), right.len()));
         }
     }
     if let (Ok(left), Ok(right)) = (left.cast::<PyList>(), right.cast::<PyList>()) {
-        // This scans the exact built-in sequence without materializing it; the
-        // eight-item cap applies only to rendered containers.
-        for index in 0..left.len().min(right.len()) {
-            let Ok(left_value) = left.get_item(index) else {
+        if left.len() != right.len() {
+            return Some(different_lengths(path, left.len(), right.len()));
+        }
+        for index in 0..left.len() {
+            let (Ok(left_value), Ok(right_value)) = (left.get_item(index), right.get_item(index))
+            else {
                 continue;
             };
-            let Ok(right_value) = right.get_item(index) else {
-                continue;
-            };
-            if known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone()) == Some(false) {
-                return vec![
-                    format!("actual[{index}]: {}", safe_repr(&left_value)),
-                    format!("expected[{index}]: {}", safe_repr(&right_value)),
-                ];
+            let nested_container = same_builtin_container(&left_value, &right_value);
+            let known = known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone());
+            if known == Some(false) || nested_container {
+                let item_path = path_index(path, index);
+                if let Some(diff) =
+                    focused_diff_inner(&left_value, &right_value, &item_path, depth + 1)
+                {
+                    return Some(diff);
+                }
+                if known == Some(false) {
+                    return Some(difference_at(
+                        &item_path,
+                        &safe_repr(&left_value),
+                        &safe_repr(&right_value),
+                    ));
+                }
             }
         }
     }
-    if (left.is_exact_instance_of::<PyBytes>() && right.is_exact_instance_of::<PyBytes>())
-        || (left.is_exact_instance_of::<PySet>() && right.is_exact_instance_of::<PySet>())
+    if let (Ok(left), Ok(right)) = (left.cast::<PyTuple>(), right.cast::<PyTuple>()) {
+        if left.len() != right.len() {
+            return Some(different_lengths(path, left.len(), right.len()));
+        }
+        for index in 0..left.len() {
+            let (Ok(left_value), Ok(right_value)) = (left.get_item(index), right.get_item(index))
+            else {
+                continue;
+            };
+            let nested_container = same_builtin_container(&left_value, &right_value);
+            let known = known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone());
+            if known == Some(false) || nested_container {
+                let item_path = path_index(path, index);
+                if let Some(diff) =
+                    focused_diff_inner(&left_value, &right_value, &item_path, depth + 1)
+                {
+                    return Some(diff);
+                }
+                if known == Some(false) {
+                    return Some(difference_at(
+                        &item_path,
+                        &safe_repr(&left_value),
+                        &safe_repr(&right_value),
+                    ));
+                }
+            }
+        }
+    }
+    if left.is_exact_instance_of::<PyBytes>() && right.is_exact_instance_of::<PyBytes>() {
+        let (Ok(left), Ok(right)) = (left.cast::<PyBytes>(), right.cast::<PyBytes>()) else {
+            return None;
+        };
+        let left = left.as_bytes();
+        let right = right.as_bytes();
+        if left.len() != right.len() {
+            return Some(different_lengths(path, left.len(), right.len()));
+        }
+        if let Some((index, (left, right))) = left
+            .iter()
+            .zip(right)
+            .enumerate()
+            .find(|(_, (left, right))| left != right)
+        {
+            return Some(difference_at(
+                &path_index(path, index),
+                &left.to_string(),
+                &right.to_string(),
+            ));
+        }
+    }
+    if (left.is_exact_instance_of::<PySet>() && right.is_exact_instance_of::<PySet>())
         || (left.is_exact_instance_of::<PyFrozenSet>()
             && right.is_exact_instance_of::<PyFrozenSet>())
     {
-        if safe_repr(left) != safe_repr(right) {
-            return vec![
-                format!("actual: {}", safe_repr(left)),
-                format!("expected: {}", safe_repr(right)),
-            ];
+        if left
+            .try_iter()
+            .ok()?
+            .flatten()
+            .any(|item| !supported_key(&item))
+            || right
+                .try_iter()
+                .ok()?
+                .flatten()
+                .any(|item| !supported_key(&item))
+        {
+            return None;
+        }
+        let mut differences = vec!["Set difference:".to_string()];
+        for (set, other, label) in [(left, right, "left"), (right, left, "right")] {
+            let mut displayed = 0;
+            let mut omitted = 0;
+            for item in set.try_iter().ok()?.flatten() {
+                if !set_contains(other, &item)? {
+                    if displayed < MAX_ITEMS {
+                        differences.push(format!("  {label} only: {}", safe_repr(&item)));
+                        displayed += 1;
+                    } else {
+                        omitted += 1;
+                    }
+                }
+            }
+            if omitted > 0 {
+                differences.push(format!("  {label} only: ({omitted} more omitted)"));
+            }
+        }
+        if differences.len() > 1 {
+            return Some(differences);
         }
     }
     if left.is_exact_instance_of::<PyString>() && right.is_exact_instance_of::<PyString>() {
-        let Ok(left) = left.cast::<PyString>() else {
-            return Vec::new();
-        };
-        let Ok(left) = left.to_str() else {
-            return Vec::new();
-        };
-        let Ok(right) = right.cast::<PyString>() else {
-            return Vec::new();
-        };
-        let Ok(right) = right.to_str() else {
-            return Vec::new();
-        };
-        if left != right {
-            return vec![
-                "string diff:".to_string(),
-                karva_snapshot::diff::format_diff(&preview_text(left), &preview_text(right)),
-            ];
+        let left_object = left.cast::<PyString>().ok()?;
+        let right_object = right.cast::<PyString>().ok()?;
+        let py = left_object.py();
+        let left = left_object.to_str().ok()?;
+        let right = right_object.to_str().ok()?;
+        if left == right {
+            return None;
         }
+        let focus = left
+            .chars()
+            .zip(right.chars())
+            .position(|(left, right)| left != right)
+            .unwrap_or_else(|| left.chars().count().min(right.chars().count()));
+        if !left.contains('\n') && !right.contains('\n') {
+            let header = if path.is_empty() {
+                "String difference:".to_string()
+            } else {
+                format!("Difference at {path}:")
+            };
+            return Some(vec![
+                header,
+                format!(
+                    "  left: {}",
+                    safe_repr(&PyString::new(py, &preview_text_around(left, Some(focus))))
+                ),
+                format!(
+                    "  right: {}",
+                    safe_repr(&PyString::new(py, &preview_text_around(right, Some(focus))))
+                ),
+            ]);
+        }
+        let header = if path.is_empty() {
+            "String difference (- left, + right):".to_string()
+        } else {
+            format!("Difference at {path}:\nString difference (- left, + right):")
+        };
+        return Some(vec![
+            header,
+            karva_snapshot::diff::format_diff(
+                &preview_text_around(left, Some(focus)),
+                &preview_text_around(right, Some(focus)),
+            ),
+        ]);
     }
-    Vec::new()
+    None
+}
+
+fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
+    focused_diff_inner(left, right, "", 0).unwrap_or_default()
 }
 
 fn render_explanation(
@@ -990,7 +1234,6 @@ fn render_explanation(
     missing: Option<&Bound<'_, PyAny>>,
     records: Vec<EvaluatedCapture<'_>>,
 ) -> String {
-    let mut lines = vec![format!("assert {}", clip(&metadata.source))];
     let mut values: Vec<(String, String, Bound<'_, PyAny>, bool)> = Vec::new();
     for record in records {
         if record.optional
@@ -1010,34 +1253,35 @@ fn render_explanation(
         }
         values.push((label, rendered, record.value, record.literal));
     }
-    if metadata.comparison != ComparisonKind::Other && values.len() == 2 {
+    if metadata.comparison == ComparisonKind::Equality && values.len() == 2 {
         let diff = focused_diff(&values[0].2, &values[1].2);
         if !diff.is_empty() {
-            lines.push(String::new());
-            lines.push("Differing values:".to_string());
-            lines.extend(diff.into_iter().map(|line| format!("  {line}")));
-            return lines.join("\n");
+            return diff.join("\n");
         }
     }
     values.retain(|(_, _, _, literal)| !literal);
-    if !values.is_empty() {
-        lines.push(String::new());
-        lines.push("Differing values:".to_string());
-        if metadata.comparison == ComparisonKind::Identity
-            && values.len() == 2
-            && values[0].1 == values[1].1
-            && values[0].2.as_ptr() != values[1].2.as_ptr()
-        {
-            lines.extend(values.iter().map(|(label, rendered, _, _)| {
-                format!("  {label}: {rendered} (distinct objects)")
-            }));
+    if values.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["Evaluated values:".to_string()];
+    for (index, (label, rendered, _, _)) in values.iter().enumerate() {
+        let label = if values.len() == 2
+            && matches!(
+                metadata.comparison,
+                ComparisonKind::Equality | ComparisonKind::Comparison | ComparisonKind::Identity
+            ) {
+            format!("{} ({label})", if index == 0 { "left" } else { "right" })
         } else {
-            lines.extend(
-                values
-                    .iter()
-                    .map(|(label, rendered, _, _)| format!("  {label}: {rendered}")),
-            );
-        }
+            label.clone()
+        };
+        lines.push(format!("  {label} = {rendered}"));
+    }
+    if metadata.comparison == ComparisonKind::Identity
+        && values.len() == 2
+        && values[0].1 == values[1].1
+        && values[0].2.as_ptr() != values[1].2.as_ptr()
+    {
+        return format!("Distinct objects (both rendered as {})", values[0].1);
     }
     lines.join("\n")
 }

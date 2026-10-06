@@ -171,10 +171,8 @@ def test_nonnumeric_mismatch():
       |
     5 |     assert "other" == karva.approx("two")
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert "other" == karva.approx("two")
-          
-          Differing values:
-            karva.approx("two"): <karva._approx._ApproxScalar object>
+    info: Evaluated values:
+      karva.approx("two") = <karva._approx._ApproxScalar object>
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

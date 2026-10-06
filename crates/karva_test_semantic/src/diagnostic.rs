@@ -880,8 +880,14 @@ fn handle_failed_function_call(
 
     if error.is_instance_of::<PyAssertionError>(py)
         && let Some(explanation) = crate::assertions::explain(py, error)
+        && !explanation.is_empty()
     {
-        diagnostic.info(indent_continuation_lines(&explanation));
+        let (message, body) = explanation.split_once('\n').unwrap_or((&explanation, ""));
+        let mut assertion = SubDiagnostic::new(Severity::Info, message);
+        if !body.is_empty() {
+            assertion.body(body);
+        }
+        diagnostic.sub(assertion);
     }
 }
 

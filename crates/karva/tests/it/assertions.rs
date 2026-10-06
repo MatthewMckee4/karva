@@ -45,11 +45,9 @@ def test_call_count():
     10 |     assert actual() == {"active": True}, "state mismatch"
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: state mismatch
-    info: assert actual() == {"active": True}
-          
-          Differing values:
-            actual['active']: False
-            expected['active']: True
+    info: Difference at ['active']:
+      left: False
+      right: True
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
@@ -100,10 +98,8 @@ async def test_failure(expected):
        |
     12 |     assert side_effect and expected == [1, 2, 3]
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert side_effect and expected == [1, 2, 3]
-          
-          Differing values:
-            side_effect: False
+    info: Evaluated values:
+      side_effect = False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -179,11 +175,7 @@ def test_custom_message_args():
       |
     3 |     assert object() is object()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert object() is object()
-          
-          Differing values:
-            object(): <builtins.object object> (distinct objects)
-            object(): <builtins.object object> (distinct objects)
+    info: Distinct objects (both rendered as <builtins.object object>)
 
     test_assertion_forms::test_membership:
 
@@ -197,7 +189,6 @@ def test_custom_message_args():
        |
     13 |     assert "needle" in ("haystack",)
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert "needle" in ("haystack",)
 
     test_assertion_forms::test_repeated_boolean_operand:
 
@@ -211,10 +202,8 @@ def test_custom_message_args():
        |
     25 |     assert next_value() and next_value()
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert next_value() and next_value()
-          
-          Differing values:
-            next_value(): False
+    info: Evaluated values:
+      next_value() = False
 
     test_assertion_forms::test_safe_repr:
 
@@ -228,11 +217,9 @@ def test_custom_message_args():
        |
     10 |     assert Unprintable() == Unprintable()
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert Unprintable() == Unprintable()
-          
-          Differing values:
-            Unprintable(): <test_assertion_forms.Unprintable object>
-            Unprintable(): <test_assertion_forms.Unprintable object>
+    info: Evaluated values:
+      left (Unprintable()) = <test_assertion_forms.Unprintable object>
+      right (Unprintable()) = <test_assertion_forms.Unprintable object>
 
     test_assertion_forms::test_truthiness:
 
@@ -246,7 +233,6 @@ def test_custom_message_args():
        |
     16 |     assert []
        |     ^^^^^^^^^
-    info: assert []
 
     ────────────
          Summary [TIME] 6 tests run: 1 passed, 5 failed, 0 skipped
@@ -320,6 +306,29 @@ def test_bytes_diff():
 def test_set_diff():
     assert {"alpha"} == {"beta"}
 
+def test_mapping_missing_key():
+    assert {"active": True} == {"enabled": True}
+
+def test_sequence_length_diff():
+    assert [1, 2] == [1, 2, 3]
+
+def test_nested_diff():
+    assert {"outer": {"items": [1, 2]}} == {"outer": {"items": [1, 3]}}
+
+def test_nested_diff_skips_equal_prefix():
+    assert {"outer": {"same": {"x": 1}, "changed": [1, 2]}} == {"outer": {"same": {"x": 1}, "changed": [1, 3]}}
+
+def test_nested_string_diff():
+    assert {"message": "left"} == {"message": "right"}
+
+def test_whitespace_string_diff():
+    assert "hello world" == "helloworld"
+
+def test_long_middle_string_diff():
+    left = "a" * 140 + "LEFT" + "z" * 140
+    right = "a" * 140 + "RIGHT" + "z" * 140
+    assert left == right
+
 def test_unicode_repr():
     assert "🙂" * 300 == None
 
@@ -375,7 +384,7 @@ def test_hostile_metadata():
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 15 tests across 1 worker
+        Starting 22 tests across 1 worker
             PASS [TIME] test_assertion_formatter::test_package_resources
             FAIL [TIME] test_assertion_formatter::test_module_import_assertion
             PASS [TIME] test_assertion_formatter::test_native_args
@@ -386,6 +395,13 @@ def test_hostile_metadata():
             FAIL [TIME] test_assertion_formatter::test_string_diff
             FAIL [TIME] test_assertion_formatter::test_bytes_diff
             FAIL [TIME] test_assertion_formatter::test_set_diff
+            FAIL [TIME] test_assertion_formatter::test_mapping_missing_key
+            FAIL [TIME] test_assertion_formatter::test_sequence_length_diff
+            FAIL [TIME] test_assertion_formatter::test_nested_diff
+            FAIL [TIME] test_assertion_formatter::test_nested_diff_skips_equal_prefix
+            FAIL [TIME] test_assertion_formatter::test_nested_string_diff
+            FAIL [TIME] test_assertion_formatter::test_whitespace_string_diff
+            FAIL [TIME] test_assertion_formatter::test_long_middle_string_diff
             FAIL [TIME] test_assertion_formatter::test_unicode_repr
             PASS [TIME] test_assertion_formatter::test_traceback_columns_keep_original_source
             FAIL [TIME] test_assertion_formatter::test_deep_value
@@ -406,63 +422,87 @@ def test_hostile_metadata():
        |
     50 |     assert b"alpha" == b"alphi"
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert b"alpha" == b"alphi"
-          
-          Differing values:
-            actual: b'alpha'
-            expected: b'alphi'
+    info: Difference at [4]:
+      left: 97
+      right: 105
 
     test_assertion_formatter::test_deep_value:
 
     error[test-failure]: Test `test_deep_value` failed
-      --> test_assertion_formatter.py:82:5
-       |
-    82 | def test_deep_value():
-       |     ^^^^^^^^^^^^^^^
+       --> test_assertion_formatter.py:105:5
+        |
+    105 | def test_deep_value():
+        |     ^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:86:5
-       |
-    86 |     assert value == None
-       |     ^^^^^^^^^^^^^^^^^^^^
-    info: assert value == None
-          
-          Differing values:
-            value: [[[[[[[[[<builtins.list object>]]]]]]]]]
+       --> test_assertion_formatter.py:109:5
+        |
+    109 |     assert value == None
+        |     ^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = [[[[[[[[[<builtins.list object>]]]]]]]]]
 
     test_assertion_formatter::test_hostile_metadata:
 
     error[test-failure]: Test `test_hostile_metadata` failed
-       --> test_assertion_formatter.py:100:5
+       --> test_assertion_formatter.py:123:5
         |
-    100 | def test_hostile_metadata():
+    123 | def test_hostile_metadata():
         |     ^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-       --> test_assertion_formatter.py:101:5
+       --> test_assertion_formatter.py:124:5
         |
-    101 |     assert Hostile() == Hostile()
+    124 |     assert Hostile() == Hostile()
         |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert Hostile() == Hostile()
-          
-          Differing values:
-            Hostile(): <test_assertion_formatter.Hostile object>
-            Hostile(): <test_assertion_formatter.Hostile object>
+    info: Evaluated values:
+      left (Hostile()) = <test_assertion_formatter.Hostile object>
+      right (Hostile()) = <test_assertion_formatter.Hostile object>
 
     test_assertion_formatter::test_huge_integer:
 
     error[test-failure]: Test `test_huge_integer` failed
-      --> test_assertion_formatter.py:88:5
-       |
-    88 | def test_huge_integer():
-       |     ^^^^^^^^^^^^^^^^^
+       --> test_assertion_formatter.py:111:5
+        |
+    111 | def test_huge_integer():
+        |     ^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:89:5
+       --> test_assertion_formatter.py:112:5
+        |
+    112 |     assert 10**10000 == None
+        |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      10**10000 = <int 33220 bits>
+
+    test_assertion_formatter::test_long_middle_string_diff:
+
+    error[test-failure]: Test `test_long_middle_string_diff` failed
+      --> test_assertion_formatter.py:73:5
        |
-    89 |     assert 10**10000 == None
+    73 | def test_long_middle_string_diff():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:76:5
+       |
+    76 |     assert left == right
+       |     ^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: '…aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaLEFTzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz…'
+      right: '…aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaRIGHTzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz…'
+
+    test_assertion_formatter::test_mapping_missing_key:
+
+    error[test-failure]: Test `test_mapping_missing_key` failed
+      --> test_assertion_formatter.py:55:5
+       |
+    55 | def test_mapping_missing_key():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert 10**10000 == None
-          
-          Differing values:
-            10**10000: <int 33220 bits>
+    info: Test failed here
+      --> test_assertion_formatter.py:56:5
+       |
+    56 |     assert {"active": True} == {"enabled": True}
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Difference at ['active']:
+      left: True
+      right: <missing>
 
     test_assertion_formatter::test_module_import_assertion:
 
@@ -476,10 +516,56 @@ def test_hostile_metadata():
       |
     2 | assert value == 2
       | ^^^^^^^^^^^^^^^^^
-    info: assert value == 2
-          
-          Differing values:
-            value: 1
+    info: Evaluated values:
+      value = 1
+
+    test_assertion_formatter::test_nested_diff:
+
+    error[test-failure]: Test `test_nested_diff` failed
+      --> test_assertion_formatter.py:61:5
+       |
+    61 | def test_nested_diff():
+       |     ^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:62:5
+       |
+    62 |     assert {"outer": {"items": [1, 2]}} == {"outer": {"items": [1, 3]}}
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Difference at ['outer']['items'][1]:
+      left: 2
+      right: 3
+
+    test_assertion_formatter::test_nested_diff_skips_equal_prefix:
+
+    error[test-failure]: Test `test_nested_diff_skips_equal_prefix` failed
+      --> test_assertion_formatter.py:64:5
+       |
+    64 | def test_nested_diff_skips_equal_prefix():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:65:5
+       |
+    65 |     assert {"outer": {"same": {"x": 1}, "changed": [1, 2]}} == {"outer": {"same": {"x": 1}, "changed": [1, 3]}}
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Difference at ['outer']['changed'][1]:
+      left: 2
+      right: 3
+
+    test_assertion_formatter::test_nested_string_diff:
+
+    error[test-failure]: Test `test_nested_string_diff` failed
+      --> test_assertion_formatter.py:67:5
+       |
+    67 | def test_nested_string_diff():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:68:5
+       |
+    68 |     assert {"message": "left"} == {"message": "right"}
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Difference at ['message']:
+      left: 'left'
+      right: 'right'
 
     test_assertion_formatter::test_same_line_second_assertion:
 
@@ -493,10 +579,24 @@ def test_hostile_metadata():
        |
     44 |     if True: assert first == 1; assert second == 3
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert second == 3
-          
-          Differing values:
-            second: 2
+    info: Evaluated values:
+      second = 2
+
+    test_assertion_formatter::test_sequence_length_diff:
+
+    error[test-failure]: Test `test_sequence_length_diff` failed
+      --> test_assertion_formatter.py:58:5
+       |
+    58 | def test_sequence_length_diff():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:59:5
+       |
+    59 |     assert [1, 2] == [1, 2, 3]
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Different lengths:
+      left: 2
+      right: 3
 
     test_assertion_formatter::test_set_diff:
 
@@ -510,7 +610,9 @@ def test_hostile_metadata():
        |
     53 |     assert {"alpha"} == {"beta"}
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert {"alpha"} == {"beta"}
+    info: Set difference:
+      left only: 'alpha'
+      right only: 'beta'
 
     test_assertion_formatter::test_string_diff:
 
@@ -524,33 +626,44 @@ def test_hostile_metadata():
        |
     47 |     assert "alpha/nbravo" == "alpha/nbrava"
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert "alpha/nbravo" == "alpha/nbrava"
-          
-          Differing values:
-            string diff:
-            1 │  alpha
-          2 │ -bravo
-          2 │ +brava
+    info: String difference (- left, + right):
+    1 │  alpha
+    2 │ -bravo
+    2 │ +brava
 
     test_assertion_formatter::test_unicode_repr:
 
     error[test-failure]: Test `test_unicode_repr` failed
-      --> test_assertion_formatter.py:55:5
+      --> test_assertion_formatter.py:78:5
        |
-    55 | def test_unicode_repr():
+    78 | def test_unicode_repr():
        |     ^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:56:5
+      --> test_assertion_formatter.py:79:5
        |
-    56 |     assert "🙂" * 300 == None
+    79 |     assert "🙂" * 300 == None
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: assert "🙂" * 300 == None
-          
-          Differing values:
-            "🙂" * 300: '🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂…🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂...
+    info: Evaluated values:
+      "🙂" * 300 = '🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂…'
+
+    test_assertion_formatter::test_whitespace_string_diff:
+
+    error[test-failure]: Test `test_whitespace_string_diff` failed
+      --> test_assertion_formatter.py:70:5
+       |
+    70 | def test_whitespace_string_diff():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:71:5
+       |
+    71 |     assert "hello world" == "helloworld"
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: 'hello world'
+      right: 'helloworld'
 
     ────────────
-         Summary [TIME] 15 tests run: 6 passed, 9 failed, 0 skipped
+         Summary [TIME] 22 tests run: 6 passed, 16 failed, 0 skipped
 
     ----- stderr -----
     "#);
