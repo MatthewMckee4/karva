@@ -50,6 +50,23 @@ Initialization and workspace settings remain available under `lsp.karva`:
 }
 ```
 
+## Fixture inlay hints
+
+Enable Zed's inlay hints to see each injected fixture's scope and provider next
+to test parameters, fixture dependencies, and `usefixtures` names:
+
+```json
+{
+  "inlay_hints": {
+    "enabled": true,
+    "show_other_hints": true
+  }
+}
+```
+
+Hints follow fixture overrides and unsaved provider edits. Unknown fixtures and
+ordinary Python parameters are left to diagnostics and the Python language server.
+
 ## Gutter test runs
 
 Zed detects Python `test_*` functions itself and binds their gutter play icons

@@ -20,7 +20,7 @@ pub use completion::{FixtureCompletion, complete_fixtures};
 pub use definition::{FixtureDefinitionTarget, fixture_definition};
 pub use fixture::{FixtureId, FixtureScope};
 use fixture::{FixtureModel, FixtureResolution};
-pub use hover::{FixtureHover, hover_fixture};
+pub use hover::{FixtureHover, fixture_reference_hovers, hover_fixture};
 pub use implementation::{FixtureImplementationTarget, fixture_implementation};
 pub(crate) use occurrences::fixture_occurrences;
 pub use occurrences::{

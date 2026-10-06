@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_ide::{SourceDiagnostic, SourceLocation};
 use lsp_types::{
-    Code, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location,
-    PublishDiagnosticsNotification, PublishDiagnosticsParams, Range, Uri,
+    Code, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, InlayHintRefreshRequest,
+    Location, PublishDiagnosticsNotification, PublishDiagnosticsParams, Range, Uri,
 };
 use ruff_source_file::LineIndex;
 
@@ -128,6 +128,12 @@ pub(in crate::server) fn publish_diagnostics(
         )?;
     }
 
+    // A provider or configuration edit can change hints in an unchanged consumer.
+    // Refresh only after the current source revision has been accepted.
+    if session.supports_inlay_hint_refresh() {
+        let id = session.request_queue_mut().register_next_outgoing()?;
+        client.send_request::<InlayHintRefreshRequest>(id, ())?;
+    }
     Ok(())
 }
 

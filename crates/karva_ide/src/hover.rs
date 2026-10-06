@@ -73,6 +73,60 @@ pub fn hover_fixture(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fixt
     None
 }
 
+/// Returns semantic context for statically resolved injection sites in source order.
+///
+/// Includes test parameters, fixture dependencies, and literal `usefixtures`
+/// names. Ordinary Python parameters and unresolved or dynamic providers are
+/// excluded. Uses the same resolution rules as hover, including built-ins and
+/// ancestor overrides, without importing user code.
+pub fn fixture_reference_hovers(analysis: &SourceAnalysis) -> Vec<FixtureHover> {
+    let mut hovers = analysis
+        .fixture_model
+        .local()
+        .iter()
+        .flat_map(|definition| {
+            definition.dependencies.iter().filter_map(|reference| {
+                hover_from_resolution(
+                    analysis,
+                    reference.name.clone(),
+                    reference.range,
+                    &reference.resolution,
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    for function in &analysis.module.test_function_defs {
+        for parameter in function.parameters.iter_non_variadic_params() {
+            if let Some((name, range)) =
+                test_parameter_reference(analysis, function, parameter.parameter.name.range.start())
+                && let Some(hover) = hover_from_name(analysis, name, range)
+            {
+                hovers.push(hover);
+            }
+        }
+        for decorator in &function.decorator_list {
+            let Expr::Call(call) = &decorator.expression else {
+                continue;
+            };
+            if !analysis.fixture_model.is_use_fixtures_reference(&call.func) {
+                continue;
+            }
+            for argument in &call.arguments.args {
+                if let Expr::StringLiteral(literal) = argument
+                    && let Some(range) = crate::fixture::single_string_content_range(literal)
+                    && let Some((name, _)) =
+                        use_fixtures_reference(analysis, function, range.start())
+                    && let Some(hover) = hover_from_name(analysis, name, literal.range())
+                {
+                    hovers.push(hover);
+                }
+            }
+        }
+    }
+    hovers.sort_by_key(|hover| hover.range.start());
+    hovers
+}
+
 fn hover_from_name(
     analysis: &SourceAnalysis,
     name: String,
