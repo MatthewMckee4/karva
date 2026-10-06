@@ -87,6 +87,10 @@ fn literal_sequence_len(expr: &Expr) -> Option<usize> {
 ///
 /// References inside control flow, helpers, and imports are included conservatively:
 /// source collection cannot know which of these bind marks when Python imports the module.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "module mark detection is shared only by collector modules"
+)]
 pub(super) fn has_module_tags(body: &[Stmt]) -> bool {
     /// Records conservative evidence that Python may bind module marks.
     #[derive(Default)]
