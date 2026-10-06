@@ -1,6 +1,6 @@
 # Tutorial
 
-This tutorial walks through setting up a small project, writing a test, and running it.
+Create a project, write a test, and run it.
 
 ## A new project
 

@@ -1,10 +1,8 @@
-The `parametrize` tag allows us to run the same test with several different inputs.
+# Parametrize
 
-This works like pytest's `parametrize` decorator.
+`@karva.tags.parametrize` runs a test with each set of inputs, like pytest.
 
 ## Basic Usage
-
-First, here is a small example:
 
 ```python title="test.py"
 import karva
@@ -18,7 +16,7 @@ Running `uv run karva test` will run `test_function` three times, once for each 
 
 ## Multiple Variables
 
-We can also parametrize multiple arguments:
+Pass multiple argument names and a row of values for each case:
 
 ```python title="test.py"
 import karva
@@ -28,7 +26,7 @@ def test_function(a: int, b: int):
     assert a > 0 and b > 0
 ```
 
-Like pytest, we can put the arguments in a single string, separated by ",":
+Argument names can also be comma-separated: `"a,b"`.
 
 ```python title="test.py"
 import karva
@@ -40,7 +38,7 @@ def test_function(a: int, b: int):
 
 ## Parametrize with Fixtures
 
-We can also mix fixtures and parametrize:
+Tests can request fixtures alongside parametrized arguments:
 
 ```python title="test.py"
 import karva
@@ -58,8 +56,7 @@ Each parametrized variant receives the fixture value alongside the parametrized 
 
 ## Multiple Parametrize Tags
 
-We can also use multiple decorators, allowing us to test more scenarios.
-This will result in a cartesian product of the parametrize values.
+Stack decorators to run every combination of their values.
 
 ```python title="test.py"
 import karva
@@ -144,7 +141,7 @@ def test_square(input, expected):
 
 ## Pytest
 
-You can also still use `@pytest.mark.parametrize`:
+`@pytest.mark.parametrize` is also supported:
 
 ```python title="test.py"
 import pytest

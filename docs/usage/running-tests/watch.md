@@ -1,12 +1,10 @@
 # Watch mode
 
-`--watch` keeps Karva running, watches the project for Python source changes, and re-runs tests whenever a file is saved:
+`--watch` reruns tests when Python source files change:
 
 ```bash
-karva test --watch
+uv run karva test --watch
 ```
-
-It is the inner loop for local development: edit a file, hit save, see the result.
 
 ## What triggers a re-run
 
@@ -16,18 +14,18 @@ The watcher debounces rapid saves so a single editor write does not produce mult
 
 ## Combining with other flags
 
-`--watch` composes with everything else. Two combinations are particularly useful:
+Combine `--watch` with test selection:
 
 Re-run only the tests that failed last time, then everything once they pass:
 
 ```bash
-karva test --watch --last-failed
+uv run karva test --watch --last-failed
 ```
 
-Tighten the loop when iterating on one test:
+Watch one test:
 
 ```bash
-karva test --watch -E 'test(/^pkg::test_login$/)'
+uv run karva test --watch -E 'test(/^pkg::test_login$/)'
 ```
 
 To exit, press `Ctrl-C`.

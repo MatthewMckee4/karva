@@ -1,6 +1,6 @@
 # Fixtures
 
-Fixtures provide a mechanism for setup and teardown logic in tests. They enable dependency injection, allowing tests to declare their dependencies explicitly and receive them automatically.
+Fixtures share setup and teardown. Tests request them by argument name.
 
 ## Defining Fixtures
 
@@ -20,7 +20,7 @@ def test_query(database_connection):
 
 ## Fixture Scopes
 
-Fixtures support different scopes that control their lifecycle and when they are created and destroyed.
+Scope controls how long a fixture is shared within each worker.
 
 ### Function Scope (Default)
 
@@ -82,7 +82,7 @@ If both `test_unit.py` and `test_integration.py` use `package_resource`, the fix
 
 ### Session Scope
 
-The fixture is created once for the entire test session and shared across all tests:
+The fixture is created once per worker and shared across its tests:
 
 ```py title="conftest.py"
 import karva
@@ -114,7 +114,7 @@ The callable receives `fixture_name` as a string and `config` (currently `None`)
 
 ## Dependent Fixtures
 
-Fixtures can depend on other fixtures, enabling composition:
+Fixtures request other fixtures by argument name:
 
 ```py title="conftest.py"
 import karva
@@ -160,17 +160,9 @@ def temp_directory():
     shutil.rmtree(path)
 ```
 
-Example output when running with `karva test --show-output`:
-
-```text
-Creating database
-Running test
-Closing database
-```
-
 ## Auto-Use Fixtures
 
-Auto-use fixtures execute automatically for all tests within their scope, without requiring explicit declaration:
+Auto-use fixtures run for tests in their scope without being requested:
 
 ```py title="conftest.py"
 import karva
@@ -189,7 +181,7 @@ def test_something():
     pass
 ```
 
-This is particularly useful for global setup and teardown:
+For session setup and teardown:
 
 ```py title="conftest.py"
 import karva
@@ -260,4 +252,4 @@ def test_admin_user(username):
 
 ## Limitations
 
-Karva does not support the `request` fixture. This is an intentional design decision and there are no plans to add support for it.
+Karva does not support pytest's [`request` fixture](../non-goals.md#pytest-request-internals).

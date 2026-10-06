@@ -1,14 +1,12 @@
 # Filtering tests
 
-Karva selects which tests to run with **filter expressions**, a small
-language inspired by [nextest's filtersets]. A single `-E` / `--filter`
-flag composes name matching, tag matching, and boolean logic into one
-expression — there are no separate `--tag` or `--match` flags.
+Use `-E` / `--filter` to select tests by name or tag. Combine predicates
+with boolean operators, using syntax inspired by [nextest's filtersets]:
 
 ```bash
-karva test -E 'tag(slow)'
-karva test -E 'test(/^auth::/) & not tag(flaky)'
-karva test -E '(tag(fast) | tag(unit)) - tag(flaky)'
+uv run karva test -E 'tag(slow)'
+uv run karva test -E 'test(/^auth::/) & not tag(flaky)'
+uv run karva test -E '(tag(fast) | tag(unit)) - tag(flaky)'
 ```
 
 ## Adding custom tags
@@ -51,12 +49,10 @@ When `-E` is passed more than once, a test runs if it matches **any** of
 the expressions (OR across flags):
 
 ```bash
-karva test -E 'tag(slow)' -E 'tag(integration)'
+uv run karva test -E 'tag(slow)' -E 'tag(integration)'
 ```
 
-Expressions are evaluated against every discovered test. A test runs if
-and only if the expression evaluates to true for it; otherwise it is
-skipped.
+Tests that do not match are skipped.
 
 ## Predicates
 
@@ -69,24 +65,17 @@ operators. Karva currently supports two predicates:
   tag matches. Built-in and custom `karva.tags.*` decorators and
   `pytest.mark.*` decorators all contribute tags.
 
-Unknown predicate names are a parse error. The error message will
-suggest the valid names. If you expected one and got the other, make
-sure you haven't misspelled `test`/`tag` or used an older nextest
-predicate (`package`, `binary`, `platform`, etc.) — karva does not
-currently implement those.
+Unknown predicates produce a parse error listing the supported names.
 
 ## Operators
 
-Predicates can be combined with the following operators. All operators
-have both a symbolic and a keyword form, pick whichever is clearer in
-context:
+Combine predicates with these operators:
 
 - `&` or `and` — logical AND, e.g. `tag(slow) & test(~login)`.
 - `|` or `or` — logical OR, e.g. `tag(slow) or tag(fast)`.
 - `not` or `!` — logical NOT, e.g. `not tag(flaky)`.
 - `-` — difference (and-not), e.g. `tag(slow) - tag(flaky)` is
-  shorthand for `tag(slow) & not tag(flaky)`. Useful for subtracting
-  flaky or platform-gated tests from a broader selection.
+  shorthand for `tag(slow) & not tag(flaky)`.
 - `( … )` — grouping, e.g. `(tag(a) or tag(b)) and tag(c)`.
 
 ### Operator precedence
@@ -111,9 +100,7 @@ When in doubt, parenthesize.
 
 ## Matchers
 
-A matcher describes how a predicate's argument is compared against the
-value it is evaluated over (a test name or a tag name). There are four
-matcher kinds, distinguished by a single-character prefix:
+Prefixes control how test and tag names are matched:
 
 - `=foo` — **exact**: the value must equal the pattern exactly.
 - `~foo` — **substring**: the pattern must appear anywhere in the value.
@@ -142,15 +129,11 @@ tag(#py3*)                    # any tag matching the glob "py3*"
 When you omit the prefix, the matcher kind depends on the predicate:
 
 - `test(foo)` defaults to **substring**. `test(login)` is the same as
-  `test(~login)`. This matches how `cargo nextest` behaves and is what
-  people usually want when typing something quick.
+  `test(~login)`.
 - `tag(foo)` defaults to **exact**. `tag(slow)` is the same as
-  `tag(=slow)`. Tags are short identifiers, so partial matches almost
-  always hit more than you want.
+  `tag(=slow)`.
 
-If you write tooling that constructs filter expressions programmatically,
-always use an explicit prefix rather than relying on the default — it's
-clearer to read and won't surprise you if the default ever changes.
+Use explicit prefixes when generating expressions in tooling.
 
 ### Matcher bodies
 
@@ -209,14 +192,8 @@ has a direct translation:
 - `-m 'slow|fast'` becomes `-E 'test(/slow|fast/)'`
 - `-t slow -m auth` becomes `-E 'tag(slow) & test(/auth/)'`
 
-Multiple `-E` flags keep the same OR-across-flags semantics that
-multiple `-t` or `-m` flags used to have, so `-t a -t b` becomes
-`-E 'tag(a)' -E 'tag(b)'` and not `-E 'tag(a) | tag(b)'` (though those
-two are equivalent).
-
-On top of the old capabilities, the new DSL adds substring, exact, and
-glob matchers — previously only regex matching was possible for test
-names, and only exact matching for tags.
+Multiple `-E` flags are combined with OR, as multiple `-t` or `-m` flags
+were. For example, `-t a -t b` becomes `-E 'tag(a)' -E 'tag(b)'`.
 
 ## When nothing matches
 

@@ -1,28 +1,30 @@
 # Failing fast
 
-By default, Karva runs every test in the suite even after some have failed, so a single broken assertion does not hide the rest of the failures. Two flags change that.
+Karva runs the whole suite by default. Use `--fail-fast` or `--max-fail` to
+stop after failures.
 
 ## Stopping after the first failure
 
 `--fail-fast` stops scheduling new tests once any test fails:
 
 ```bash
-karva test --fail-fast
+uv run karva test --fail-fast
 ```
 
-It is equivalent to `--max-fail=1`, kept around as the familiar pytest spelling.
+This is equivalent to `--max-fail=1`.
 
 ## Stopping after N failures
 
 `--max-fail=N` is the general form: stop scheduling new tests once `N` have failed.
 
 ```bash
-karva test --max-fail=3
+uv run karva test --max-fail=3
 ```
 
-In-flight tests are allowed to finish, so the final failure count may exceed `N` by a small amount when running in parallel. Across workers, the limit is enforced through a shared file-based signal so workers stop scheduling cooperatively without racing.
+Tests already running may finish, so parallel runs can report more than `N`
+failures.
 
-## Configuring in `karva.toml`
+## Configuration
 
 ```toml
 [tool.karva.profile.default.test]
@@ -36,7 +38,7 @@ max-fail = 3
 `--no-fail-fast` clears any `fail-fast` or `max-fail` value set in configuration and runs the entire suite:
 
 ```bash
-karva test --no-fail-fast
+uv run karva test --no-fail-fast
 ```
 
-When `--max-fail=N` and `--no-fail-fast` are both passed on the command line, `--max-fail` takes precedence. Use `--no-fail-fast` to override a CI profile on a one-off invocation when you want the full picture.
+If both flags are passed, `--max-fail` takes precedence.

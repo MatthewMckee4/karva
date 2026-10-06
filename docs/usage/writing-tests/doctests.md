@@ -40,7 +40,7 @@ def add(left, right):
     return left + right
 ```
 
-This MVP collects source-defined module docstrings, functions and classes
+Karva collects source-defined module docstrings, functions and classes
 declared directly at module scope, and members declared directly on those
 classes, including nested classes. The documented object must remain visible
 under its source name after the module is imported; otherwise, Karva reports
