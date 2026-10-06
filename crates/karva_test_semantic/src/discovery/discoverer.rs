@@ -177,6 +177,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             test_function_defs,
             doctests,
             fixture_function_defs,
+            ..
         } = collected_module;
 
         let module_file_path = path.path().clone();

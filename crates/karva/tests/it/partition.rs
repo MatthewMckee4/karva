@@ -390,3 +390,50 @@ def test_value(value):
     "
     );
 }
+
+#[rstest]
+fn module_and_function_parametrize_cases_are_not_dropped(
+    #[values(
+        "pytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])",
+        "karva_tag = karva.tags.parametrize('module_value', [1, 2, 3])",
+        "if True:\n    pytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])",
+        "from marks import pytestmark"
+    )]
+    module_mark: &str,
+) {
+    let context = TestContext::with_files([
+        (
+            "marks.py",
+            "import pytest\npytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])\n",
+        ),
+        (
+            "test_mod.py",
+            &format!(
+                r#"
+import karva
+import pytest
+
+{module_mark}
+
+@pytest.mark.parametrize("function_value", [4, 5])
+def test_values(module_value, function_value):
+    assert module_value in [1, 2, 3]
+    assert function_value in [4, 5]
+"#,
+            ),
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context.command().args(["--num-workers=2", "--status-level=none"]),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 6 tests run: 6 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}

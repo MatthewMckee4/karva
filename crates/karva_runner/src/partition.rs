@@ -187,11 +187,7 @@ pub fn scheduled_test_count(package: &karva_collector::CollectedPackage) -> usiz
             module
                 .test_function_defs
                 .iter()
-                .map(|test| {
-                    karva_collector::count_parametrize_cases(test)
-                        .unwrap_or(1)
-                        .max(1)
-                })
+                .map(|test| module.count_parametrize_cases(test).unwrap_or(1).max(1))
                 .fold(module.doctests.len(), usize::saturating_add)
         })
         .fold(0usize, usize::saturating_add);

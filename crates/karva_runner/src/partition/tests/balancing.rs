@@ -398,3 +398,29 @@ fn exact_case_duration_overrides_legacy_fallback() {
             .map(|index| { TestCacheKey::parameter_case_name("test_sample::test_value", index) })
     );
 }
+
+#[test]
+fn module_marks_keep_function_parametrize_atomic() {
+    let (_temp_dir, test_path, package) = collected_package(
+        "pytestmark = marks\n@karva.tags.parametrize('value', [0, 1, 2])\ndef test_value(value): pass\n",
+    );
+    let partitions = partition_collected_tests(
+        &package,
+        2,
+        &HashMap::new(),
+        &HashSet::new(),
+        LastFailedSelection::All,
+        FailurePriority::Normal,
+        None,
+        TestOrdering::Stable,
+    );
+
+    assert_eq!(scheduled_test_count(&package), 1);
+    assert_eq!(
+        partitions
+            .iter()
+            .flat_map(Partition::test_paths)
+            .collect::<Vec<_>>(),
+        [format!("{test_path}::test_value")],
+    );
+}
