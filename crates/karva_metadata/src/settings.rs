@@ -147,24 +147,6 @@ pub enum JunitFlakyFailStatus {
     Success,
 }
 
-impl JunitFlakyFailStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Failure => "failure",
-            Self::Success => "success",
-        }
-    }
-}
-
-impl FlakyResult {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Pass => "pass",
-            Self::Fail => "fail",
-        }
-    }
-}
-
 impl Combine for JunitFlakyFailStatus {
     #[inline(always)]
     fn combine_with(&mut self, _other: Self) {}
@@ -480,7 +462,7 @@ pub struct ProjectSettings {
 #[serde(rename_all = "kebab-case")]
 pub struct OverrideSettings {
     /// Compiled selector deciding which tests receive this override.
-    pub filter: ValidatedFilter,
+    pub(super) filter: ValidatedFilter,
 
     /// Retry count replacing profile-level retry policy.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -488,23 +470,23 @@ pub struct OverrideSettings {
 
     /// Flaky-result policy replacing profile-level policy.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub flaky_result: Option<FlakyResult>,
+    pub(super) flaky_result: Option<FlakyResult>,
 
     /// `JUnit` flaky policy replacing profile-level policy.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub junit_flaky_fail_status: Option<JunitFlakyFailStatus>,
+    pub(super) junit_flaky_fail_status: Option<JunitFlakyFailStatus>,
 
     /// Hard timeout in seconds; non-positive values disable it.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<TestTimeoutSecs>,
+    pub(super) timeout: Option<TestTimeoutSecs>,
 
     /// Slow-test threshold in seconds; non-positive values disable it.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub slow_timeout: Option<SlowTimeoutSecs>,
+    pub(super) slow_timeout: Option<SlowTimeoutSecs>,
 
     /// Post-run duration budget in seconds; non-positive values disable it.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fail_slow: Option<FailSlowSecs>,
+    pub(super) fail_slow: Option<FailSlowSecs>,
 }
 
 impl OverrideSettings {
@@ -758,7 +740,7 @@ pub struct JunitSettings {
     pub store_failure_output: bool,
 
     /// Outcome assigned to failed attempts before an eventual pass.
-    pub flaky_fail_status: JunitFlakyFailStatus,
+    pub(super) flaky_fail_status: JunitFlakyFailStatus,
 }
 
 impl Default for JunitSettings {

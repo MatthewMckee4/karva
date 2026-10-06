@@ -126,15 +126,6 @@ pub enum CovContext {
     Test,
 }
 
-impl CovContext {
-    /// Returns the value forwarded to coverage configuration.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Test => "test",
-        }
-    }
-}
-
 /// Whether to run ignored/skipped tests.
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum RunIgnored {
@@ -143,16 +134,6 @@ pub enum RunIgnored {
 
     /// Run both ignored and non-ignored tests.
     All,
-}
-
-impl RunIgnored {
-    /// Returns the canonical CLI spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Only => "only",
-            Self::All => "all",
-        }
-    }
 }
 
 impl From<RunIgnored> for RunIgnoredMode {

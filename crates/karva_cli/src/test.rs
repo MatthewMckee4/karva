@@ -459,7 +459,7 @@ impl TestCommand {
 
 impl SubTestCommand {
     /// Converts user-facing test arguments into configuration overrides.
-    pub fn into_options(self) -> Options {
+    fn into_options(self) -> Options {
         // `--no-fail-fast` forces `fail_fast = false` and clears any
         // `max-fail` limit from config. `overrides_with` guarantees
         // `--fail-fast` and `--no-fail-fast` cannot both be active.
