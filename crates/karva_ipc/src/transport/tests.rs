@@ -11,62 +11,62 @@ use std::path::PathBuf;
 use super::{ControllerEndpoint, ControllerListener};
 
 #[test]
-fn endpoint_argument_roundtrips() {
+fn endpoint_encoding_roundtrips() {
     let endpoint = ControllerListener::bind()
         .expect("bind controller listener")
         .endpoint();
-    let encoded = endpoint.to_argument();
-    assert_eq!(ControllerEndpoint::from_argument(&encoded), Ok(endpoint));
+    let encoded = endpoint.encode();
+    assert_eq!(ControllerEndpoint::decode(&encoded), Ok(endpoint));
 }
 
 #[cfg(unix)]
 #[test]
-fn non_unicode_unix_endpoint_argument_roundtrips() {
+fn non_unicode_unix_endpoint_encoding_roundtrips() {
     let endpoint = ControllerEndpoint::Unix(PathBuf::from(OsString::from_vec(vec![0xff])));
-    let encoded = endpoint.to_argument();
+    let encoded = endpoint.encode();
 
-    assert_eq!(ControllerEndpoint::from_argument(&encoded), Ok(endpoint));
+    assert_eq!(ControllerEndpoint::decode(&encoded), Ok(endpoint));
 }
 
 #[test]
-fn tcp_fallback_endpoint_argument_roundtrips() {
+fn tcp_fallback_endpoint_encoding_roundtrips() {
     let listener = ControllerListener::bind_tcp().expect("bind TCP controller listener");
     let endpoint = listener.endpoint();
-    let encoded = endpoint.to_argument();
+    let encoded = endpoint.encode();
 
-    assert_eq!(ControllerEndpoint::from_argument(&encoded), Ok(endpoint));
+    assert_eq!(ControllerEndpoint::decode(&encoded), Ok(endpoint));
 }
 
 #[test]
-fn endpoint_argument_rejects_invalid_transport_values() {
+fn endpoint_encoding_rejects_invalid_transport_values() {
     let missing_transport_error = if cfg!(unix) {
         "controller endpoint must start with `unix:` or `tcp:`"
     } else {
         "controller endpoint must start with `tcp:`"
     };
     assert_eq!(
-        ControllerEndpoint::from_argument(OsStr::new("controller.sock")),
+        ControllerEndpoint::decode(OsStr::new("controller.sock")),
         Err(missing_transport_error.to_string())
     );
     assert_eq!(
-        ControllerEndpoint::from_argument(OsStr::new("tcp:")),
+        ControllerEndpoint::decode(OsStr::new("tcp:")),
         Err("TCP controller endpoint must not be empty".to_string())
     );
     assert!(matches!(
-        ControllerEndpoint::from_argument(OsStr::new("tcp:not-an-address")),
+        ControllerEndpoint::decode(OsStr::new("tcp:not-an-address")),
         Err(error) if error.starts_with("invalid TCP controller endpoint `not-an-address`:")
     ));
 }
 
 #[cfg(unix)]
 #[test]
-fn unix_endpoint_argument_rejects_empty_path_and_invalid_tcp_encoding() {
+fn unix_endpoint_encoding_rejects_empty_path_and_invalid_tcp_encoding() {
     assert_eq!(
-        ControllerEndpoint::from_argument(OsStr::new("unix:")),
+        ControllerEndpoint::decode(OsStr::new("unix:")),
         Err("Unix controller endpoint path must not be empty".to_string())
     );
     assert_eq!(
-        ControllerEndpoint::from_argument(OsStr::from_bytes(b"tcp:\xff")),
+        ControllerEndpoint::decode(OsStr::from_bytes(b"tcp:\xff")),
         Err("TCP controller endpoint must be valid Unicode".to_string())
     );
 }

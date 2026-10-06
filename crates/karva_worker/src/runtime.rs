@@ -1,58 +1,28 @@
+//! Worker startup from process bootstrap identity and authenticated IPC configuration.
+
 use std::collections::BTreeSet;
-use std::{ffi::OsString, io};
+use std::{env, io};
 
 use anyhow::Context as _;
 use camino::Utf8PathBuf;
-use clap::Parser;
 use colored::Colorize;
-use karva_cli::{ExitStatus, Verbosity};
+use karva_cli::ExitStatus;
 use karva_diagnostic::{
     DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
 };
 use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerConfiguration, WorkerEvent};
-use karva_logging::{Printer, TerminalColor, set_colored_override, setup_tracing};
+use karva_logging::{Printer, set_colored_override, setup_tracing};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, ProjectSettings};
 use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::{current_python_version, enable_faulthandler};
+use karva_static::WorkerEnvVars;
 
 use crate::reporter::WorkerReporter;
 
-/// Command-line arguments for the `karva_worker` process.
-///
-/// This struct is used internally when tests are distributed across
-/// multiple worker processes for parallel execution.
-#[derive(Parser)]
-#[command(name = "karva_worker", about = "Karva test worker")]
-struct Args {
-    /// Controller endpoint used for runtime events and final results.
-    #[arg(long = "controller-address")]
-    controller_endpoint: OsString,
-
-    /// Unique identifier correlating events for this test run.
-    #[arg(long)]
-    run_id: String,
-
-    /// Numeric identifier for this worker in a parallel test run.
-    #[arg(long)]
-    worker_id: usize,
-
-    /// Logging verbosity needed before the controller handshake.
-    #[clap(flatten)]
-    verbosity: Verbosity,
-
-    /// Resolved color policy for worker output.
-    #[arg(long)]
-    color: Option<TerminalColor>,
-
-    /// Per-worker coverage artifact, present only when measurement is enabled.
-    #[arg(long)]
-    cov_data_file: Option<Utf8PathBuf>,
-}
-
 /// Runs one worker invocation, translating broken pipes into successful exits.
-pub fn karva_worker_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
-    run(f).unwrap_or_else(|error| {
+pub fn karva_worker_main() -> ExitStatus {
+    run().unwrap_or_else(|error| {
         use io::Write;
 
         // Exit "gracefully" on broken pipe errors.
@@ -83,28 +53,24 @@ pub fn karva_worker_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> Exit
     })
 }
 
-fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitStatus> {
-    let args = wild::args_os();
-
-    let args = f(
-        argfile::expand_args_from(args, argfile::parse_fromfile, argfile::PREFIX)
-            .context("Failed to read CLI arguments from file")?,
-    );
-
-    let args = Args::parse_from(args);
-
-    let verbosity = args.verbosity.level();
-    set_colored_override(args.color);
+fn run() -> anyhow::Result<ExitStatus> {
+    let endpoint = env::var_os(WorkerEnvVars::KARVA_CONTROLLER_ENDPOINT)
+        .context("karva-worker requires KARVA_CONTROLLER_ENDPOINT from its controller")?;
+    let controller_endpoint = ControllerEndpoint::decode(&endpoint).map_err(anyhow::Error::msg)?;
+    let run_id = env::var(WorkerEnvVars::KARVA_RUN_ID)
+        .context("karva-worker requires a Unicode KARVA_RUN_ID from its controller")?;
+    let worker_id = env::var(WorkerEnvVars::KARVA_WORKER_ID)
+        .context("karva-worker requires KARVA_WORKER_ID from its controller")?
+        .parse()
+        .context("karva-worker requires KARVA_WORKER_ID to be an unsigned integer")?;
+    let (client, selection) = WorkerClient::connect(&controller_endpoint, &run_id, worker_id)?;
+    let configuration = selection.configuration;
+    let verbosity = configuration.verbosity;
+    set_colored_override(configuration.color);
     let _guard = setup_tracing(verbosity);
     let cwd = cwd()?;
     let python_version = current_python_version();
     enable_faulthandler().context("Failed to enable Python faulthandler")?;
-
-    let controller_endpoint =
-        ControllerEndpoint::from_argument(&args.controller_endpoint).map_err(anyhow::Error::msg)?;
-    let (client, selection) =
-        WorkerClient::connect(&controller_endpoint, &args.run_id, args.worker_id)?;
-    let configuration = selection.configuration;
     let filter = FiltersetSet::new(&configuration.filter_expressions)
         .context("invalid worker test filter expression")?;
     let mut settings = configuration
@@ -117,7 +83,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
         settings.terminal().status_level,
         settings.terminal().final_status_level,
     );
-    let coverage = worker_coverage_config(&settings, &configuration, args.cov_data_file)?;
+    let coverage = worker_coverage_config(&settings, &configuration, selection.coverage_data_file)?;
     drop(configuration);
 
     let diagnostic_format = match settings.terminal().output_format {
@@ -178,7 +144,7 @@ fn cwd() -> anyhow::Result<Utf8PathBuf> {
     })
 }
 
-/// Builds worker coverage settings and rejects incomplete controller arguments.
+/// Builds worker coverage settings and rejects incomplete controller assignments.
 fn worker_coverage_config(
     settings: &ProjectSettings,
     configuration: &WorkerConfiguration,
@@ -191,7 +157,7 @@ fn worker_coverage_config(
 
     let Some(data_file) = data_file else {
         anyhow::bail!(
-            "karva-worker requires `--cov-data-file` when coverage sources are configured"
+            "worker assignment requires a coverage data file when coverage sources are configured"
         );
     };
 
@@ -244,7 +210,7 @@ mod tests {
             .expect_err("missing coverage artifact");
         assert_eq!(
             error.to_string(),
-            "karva-worker requires `--cov-data-file` when coverage sources are configured"
+            "worker assignment requires a coverage data file when coverage sources are configured"
         );
     }
 

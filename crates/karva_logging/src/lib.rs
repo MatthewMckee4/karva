@@ -7,6 +7,7 @@ use std::path::Path;
 
 use colored::Colorize;
 use karva_static::{EnvVars, parse_boolish_env_var};
+use serde::{Deserialize, Serialize};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
@@ -210,7 +211,20 @@ pub fn set_colored_override(color: Option<TerminalColor>) {
 }
 
 /// Control when colored output is used.
-#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Default, clap::ValueEnum)]
+#[derive(
+    Copy,
+    Clone,
+    Hash,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    clap::ValueEnum,
+    Serialize,
+    Deserialize,
+)]
 pub enum TerminalColor {
     /// Display colors if the output goes to an interactive terminal.
     #[default]

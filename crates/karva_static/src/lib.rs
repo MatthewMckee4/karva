@@ -134,6 +134,10 @@ env_vars! {
         /// the runner without heavier introspection.
         pub const KARVA: &'static str = "KARVA";
 
+        /// Private controller endpoint used to bootstrap the worker connection.
+        /// Run configuration is received over IPC after authentication.
+        pub const KARVA_CONTROLLER_ENDPOINT: &'static str = "KARVA_CONTROLLER_ENDPOINT";
+
         /// 0-indexed worker number. The canonical way to partition shared
         /// resources (database names, ports, scratch directories) across
         /// parallel workers without coordination.

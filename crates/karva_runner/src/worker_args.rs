@@ -25,7 +25,7 @@ pub struct WorkerSpawn<'a> {
     /// Identifier shared by controller and all workers in this run.
     pub run_hash: &'a RunHash,
 
-    /// Invocation controls for process environment, color, and early logging.
+    /// Invocation controls for the test process environment.
     pub args: &'a SubTestCommand,
 
     /// Run configuration delivered through the authenticated controller connection.
@@ -44,21 +44,13 @@ pub struct WorkerSpawn<'a> {
     pub coverage_enabled: bool,
 }
 
-/// Builds one worker command with process identity, presentation, and environment.
+/// Builds one worker command with its bootstrap identity and test environment.
 pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     let mut cmd = Command::new(spawn.worker_binary);
-    cmd.arg("--controller-address")
-        .arg(spawn.controller_endpoint.to_argument())
-        .arg("--run-id")
-        .arg(spawn.run_hash.inner())
-        .arg("--worker-id")
-        .arg(worker_id.to_string())
-        .current_dir(spawn.project.cwd())
+    cmd.current_dir(spawn.project.cwd())
         // Ensure python does not buffer output
         .env(PythonEnvVars::PYTHONUNBUFFERED, "1")
         .env(WorkerEnvVars::KARVA, "1")
-        .env(WorkerEnvVars::KARVA_WORKER_ID, worker_id.to_string())
-        .env(WorkerEnvVars::KARVA_RUN_ID, spawn.run_hash.inner())
         .env(
             WorkerEnvVars::KARVA_WORKSPACE_ROOT,
             spawn.project.cwd().as_str(),
@@ -96,22 +88,13 @@ pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
         }
     }
 
-    if let Some(verbosity) = spawn.args.verbosity.level().cli_arg() {
-        cmd.arg(verbosity);
-    }
-    let color = spawn.args.color.or_else(|| {
-        colored::control::SHOULD_COLORIZE
-            .should_colorize()
-            .then_some(TerminalColor::Always)
-    });
-    if let Some(color) = color {
-        cmd.arg("--color").arg(color.as_str());
-    }
-
-    if spawn.coverage_enabled {
-        let data_file = spawn.artifacts.coverage_data_file(worker_id);
-        cmd.arg("--cov-data-file").arg(data_file.as_str());
-    }
+    // Bootstrap identity replaces any inherited values before the worker starts.
+    cmd.env(
+        WorkerEnvVars::KARVA_CONTROLLER_ENDPOINT,
+        spawn.controller_endpoint.encode(),
+    )
+    .env(WorkerEnvVars::KARVA_RUN_ID, spawn.run_hash.inner())
+    .env(WorkerEnvVars::KARVA_WORKER_ID, worker_id.to_string());
 
     cmd
 }
@@ -136,6 +119,12 @@ pub fn worker_configuration(
         src.include = None;
     }
     Arc::new(WorkerConfiguration {
+        verbosity: args.verbosity.level(),
+        color: args.color.or_else(|| {
+            colored::control::SHOULD_COLORIZE
+                .should_colorize()
+                .then_some(TerminalColor::Always)
+        }),
         options,
         tags: project.settings().tags().clone(),
         filter_expressions: args.filter_expressions.clone(),

@@ -98,7 +98,7 @@ impl Partition {
         self.weight
     }
 
-    /// Returns worker CLI selectors in execution order.
+    /// Returns worker IPC selectors in execution order.
     #[cfg(test)]
     fn test_paths(&self) -> impl ExactSizeIterator<Item = String> + '_ {
         self.tests.iter().map(|test| test.worker_path().to_string())

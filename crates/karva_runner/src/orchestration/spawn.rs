@@ -59,6 +59,9 @@ pub(super) fn spawn_worker(
         worker_id,
         WorkerSelection {
             configuration: Arc::clone(&spawn.configuration),
+            coverage_data_file: spawn
+                .coverage_enabled
+                .then(|| spawn.artifacts.coverage_data_file(worker_id)),
             test_paths: partition.worker_test_paths(),
             resume_skip: partition.resume_skip().to_vec(),
         },

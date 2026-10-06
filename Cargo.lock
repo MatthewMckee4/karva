@@ -1175,8 +1175,10 @@ name = "karva_ipc"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "camino",
  "crossbeam-channel",
  "karva_diagnostic",
+ "karva_logging",
  "karva_metadata",
  "karva_python_semantic",
  "rstest",
@@ -1391,9 +1393,7 @@ name = "karva_worker"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "argfile",
  "camino",
- "clap",
  "colored",
  "karva_cli",
  "karva_diagnostic",
@@ -1402,10 +1402,10 @@ dependencies = [
  "karva_metadata",
  "karva_project",
  "karva_python_semantic",
+ "karva_static",
  "karva_test_semantic",
  "serde_json",
  "tracing",
- "wild",
 ]
 
 [[package]]

@@ -42,7 +42,10 @@ def test_environment(): pass
             .command()
             .args(["--profile", "ci"])
             .env("CACHE_DIR", "from-parent")
-            .env("LIVE_API_TOKEN", "secret"),
+            .env("LIVE_API_TOKEN", "secret")
+            .env("KARVA_CONTROLLER_ENDPOINT", "invalid")
+            .env("KARVA_RUN_ID", "invalid")
+            .env("KARVA_WORKER_ID", "invalid"),
         @"
     success: true
     exit_code: 0

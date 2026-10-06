@@ -21,6 +21,7 @@ const BUFFERED_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
         configuration: Arc::default(),
+        coverage_data_file: None,
         test_paths: test_paths.into_iter().map(Into::into).collect(),
         resume_skip: Vec::new(),
     }
@@ -125,6 +126,7 @@ fn closing_worker_connection_interrupts_a_blocked_selection_write() {
             7,
             WorkerSelection {
                 configuration: Arc::default(),
+                coverage_data_file: None,
                 test_paths: vec![path; 1_000_000],
                 resume_skip: Vec::new(),
             },
@@ -467,6 +469,7 @@ fn transfers_resume_skip_cases() {
             7,
             WorkerSelection {
                 configuration: Arc::default(),
+                coverage_data_file: None,
                 test_paths: vec!["mod::test".into()],
                 resume_skip: vec![TestCacheKey::function_name("mod::test[1]")],
             },
@@ -607,6 +610,8 @@ fn buffered_event_reaches_controller_before_worker_completes() {
 #[test]
 fn transfers_worker_configuration_after_authentication() {
     let configuration = Arc::new(crate::WorkerConfiguration {
+        color: Some(karva_logging::TerminalColor::Never),
+        verbosity: karva_logging::VerbosityLevel::Trace,
         options: serde_json::from_value(serde_json::json!({
             "src": {"respect-ignore-files": false},
             "terminal": {"status-level": "none", "output-format": "concise"},
@@ -640,6 +645,7 @@ fn transfers_worker_configuration_after_authentication() {
             7,
             WorkerSelection {
                 configuration,
+                coverage_data_file: Some(".coverage.worker-7".into()),
                 ..selection(vec!["mod::check".to_owned()])
             },
         )
@@ -648,7 +654,13 @@ fn transfers_worker_configuration_after_authentication() {
     let worker = thread::spawn(move || {
         let (client, selection) =
             WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
+        assert_eq!(
+            selection.coverage_data_file.as_deref(),
+            Some(camino::Utf8Path::new(".coverage.worker-7"))
+        );
         let received = selection.configuration;
+        assert_eq!(received.color, expected.color);
+        assert_eq!(received.verbosity, expected.verbosity);
         assert_eq!(received.options, expected.options);
         assert_eq!(received.tags, expected.tags);
         assert_eq!(received.filter_expressions, expected.filter_expressions);
