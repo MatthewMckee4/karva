@@ -60,10 +60,14 @@ to pytest by default. A project can bind the same runnable tag to Karva with
       "$ZED_CUSTOM_PYTHON_TEST_TARGET"
     ],
     "cwd": "$ZED_WORKTREE_ROOT",
+    "save": "all",
     "tags": ["python-pytest-method"]
   }
 ]
 ```
+
+The task saves all modified files before running, including fixture providers
+such as `conftest.py`, so Karva executes the code shown in the editor.
 
 This file changes only the gutter action; the language server does not require
 it.
