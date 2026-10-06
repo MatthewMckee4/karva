@@ -268,6 +268,7 @@ fn formatter_failures_preserve_native_assertions() {
             "test_assertion_formatter.py",
             r#"
 from importlib.resources import files
+import traceback
 
 from helpers import _karva_message_
 
@@ -322,6 +323,26 @@ def test_set_diff():
 def test_unicode_repr():
     assert "🙂" * 300 == None
 
+def test_traceback_columns_keep_original_source():
+    a = 1
+    try:
+        assert a / 0 == 2
+    except ZeroDivisionError as error:
+        frame = traceback.extract_tb(error.__traceback__)[-1]
+        assert (frame.colno, frame.end_colno) == (15, 20)
+    try:
+        assert (
+            a / 0 == 2
+        )
+    except ZeroDivisionError as error:
+        frame = traceback.extract_tb(error.__traceback__)[-1]
+        assert (frame.colno, frame.end_colno) == (12, 17)
+    try:
+        if True: assert True; assert a / 0 == 2
+    except ZeroDivisionError as error:
+        frame = traceback.extract_tb(error.__traceback__)[-1]
+        assert (frame.colno, frame.end_colno) == (37, 42)
+
 def test_deep_value():
     value = 0
     for _ in range(1500):
@@ -350,7 +371,7 @@ def test_hostile_metadata():
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 14 tests across 1 worker
+        Starting 15 tests across 1 worker
             PASS [TIME] test_assertion_formatter::test_package_resources
             FAIL [TIME] test_assertion_formatter::test_module_import_assertion
             PASS [TIME] test_assertion_formatter::test_native_args
@@ -362,6 +383,7 @@ def test_hostile_metadata():
             FAIL [TIME] test_assertion_formatter::test_bytes_diff
             FAIL [TIME] test_assertion_formatter::test_set_diff
             FAIL [TIME] test_assertion_formatter::test_unicode_repr
+            PASS [TIME] test_assertion_formatter::test_traceback_columns_keep_original_source
             FAIL [TIME] test_assertion_formatter::test_deep_value
             FAIL [TIME] test_assertion_formatter::test_huge_integer
             FAIL [TIME] test_assertion_formatter::test_hostile_metadata
@@ -371,14 +393,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_bytes_diff:
 
     error[test-failure]: Test `test_bytes_diff` failed
-      --> test_assertion_formatter.py:48:5
-       |
-    48 | def test_bytes_diff():
-       |     ^^^^^^^^^^^^^^^
-    info: Test failed here
       --> test_assertion_formatter.py:49:5
        |
-    49 |     assert b"alpha" == b"alphi"
+    49 | def test_bytes_diff():
+       |     ^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:50:5
+       |
+    50 |     assert b"alpha" == b"alphi"
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert b"alpha" == b"alphi"
           
@@ -389,14 +411,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_deep_value:
 
     error[test-failure]: Test `test_deep_value` failed
-      --> test_assertion_formatter.py:57:5
+      --> test_assertion_formatter.py:78:5
        |
-    57 | def test_deep_value():
+    78 | def test_deep_value():
        |     ^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:61:5
+      --> test_assertion_formatter.py:82:5
        |
-    61 |     assert value == None
+    82 |     assert value == None
        |     ^^^^^^^^^^^^^^^^^^^^
     info: assert value == None
           
@@ -406,14 +428,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_hostile_metadata:
 
     error[test-failure]: Test `test_hostile_metadata` failed
-      --> test_assertion_formatter.py:75:5
+      --> test_assertion_formatter.py:96:5
        |
-    75 | def test_hostile_metadata():
+    96 | def test_hostile_metadata():
        |     ^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:76:5
+      --> test_assertion_formatter.py:97:5
        |
-    76 |     assert Hostile() == Hostile()
+    97 |     assert Hostile() == Hostile()
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert Hostile() == Hostile()
           
@@ -424,14 +446,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_huge_integer:
 
     error[test-failure]: Test `test_huge_integer` failed
-      --> test_assertion_formatter.py:63:5
+      --> test_assertion_formatter.py:84:5
        |
-    63 | def test_huge_integer():
+    84 | def test_huge_integer():
        |     ^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:64:5
+      --> test_assertion_formatter.py:85:5
        |
-    64 |     assert 10**10000 == None
+    85 |     assert 10**10000 == None
        |     ^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert 10**10000 == None
           
@@ -441,10 +463,10 @@ def test_hostile_metadata():
     test_assertion_formatter::test_module_import_assertion:
 
     error[test-failure]: Test `test_module_import_assertion` failed
-     --> test_assertion_formatter.py:9:5
-      |
-    9 | def test_module_import_assertion():
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      --> test_assertion_formatter.py:10:5
+       |
+    10 | def test_module_import_assertion():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
      --> helpers/import_assertion.py:2:1
       |
@@ -458,14 +480,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_same_line_second_assertion:
 
     error[test-failure]: Test `test_same_line_second_assertion` failed
-      --> test_assertion_formatter.py:40:5
+      --> test_assertion_formatter.py:41:5
        |
-    40 | def test_same_line_second_assertion():
+    41 | def test_same_line_second_assertion():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:43:5
+      --> test_assertion_formatter.py:44:5
        |
-    43 |     if True: assert first == 1; assert second == 3
+    44 |     if True: assert first == 1; assert second == 3
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert second == 3
           
@@ -475,28 +497,28 @@ def test_hostile_metadata():
     test_assertion_formatter::test_set_diff:
 
     error[test-failure]: Test `test_set_diff` failed
-      --> test_assertion_formatter.py:51:5
-       |
-    51 | def test_set_diff():
-       |     ^^^^^^^^^^^^^
-    info: Test failed here
       --> test_assertion_formatter.py:52:5
        |
-    52 |     assert {"alpha"} == {"beta"}
+    52 | def test_set_diff():
+       |     ^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:53:5
+       |
+    53 |     assert {"alpha"} == {"beta"}
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert {"alpha"} == {"beta"}
 
     test_assertion_formatter::test_string_diff:
 
     error[test-failure]: Test `test_string_diff` failed
-      --> test_assertion_formatter.py:45:5
-       |
-    45 | def test_string_diff():
-       |     ^^^^^^^^^^^^^^^^
-    info: Test failed here
       --> test_assertion_formatter.py:46:5
        |
-    46 |     assert "alpha/nbravo" == "alpha/nbrava"
+    46 | def test_string_diff():
+       |     ^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:47:5
+       |
+    47 |     assert "alpha/nbravo" == "alpha/nbrava"
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert "alpha/nbravo" == "alpha/nbrava"
           
@@ -509,14 +531,14 @@ def test_hostile_metadata():
     test_assertion_formatter::test_unicode_repr:
 
     error[test-failure]: Test `test_unicode_repr` failed
-      --> test_assertion_formatter.py:54:5
-       |
-    54 | def test_unicode_repr():
-       |     ^^^^^^^^^^^^^^^^^
-    info: Test failed here
       --> test_assertion_formatter.py:55:5
        |
-    55 |     assert "🙂" * 300 == None
+    55 | def test_unicode_repr():
+       |     ^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:56:5
+       |
+    56 |     assert "🙂" * 300 == None
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert "🙂" * 300 == None
           
@@ -524,7 +546,7 @@ def test_hostile_metadata():
             "🙂" * 300: '🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂…🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂...
 
     ────────────
-         Summary [TIME] 14 tests run: 5 passed, 9 failed, 0 skipped
+         Summary [TIME] 15 tests run: 6 passed, 9 failed, 0 skipped
 
     ----- stderr -----
     "#);

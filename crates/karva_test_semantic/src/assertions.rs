@@ -1,7 +1,7 @@
 //! Rust-owned assertion instrumentation for first-party Python modules.
 //!
 //! Ruff identifies assertion and operand ranges. Rust applies source edits for
-//! captures, then uses CPython's standard AST only for statement cleanup and
+//! captures, then uses `CPython`'s standard AST only for statement cleanup and
 //! compilation. This keeps Python's compiler semantics while avoiding a second
 //! expression-tree implementation in Rust.
 
@@ -34,7 +34,7 @@ fn registry() -> &'static RwLock<HashMap<String, Vec<AssertionMetadata>>> {
 
 #[derive(Clone, Debug)]
 struct Location {
-    /// CPython's one-based source line and UTF-8 byte column.
+    /// `CPython`'s one-based source line and UTF-8 byte column.
     line: u32,
     column: u32,
 }
@@ -229,9 +229,109 @@ fn collect_plans(source: &str, python_version: PythonVersion) -> Option<Vec<Asse
 struct Edit {
     range: TextRange,
     replacement: String,
+    prefix_bytes: usize,
+    suffix_bytes: usize,
 }
 
-fn rewrite_source(source: &str, plans: &[AssertionPlan], missing_name: &str) -> String {
+struct ColumnEvent {
+    original_column: usize,
+    inserted_bytes: usize,
+}
+
+struct SourceMap {
+    lines: HashMap<u32, Vec<ColumnEvent>>,
+}
+
+impl SourceMap {
+    fn from_edits(source: &str, edits: &[Edit]) -> Self {
+        let mut line_starts = vec![0];
+        line_starts.extend(
+            source
+                .bytes()
+                .enumerate()
+                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
+        );
+        let mut lines: HashMap<u32, Vec<ColumnEvent>> = HashMap::new();
+        for edit in edits {
+            let start = edit.range.start().to_usize();
+            let end = edit.range.end().to_usize();
+            let (start_line, start_column) = source_location(&line_starts, start);
+            let (end_line, end_column) = source_location(&line_starts, end);
+            let original = &source[start..end];
+            if original.is_empty() {
+                Self::add_event(
+                    &mut lines,
+                    start_line,
+                    start_column,
+                    edit.prefix_bytes + edit.suffix_bytes,
+                );
+                continue;
+            }
+            Self::add_event(&mut lines, start_line, start_column, edit.prefix_bytes);
+            Self::add_event(&mut lines, end_line, end_column, edit.suffix_bytes);
+        }
+        for events in lines.values_mut() {
+            events.sort_by_key(|event| event.original_column);
+            let mut merged: Vec<ColumnEvent> = Vec::with_capacity(events.len());
+            for event in events.drain(..) {
+                if let Some(previous) = merged.last_mut()
+                    && previous.original_column == event.original_column
+                {
+                    previous.inserted_bytes += event.inserted_bytes;
+                } else {
+                    merged.push(event);
+                }
+            }
+            *events = merged;
+        }
+        Self { lines }
+    }
+
+    fn add_event(
+        lines: &mut HashMap<u32, Vec<ColumnEvent>>,
+        line: u32,
+        original_column: usize,
+        inserted_bytes: usize,
+    ) {
+        if inserted_bytes > 0 {
+            lines.entry(line).or_default().push(ColumnEvent {
+                original_column,
+                inserted_bytes,
+            });
+        }
+    }
+
+    fn map_column(&self, line: u32, transformed_column: u32) -> u32 {
+        let mut delta = 0;
+        for event in self.lines.get(&line).into_iter().flatten() {
+            let transformed_start = event.original_column + delta;
+            if (transformed_column as usize) < transformed_start {
+                break;
+            }
+            if (transformed_column as usize) < transformed_start + event.inserted_bytes {
+                return u32::try_from(event.original_column).unwrap_or(u32::MAX);
+            }
+            delta += event.inserted_bytes;
+        }
+        u32::try_from((transformed_column as usize).saturating_sub(delta)).unwrap_or(u32::MAX)
+    }
+}
+
+fn source_location(line_starts: &[usize], offset: usize) -> (u32, usize) {
+    let line = line_starts
+        .binary_search(&offset)
+        .unwrap_or_else(|index| index.saturating_sub(1));
+    (
+        u32::try_from(line + 1).unwrap_or(u32::MAX),
+        offset - line_starts[line],
+    )
+}
+
+fn rewrite_source(
+    source: &str,
+    plans: &[AssertionPlan],
+    missing_name: &str,
+) -> (String, SourceMap) {
     let mut edits = Vec::new();
     for plan in plans {
         for capture in &plan.captures {
@@ -240,6 +340,8 @@ fn rewrite_source(source: &str, plans: &[AssertionPlan], missing_name: &str) -> 
             edits.push(Edit {
                 range: capture.range,
                 replacement: format!("({} := ({}))", capture.name, original),
+                prefix_bytes: format!("({} := (", capture.name).len(),
+                suffix_bytes: 2,
             });
         }
         let optional = plan
@@ -257,17 +359,26 @@ fn rewrite_source(source: &str, plans: &[AssertionPlan], missing_name: &str) -> 
             edits.push(Edit {
                 range: TextRange::at(plan.test_range.start(), 0.into()),
                 replacement: format!("{} or ", optional.join(" or ")),
+                prefix_bytes: optional.join(" or ").len() + 4,
+                suffix_bytes: 0,
             });
         }
     }
-    edits.sort_by_key(|edit| std::cmp::Reverse(edit.range.start()));
+    let source_map = SourceMap::from_edits(source, &edits);
+    edits.sort_by(|left, right| {
+        right
+            .range
+            .start()
+            .cmp(&left.range.start())
+            .then_with(|| right.range.len().cmp(&left.range.len()))
+    });
     let mut rewritten = source.to_string();
     for edit in edits {
         let start = edit.range.start().to_usize();
         let end = edit.range.end().to_usize();
         rewritten.replace_range(start..end, &edit.replacement);
     }
-    rewritten
+    (rewritten, source_map)
 }
 
 fn line_location(node: &Bound<'_, PyAny>) -> PyResult<Location> {
@@ -367,13 +478,13 @@ fn transform_assert<'py>(
 fn replace_statement_lists<'py>(
     py: Python<'py>,
     ast: &Bound<'py, PyModule>,
-    node: Bound<'py, PyAny>,
+    node: &Bound<'py, PyAny>,
     plans: &[AssertionPlan],
     next: &mut usize,
 ) -> PyResult<()> {
     let fields = ast
         .getattr("iter_fields")?
-        .call1((node.clone(),))?
+        .call1((node,))?
         .cast_into::<pyo3::types::PyIterator>()?;
     for field in fields {
         let tuple = field?.cast_into::<pyo3::types::PyTuple>()?;
@@ -388,12 +499,49 @@ fn replace_statement_lists<'py>(
                     list.set_item(index, transform_assert(py, ast, item, plan)?)?;
                     *next += 1;
                 } else if item.hasattr("_fields")? {
-                    replace_statement_lists(py, ast, item, plans, next)?;
+                    replace_statement_lists(py, ast, &item, plans, next)?;
                 }
             }
         } else if value.hasattr("_fields")? {
-            replace_statement_lists(py, ast, value, plans, next)?;
+            replace_statement_lists(py, ast, &value, plans, next)?;
         }
+    }
+    Ok(())
+}
+
+fn remap_location(
+    node: &Bound<'_, PyAny>,
+    source_map: &SourceMap,
+    line_name: &str,
+    column_name: &str,
+) -> PyResult<()> {
+    let Ok(line) = node
+        .getattr(line_name)
+        .and_then(|value| value.extract::<u32>())
+    else {
+        return Ok(());
+    };
+    let Ok(column) = node
+        .getattr(column_name)
+        .and_then(|value| value.extract::<u32>())
+    else {
+        return Ok(());
+    };
+    node.setattr(column_name, source_map.map_column(line, column))
+}
+
+fn remap_locations(
+    ast: &Bound<'_, PyModule>,
+    tree: &Bound<'_, PyAny>,
+    source_map: &SourceMap,
+) -> PyResult<()> {
+    let nodes = ast
+        .getattr("walk")?
+        .call1((tree.clone(),))?
+        .cast_into::<pyo3::types::PyIterator>()?;
+    for node in nodes.flatten() {
+        remap_location(&node, source_map, "lineno", "col_offset")?;
+        remap_location(&node, source_map, "end_lineno", "end_col_offset")?;
     }
     Ok(())
 }
@@ -418,7 +566,7 @@ fn compile_and_exec<'py>(
             names.insert(token.to_string());
         }
     }
-    let missing_name = (0..)
+    let missing_name = (0..=names.len())
         .map(|suffix| {
             if suffix == 0 {
                 MISSING_PREFIX.to_string()
@@ -428,11 +576,11 @@ fn compile_and_exec<'py>(
         })
         .find(|candidate| !names.contains(candidate))
         .unwrap_or_else(|| format!("{MISSING_PREFIX}_fallback"));
-    let rewritten = rewrite_source(source, &plans, &missing_name);
+    let (rewritten, source_map) = rewrite_source(source, &plans, &missing_name);
     module_dict.set_item(&missing_name, py.eval(c"object()", None, None)?)?;
     let tree = ast.getattr("parse")?.call((rewritten, filename), None)?;
     let mut next = 0;
-    replace_statement_lists(py, ast, tree.clone(), &plans, &mut next)?;
+    replace_statement_lists(py, ast, &tree, &plans, &mut next)?;
     if next != plans.len() {
         return Err(pyo3::exceptions::PyRuntimeError::new_err(
             "assertion rewrite lost an assertion node",
@@ -440,15 +588,16 @@ fn compile_and_exec<'py>(
     }
     ast.getattr("fix_missing_locations")?
         .call1((tree.clone(),))?;
+    remap_locations(ast, &tree, &source_map)?;
     let compile = py.import("builtins")?.getattr("compile")?;
-    let dont_inherit = py.eval(c"True", None, None)?.to_owned().into_any();
+    let dont_inherit = py.eval(c"True", None, None)?.clone().into_any();
     let options = kwargs(py, &[("dont_inherit", dont_inherit)])?;
     let code = compile.call((tree.clone(), filename, "exec"), Some(&options))?;
     let mut locations = ast
         .getattr("walk")?
         .call1((tree.clone(),))?
         .cast_into::<pyo3::types::PyIterator>()?
-        .filter_map(|node| node.ok())
+        .filter_map(Result::ok)
         .filter(|node| node_kind(node).is_ok_and(|kind| kind == "Assert"))
         .map(|node| assertion_locations(&node))
         .collect::<PyResult<Vec<_>>>()?;
@@ -480,10 +629,13 @@ fn compile_and_exec<'py>(
     Ok(())
 }
 
+// Receipt: a 240-character body fits eight short scalar entries in the
+// diagnostic width used by the existing terminal snapshots.
 const MAX_TEXT: usize = 240;
+// Receipt: eight displayed entries across eight nested levels gives 64 nodes.
 const MAX_ITEMS: usize = 8;
 const MAX_DEPTH: usize = 8;
-const MAX_NODES: usize = 64;
+const MAX_NODES: usize = MAX_ITEMS * MAX_ITEMS;
 
 fn safe_repr(value: &Bound<'_, PyAny>) -> String {
     safe_repr_inner(value, 0, &mut MAX_NODES.clone())
@@ -521,7 +673,7 @@ fn safe_repr_inner(value: &Bound<'_, PyAny>, depth: usize, budget: &mut usize) -
             .and_then(|repr| repr.extract::<String>().ok())
             .unwrap_or_else(|| "<unavailable>".to_string());
         return clip(&if truncated {
-            format!("{}...", rendered)
+            format!("{rendered}...")
         } else {
             rendered
         });
@@ -571,9 +723,11 @@ fn safe_repr_inner(value: &Bound<'_, PyAny>, depth: usize, budget: &mut usize) -
                     safe_repr_inner(&item, depth + 1, budget)
                 ));
             }
-            let suffix = (dictionary.len() > MAX_ITEMS)
-                .then_some(", ...")
-                .unwrap_or("");
+            let suffix = if dictionary.len() > MAX_ITEMS {
+                ", ..."
+            } else {
+                ""
+            };
             return clip(&format!("{{{}{suffix}}}", rendered.join(", ")));
         }
         if let Ok(list) = value.cast::<PyList>() {
@@ -584,7 +738,7 @@ fn safe_repr_inner(value: &Bound<'_, PyAny>, depth: usize, budget: &mut usize) -
                 }
                 rendered.push(safe_repr_inner(&item, depth + 1, budget));
             }
-            let suffix = (list.len() > MAX_ITEMS).then_some(", ...").unwrap_or("");
+            let suffix = if list.len() > MAX_ITEMS { ", ..." } else { "" };
             return clip(&format!("[{}{suffix}]", rendered.join(", ")));
         }
         if let Ok(tuple) = value.cast::<PyTuple>() {
@@ -595,8 +749,8 @@ fn safe_repr_inner(value: &Bound<'_, PyAny>, depth: usize, budget: &mut usize) -
                 }
                 rendered.push(safe_repr_inner(&item, depth + 1, budget));
             }
-            let suffix = (tuple.len() > MAX_ITEMS).then_some(", ...").unwrap_or("");
-            let comma = (tuple.len() == 1).then_some(",").unwrap_or("");
+            let suffix = if tuple.len() > MAX_ITEMS { ", ..." } else { "" };
+            let comma = if tuple.len() == 1 { "," } else { "" };
             return clip(&format!("({}{suffix}{comma})", rendered.join(", ")));
         }
     }
@@ -1056,7 +1210,7 @@ pub fn install(py: Python<'_>, root: &Utf8Path) -> PyResult<()> {
         .getattr("meta_path")?
         .cast::<PyList>()?
         .iter()
-        .find(|item| item.is_instance_of::<AssertionFinder>())
+        .find(PyAnyMethods::is_instance_of::<AssertionFinder>)
     {
         existing.cast::<AssertionFinder>()?.borrow().roots.clone()
     } else {
@@ -1115,9 +1269,8 @@ fn instruction_column(frame: &Bound<'_, PyAny>, traceback: &Bound<'_, PyAny>) ->
 ///
 /// The formatter is added after the loader path is proven against the focused
 /// import, scope, and optimization regressions.
-pub(crate) fn explain(_py: Python<'_>, _error: &PyErr) -> Option<String> {
-    let py = _py;
-    let mut traceback = _error.traceback(py)?.into_any();
+pub fn explain(py: Python<'_>, error: &PyErr) -> Option<String> {
+    let mut traceback = error.traceback(py)?.into_any();
     loop {
         let next = traceback.getattr("tb_next").ok()?;
         if next.is_none() {
