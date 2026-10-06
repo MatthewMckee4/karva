@@ -91,6 +91,32 @@ mod tests {
     }
 
     #[test]
+    fn registers_python_snippets_with_unique_karva_triggers() {
+        let manifest = include_str!("../extension.toml");
+        assert!(manifest.contains("snippets = [\"snippets/python.json\"]"));
+        let snippets: zed::serde_json::Value =
+            zed::serde_json::from_str(include_str!("../snippets/python.json"))
+                .expect("valid snippet JSON");
+        let mut prefixes = std::collections::HashSet::new();
+        for snippet in snippets.as_object().expect("snippet map").values() {
+            let prefix = snippet["prefix"].as_str().expect("snippet prefix");
+            assert!(prefix.starts_with("karva_"));
+            assert!(prefixes.insert(prefix), "duplicate trigger {prefix}");
+            assert!(
+                snippet["description"]
+                    .as_str()
+                    .is_some_and(|text| !text.is_empty())
+            );
+            assert!(
+                snippet["body"]
+                    .as_array()
+                    .is_some_and(|lines| !lines.is_empty()
+                        && lines.iter().all(zed::serde_json::Value::is_string))
+            );
+        }
+    }
+
+    #[test]
     fn manifest_registers_karva_for_python() {
         let manifest = include_str!("../extension.toml");
 

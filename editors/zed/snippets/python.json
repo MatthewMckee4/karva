@@ -1,0 +1,136 @@
+{
+  "Karva test": {
+    "prefix": "karva_test",
+    "description": "Module-level Karva test",
+    "body": [
+      "def test_${1:example}():",
+      "    assert ${2:True}",
+      "    $0"
+    ]
+  },
+  "Karva fixture": {
+    "prefix": "karva_fixture",
+    "description": "Synchronous Karva fixture",
+    "body": [
+      "import karva",
+      "",
+      "@karva.fixture",
+      "def ${1:example_fixture}():",
+      "    return ${2:1}",
+      "    $0"
+    ]
+  },
+  "Karva async fixture": {
+    "prefix": "karva_async_fixture",
+    "description": "Asynchronous Karva fixture",
+    "body": [
+      "import karva",
+      "",
+      "@karva.fixture",
+      "async def ${1:example_fixture}():",
+      "    return ${2:1}",
+      "    $0"
+    ]
+  },
+  "Karva teardown fixture": {
+    "prefix": "karva_teardown",
+    "description": "Generator fixture with guaranteed cleanup",
+    "body": [
+      "import karva",
+      "",
+      "@karva.fixture",
+      "def ${1:example_fixture}():",
+      "    resource = ${2:[1]}",
+      "    try:",
+      "        yield resource",
+      "    finally:",
+      "        ${3:resource.clear()}",
+      "    $0"
+    ]
+  },
+  "Karva autouse fixture": {
+    "prefix": "karva_auto_use",
+    "description": "Automatically used Karva fixture",
+    "body": [
+      "import karva",
+      "",
+      "@karva.fixture(auto_use=True)",
+      "def ${1:example_fixture}():",
+      "    ${2:pass}",
+      "    $0"
+    ]
+  },
+  "Karva parametrized test": {
+    "prefix": "karva_parametrize",
+    "description": "Parametrized cases with stable IDs",
+    "body": [
+      "import karva",
+      "",
+      "@karva.tags.parametrize(\"value\", [1, 2], ids=[\"one\", \"two\"])",
+      "def test_${1:example}(value):",
+      "    assert ${2:value > 0}",
+      "    $0"
+    ]
+  },
+  "Karva tagged test": {
+    "prefix": "karva_tag",
+    "description": "Karva custom test tag",
+    "body": [
+      "import karva",
+      "",
+      "@karva.tags.${1:smoke}",
+      "def test_${2:example}():",
+      "    assert ${3:True}",
+      "    $0"
+    ]
+  },
+  "Karva expected failure": {
+    "prefix": "karva_expect_fail",
+    "description": "Test with an expected failure",
+    "body": [
+      "import karva",
+      "",
+      "@karva.tags.expect_fail(reason=\"${1:Known issue}\")",
+      "def test_${2:example}():",
+      "    assert ${3:False}",
+      "    $0"
+    ]
+  },
+  "Karva text snapshot": {
+    "prefix": "karva_snapshot",
+    "description": "Inline text snapshot",
+    "body": [
+      "import karva",
+      "",
+      "def test_${1:example}():",
+      "    karva.assert_snapshot(${2:\"hello\"}, inline=${3:\"hello\"})",
+      "    $0"
+    ]
+  },
+  "Karva JSON snapshot": {
+    "prefix": "karva_json_snapshot",
+    "description": "Inline JSON snapshot",
+    "body": [
+      "import karva",
+      "",
+      "def test_${1:example}():",
+      "    value = {\"value\": 1}",
+      "    karva.assert_json_snapshot(value, inline='{\\n  \"value\": 1\\n}')",
+      "    $0"
+    ]
+  },
+  "Karva doctest": {
+    "prefix": "karva_doctest",
+    "description": "Function doctest; enable --doctest-modules",
+    "body": [
+      "def ${1:add}(left, right):",
+      "    \"\"\"Add two numbers.",
+      "",
+      "    >>> ${1:add}(1, 2)",
+      "    3",
+      "    \"\"\"",
+      "    return left + right",
+      "    $0"
+    ]
+  }
+}
