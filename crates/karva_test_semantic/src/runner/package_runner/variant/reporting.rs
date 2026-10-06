@@ -51,12 +51,15 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 .register_slow_test(&settings.identity.qualified_test_name, total_duration);
         }
         if prior_attempts.is_empty() {
-            self.package_runner.context.register_test_case_result(
-                &settings.identity.qualified_test_name,
-                final_attempt.outcome,
-                total_duration,
-                captured_output,
-            )
+            self.package_runner
+                .context
+                .register_test_case_result_with_source(
+                    &settings.identity.qualified_test_name,
+                    final_attempt.outcome,
+                    total_duration,
+                    captured_output,
+                    self.input.source.clone(),
+                )
         } else {
             let final_attempt_number = final_attempt.attempt;
             let outcome = final_attempt.outcome.clone();
@@ -77,7 +80,8 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     .with_failure_policy(flaky_failure, junit_flaky_failure),
                 captured_output,
                 execution_attempts,
-            );
+            )
+            .with_source(self.input.source.clone());
             self.package_runner
                 .context
                 .register_retried_result(&settings.identity.qualified_test_name, test_case)

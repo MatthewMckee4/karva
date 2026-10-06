@@ -5,9 +5,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
+use karva_diagnostic::TestCaseSource;
 use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
+use crate::discovery::models::definition::TestDefinition;
 use crate::extensions::fixtures::{FixtureId, FixturePlan};
 use crate::extensions::tags::RuntimeTags;
 use crate::runner::test_iterator::TestVariant;
@@ -36,6 +38,13 @@ pub(super) struct VariantFixtures {
 pub(super) struct VariantInput<'test> {
     /// Discovered test definition shared by every attempt.
     pub(super) test: &'test DiscoveredTestFunction,
+
+    /// Case-specific diagnostic source, retaining collected identity.
+    pub(super) definition: Rc<TestDefinition>,
+
+    /// Original source metadata sent through IPC and report writers.
+    pub(super) source: Option<TestCaseSource>,
+
     /// Parameter values reused when a retry prepares fresh fixtures.
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
     /// Identity known before fixture setup.
@@ -57,6 +66,7 @@ impl<'test> VariantInput<'test> {
             params,
             id,
             case_index,
+            source,
             fixture_plan,
             fixture_dependencies,
             use_fixture_dependencies,
@@ -64,8 +74,20 @@ impl<'test> VariantInput<'test> {
             tags,
         } = variant;
 
+        let definition = source.as_ref().map_or_else(
+            || Rc::clone(test.definition()),
+            |location| {
+                Rc::new(
+                    test.definition()
+                        .with_source(location.source_file.clone(), location.range),
+                )
+            },
+        );
+        let source = source.map(|location| location.result_source);
         Self {
             test,
+            definition,
+            source,
             params,
             identity: VariantIdentity { id, case_index },
             fixtures: VariantFixtures {

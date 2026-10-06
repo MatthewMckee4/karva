@@ -8,6 +8,7 @@ use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{FixtureId, FixturePlan};
+use crate::extensions::functions::source::SourceLocation;
 use crate::extensions::tags::parametrize::{ParameterPlan, ParameterPlanIterator};
 use crate::extensions::tags::{CompiledTags, RuntimeTags};
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResult};
@@ -33,6 +34,9 @@ pub(super) struct TestVariant<'a> {
     pub(super) params: HashMap<String, Arc<Py<PyAny>>>,
 
     pub id: Option<String>,
+
+    /// Original source of an externally generated parameter case.
+    pub(super) source: Option<SourceLocation>,
 
     /// Arena shared by all fixture root groups for this test.
     pub(super) fixture_plan: Rc<FixturePlan>,
@@ -212,6 +216,7 @@ impl<'a> TestVariantIterator<'a> {
             test: self.test,
             id: param_args.id().map(str::to_string),
             params: param_args.values,
+            source: param_args.source,
             fixture_plan: Rc::clone(&self.fixture_plan),
             fixture_dependencies: Rc::clone(&self.fixture_dependencies),
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use camino::Utf8Path;
 use karva_python_semantic::QualifiedTestName;
+use serde::{Deserialize, Serialize};
 
 use crate::{Diagnostic, DisplayDiagnosticConfig, render_diagnostic};
 
@@ -27,6 +28,26 @@ pub struct TestCaseResult<D = RenderedDiagnostic> {
     payload: TestCaseResultPayload<D>,
 }
 
+/// Original source position provided by an external test adapter.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TestCaseSource {
+    /// Document path displayed in diagnostics and reports.
+    pub path: String,
+
+    /// One-based source line.
+    pub line: usize,
+
+    /// One-based Unicode character column.
+    pub column: usize,
+}
+
+impl TestCaseSource {
+    /// Builds source metadata whose coordinates were validated by the worker.
+    pub fn new(path: String, line: usize, column: usize) -> Self {
+        Self { path, line, column }
+    }
+}
+
 /// Display identity attached to a final test result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TestCaseIdentity {
@@ -38,6 +59,9 @@ struct TestCaseIdentity {
 
     /// Fully qualified user-visible test name.
     full_name: String,
+
+    /// Optional original document position for an external adapter.
+    source: Option<TestCaseSource>,
 }
 
 /// Final execution data grouped separately from user-visible test identity.
@@ -99,6 +123,18 @@ impl<D> TestCaseResult<D> {
             identity: TestCaseIdentity::from_display_name(full_name),
             payload: TestCaseResultPayload::new(outcome, duration, captured_output),
         }
+    }
+
+    /// Attaches original source without changing collection or cache identity.
+    #[must_use]
+    pub fn with_source(mut self, source: Option<TestCaseSource>) -> Self {
+        self.identity.source = source;
+        self
+    }
+
+    /// Returns the original document position when supplied by an adapter.
+    pub fn source(&self) -> Option<&TestCaseSource> {
+        self.identity.source.as_ref()
     }
 
     /// Returns the dotted Python module containing the test.
@@ -178,6 +214,7 @@ impl TestCaseIdentity {
             module_name: function_name.module_path().module_name().to_string(),
             name,
             full_name: test_case_name.to_string(),
+            source: None,
         }
     }
 
@@ -188,6 +225,7 @@ impl TestCaseIdentity {
             module_name: module_name.to_string(),
             name: name.to_string(),
             full_name: full_name.to_string(),
+            source: None,
         }
     }
 }

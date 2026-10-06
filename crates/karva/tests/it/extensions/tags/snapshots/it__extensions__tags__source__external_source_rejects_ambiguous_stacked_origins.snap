@@ -1,0 +1,30 @@
+---
+source: crates/karva/tests/it/extensions/tags/source.rs
+info:
+  program: karva
+  args:
+    - test
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/adam/Library/Caches/karva/test-cache/shared-venv-5fb31e59f8dea19d-py3.13-e138e44300cb558f
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 1 test across 1 worker
+       ERROR [TIME] test_generated::test_generated
+
+failures:
+
+test_generated::test_generated:
+
+error[invalid-parametrize]: Source locations may appear in only one parametrization dimension
+ --> test_generated.py:7:5
+  |
+7 | def test_generated(first, second):
+  |     ^^^^^^^^^^^^^^
+
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+----- stderr -----

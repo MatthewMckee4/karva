@@ -587,10 +587,17 @@ impl Tags {
             .map(|parameter| parameter.parameter.name.as_str())
             .collect();
         let mut seen_names = HashSet::new();
+        let mut seen_source = false;
 
         for tag in &self.inner {
             if let Tag::Parametrize(parametrize) = tag {
                 parametrize.validate(&function_parameter_names, &mut seen_names)?;
+                if parametrize.has_source() {
+                    if seen_source {
+                        return Err(InvalidParametrizeError::MultipleSourceDimensions);
+                    }
+                    seen_source = true;
+                }
             }
         }
 

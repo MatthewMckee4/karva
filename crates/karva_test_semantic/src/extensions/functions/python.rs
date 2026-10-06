@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 
+use crate::extensions::functions::source::SourceLocation;
 use crate::extensions::tags::parametrize::{Parametrization, default_param_id};
 use crate::extensions::tags::{Tag, Tags};
 
@@ -27,6 +28,9 @@ pub struct Param {
 
     /// Value-derived display ID for partially explicit stacked parametrization.
     pub(crate) default_id: String,
+
+    /// Original document location supplied by an external adapter.
+    pub(crate) source: Option<SourceLocation>,
 }
 
 impl Param {
@@ -35,6 +39,7 @@ impl Param {
         values: Vec<Py<PyAny>>,
         tags: Vec<Py<PyAny>>,
         id: Option<String>,
+        source: Option<SourceLocation>,
     ) -> PyResult<Self> {
         let mut new_tags = Vec::new();
 
@@ -50,6 +55,7 @@ impl Param {
             values,
             tags: Tags::new(new_tags),
             id,
+            source,
         })
     }
 
@@ -59,6 +65,7 @@ impl Param {
             tags,
             id,
             default_id,
+            source,
         }: Parametrization,
     ) -> Self {
         Self {
@@ -66,6 +73,7 @@ impl Param {
             tags,
             id,
             default_id,
+            source,
         }
     }
 }
@@ -114,13 +122,14 @@ pub fn fail(_py: Python<'_>, reason: Option<String>) -> PyResult<()> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (*values, tags = None, id = None))]
+#[pyo3(signature = (*values, tags = None, id = None, source = None))]
 /// Creates one parameter row with optional row-specific tags and display ID.
 pub fn param(
     py: Python<'_>,
     values: Vec<Py<PyAny>>,
     tags: Option<Vec<Py<PyAny>>>,
     id: Option<String>,
+    source: Option<SourceLocation>,
 ) -> PyResult<Param> {
-    Param::new(py, values, tags.unwrap_or_default(), id)
+    Param::new(py, values, tags.unwrap_or_default(), id, source)
 }

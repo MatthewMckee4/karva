@@ -1,0 +1,39 @@
+---
+source: crates/karva/tests/it/extensions/tags/source.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--profile=ci"
+    - "--retry=1"
+    - "--status-level=none"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/adam/Library/Caches/karva/test-cache/shared-venv-5fb31e59f8dea19d-py3.13-e138e44300cb558f
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+failures:
+
+test_generated::test_fixture(fixture) (requires fixture `broken`):
+
+error[fixture-failure]: Fixture `broken` failed
+ --> test_generated.py:7:5
+  |
+7 | def broken():
+  |     ^^^^^^
+info: Fixture failed here
+ --> test_generated.py:8:5
+  |
+8 |     raise ValueError("fixture failed")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: fixture failed
+
+────────────
+     Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 error, 0 skipped
+   FLAKY 2/2 [TIME] test_generated::test_retry(retry)
+
+----- stderr -----

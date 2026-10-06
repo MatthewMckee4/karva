@@ -1,0 +1,38 @@
+---
+source: crates/karva/tests/it/extensions/tags/source.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--profile=ci"
+    - "--num-workers=2"
+    - "--status-level=none"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/adam/Library/Caches/karva/test-cache/shared-venv-5fb31e59f8dea19d-py3.13-e138e44300cb558f
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+failures:
+
+test_generated::test_generated(fail):
+
+error[test-failure]: Test `test_generated` failed
+ --> docs/guide.rst:2:3
+  |
+2 | é 42
+  |   ^
+info: Test ran with arguments:
+info:   `value`: `2`
+info: Test failed here
+  --> test_generated.py:14:5
+   |
+14 |     assert value != 2
+   |     ^^^^^^^^^^^^^^^^^
+
+────────────
+     Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
+
+----- stderr -----

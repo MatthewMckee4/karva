@@ -153,3 +153,37 @@ import pytest
 def test_function(a: int):
     assert a > 0
 ```
+
+## Original Document Positions
+
+Adapters that generate Python tests from documentation can attach an original
+position to each `karva.param`:
+
+```python title="test_generated.py"
+import karva
+
+source = karva.SourceDocument("docs/guide.rst", ">>> 1 + 1\n2\n")
+
+@karva.tags.parametrize("actual,expected", [
+    karva.param(2, 2, id="guide-example", source=source.location(1, 1)),
+])
+def test_example(actual, expected):
+    assert actual == expected
+```
+
+Create one `SourceDocument` per decoded document. Locations share its text
+without copying the whole document per parameter case. The path identifies the
+original document, which need not exist on disk. Lines and Unicode character
+columns start at 1. A column immediately after the last character is allowed,
+and invalid coordinates raise `ValueError`.
+
+Failures identify the original position while retaining the Python traceback.
+JUnit cases include `file`, `line`, and `column` attributes, including skipped
+cases, retries, and fixture errors. Source metadata does not change collection,
+filtering, cache, or coverage identity: those still refer to the generated Python
+test. It does not collect documents or replay earlier examples when selecting a
+later example.
+
+Only one dimension of stacked parametrization may provide source positions.
+Multiple dimensions with source positions are rejected because the original
+position would be ambiguous.

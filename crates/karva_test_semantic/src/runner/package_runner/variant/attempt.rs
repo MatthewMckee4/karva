@@ -85,7 +85,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             duration,
             phases,
             settings.retry.fail_slow_budget,
-            self.input.test.definition(),
+            &self.input.definition,
         );
         let retryable = body.retryable || teardown_failed || (budget_exceeded && !skipped);
 
@@ -160,7 +160,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             self.py,
             test_result,
             &OutcomeContext {
-                definition: self.input.test.definition(),
+                definition: &self.input.definition,
                 function_arguments,
                 expect_fail_tag: settings.execution.expect_fail_tag.as_ref(),
                 verbose: self.package_runner.context.is_verbose(),

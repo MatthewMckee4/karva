@@ -197,12 +197,17 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 tags: &tag_names,
             };
             if !filter.matches(&context) {
-                return Some(self.package_runner.context.register_test_case_result(
-                    qualified,
-                    TestExecutionOutcome::Skipped { reason: None },
-                    Duration::ZERO,
-                    None,
-                ));
+                return Some(
+                    self.package_runner
+                        .context
+                        .register_test_case_result_with_source(
+                            qualified,
+                            TestExecutionOutcome::Skipped { reason: None },
+                            Duration::ZERO,
+                            None,
+                            self.input.source.clone(),
+                        ),
+                );
             }
         }
 
@@ -217,12 +222,17 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let (true, reason) = skipped else {
             return None;
         };
-        Some(self.package_runner.context.register_test_case_result(
-            qualified,
-            TestExecutionOutcome::Skipped { reason },
-            Duration::ZERO,
-            None,
-        ))
+        Some(
+            self.package_runner
+                .context
+                .register_test_case_result_with_source(
+                    qualified,
+                    TestExecutionOutcome::Skipped { reason },
+                    Duration::ZERO,
+                    None,
+                    self.input.source.clone(),
+                ),
+        )
     }
 
     /// Starts best-effort Python output capture when terminal output is hidden.

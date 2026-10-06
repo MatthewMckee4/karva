@@ -72,6 +72,9 @@ enum TestDefinitionKind {
 
     /// A doctest located at its first executable prompt.
     Doctest { range: TextRange },
+
+    /// Original document position of an externally generated case.
+    External { range: TextRange },
 }
 
 impl TestDefinition {
@@ -99,6 +102,15 @@ impl TestDefinition {
         }
     }
 
+    /// Replaces diagnostic source while retaining the collected test identity.
+    pub(crate) fn with_source(&self, source_file: SourceFile, range: TextRange) -> Self {
+        Self {
+            name: self.name.clone(),
+            source_file,
+            kind: TestDefinitionKind::External { range },
+        }
+    }
+
     pub(crate) fn name(&self) -> &QualifiedFunctionName {
         &self.name
     }
@@ -111,14 +123,18 @@ impl TestDefinition {
     pub(crate) fn diagnostic_range(&self) -> TextRange {
         match &self.kind {
             TestDefinitionKind::Function(statement) => statement.name.range,
-            TestDefinitionKind::Doctest { range } => *range,
+            TestDefinitionKind::Doctest { range } | TestDefinitionKind::External { range } => {
+                *range
+            }
         }
     }
 
     pub(super) fn source_range(&self) -> TextRange {
         match &self.kind {
             TestDefinitionKind::Function(statement) => statement.range,
-            TestDefinitionKind::Doctest { range } => *range,
+            TestDefinitionKind::Doctest { range } | TestDefinitionKind::External { range } => {
+                *range
+            }
         }
     }
 
@@ -126,7 +142,7 @@ impl TestDefinition {
     pub(super) fn function_statement(&self) -> Option<&StmtFunctionDef> {
         match &self.kind {
             TestDefinitionKind::Function(statement) => Some(statement),
-            TestDefinitionKind::Doctest { .. } => None,
+            TestDefinitionKind::Doctest { .. } | TestDefinitionKind::External { .. } => None,
         }
     }
 
