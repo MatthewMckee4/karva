@@ -11,7 +11,6 @@ use karva_metadata::MaxFail;
 
 use super::super::dispatcher::{CrashCheckpoint, CrashedWorker};
 use super::super::output::termination_description;
-#[cfg(unix)]
 use super::super::process_control;
 use super::super::worker::Worker;
 use super::super::{CANCELLATION_EVENT_SETTLE, WORKER_POLL_INTERVAL};
@@ -47,7 +46,7 @@ impl WorkerSupervisor {
                 #[cfg(unix)]
                 let status = reap_exited_process_group(&mut worker);
                 #[cfg(not(unix))]
-                let status = worker.child_mut().try_wait();
+                let status = reap_exited_job(&mut worker);
                 status
             };
             match status {
@@ -132,6 +131,7 @@ impl WorkerSupervisor {
                 Ok(None) => running.push(worker),
                 Err(error) => {
                     tracing::error!(target: "karva_runner::orchestration", "Error waiting on worker {}: {}", worker.id(), error);
+                    running.push(worker);
                 }
             }
         }
@@ -139,8 +139,18 @@ impl WorkerSupervisor {
         Ok(crashed)
     }
 
-    /// Reaps children that stop during termination without classifying their exits.
+    /// Reaps Unix children during termination without classifying their exits.
+    ///
+    /// Windows keeps workers owned until the grace deadline even when their
+    /// leaders exit, so the final Job Object kill covers descendants too.
     pub(in crate::orchestration) fn reap_during_shutdown(&mut self) {
+        #[cfg(not(unix))]
+        for worker in &mut self.workers {
+            if let Err(error) = worker.try_wait() {
+                tracing::error!(target: "karva_runner::orchestration", "Error waiting on worker {}: {}", worker.id(), error);
+            }
+        }
+        #[cfg(unix)]
         self.workers
             .retain_mut(|worker| match shutdown_status(worker) {
                 Ok(Some(_)) => {
@@ -233,15 +243,19 @@ impl WorkerSupervisor {
 /// Unix workers remain unreaped until either they are force-killed at the grace
 /// deadline or their leader exits. Once a leader exits, any remaining group
 /// members are killed before `wait` releases the numeric process-group id.
+#[cfg(unix)]
 fn shutdown_status(worker: &mut Worker) -> std::io::Result<Option<ExitStatus>> {
-    #[cfg(unix)]
-    {
-        reap_exited_process_group(worker)
-    }
-    #[cfg(not(unix))]
-    {
-        worker.child_mut().try_wait()
-    }
+    reap_exited_process_group(worker)
+}
+
+/// Reaps a Windows worker only after terminating every descendant in its Job Object.
+#[cfg(not(unix))]
+fn reap_exited_job(worker: &mut Worker) -> std::io::Result<Option<ExitStatus>> {
+    let Some(_status) = worker.try_wait()? else {
+        return Ok(None);
+    };
+    process_control::force_kill(worker.child_mut())?;
+    worker.wait().map(Some)
 }
 
 /// Reaps an exited Unix group leader only after terminating every descendant.

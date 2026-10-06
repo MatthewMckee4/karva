@@ -1,13 +1,27 @@
 //! Platform-specific worker process control.
 //!
-//! Unix workers run in their own process groups so cancellation and crash cleanup
-//! cover descendants. Other platforms fall back to child-process termination.
+//! Unix workers run in their own process groups, while Windows workers run in
+//! Job Objects, so cancellation and crash cleanup cover descendants.
 
 #[cfg(unix)]
 mod unix {
     use std::io;
     use std::os::unix::process::CommandExt;
-    use std::process::{Child, Command};
+    use std::process::{Child, ChildStderr, ChildStdout, Command};
+
+    pub type WorkerChild = Child;
+
+    pub fn spawn(mut command: Command) -> io::Result<WorkerChild> {
+        command.spawn()
+    }
+
+    pub fn take_stdout(child: &mut WorkerChild) -> Option<ChildStdout> {
+        child.stdout.take()
+    }
+
+    pub fn take_stderr(child: &mut WorkerChild) -> Option<ChildStderr> {
+        child.stderr.take()
+    }
 
     pub fn configure_worker_command(command: &mut Command) {
         command.process_group(0);
@@ -100,22 +114,56 @@ pub use unix::*;
 #[cfg(not(unix))]
 mod windows {
     use std::io;
-    use std::process::{Child, Command};
+    use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus};
+    use std::thread;
+
+    use crate::orchestration::WORKER_POLL_INTERVAL;
+    use subc_jobobject::ContainedChild;
+
+    /// Worker leader and its owning Job Object, assigned before the leader resumes.
+    ///
+    /// Keeping both handles in one value ensures dropping a worker closes the
+    /// kill-on-close Job Object instead of orphaning descendants.
+    pub type WorkerChild = ContainedChild<Child>;
 
     pub fn configure_worker_command(_command: &mut Command) {}
 
-    pub fn terminate(child: &mut Child) -> io::Result<()> {
-        child.kill()
+    /// Creates the worker suspended, assigns it to a kill-on-close Job Object,
+    /// and resumes it only after assignment succeeds.
+    pub fn spawn(mut command: Command) -> io::Result<WorkerChild> {
+        subc_jobobject::spawn_contained(&mut command)
     }
 
-    /// Process-group cleanup is Unix-only; callers kill the retained child
-    /// handle separately on this platform.
-    pub fn force_kill(_child: &Child) -> io::Result<()> {
-        Ok(())
+    pub fn take_stdout(child: &mut WorkerChild) -> Option<ChildStdout> {
+        child.child.stdout.take()
     }
 
-    pub fn force_kill_child(child: &mut Child) -> io::Result<()> {
-        child.kill()
+    pub fn take_stderr(child: &mut WorkerChild) -> Option<ChildStderr> {
+        child.child.stderr.take()
+    }
+
+    /// Stops only the worker so its descendants can finish during the grace period.
+    pub fn terminate(child: &mut WorkerChild) -> io::Result<()> {
+        child.child.kill()
+    }
+
+    /// Terminates the worker's Job Object and all descendants.
+    pub fn force_kill(child: &mut WorkerChild) -> io::Result<()> {
+        child.job.terminate()
+    }
+
+    /// Polls only the leader; callers retain the Job Object until force cleanup.
+    pub fn try_wait(child: &mut WorkerChild) -> io::Result<Option<ExitStatus>> {
+        child.child.try_wait()
+    }
+
+    /// Reaps the leader and waits until the Job Object has no active members.
+    pub fn wait(child: &mut WorkerChild) -> io::Result<ExitStatus> {
+        let status = child.child.wait()?;
+        while child.job.process_count()? != 0 {
+            thread::sleep(WORKER_POLL_INTERVAL);
+        }
+        Ok(status)
     }
 }
 

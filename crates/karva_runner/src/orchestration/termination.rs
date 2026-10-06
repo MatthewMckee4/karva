@@ -74,11 +74,13 @@ impl WorkerSupervisor {
         // unreaped leader reserves its process-group id, so no signal can
         // target a group recycled after an earlier `wait` in this pass.
         // Completed workers can still own test-created descendants.
+        let mut cleanup_failed = false;
         #[cfg(unix)]
         for worker in self.workers() {
             if let Err(error) = process_control::force_kill(worker.child())
                 && error.kind() != std::io::ErrorKind::PermissionDenied
             {
+                cleanup_failed = true;
                 tracing::warn!(target: "karva_runner::orchestration",
                     worker_id = worker.id(),
                     "failed to force-kill worker process group: {error}"
@@ -87,23 +89,39 @@ impl WorkerSupervisor {
         }
         for worker in self.workers_mut() {
             #[cfg(not(unix))]
-            if let Err(error) = process_control::force_kill_child(worker.child_mut()) {
-                tracing::warn!(target: "karva_runner::orchestration",
-                    worker_id = worker.id(),
-                    "failed to force-kill worker process: {error}"
-                );
+            let force_kill_failed = match process_control::force_kill(worker.child_mut()) {
+                Ok(()) => false,
+                Err(error) => {
+                    cleanup_failed = true;
+                    tracing::warn!(target: "karva_runner::orchestration",
+                        worker_id = worker.id(),
+                        "failed to force-kill worker process tree: {error}"
+                    );
+                    true
+                }
+            };
+            #[cfg(unix)]
+            let force_kill_failed = false;
+            if force_kill_failed {
+                // A Windows wait also waits for the job's active-process count
+                // to reach zero; do not block forever when termination failed.
+                continue;
             }
-            if let Err(error) = worker.child_mut().wait() {
+            if let Err(error) = worker.wait() {
+                cleanup_failed = true;
                 tracing::warn!(target: "karva_runner::orchestration",
                     worker_id = worker.id(),
                     "failed to wait for worker process: {error}"
                 );
+                continue;
             }
             worker.mark_forced_disconnect();
             worker.join_output();
             worker.join_stderr(false);
         }
-        self.clear_workers();
+        if !cleanup_failed {
+            self.clear_workers();
+        }
     }
 
     /// Stops workers and renders interruption lines for tests still in flight.
@@ -199,19 +217,23 @@ impl WorkerSupervisor {
 impl Drop for WorkerSupervisor {
     fn drop(&mut self) {
         for worker in self.workers_mut() {
-            if !worker.has_exit_status()
-                && let Err(error) = process_control::force_kill(worker.child())
-            {
-                tracing::warn!(target: "karva_runner::orchestration",
-                    worker_id = worker.id(),
-                    "failed to clean up worker process group: {error}"
-                );
+            if !worker.has_exit_status() {
+                #[cfg(unix)]
+                let result = process_control::force_kill(worker.child());
+                #[cfg(not(unix))]
+                let result = process_control::force_kill(worker.child_mut());
+                if let Err(error) = result {
+                    tracing::warn!(target: "karva_runner::orchestration",
+                        worker_id = worker.id(),
+                        "failed to clean up worker process tree: {error}"
+                    );
+                    // The Windows wait also waits for all Job Object members.
+                    // Retaining the owned worker lets its JobObject close and
+                    // apply kill-on-close instead of blocking indefinitely.
+                    continue;
+                }
             }
-            #[cfg(not(unix))]
-            if let Err(error) = process_control::force_kill_child(worker.child_mut()) {
-                tracing::warn!(target: "karva_runner::orchestration", worker_id = worker.id(), "failed to kill worker: {error}");
-            }
-            if let Err(error) = worker.child_mut().wait() {
+            if let Err(error) = worker.wait() {
                 tracing::warn!(target: "karva_runner::orchestration", worker_id = worker.id(), "failed to reap worker: {error}");
             }
         }
