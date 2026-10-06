@@ -136,7 +136,7 @@ impl Context<'_> {
     }
 
     /// Reports one case with original document metadata from an external adapter.
-    pub(crate) fn register_test_case_result_with_source(
+    pub(super) fn register_test_case_result_with_source(
         &self,
         test_case_name: &QualifiedTestName,
         outcome: TestExecutionOutcome,
