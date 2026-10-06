@@ -23,9 +23,9 @@ pub use options::{
 pub use pyproject::PyProjectError;
 pub use settings::{
     CovFailUnder, CoverageExcludePattern, CoveragePrecision, CoverageSettings, FailSlowSecs,
-    FlakyResult, JunitFlakyFailStatus, JunitSettings, NoTestsMode, OverrideSettings,
-    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, TerminationGracePeriodSecs,
-    TestTimeoutSecs,
+    FlakyResult, JunitFlakyFailStatus, JunitSettings, NoTestsMode, OutputLimitBytes,
+    OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs,
+    TerminationGracePeriodSecs, TestTimeoutSecs,
 };
 
 use crate::options::KarvaTomlError;

@@ -5,15 +5,16 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use karva_coverage::CoverageSession;
+use karva_diagnostic::CapturedTestOutput;
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
 use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
-use crate::output_capture::{PythonStdinCapture, StdinCapture};
+use crate::output_capture::{PythonOutputCapture, PythonStdinCapture, StdinCapture};
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionError};
-use crate::runner::scoped_storage::ScopeKey;
+use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 use crate::runner::test_iterator::{CompiledTestPlan, PendingTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
 use crate::{Context, RunState};
@@ -101,6 +102,8 @@ pub struct PackageRunner<'context, 'settings> {
     stdin_capture: Option<StdinCapture>,
     /// Python stdin guard shared by all captured test attempts in this worker.
     python_stdin_capture: Option<PythonStdinCapture>,
+    /// Output emitted by broader fixture scopes before a test begins.
+    scope_output: ScopedStorage<Option<CapturedTestOutput>>,
 }
 
 impl<'context, 'settings> PackageRunner<'context, 'settings> {
@@ -120,7 +123,70 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             active_module: None,
             stdin_capture: None,
             python_stdin_capture: None,
+            scope_output: ScopedStorage::default(),
         }
+    }
+
+    /// Starts a capture window around session, package, or module fixture code.
+    pub(super) fn start_scope_output_capture(&self, py: Python<'_>) -> Option<PythonOutputCapture> {
+        if self.context.settings().terminal().show_python_output {
+            return None;
+        }
+
+        let output_limit = self.context.settings().terminal().output_limit;
+        match PythonOutputCapture::start(py, output_limit) {
+            Ok(capture) => Some(capture),
+            Err(error) => {
+                tracing::warn!("failed to start fixture output capture: {error}");
+                None
+            }
+        }
+    }
+
+    /// Finishes one broader-scope fixture capture and returns non-empty output.
+    pub(super) fn finish_scope_output_capture(
+        py: Python<'_>,
+        capture: Option<PythonOutputCapture>,
+    ) -> Option<CapturedTestOutput> {
+        let capture = capture?;
+        match capture.finish(py) {
+            Ok(output) => {
+                let output = CapturedTestOutput::with_raw_totals(
+                    output.stdout,
+                    output.stderr,
+                    output.stdout_raw,
+                    output.stderr_raw,
+                    output.stdout_total,
+                    output.stderr_total,
+                );
+                (!output.is_empty()).then_some(output)
+            }
+            Err(error) => {
+                tracing::warn!("failed to finish fixture output capture: {error}");
+                None
+            }
+        }
+    }
+
+    /// Retains output from setup until the owning test result is reported.
+    pub(super) fn retain_scope_output(
+        &mut self,
+        scope: ScopeKey<'_>,
+        output: Option<CapturedTestOutput>,
+    ) {
+        let Some(output) = output else {
+            return;
+        };
+        self.scope_output.with_mut(scope, |stored| {
+            if stored.is_none() {
+                *stored = Some(output);
+            }
+        });
+    }
+
+    /// Takes setup output retained by scopes before the first test runs.
+    pub(super) fn take_pending_scope_output(&mut self) -> Vec<CapturedTestOutput> {
+        self.scope_output.take_all().into_iter().flatten().collect()
     }
 
     /// Returns whether failure count reached configured scheduling budget.

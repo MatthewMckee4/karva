@@ -5,9 +5,9 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_logging::{FinalStatusLevel, StatusLevel, TerminalColor};
 use karva_metadata::{
-    CovFailUnder, CoverageOptions, FailSlowSecs, JunitOptions, MaxFail, Options, OverrideOptions,
-    RunTimeoutSecs, SlowTimeoutSecs, SrcOptions, TerminalOptions, TerminationGracePeriodSecs,
-    TestOptions, TestTimeoutSecs,
+    CovFailUnder, CoverageOptions, FailSlowSecs, JunitOptions, MaxFail, Options, OutputLimitBytes,
+    OverrideOptions, RunTimeoutSecs, SlowTimeoutSecs, SrcOptions, TerminalOptions,
+    TerminationGracePeriodSecs, TestOptions, TestTimeoutSecs,
 };
 use karva_static::EnvVars;
 
@@ -197,6 +197,10 @@ pub struct SubTestCommand {
     /// Show Python stdout during test execution.
     #[clap(short = 's', long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Reporter options")]
     pub show_output: Option<bool>,
+
+    /// Maximum bytes retained per stdout or stderr stream for one test.
+    #[clap(long, value_name = "BYTES", help_heading = "Reporter options")]
+    pub output_limit: Option<NonZeroUsize>,
 
     /// Test result statuses to display during the run [default: pass]
     #[arg(
@@ -552,6 +556,7 @@ impl SubTestCommand {
             terminal: Some(TerminalOptions {
                 output_format: self.output_format.map(Into::into),
                 show_python_output: self.show_output,
+                output_limit: self.output_limit.map(|limit| OutputLimitBytes(limit.get())),
                 status_level: self.status_level,
                 final_status_level: self.final_status_level,
             }),

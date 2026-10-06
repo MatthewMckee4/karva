@@ -8,7 +8,7 @@ use karva_diagnostic::{
 use karva_metadata::{FlakyResult, JunitFlakyFailStatus};
 use pyo3::prelude::*;
 
-use crate::output_capture::PythonOutputCapture;
+use crate::output_capture::{PythonOutputCapture, format_captured_bytes, retain_bounded_bytes};
 
 use super::{TestLifecycleAttempt, VariantRunner, VariantSettings};
 
@@ -21,11 +21,17 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         final_attempt: TestLifecycleAttempt,
     ) -> bool {
         self.clear_coverage_context();
+        let attempt_output = prior_attempts
+            .iter()
+            .chain(std::iter::once(&final_attempt))
+            .filter_map(|attempt| attempt.captured_output.as_ref());
         let captured_output = combine_captured_output(
-            prior_attempts
-                .iter()
-                .chain(std::iter::once(&final_attempt))
-                .filter_map(|attempt| attempt.captured_output.as_ref()),
+            self.scope_output.iter().chain(attempt_output),
+            self.package_runner
+                .context
+                .settings()
+                .terminal()
+                .output_limit,
         );
         let total_duration = prior_attempts
             .iter()
@@ -94,7 +100,14 @@ pub(super) fn finish_output_capture(
 
     match capture.finish(py) {
         Ok(output) => {
-            let output = CapturedTestOutput::new(output.stdout, output.stderr);
+            let output = CapturedTestOutput::with_raw_totals(
+                output.stdout,
+                output.stderr,
+                output.stdout_raw,
+                output.stderr_raw,
+                output.stdout_total,
+                output.stderr_total,
+            );
             (!output.is_empty()).then_some(output)
         }
         Err(error) => {
@@ -107,13 +120,37 @@ pub(super) fn finish_output_capture(
 /// Combines attempt output for existing terminal and `JUnit` consumers.
 fn combine_captured_output<'a>(
     outputs: impl Iterator<Item = &'a CapturedTestOutput>,
+    output_limit: usize,
 ) -> Option<CapturedTestOutput> {
-    let mut stdout = String::new();
-    let mut stderr = String::new();
-    for output in outputs {
-        stdout.push_str(output.stdout());
-        stderr.push_str(output.stderr());
+    let mut outputs = outputs;
+    let first = outputs.next()?;
+    let Some(second) = outputs.next() else {
+        return Some(first.clone());
+    };
+
+    let mut stdout_raw = first.raw_stdout().to_vec();
+    let mut stderr_raw = first.raw_stderr().to_vec();
+    let mut stdout_total = first.stdout_total();
+    let mut stderr_total = first.stderr_total();
+    for output in std::iter::once(second).chain(outputs) {
+        stdout_total = stdout_total.saturating_add(output.stdout_total());
+        stderr_total = stderr_total.saturating_add(output.stderr_total());
+        let mut stdout_combined = stdout_raw;
+        stdout_combined.extend_from_slice(output.raw_stdout());
+        stdout_raw = retain_bounded_bytes(stdout_combined, output_limit);
+        let mut stderr_combined = stderr_raw;
+        stderr_combined.extend_from_slice(output.raw_stderr());
+        stderr_raw = retain_bounded_bytes(stderr_combined, output_limit);
     }
-    let output = CapturedTestOutput::new(stdout, stderr);
+    let stdout = format_captured_bytes(&stdout_raw, stdout_total, output_limit);
+    let stderr = format_captured_bytes(&stderr_raw, stderr_total, output_limit);
+    let output = CapturedTestOutput::with_raw_totals(
+        stdout,
+        stderr,
+        stdout_raw,
+        stderr_raw,
+        stdout_total,
+        stderr_total,
+    );
     (!output.is_empty()).then_some(output)
 }

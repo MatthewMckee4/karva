@@ -1,5 +1,6 @@
 use insta_cmd::assert_cmd_snapshot;
 use karva_static::EnvVars;
+use std::time::{Duration, Instant};
 
 use crate::common::TestContext;
 
@@ -690,6 +691,233 @@ fn test_failed_output_is_captured() {
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_os_output_is_captured_and_bounded() {
+    let context = TestContext::with_file(
+        "test_os_output.py",
+        r#"
+        import os
+        import karva
+        import subprocess
+        import sys
+
+        @karva.fixture
+        def output_fixture():
+            os.write(1, b"fixture setup\n")
+            yield
+            os.write(2, b"fixture teardown\n")
+
+        def test_os_output(output_fixture):
+            print("python stdout")
+            os.write(1, b"native stdout\n")
+            print("python stderr", file=sys.stderr)
+            os.write(2, b"native stderr\n")
+            os.write(1, b"invalid: \xff\n")
+            subprocess.run([
+                sys.executable,
+                "-c",
+                "import sys; print('child stdout'); print('child stderr', file=sys.stderr)",
+            ], check=True)
+            print("x" * 128)
+            assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--output-limit=64"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_os_output::test_os_output(output_fixture=None)
+
+    failures:
+
+    test_os_output::test_os_output(output_fixture=None):
+
+    error[test-failure]: Test `test_os_output` failed
+      --> test_os_output.py:13:5
+       |
+    13 | def test_os_output(output_fixture):
+       |     ^^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `output_fixture`: `None`
+    info: Test failed here
+      --> test_os_output.py:25:5
+       |
+    25 |     assert False
+       |     ^^^^^^^^^^^^
+
+    captured stdout:
+    [Karva output truncated: 195 bytes captured, 131 bytes omitted]
+    fixture setup
+    python stdout
+    nati
+    ... output truncated ...
+    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    captured stderr:
+    python stderr
+    native stderr
+    child stderr
+    fixture teardown
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_large_native_burst_is_drained_before_capture_shutdown() {
+    let context = TestContext::with_file(
+        "test_large_burst.py",
+        r#"
+import os
+
+def test_large_burst():
+    os.write(1, b"x" * 131072)
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--output-limit=64"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_large_burst::test_large_burst
+
+    failures:
+
+    test_large_burst::test_large_burst:
+
+    error[test-failure]: Test `test_large_burst` failed
+     --> test_large_burst.py:4:5
+      |
+    4 | def test_large_burst():
+      |     ^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_large_burst.py:6:5
+      |
+    6 |     assert False
+      |     ^^^^^^^^^^^^
+
+    captured stdout:
+    [Karva output truncated: 131072 bytes captured, 131008 bytes omitted]
+    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    ... output truncated ...
+    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_retry_output_reports_aggregate_raw_bytes() {
+    let context = TestContext::with_file(
+        "test_retry_output.py",
+        r#"
+import os
+
+def test_retry_output():
+    os.write(1, b"\xff" * 128)
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--output-limit=64"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test_retry_output::test_retry_output
+      TRY 2 FAIL [TIME] test_retry_output::test_retry_output
+
+    failures:
+
+    test_retry_output::test_retry_output:
+
+    error[test-failure]: Test `test_retry_output` failed
+     --> test_retry_output.py:4:5
+      |
+    4 | def test_retry_output():
+      |     ^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_retry_output.py:6:5
+      |
+    6 |     assert False
+      |     ^^^^^^^^^^^^
+
+    captured stdout:
+    [Karva output truncated: 256 bytes captured, 192 bytes omitted]
+    ��������������������������������
+    ... output truncated ...
+    ��������������������������������
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ",
+    );
+}
+
+#[test]
+fn test_leaked_descendant_does_not_delay_capture_shutdown() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import subprocess
+import sys
+
+def test_leaks_output_descriptor():
+    subprocess.Popen([
+        sys.executable,
+        "-c",
+        "import time; time.sleep(5)",
+    ])
+    assert False
+        "#,
+    );
+
+    let started = Instant::now();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_leaks_output_descriptor
+
+    failures:
+
+    test::test_leaks_output_descriptor:
+
+    error[test-failure]: Test `test_leaks_output_descriptor` failed
+     --> test.py:5:5
+      |
+    5 | def test_leaks_output_descriptor():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     assert False
+       |     ^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(started.elapsed() < Duration::from_secs(4));
 }
 
 #[test]
@@ -2010,7 +2238,11 @@ fn test_show_python_output() {
     let context = TestContext::with_file(
         "test.py",
         r#"
+import os
+
 def test_with_print():
+    os.write(1, b"native stdout\n")
+    os.write(2, b"native stderr\n")
     print("hello from test")
     assert True
         "#,
@@ -2021,12 +2253,14 @@ def test_with_print():
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
+    native stdout
     hello from test
             PASS [TIME] test::test_with_print
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
+    native stderr
     ");
 }
 

@@ -805,6 +805,35 @@ Defaults to `full`.
 
 ---
 
+#### `output-limit`
+
+Maximum bytes retained per stdout or stderr stream for one test.
+
+Defaults to 1 MiB. The limit applies independently to each stream and
+preserves leading and trailing output when truncation is needed.
+
+**Default value**: `1048576`
+
+**Type**: `positive integer (bytes)`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.terminal]
+    output-limit = 2097152
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.terminal]
+    output-limit = 2097152
+    ```
+
+---
+
 #### `show-python-output`
 
 Whether to show the python output.

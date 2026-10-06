@@ -516,6 +516,12 @@
         }
       ]
     },
+    "OutputLimitBytes": {
+      "description": "Positive per-stream output budget used by runner-level capture.",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0
+    },
     "OverrideJunitOptions": {
       "description": "`JUnit`-specific values available inside one per-test override.",
       "type": "object",
@@ -706,6 +712,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/OutputFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output-limit": {
+          "description": "Maximum bytes retained per stdout or stderr stream for one test.\n\nDefaults to 1 MiB. The limit applies independently to each stream and\npreserves leading and trailing output when truncation is needed.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OutputLimitBytes"
             },
             {
               "type": "null"

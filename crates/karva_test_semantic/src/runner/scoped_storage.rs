@@ -55,4 +55,22 @@ impl<T: Default> ScopedStorage<T> {
             ScopeKey::Function => std::mem::take(&mut self.function),
         }
     }
+
+    /// Removes all scope values when a test must inherit setup diagnostics.
+    pub(super) fn take_all(&mut self) -> Vec<T> {
+        let mut values = Vec::with_capacity(1 + self.packages.len() + self.modules.len());
+        values.push(std::mem::take(&mut self.session));
+        let mut packages = std::mem::take(&mut self.packages)
+            .into_iter()
+            .collect::<Vec<_>>();
+        packages.sort_by(|(left, _), (right, _)| left.cmp(right));
+        values.extend(packages.into_iter().map(|(_, value)| value));
+        let mut modules = std::mem::take(&mut self.modules)
+            .into_iter()
+            .collect::<Vec<_>>();
+        modules.sort_by(|(left, _), (right, _)| left.cmp(right));
+        values.extend(modules.into_iter().map(|(_, value)| value));
+        values.push(std::mem::take(&mut self.function));
+        values
+    }
 }

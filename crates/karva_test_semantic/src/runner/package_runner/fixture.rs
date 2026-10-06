@@ -5,7 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use camino::Utf8Path;
-use karva_diagnostic::{Diagnostic, FixtureFailure, FixtureUsage, TestExecutionOutcome};
+use karva_diagnostic::{
+    Diagnostic, FixtureFailure, FixtureUsage, Severity, SubDiagnostic, TestExecutionOutcome,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 
@@ -15,6 +17,7 @@ use crate::extensions::fixtures::{
     Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
 };
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
+use crate::output_capture::{format_captured_bytes, retain_bounded_bytes};
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::runner::scoped_storage::ScopeKey;
@@ -55,15 +58,31 @@ impl PackageRunner<'_, '_> {
         if !auto_use_fixtures.is_empty() {
             self.context.flush_test_results();
         }
+        let output_capture = self.start_scope_output_capture(py);
         let failures =
             self.run_fixtures(py, &fixture_plan, &auto_use_fixtures, FixtureUsage::AutoUse);
+        let setup_output = Self::finish_scope_output_capture(py, output_capture);
         let Some(failures) = FixtureSetupError::from_vec(failures) else {
+            self.retain_scope_output(scope_key, setup_output);
             return Ok(());
         };
 
-        Err(failures
+        let cleanup_capture = self.start_scope_output_capture(py);
+        let cleanup_diagnostics = self.clean_up_scope(py, scope_key);
+        let cleanup_output = Self::finish_scope_output_capture(py, cleanup_capture);
+        let output = combine_scope_output(
+            self.context.settings().terminal().output_limit,
+            setup_output.as_ref(),
+            cleanup_output.as_ref(),
+        );
+        let mut error = failures
             .into_test_error(py, self.context.is_verbose())
-            .with_related(self.clean_up_scope(py, scope_key)))
+            .with_related(cleanup_diagnostics);
+        if let Some(output) = output {
+            error =
+                error.with_related([captured_output_diagnostic(scope.name(), "setup", &output)]);
+        }
+        Err(error)
     }
 
     /// Runs function-scoped finalizers and clears their cached fixture values.
@@ -97,7 +116,21 @@ impl PackageRunner<'_, '_> {
         if self.finalizer_cache.has_finalizers(scope) || self.fixture_cache.has_values(scope) {
             self.context.flush_test_results();
         }
-        for diagnostic in self.clean_up_scope(py, scope) {
+        let output_capture = self.start_scope_output_capture(py);
+        let mut diagnostics = self.clean_up_scope(py, scope);
+        let output = Self::finish_scope_output_capture(py, output_capture);
+        if let Some(output) = output {
+            if let Some(diagnostic) = diagnostics.first_mut() {
+                attach_captured_output(diagnostic, &output);
+            } else {
+                diagnostics.push(captured_output_diagnostic(
+                    scope_name(scope),
+                    "cleanup",
+                    &output,
+                ));
+            }
+        }
+        for diagnostic in diagnostics {
             self.state.add_run_diagnostic(diagnostic);
         }
     }
@@ -266,6 +299,96 @@ impl PackageRunner<'_, '_> {
         }
         errors
     }
+}
+
+fn combine_scope_output(
+    output_limit: usize,
+    setup: Option<&karva_diagnostic::CapturedTestOutput>,
+    cleanup: Option<&karva_diagnostic::CapturedTestOutput>,
+) -> Option<karva_diagnostic::CapturedTestOutput> {
+    let stdout_total = setup
+        .map_or(0, karva_diagnostic::CapturedTestOutput::stdout_total)
+        .saturating_add(cleanup.map_or(0, karva_diagnostic::CapturedTestOutput::stdout_total));
+    let stderr_total = setup
+        .map_or(0, karva_diagnostic::CapturedTestOutput::stderr_total)
+        .saturating_add(cleanup.map_or(0, karva_diagnostic::CapturedTestOutput::stderr_total));
+    let mut stdout_combined = setup.map_or_else(Vec::new, |output| output.raw_stdout().to_vec());
+    if let Some(cleanup) = cleanup {
+        stdout_combined.extend_from_slice(cleanup.raw_stdout());
+    }
+    let stdout_raw = retain_bounded_bytes(stdout_combined, output_limit);
+    let mut stderr_combined = setup.map_or_else(Vec::new, |output| output.raw_stderr().to_vec());
+    if let Some(cleanup) = cleanup {
+        stderr_combined.extend_from_slice(cleanup.raw_stderr());
+    }
+    let stderr_raw = retain_bounded_bytes(stderr_combined, output_limit);
+    let output = karva_diagnostic::CapturedTestOutput::with_raw_totals(
+        format_captured_bytes(&stdout_raw, stdout_total, output_limit),
+        format_captured_bytes(&stderr_raw, stderr_total, output_limit),
+        stdout_raw,
+        stderr_raw,
+        stdout_total,
+        stderr_total,
+    );
+    (!output.is_empty()).then_some(output)
+}
+
+fn attach_captured_output(
+    diagnostic: &mut Diagnostic,
+    output: &karva_diagnostic::CapturedTestOutput,
+) {
+    let sub = captured_output_subdiagnostic("captured fixture cleanup output", output);
+    diagnostic.sub(sub);
+}
+
+fn captured_output_diagnostic(
+    scope: &str,
+    phase: &str,
+    output: &karva_diagnostic::CapturedTestOutput,
+) -> Diagnostic {
+    let mut diagnostic = Diagnostic::new(
+        "fixture-output",
+        Severity::Info,
+        format!("captured {scope} fixture {phase} output"),
+    );
+    diagnostic.sub(captured_output_subdiagnostic(
+        "captured fixture output",
+        output,
+    ));
+    diagnostic
+}
+
+fn scope_name(scope: ScopeKey<'_>) -> &'static str {
+    match scope {
+        ScopeKey::Session => "session",
+        ScopeKey::Package(_) => "package",
+        ScopeKey::Module(_) => "module",
+        ScopeKey::Function => "function",
+    }
+}
+
+fn captured_output_subdiagnostic(
+    message: &str,
+    output: &karva_diagnostic::CapturedTestOutput,
+) -> SubDiagnostic {
+    let mut body = String::new();
+    if !output.stdout().is_empty() {
+        body.push_str("captured stdout:\n");
+        body.push_str(output.stdout());
+        if !output.stdout().ends_with('\n') {
+            body.push('\n');
+        }
+    }
+    if !output.stderr().is_empty() {
+        body.push_str("captured stderr:\n");
+        body.push_str(output.stderr());
+        if !output.stderr().ends_with('\n') {
+            body.push('\n');
+        }
+    }
+    let mut sub = SubDiagnostic::new(Severity::Info, message);
+    sub.body(body);
+    sub
 }
 
 fn scope_key<'a>(

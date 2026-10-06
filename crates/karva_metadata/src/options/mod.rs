@@ -20,10 +20,10 @@ use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
     CovFailUnder, CoverageExcludePattern, CoveragePartialPattern, CoveragePrecision,
-    CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs, FlakyResult, JunitFlakyFailStatus,
-    JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
-    SlowTimeoutSecs, SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings,
-    TestTimeoutSecs,
+    CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, DEFAULT_OUTPUT_LIMIT, FailSlowSecs, FlakyResult,
+    JunitFlakyFailStatus, JunitSettings, NoTestsMode, OutputLimitBytes, OverrideSettings,
+    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings,
+    TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
 };
 use crate::{EnvironmentVariable, EnvironmentVariableName};
 
@@ -329,6 +329,20 @@ pub struct TerminalOptions {
     )]
     pub show_python_output: Option<bool>,
 
+    /// Maximum bytes retained per stdout or stderr stream for one test.
+    ///
+    /// Defaults to 1 MiB. The limit applies independently to each stream and
+    /// preserves leading and trailing output when truncation is needed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"1048576"#,
+        value_type = "positive integer (bytes)",
+        example = r#"
+            output-limit = 2097152
+        "#
+    )]
+    pub output_limit: Option<OutputLimitBytes>,
+
     /// Test result statuses to display during the run.
     ///
     /// Modeled after `cargo-nextest`'s `--status-level`. Levels are
@@ -370,6 +384,10 @@ impl TerminalOptions {
         TerminalSettings {
             output_format: self.output_format.unwrap_or_default(),
             show_python_output: self.show_python_output.unwrap_or_default(),
+            output_limit: self
+                .output_limit
+                .map(|limit| limit.0)
+                .unwrap_or(DEFAULT_OUTPUT_LIMIT),
             status_level: self.status_level.unwrap_or_default(),
             final_status_level: self.final_status_level.unwrap_or_default(),
         }
@@ -1458,6 +1476,22 @@ retry = 5
         assert_snapshot!(
             err,
             @"profile `ci` is not defined in configuration (available: default)"
+        );
+    }
+
+    #[test]
+    fn output_limit_rejects_zero() {
+        let error = Config::from_toml_str(
+            r"
+[profile.default.terminal]
+output-limit = 0
+",
+        )
+        .expect_err("zero output limit must be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("output-limit must be a positive integer number of bytes; got `0`")
         );
     }
 

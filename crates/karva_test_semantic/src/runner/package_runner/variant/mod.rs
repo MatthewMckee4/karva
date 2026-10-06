@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_coverage::CoveragePhase;
-use karva_diagnostic::TestExecutionOutcome;
+use karva_diagnostic::{CapturedTestOutput, TestExecutionOutcome};
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
 use karva_python_semantic::QualifiedTestName;
@@ -50,6 +50,8 @@ struct VariantRunner<'runner, 'context, 'settings, 'test, 'py> {
     py: Python<'py>,
     /// Variant inputs shared by setup, retries, and reporting.
     input: VariantInput<'test>,
+    /// Output emitted by broader fixture scopes before this test began.
+    scope_output: Vec<CapturedTestOutput>,
 }
 
 impl<'runner, 'context, 'settings, 'test, 'py>
@@ -65,6 +67,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             package_runner,
             py,
             input: VariantInput::from_test_variant(variant),
+            scope_output: Vec::new(),
         }
     }
 
@@ -81,6 +84,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         if let Some(result) = self.should_skip(&unresolved_test_name) {
             return result;
         }
+        self.scope_output = self.package_runner.take_pending_scope_output();
 
         let (initial_test_name, initial_name_is_exact) =
             self.initial_test_name(unresolved_test_name);
@@ -237,7 +241,13 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return None;
         }
 
-        match PythonOutputCapture::start(self.py) {
+        let output_limit = self
+            .package_runner
+            .context
+            .settings()
+            .terminal()
+            .output_limit;
+        match PythonOutputCapture::start(self.py, output_limit) {
             Ok(capture) => {
                 if let Err(error) = self.package_runner.ensure_python_stdin_capture(self.py) {
                     tracing::warn!("failed to start Python stdin capture: {error}");

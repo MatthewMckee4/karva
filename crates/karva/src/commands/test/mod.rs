@@ -439,7 +439,10 @@ pub fn print_test_output(
     let mut details = printer.stream_for_details().lock();
 
     let has_test_diagnostics = !result.stats.is_success();
-    let has_run_diagnostics = !result.run_diagnostics.is_empty();
+    let has_run_diagnostics = result
+        .run_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.is_error() || has_test_diagnostics);
     let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
     let has_preceding_test_lines = result.stats.total() > 0;
 
@@ -556,7 +559,12 @@ fn write_run_diagnostics_block(
     result: &AggregatedResults,
     needs_leading_blank: bool,
 ) -> Result<()> {
-    if result.run_diagnostics.is_empty() {
+    let show_info = !result.stats.is_success();
+    if !result
+        .run_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.is_error() || show_info)
+    {
         return Ok(());
     }
 
@@ -566,7 +574,9 @@ fn write_run_diagnostics_block(
     writeln!(stdout, "diagnostics:")?;
     writeln!(stdout)?;
     for diagnostic in &result.run_diagnostics {
-        write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        if diagnostic.is_error() || show_info {
+            write_rendered_diagnostic(stdout, diagnostic.rendered_for_terminal())?;
+        }
     }
 
     Ok(())

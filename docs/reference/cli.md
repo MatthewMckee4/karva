@@ -151,7 +151,8 @@ karva test [OPTIONS] [PATH]...
 <ul>
 <li><code>full</code>:  Print diagnostics verbosely, with context and helpful hints (default)</li>
 <li><code>concise</code>:  Print diagnostics concisely, one per line</li>
-</ul></dd><dt id="karva-test--partition"><a href="#karva-test--partition"><code>--partition</code></a> <i>strategy:m/n</i></dt><dd><p>Run only one partition of the collected tests.</p>
+</ul></dd><dt id="karva-test--output-limit"><a href="#karva-test--output-limit"><code>--output-limit</code></a> <i>bytes</i></dt><dd><p>Maximum bytes retained per stdout or stderr stream for one test</p>
+</dd><dt id="karva-test--partition"><a href="#karva-test--partition"><code>--partition</code></a> <i>strategy:m/n</i></dt><dd><p>Run only one partition of the collected tests.</p>
 <p>Accepts <code>slice:M/N</code> where this run executes slice <code>M</code> of <code>N</code> total slices (1-indexed). Tests are sorted by qualified name and then distributed by cycling through slices: test 1 to slice 1, test 2 to slice 2, ..., test N+1 to slice 1, and so on. Running every <code>slice:1/N</code> through <code>slice:N/N</code> together covers every collected test exactly once.</p>
 <p>Also accepts <code>hash:M/N</code>, which assigns each test to a stable bucket based on its qualified name. Hash partitioning is less balanced than <code>slice</code>, but adding or removing a test only changes that test's bucket.</p>
 </dd><dt id="karva-test--profile"><a href="#karva-test--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to use.</p>

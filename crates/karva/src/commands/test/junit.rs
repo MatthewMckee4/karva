@@ -307,11 +307,15 @@ fn write_run_diagnostics_suite(
     settings: &JunitSettings,
     diagnostics: &[karva_diagnostic::RenderedDiagnostic],
 ) -> Result<()> {
-    let diagnostics = diagnostics
+    let errors = diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.is_error())
         .collect::<Vec<_>>();
-    if diagnostics.is_empty() {
+    let fixture_output = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code() == "fixture-output")
+        .collect::<Vec<_>>();
+    if errors.is_empty() && fixture_output.is_empty() {
         return Ok(());
     }
 
@@ -319,10 +323,10 @@ fn write_run_diagnostics_suite(
         xml,
         "  <testsuite name=\"{}::run\" tests=\"{}\" failures=\"0\" skipped=\"0\" errors=\"{}\" time=\"0.000000\">",
         escape_xml(&settings.report_name),
-        diagnostics.len(),
-        diagnostics.len(),
+        errors.len(),
+        errors.len(),
     )?;
-    for (index, diagnostic) in diagnostics.iter().enumerate() {
+    for (index, diagnostic) in errors.iter().enumerate() {
         writeln!(
             xml,
             "    <testcase classname=\"karva.run\" name=\"{}-{}\" time=\"0.000000\">",
@@ -331,6 +335,17 @@ fn write_run_diagnostics_suite(
         )?;
         write_diagnostic_element(xml, "error", diagnostic, &[], None)?;
         xml.push_str("    </testcase>\n");
+    }
+    if !fixture_output.is_empty() {
+        let rendered = fixture_output
+            .iter()
+            .map(|diagnostic| diagnostic.rendered())
+            .collect::<String>();
+        writeln!(
+            xml,
+            "    <system-out>{}</system-out>",
+            escape_xml(&rendered)
+        )?;
     }
     xml.push_str("  </testsuite>\n");
     Ok(())

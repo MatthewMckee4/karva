@@ -4,6 +4,7 @@ mod r#async;
 mod basic;
 mod cache;
 mod cancel;
+mod capture_scopes;
 mod configuration;
 mod coverage;
 mod coverage_command;

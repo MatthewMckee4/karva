@@ -140,6 +140,108 @@ def test_skip():
 }
 
 #[test]
+fn junit_retains_scope_cleanup_output() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            r#"
+[profile.ci.junit]
+path = "results.xml"
+"#,
+        ),
+        (
+            "test_cleanup.py",
+            r#"
+import os
+import karva
+
+@karva.fixture(scope="module", auto_use=True)
+def cleanup_output():
+    yield
+    print("module cleanup stdout")
+    os.write(2, b"module cleanup stderr\n")
+
+def test_passes():
+    assert False
+"#,
+        ),
+    ]);
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--profile=ci", "--status-level=none", "--show-output=false"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_cleanup::test_passes:
+
+    error[test-failure]: Test `test_passes` failed
+      --> test_cleanup.py:11:5
+       |
+    11 | def test_passes():
+       |     ^^^^^^^^^^^
+    info: Test failed here
+      --> test_cleanup.py:12:5
+       |
+    12 |     assert False
+       |     ^^^^^^^^^^^^
+
+    diagnostics:
+
+    info[fixture-output]: captured module fixture cleanup output
+    info: captured fixture output
+    captured stdout:
+    module cleanup stdout
+    captured stderr:
+    module cleanup stderr
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let xml = normalize_junit_xml(&context.read_file("results.xml"));
+    assert_snapshot!(xml, @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test_cleanup" tests="1" failures="1" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test_cleanup" name="test_passes" time="[TIME]">
+          <failure message="Test `test_passes` failed" type="test-failure">error[test-failure]: Test `test_passes` failed
+      --&gt; test_cleanup.py:11:5
+       |
+    11 | def test_passes():
+       |     ^^^^^^^^^^^
+    info: Test failed here
+      --&gt; test_cleanup.py:12:5
+       |
+    12 |     assert False
+       |     ^^^^^^^^^^^^
+
+    </failure>
+        </testcase>
+      </testsuite>
+      <testsuite name="karva-tests::run" tests="0" failures="0" skipped="0" errors="0" time="[TIME]">
+        <system-out>info[fixture-output]: captured module fixture cleanup output
+    info: captured fixture output
+    captured stdout:
+    module cleanup stdout
+    captured stderr:
+    module cleanup stderr
+
+    </system-out>
+      </testsuite>
+    </testsuites>
+    "#);
+}
+
+#[test]
 fn junit_reports_final_retry_outcomes() {
     let context = TestContext::with_files([
         (

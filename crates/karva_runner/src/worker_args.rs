@@ -133,6 +133,11 @@ fn inner_cli_args(
         cli_args.push("-s".to_string());
     }
 
+    cli_args.push(format!(
+        "--output-limit={}",
+        settings.terminal().output_limit
+    ));
+
     push_value_arg(
         &mut cli_args,
         "--output-format",
