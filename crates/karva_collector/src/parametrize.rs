@@ -1,4 +1,5 @@
-use ruff_python_ast::{Expr, StmtFunctionDef};
+use ruff_python_ast::visitor::{Visitor, walk_expr};
+use ruff_python_ast::{Alias, Expr, Stmt, StmtFunctionDef};
 
 /// Statically count the number of test cases a function will expand to once
 /// its `@parametrize` decorators are applied.
@@ -80,6 +81,43 @@ fn literal_sequence_len(expr: &Expr) -> Option<usize> {
         .iter()
         .any(|element| matches!(element, Expr::Starred(_))))
     .then_some(elements.len())
+}
+
+/// Detects module mark names whose runtime values can add parameter dimensions.
+///
+/// References inside control flow, helpers, and imports are included conservatively:
+/// source collection cannot know which of these bind marks when Python imports the module.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "module mark detection is shared only by collector modules"
+)]
+pub(super) fn has_module_tags(body: &[Stmt]) -> bool {
+    /// Records conservative evidence that Python may bind module marks.
+    #[derive(Default)]
+    struct ModuleTagsVisitor(bool);
+
+    impl<'a> Visitor<'a> for ModuleTagsVisitor {
+        fn visit_expr(&mut self, expression: &'a Expr) {
+            if matches!(expression, Expr::Name(name) if is_module_tag_name(&name.id)) {
+                self.0 = true;
+            } else if !self.0 {
+                walk_expr(self, expression);
+            }
+        }
+
+        fn visit_alias(&mut self, alias: &'a Alias) {
+            let name = alias.asname.as_ref().unwrap_or(&alias.name);
+            self.0 |= is_module_tag_name(name);
+        }
+    }
+
+    let mut visitor = ModuleTagsVisitor::default();
+    visitor.visit_body(body);
+    visitor.0
+}
+
+fn is_module_tag_name(name: &str) -> bool {
+    matches!(name, "pytestmark" | "karva_tag")
 }
 
 #[cfg(test)]

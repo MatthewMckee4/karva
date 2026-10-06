@@ -5,6 +5,8 @@ use karva_python_semantic::ModulePath;
 use ruff_python_ast::{Stmt, StmtFunctionDef};
 use ruff_text_size::TextRange;
 
+use crate::parametrize::{count_parametrize_cases, has_module_tags};
+
 /// The Python object whose docstring defines a doctest case.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DoctestTarget {
@@ -44,6 +46,9 @@ pub struct CollectedModule {
     /// Complete module statements retained for source-aware semantic checks.
     pub module_body: Box<[Stmt]>,
 
+    /// Runtime module marks may add parameter cases beyond function decorators.
+    pub(super) has_module_tags: bool,
+
     /// Test definitions; scheduling-only collection discards their bodies.
     pub test_function_defs: Vec<StmtFunctionDef>,
 
@@ -65,10 +70,22 @@ impl CollectedModule {
             path,
             module_type,
             source_text,
+            has_module_tags: has_module_tags(&module_body),
             module_body,
             test_function_defs: Vec::new(),
             doctests: Vec::new(),
             fixture_function_defs: Vec::new(),
+        }
+    }
+
+    /// Counts cases only when module marks cannot add runtime parameter dimensions.
+    ///
+    /// Unknown counts keep the whole function in one worker assignment.
+    pub fn count_parametrize_cases(&self, function: &StmtFunctionDef) -> Option<usize> {
+        if self.has_module_tags {
+            None
+        } else {
+            count_parametrize_cases(function)
         }
     }
 
@@ -275,6 +292,7 @@ impl CollectedModule {
     /// Merges function definitions from the other module into this one.
     fn update(&mut self, module: Self) {
         if self.path == module.path {
+            self.has_module_tags |= module.has_module_tags;
             add_new_definitions(&mut self.test_function_defs, module.test_function_defs);
             for doctest in module.doctests {
                 if !self

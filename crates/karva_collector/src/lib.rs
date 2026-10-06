@@ -130,6 +130,7 @@ fn collect_source_for_scheduling(
     };
     let mut collected_module =
         CollectedModule::new(module_path, module_type, Box::default(), String::new());
+    collected_module.has_module_tags = parametrize::has_module_tags(&module_body);
 
     for doctest in doctests {
         if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {

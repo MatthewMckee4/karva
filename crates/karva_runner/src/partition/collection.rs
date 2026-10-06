@@ -52,7 +52,7 @@ pub(super) fn collect_test_paths_recursive(
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
             });
-            let case_count = karva_collector::count_parametrize_cases(test_fn_def);
+            let case_count = module.count_parametrize_cases(test_fn_def);
 
             if let Some(case_count) = case_count
                 && case_count > 0
