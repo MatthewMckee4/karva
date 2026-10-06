@@ -27,7 +27,7 @@ pub struct DiscoveredTestFunction {
     pub(crate) tags: Tags,
 
     /// Restrict execution to these parametrize case indices when `Some`,
-    /// or run every case when `None`. Set by the worker CLI when the user
+    /// or run every case when `None`. Derived from test selectors when the user
     /// (or partitioner) requested a subset like `file::test[3]`.
     pub(crate) case_filter: Option<Vec<usize>>,
 }
