@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use karva_diagnostic::{Diagnostic, TestExecutionOutcome};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 
 use crate::diagnostic::{
@@ -126,10 +127,16 @@ pub(super) fn classify_test_result(
         return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
     }
 
-    let missing_arguments = missing_arguments_from_error(
-        context.definition.name().function_name(),
-        &error.to_string(),
-    );
+    // A decorator may run before calling the test with incomplete arguments.
+    // Once the test body appears in the traceback, matching text is a failure.
+    let test_name = context.definition.name().function_name();
+    let missing_arguments = if error.is_instance_of::<PyTypeError>(py)
+        && matches!(test_body_started(py, &error, test_name), Ok(false))
+    {
+        missing_arguments_from_error(test_name, &error.to_string())
+    } else {
+        Vec::new()
+    };
     if missing_arguments.is_empty() {
         let diagnostic = test_failure_diagnostic(
             py,
@@ -148,6 +155,30 @@ pub(super) fn classify_test_result(
             karva_python_semantic::FunctionKind::Test,
         );
         ClassifiedTestResult::new(TestExecutionOutcome::error(diagnostic), false)
+    }
+}
+
+/// Checks raw Python frames without formatting tracebacks or loading source files.
+///
+/// Inspection errors leave classification to the ordinary test-failure path.
+fn test_body_started(py: Python<'_>, error: &PyErr, test_name: &str) -> PyResult<bool> {
+    let Some(traceback) = error.traceback(py) else {
+        return Ok(false);
+    };
+    let mut traceback = traceback.into_any();
+    loop {
+        let name: String = traceback
+            .getattr("tb_frame")?
+            .getattr("f_code")?
+            .getattr("co_name")?
+            .extract()?;
+        if name == test_name {
+            return Ok(true);
+        }
+        traceback = traceback.getattr("tb_next")?;
+        if traceback.is_none() {
+            return Ok(false);
+        }
     }
 }
 

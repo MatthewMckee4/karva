@@ -3733,3 +3733,100 @@ def test_slow_flaky():
     "
     );
 }
+
+#[test]
+fn test_body_errors_are_not_missing_fixtures() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+def helper_test_helper_call(value):
+    pass
+
+def requires_fixture(function):
+    def test_missing(value):
+        pass
+    return test_missing
+
+@requires_fixture
+def test_missing():
+    pass
+
+def test_helper_call():
+    helper_test_helper_call()
+
+def test_valueerror():
+    raise ValueError("test_valueerror() missing 1 required positional argument: 'value'")
+
+def test_typeerror():
+    raise TypeError("test_typeerror() missing 1 required positional argument: 'value'")
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+           ERROR [TIME] test::test_missing
+            FAIL [TIME] test::test_helper_call
+            FAIL [TIME] test::test_valueerror
+            FAIL [TIME] test::test_typeerror
+
+    failures:
+
+    test::test_helper_call:
+
+    error[test-failure]: Test `test_helper_call` failed
+      --> test.py:14:5
+       |
+    14 | def test_helper_call():
+       |     ^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:15:5
+       |
+    15 |     helper_test_helper_call()
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: helper_test_helper_call() missing 1 required positional argument: 'value'
+
+    test::test_missing:
+
+    error[missing-fixtures]: Test `test_missing` has missing fixtures
+      --> test.py:11:5
+       |
+    11 | def test_missing():
+       |     ^^^^^^^^^^^^
+    info: Missing fixtures: `value`
+
+    test::test_typeerror:
+
+    error[test-failure]: Test `test_typeerror` failed
+      --> test.py:20:5
+       |
+    20 | def test_typeerror():
+       |     ^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:21:5
+       |
+    21 |     raise TypeError("test_typeerror() missing 1 required positional argument: 'value'")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: test_typeerror() missing 1 required positional argument: 'value'
+
+    test::test_valueerror:
+
+    error[test-failure]: Test `test_valueerror` failed
+      --> test.py:17:5
+       |
+    17 | def test_valueerror():
+       |     ^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:18:5
+       |
+    18 |     raise ValueError("test_valueerror() missing 1 required positional argument: 'value'")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: test_valueerror() missing 1 required positional argument: 'value'
+
+    ────────────
+         Summary [TIME] 4 tests run: 0 passed, 3 failed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
