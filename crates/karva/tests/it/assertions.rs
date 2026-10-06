@@ -133,6 +133,15 @@ def test_membership():
 def test_truthiness():
     assert []
 
+calls = []
+
+def next_value():
+    calls.append(len(calls))
+    return bool(calls[-1])
+
+def test_repeated_boolean_operand():
+    assert next_value() and next_value()
+
 def test_custom_message_args():
     sentinel = object()
     try:
@@ -148,11 +157,12 @@ def test_custom_message_args():
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 5 tests across 1 worker
+        Starting 6 tests across 1 worker
             FAIL [TIME] test_assertion_forms::test_identity
             FAIL [TIME] test_assertion_forms::test_safe_repr
             FAIL [TIME] test_assertion_forms::test_membership
             FAIL [TIME] test_assertion_forms::test_truthiness
+            FAIL [TIME] test_assertion_forms::test_repeated_boolean_operand
             PASS [TIME] test_assertion_forms::test_custom_message_args
 
     failures:
@@ -189,6 +199,23 @@ def test_custom_message_args():
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert "needle" in ("haystack",)
 
+    test_assertion_forms::test_repeated_boolean_operand:
+
+    error[test-failure]: Test `test_repeated_boolean_operand` failed
+      --> test_assertion_forms.py:24:5
+       |
+    24 | def test_repeated_boolean_operand():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_forms.py:25:5
+       |
+    25 |     assert next_value() and next_value()
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert next_value() and next_value()
+          
+          Differing values:
+            next_value(): False
+
     test_assertion_forms::test_safe_repr:
 
     error[test-failure]: Test `test_safe_repr` failed
@@ -204,6 +231,7 @@ def test_custom_message_args():
     info: assert Unprintable() == Unprintable()
           
           Differing values:
+            Unprintable(): <test_assertion_forms.Unprintable object>
             Unprintable(): <test_assertion_forms.Unprintable object>
 
     test_assertion_forms::test_truthiness:
@@ -221,7 +249,7 @@ def test_custom_message_args():
     info: assert []
 
     ────────────
-         Summary [TIME] 5 tests run: 1 passed, 4 failed, 0 skipped
+         Summary [TIME] 6 tests run: 1 passed, 5 failed, 0 skipped
 
     ----- stderr -----
     "#);
@@ -233,6 +261,10 @@ fn formatter_failures_preserve_native_assertions() {
         ("helpers/__init__.py", "_karva_message_ = object()\n"),
         ("helpers/data.txt", "payload\n"),
         (
+            "helpers/import_assertion.py",
+            "value = 1\nassert value == 2\n",
+        ),
+        (
             "test_assertion_formatter.py",
             r#"
 from importlib.resources import files
@@ -241,6 +273,9 @@ from helpers import _karva_message_
 
 def test_package_resources():
     assert files("helpers").joinpath("data.txt").read_text() == "payload\n"
+
+def test_module_import_assertion():
+    import helpers.import_assertion
 
 def test_native_args():
     try:
@@ -260,6 +295,32 @@ def test_passing_assert_releases_operands():
 
     assert Temporary() == None
     assert released == [True]
+
+def annotated(value: int) -> int:
+    return value
+
+def test_compiler_does_not_inherit_karva_annotations():
+    assert annotated.__annotations__ == {"value": int, "return": int}
+
+def test_one_line_suite_cleanup():
+    if True: assert annotated(1) == 1
+
+def test_same_line_second_assertion():
+    first = 1
+    second = 2
+    if True: assert first == 1; assert second == 3
+
+def test_string_diff():
+    assert "alpha\nbravo" == "alpha\nbrava"
+
+def test_bytes_diff():
+    assert b"alpha" == b"alphi"
+
+def test_set_diff():
+    assert {"alpha"} == {"beta"}
+
+def test_unicode_repr():
+    assert "🙂" * 300 == None
 
 def test_deep_value():
     value = 0
@@ -285,31 +346,57 @@ def test_hostile_metadata():
         ),
     ]);
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 6 tests across 1 worker
+        Starting 14 tests across 1 worker
             PASS [TIME] test_assertion_formatter::test_package_resources
+            FAIL [TIME] test_assertion_formatter::test_module_import_assertion
             PASS [TIME] test_assertion_formatter::test_native_args
             PASS [TIME] test_assertion_formatter::test_passing_assert_releases_operands
+            PASS [TIME] test_assertion_formatter::test_compiler_does_not_inherit_karva_annotations
+            PASS [TIME] test_assertion_formatter::test_one_line_suite_cleanup
+            FAIL [TIME] test_assertion_formatter::test_same_line_second_assertion
+            FAIL [TIME] test_assertion_formatter::test_string_diff
+            FAIL [TIME] test_assertion_formatter::test_bytes_diff
+            FAIL [TIME] test_assertion_formatter::test_set_diff
+            FAIL [TIME] test_assertion_formatter::test_unicode_repr
             FAIL [TIME] test_assertion_formatter::test_deep_value
             FAIL [TIME] test_assertion_formatter::test_huge_integer
             FAIL [TIME] test_assertion_formatter::test_hostile_metadata
 
     failures:
 
+    test_assertion_formatter::test_bytes_diff:
+
+    error[test-failure]: Test `test_bytes_diff` failed
+      --> test_assertion_formatter.py:48:5
+       |
+    48 | def test_bytes_diff():
+       |     ^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:49:5
+       |
+    49 |     assert b"alpha" == b"alphi"
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert b"alpha" == b"alphi"
+          
+          Differing values:
+            actual: b'alpha'
+            expected: b'alphi'
+
     test_assertion_formatter::test_deep_value:
 
     error[test-failure]: Test `test_deep_value` failed
-      --> test_assertion_formatter.py:28:5
+      --> test_assertion_formatter.py:57:5
        |
-    28 | def test_deep_value():
+    57 | def test_deep_value():
        |     ^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:32:5
+      --> test_assertion_formatter.py:61:5
        |
-    32 |     assert value == None
+    61 |     assert value == None
        |     ^^^^^^^^^^^^^^^^^^^^
     info: assert value == None
           
@@ -319,42 +406,128 @@ def test_hostile_metadata():
     test_assertion_formatter::test_hostile_metadata:
 
     error[test-failure]: Test `test_hostile_metadata` failed
-      --> test_assertion_formatter.py:46:5
+      --> test_assertion_formatter.py:75:5
        |
-    46 | def test_hostile_metadata():
+    75 | def test_hostile_metadata():
        |     ^^^^^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:47:5
+      --> test_assertion_formatter.py:76:5
        |
-    47 |     assert Hostile() == Hostile()
+    76 |     assert Hostile() == Hostile()
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert Hostile() == Hostile()
           
           Differing values:
             Hostile(): <test_assertion_formatter.Hostile object>
+            Hostile(): <test_assertion_formatter.Hostile object>
 
     test_assertion_formatter::test_huge_integer:
 
     error[test-failure]: Test `test_huge_integer` failed
-      --> test_assertion_formatter.py:34:5
+      --> test_assertion_formatter.py:63:5
        |
-    34 | def test_huge_integer():
+    63 | def test_huge_integer():
        |     ^^^^^^^^^^^^^^^^^
     info: Test failed here
-      --> test_assertion_formatter.py:35:5
+      --> test_assertion_formatter.py:64:5
        |
-    35 |     assert 10**10000 == None
+    64 |     assert 10**10000 == None
        |     ^^^^^^^^^^^^^^^^^^^^^^^^
     info: assert 10**10000 == None
           
           Differing values:
             10**10000: <int 33220 bits>
 
+    test_assertion_formatter::test_module_import_assertion:
+
+    error[test-failure]: Test `test_module_import_assertion` failed
+     --> test_assertion_formatter.py:9:5
+      |
+    9 | def test_module_import_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> helpers/import_assertion.py:2:1
+      |
+    2 | assert value == 2
+      | ^^^^^^^^^^^^^^^^^
+    info: assert value == 2
+          
+          Differing values:
+            value: 1
+
+    test_assertion_formatter::test_same_line_second_assertion:
+
+    error[test-failure]: Test `test_same_line_second_assertion` failed
+      --> test_assertion_formatter.py:40:5
+       |
+    40 | def test_same_line_second_assertion():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:43:5
+       |
+    43 |     if True: assert first == 1; assert second == 3
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert second == 3
+          
+          Differing values:
+            second: 2
+
+    test_assertion_formatter::test_set_diff:
+
+    error[test-failure]: Test `test_set_diff` failed
+      --> test_assertion_formatter.py:51:5
+       |
+    51 | def test_set_diff():
+       |     ^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:52:5
+       |
+    52 |     assert {"alpha"} == {"beta"}
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert {"alpha"} == {"beta"}
+
+    test_assertion_formatter::test_string_diff:
+
+    error[test-failure]: Test `test_string_diff` failed
+      --> test_assertion_formatter.py:45:5
+       |
+    45 | def test_string_diff():
+       |     ^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:46:5
+       |
+    46 |     assert "alpha/nbravo" == "alpha/nbrava"
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert "alpha/nbravo" == "alpha/nbrava"
+          
+          Differing values:
+            string diff:
+            1 │  alpha
+          2 │ -bravo
+          2 │ +brava
+
+    test_assertion_formatter::test_unicode_repr:
+
+    error[test-failure]: Test `test_unicode_repr` failed
+      --> test_assertion_formatter.py:54:5
+       |
+    54 | def test_unicode_repr():
+       |     ^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_formatter.py:55:5
+       |
+    55 |     assert "🙂" * 300 == None
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: assert "🙂" * 300 == None
+          
+          Differing values:
+            "🙂" * 300: '🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂…🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂...
+
     ────────────
-         Summary [TIME] 6 tests run: 3 passed, 3 failed, 0 skipped
+         Summary [TIME] 14 tests run: 5 passed, 9 failed, 0 skipped
 
     ----- stderr -----
-    ");
+    "#);
 }
 
 #[test]

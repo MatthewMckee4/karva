@@ -9,7 +9,7 @@ use karva_diagnostic::{
 };
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
-use pyo3::{PyErr, Python, exceptions::PyAssertionError, types::PyAnyMethods};
+use pyo3::{PyErr, Python, exceptions::PyAssertionError};
 use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::{OneIndexed, SourceFile};
 use ruff_text_size::{TextRange, TextSize};
@@ -879,10 +879,7 @@ fn handle_failed_function_call(
     }
 
     if error.is_instance_of::<PyAssertionError>(py)
-        && let Ok(module) = py.import("karva._assertions")
-        && let Ok(value) = module.call_method1("consume_explanation", (error.value(py),))
-        && !value.is_none()
-        && let Ok(explanation) = value.extract::<String>()
+        && let Some(explanation) = crate::assertions::explain(py, error)
     {
         diagnostic.info(indent_continuation_lines(&explanation));
     }
