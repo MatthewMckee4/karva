@@ -1237,3 +1237,252 @@ def test_raises_check_runs_only_after_type_and_match():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn test_raises_preserves_exception_and_traceback() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+class CustomError(ValueError):
+    pass
+
+def raise_error(error):
+    raise error
+
+def test_exception_details():
+    error = CustomError("prefix: code 42: suffix")
+    with karva.raises(ValueError, match=r"code \d+") as info:
+        assert info.type is None
+        assert info.value is None
+        assert info.tb is None
+        raise_error(error)
+    assert info.type is CustomError
+    assert info.value is error
+    assert info.tb is error.__traceback__
+    assert info.tb.tb_frame.f_code.co_name == "test_exception_details"
+    assert info.tb.tb_next.tb_frame.f_code.co_name == "raise_error"
+    assert info.tb.tb_next.tb_next is None
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_exception_details
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn test_raises_failed_exit_leaves_exception_info_empty(
+    #[values("no_exception", "wrong_type", "wrong_match", "invalid_regex")] scenario: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import re
+import karva
+
+def test_failed_exit():
+    scenario = "{scenario}"
+    error = TypeError("original error")
+    pattern = "[" if scenario == "invalid_regex" else "expected"
+    expected_failure = {{
+        "no_exception": karva.FailError,
+        "wrong_type": TypeError,
+        "wrong_match": karva.FailError,
+        "invalid_regex": re.error,
+    }}[scenario]
+    try:
+        with karva.raises(ValueError, match=pattern) as info:
+            if scenario == "wrong_type":
+                raise error
+            if scenario != "no_exception":
+                raise ValueError("different")
+    except expected_failure as caught:
+        if scenario == "wrong_type":
+            assert caught is error
+    else:
+        karva.fail("raises() did not report the failed exit")
+    assert info.type is None
+    assert info.value is None
+    assert info.tb is None
+        "#
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_failed_exit
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_approx_rejects_invalid_tolerances(
+    #[values("abs=-1", "abs=float('nan')", "rel=-1", "rel=float('nan')")] tolerance: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import karva
+import pytest
+
+def test_invalid_tolerance():
+    with pytest.raises(ValueError) as expected:
+        2 == pytest.approx(1, {tolerance})
+    with karva.raises(ValueError) as actual:
+        2 == karva.approx(1, {tolerance})
+    assert str(actual.value) == str(expected.value).rstrip(".")
+    assert repr(karva.approx(1, {tolerance})) == "1 ± ???"
+        "#
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_invalid_tolerance
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_approx_non_numeric_equality_fallback(
+    #[values("True", "None", "b'1'", "[[1]]", "[True]", "{'x': False}", "{1, 2}")] expected: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import karva
+
+def test_exact_equality():
+    expected = {expected}
+    approximation = karva.approx(expected)
+    assert approximation == expected
+    assert expected == approximation
+    assert not approximation != expected
+    assert approximation != object()
+    assert isinstance(repr(approximation), str)
+        "
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_exact_equality
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[test]
+fn test_approx_comparison_edge_cases() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from decimal import Decimal
+import karva
+
+@karva.tags.parametrize("actual, expected, result", [
+    (True, 1, False),
+    (False, 0, False),
+    (None, 1, False),
+    ("1", 1, False),
+    ("1", [1], False),
+    (b"1", [49], False),
+    ([1], {"x": 1}, False),
+    ({"x": 1}, [1], False),
+    ((0.1 + 0.2,), [0.3], True),
+    ([0.1 + 0.2], (0.3,), True),
+    ({"y": 2, "x": 0.1 + 0.2}, {"x": 0.3, "y": 2}, True),
+    ({"x": 1, "y": 2}, {"x": 1}, False),
+    ([], [], True),
+    ({}, {}, True),
+    (float("inf"), 1, False),
+    (float("nan"), 1, False),
+])
+def test_comparison(actual, expected, result):
+    approximation = karva.approx(expected)
+    assert (actual == approximation) is result
+    assert (approximation == actual) is result
+    assert (actual != approximation) is (not result)
+    assert (approximation != actual) is (not result)
+
+def test_decimal_tolerances():
+    assert Decimal("1.001") == karva.approx(Decimal("1"), rel=Decimal("0.01"))
+    assert Decimal("0.001") == karva.approx(Decimal("0"), abs=Decimal("0.01"))
+    assert Decimal("1.1") != karva.approx(Decimal("1"), rel=Decimal("0.01"))
+
+def test_boolean_context_rejected():
+    with karva.raises(AssertionError, match="boolean context"):
+        bool(karva.approx(1))
+
+def test_unhashable():
+    with karva.raises(TypeError, match="unhashable"):
+        hash(karva.approx(1))
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+            PASS [TIME] test::test_comparison(actual=True, expected=1, result=False)
+            PASS [TIME] test::test_comparison(actual=False, expected=0, result=False)
+            PASS [TIME] test::test_comparison(actual=None, expected=1, result=False)
+            PASS [TIME] test::test_comparison(actual='1', expected=1, result=False)
+            PASS [TIME] test::test_comparison(actual='1', expected=[1], result=False)
+            PASS [TIME] test::test_comparison(actual=b'1', expected=[49], result=False)
+            PASS [TIME] test::test_comparison(actual=[1], expected={'x': 1}, result=False)
+            PASS [TIME] test::test_comparison(actual={'x': 1}, expected=[1], result=False)
+            PASS [TIME] test::test_comparison(actual=(0.30000000000000004,), expected=[0.3], result=True)
+            PASS [TIME] test::test_comparison(actual=[0.30000000000000004], expected=(0.3,), result=True)
+            PASS [TIME] test::test_comparison(actual={'y': 2, 'x': 0.30000000000..., expected={'x': 0.3, 'y': 2}, result=True)
+            PASS [TIME] test::test_comparison(actual={'x': 1, 'y': 2}, expected={'x': 1}, result=False)
+            PASS [TIME] test::test_comparison(actual=[], expected=[], result=True)
+            PASS [TIME] test::test_comparison(actual={}, expected={}, result=True)
+            PASS [TIME] test::test_comparison(actual=inf, expected=1, result=False)
+            PASS [TIME] test::test_comparison(actual=nan, expected=1, result=False)
+            PASS [TIME] test::test_decimal_tolerances
+            PASS [TIME] test::test_boolean_context_rejected
+            PASS [TIME] test::test_unhashable
+    ────────────
+         Summary [TIME] 19 tests run: 19 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
