@@ -3830,3 +3830,37 @@ def test_typeerror():
     ----- stderr -----
     "#);
 }
+
+#[test]
+fn rejects_unsupported_class_method_selector() {
+    let context = TestContext::with_file(
+        "test.py",
+        "class TestCheckout:\n    def test_total(self): assert True\n",
+    );
+    assert_cmd_snapshot!(context.command().arg("test.py::TestCheckout::test_total"), @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: test selector `<temp_dir>/test.py::TestCheckout::test_total` is unsupported: Karva only runs top-level test functions; use `path.py::test_function` instead of a class or nested selector
+    ");
+}
+
+#[test]
+fn rejects_unsupported_class_method_selector_with_case_index() {
+    let context = TestContext::with_file(
+        "test.py",
+        "class TestCheckout:\n    def test_total(self): assert True\n",
+    );
+    assert_cmd_snapshot!(context.command().arg("test.py::TestCheckout::test_total[0]"), @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: test selector `<temp_dir>/test.py::TestCheckout::test_total[0]` is unsupported: Karva only runs top-level test functions; use `path.py::test_function` instead of a class or nested selector
+    ");
+}
