@@ -126,6 +126,48 @@ fn rejects_name_that_would_select_a_nested_provider() {
     assert_eq!(edit, None);
 }
 
+#[rstest::rstest]
+fn rejects_parameter_rename_with_unindexed_body_references(
+    #[values(
+        "    assert database == 'hello'\n",
+        "    def nested():\n        return database\n    assert nested()\n",
+        "    assert [database for _ in range(1)]\n",
+        "    assert (lambda: database)()\n"
+    )]
+    body: &str,
+    #[values("def test_example", "@fixture\ndef wrapper")] declaration: &str,
+) {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n@fixture\ndef database(): return 'hello'\n",
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    open(
+        &mut server,
+        workspace.uri("conftest.py"),
+        "from karva import fixture\n@fixture\ndef database(): return 'hello'\n",
+    );
+    let uri = workspace.uri("test_example.py");
+    let source = format!("from karva import fixture\n{declaration}(database):\n{body}");
+    open(&mut server, uri.clone(), &source);
+    let line = if declaration.starts_with('@') { 2 } else { 1 };
+    let position = Position::new(line, if line == 2 { 12 } else { 17 });
+
+    let prepared = server.request::<PrepareRenameRequest>(prepare_params(uri.clone(), position));
+    let edit = server.request::<RenameRequest>(rename_params(uri, position, "welcome"));
+    let provider_edit = server.request::<RenameRequest>(rename_params(
+        workspace.uri("conftest.py"),
+        Position::new(2, 6),
+        "welcome",
+    ));
+
+    server.receive_notification::<PublishDiagnosticsNotification>();
+    assert_eq!(prepared, None);
+    assert_eq!(edit, None);
+    assert_eq!(provider_edit, None);
+}
+
 fn open(server: &mut TestServer, uri: Uri, source: &str) {
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
