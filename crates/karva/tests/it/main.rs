@@ -27,3 +27,4 @@ mod shuffle;
 mod version;
 mod watch;
 mod worker_crash;
+mod zed_snippets;
