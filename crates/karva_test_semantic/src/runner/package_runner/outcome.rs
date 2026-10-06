@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use karva_diagnostic::{Diagnostic, TestExecutionOutcome};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 
 use crate::diagnostic::{
@@ -126,10 +127,17 @@ pub(super) fn classify_test_result(
         return ClassifiedTestResult::new(TestExecutionOutcome::Passed, false);
     }
 
-    let missing_arguments = missing_arguments_from_error(
-        context.definition.name().function_name(),
-        &error.to_string(),
-    );
+    // Missing call arguments raise TypeError before entering Python code.
+    // A traceback means user code ran, so matching text describes a test failure.
+    let missing_arguments =
+        if error.is_instance_of::<PyTypeError>(py) && error.traceback(py).is_none() {
+            missing_arguments_from_error(
+                context.definition.name().function_name(),
+                &error.to_string(),
+            )
+        } else {
+            Vec::new()
+        };
     if missing_arguments.is_empty() {
         let diagnostic = test_failure_diagnostic(
             py,
