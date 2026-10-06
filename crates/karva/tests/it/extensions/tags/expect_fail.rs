@@ -945,7 +945,19 @@ def test_expected():
             decorator = get_expect_fail_decorator(framework)
         ),
     );
-    insta::with_settings!({ snapshot_suffix => format!("{framework}_{}", raises.starts_with('(')) }, { assert_cmd_snapshot!(context.command().arg("--retry=1")); });
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_expected
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+        ");
+    }
 }
 
 #[rstest]
@@ -1018,7 +1030,192 @@ async def broken(): raise ValueError('background failed')
         context.read_file("test.py")
     };
     context.write_file("test.py", &source);
-    insta::with_settings!({ snapshot_suffix => format!("{framework}_{scenario}") }, { assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1")); });
+    allow_duplicates! {
+        match scenario {
+            "mismatch" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+              TRY 1 FAIL [TIME] test::test_expected
+              TRY 2 FAIL [TIME] test::test_expected
+
+            failures:
+
+            test::test_expected:
+
+            error[test-failure]: Test `test_expected` failed
+             --> test.py:9:5
+              |
+            9 | def test_expected():
+              |     ^^^^^^^^^^^^^
+            info: Test failed here
+              --> test.py:10:5
+               |
+            10 |     raise TypeError('unexpected')
+               |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            info: unexpected
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+            ----- stderr -----
+            "),
+            "setup" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+             TRY 1 ERROR [TIME] test::test_expected
+             TRY 2 ERROR [TIME] test::test_expected
+
+            failures:
+
+            test::test_expected (requires fixture `value`):
+
+            error[fixture-failure]: Fixture `value` failed
+             --> test.py:6:5
+              |
+            6 | def value(): raise ValueError('setup failed')
+              |     ^^^^^
+            info: Fixture failed here
+             --> test.py:6:1
+              |
+            6 | def value(): raise ValueError('setup failed')
+              | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            info: setup failed
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+            ----- stderr -----
+            "),
+            "teardown" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+             TRY 1 ERROR [TIME] test::test_expected(value=1)
+             TRY 2 ERROR [TIME] test::test_expected(value=1)
+
+            failures:
+
+            test::test_expected(value=1):
+
+            error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `value`
+             --> test.py:6:5
+              |
+            6 | def value():
+              |     ^^^^^
+            info: Failed to reset fixture: teardown failed
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+            ----- stderr -----
+            "),
+            "missing" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+                   ERROR [TIME] test::test_expected
+
+            failures:
+
+            test::test_expected:
+
+            error[missing-fixtures]: Test `test_expected` has missing fixtures
+             --> test.py:9:5
+              |
+            9 | def test_expected(value):
+              |     ^^^^^^^^^^^^^
+            info: Missing fixtures: `value`
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+            ----- stderr -----
+            "),
+            "return" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+              TRY 1 FAIL [TIME] test::test_expected
+              TRY 2 FAIL [TIME] test::test_expected
+
+            failures:
+
+            test::test_expected:
+
+            error[test-returned-value]: Test `test_expected` returned `1`
+             --> test.py:9:5
+              |
+            9 | def test_expected():
+              |     ^^^^^^^^^^^^^
+            info: Test functions must return None. Did you mean to use `assert`?
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+            ----- stderr -----
+            "),
+            "timeout" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+              TRY 1 FAIL [TIME] test::test_expected
+              TRY 2 FAIL [TIME] test::test_expected
+
+            failures:
+
+            test::test_expected:
+
+            error[test-failure]: Test `test_expected` failed
+             --> test.py:9:11
+              |
+            9 | async def test_expected():
+              |           ^^^^^^^^^^^^^
+            info: Test exceeded timeout of 0.1 seconds
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+            ----- stderr -----
+            "),
+            _ => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+              TRY 1 FAIL [TIME] test::test_expected
+              TRY 2 FAIL [TIME] test::test_expected
+
+            failures:
+
+            test::test_expected:
+
+            error[test-failure]: Test `test_expected` failed
+             --> test.py:9:11
+              |
+            9 | async def test_expected():
+              |           ^^^^^^^^^^^^^
+            info: Test failed here
+             --> test.py:6:1
+              |
+            6 | async def broken(): raise ValueError('background failed')
+              | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            info: Unhandled exception in background task: Task-[N]: ValueError: background failed
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+            ----- stderr -----
+            "),
+        }
+    }
 }
 
 #[rstest]
@@ -1037,7 +1234,22 @@ def test_expected(): pass
             decorator = get_expect_fail_decorator(framework)
         ),
     );
-    insta::with_settings!({ snapshot_suffix => format!("{framework}_{raises}") }, { assert_cmd_snapshot!(context.command()); });
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: expect_fail raises must be an exception class or a tuple of exception classes
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+        ");
+    }
 }
 
 #[rstest]
@@ -1060,7 +1272,17 @@ import pytest
             asynchronous = if asynchronous { "async " } else { "" },
         ),
     );
-    insta::with_settings!({ snapshot_suffix => format!("{framework}_{asynchronous}") }, {
-        assert_cmd_snapshot!(context.command_no_parallel());
-    });
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_expected
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+        ");
+    }
 }

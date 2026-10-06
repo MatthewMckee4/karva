@@ -942,9 +942,45 @@ def test_expected():
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--result-output=reports/results.json", "--retry=1"])
+            .args(["--result-output=reports/results.json", "--retry=1"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_expected::test_expected
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
     );
-    assert_snapshot!(context.read_file("reports/results.json"));
+    assert_snapshot!(context.read_file("reports/results.json"), @r#"
+    {
+      "schema_version": 2,
+      "status": "passed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failure": 1,
+        "flaky": 0,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test_expected",
+          "name": "test_expected",
+          "full_name": "test_expected::test_expected",
+          "status": "expected_failure",
+          "duration_seconds": "[TIME]",
+          "expected_failure_reason": "Known parser bug"
+        }
+      ]
+    }
+    "#);
     let xml = context.read_file("reports/results.xml");
     assert!(xml.contains("<skipped type=\"xfail\" message=\"Known parser bug\"/>"));
     assert!(xml.contains("skipped=\"1\""));
@@ -953,8 +989,18 @@ def test_expected():
         "--result-output=reports/results.jsonl",
         "--status-level=fail",
         "--final-status-level=fail"
-    ]));
-    assert_snapshot!(context.read_file("reports/results.jsonl"));
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+
+    ----- stderr -----
+    ");
+    assert_snapshot!(context.read_file("reports/results.jsonl"), @r#"
+    {"schema_version":2,"type":"test","module":"test_expected","name":"test_expected","full_name":"test_expected::test_expected","status":"expected_failure","duration_seconds":"[TIME]","expected_failure_reason":"Known parser bug"}
+    {"schema_version":2,"type":"run_finished","status":"passed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":0,"failed":0,"errors":0,"skipped":0,"expected_failure":1,"flaky":0,"slow":0}}
+    "#);
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(
             &context.read_file(".karva_cache/last-failed.json")
