@@ -30,7 +30,33 @@ def test_generated(value):
         "--profile=ci",
         "--num-workers=2",
         "--status-level=none"
-    ]));
+    ]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_generated::test_generated(fail):
+
+    error[test-failure]: Test `test_generated` failed
+     --> docs/guide.rst:2:3
+      |
+    2 | é 42
+      |   ^
+    info: Test ran with arguments:
+    info:   `value`: `2`
+    info: Test failed here
+      --> test_generated.py:14:5
+       |
+    14 |     assert value != 2
+       |     ^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 1 failed, 1 skipped
+
+    ----- stderr -----
+    ");
     let report = context.read_file("results.xml");
     let cases: Vec<_> = report
         .lines()
@@ -49,7 +75,33 @@ def test_generated(value):
         "--profile=ci",
         "--last-failed",
         "--status-level=none"
-    ]));
+    ]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_generated::test_generated(fail):
+
+    error[test-failure]: Test `test_generated` failed
+     --> docs/guide.rst:2:3
+      |
+    2 | é 42
+      |   ^
+    info: Test ran with arguments:
+    info:   `value`: `2`
+    info: Test failed here
+      --> test_generated.py:14:5
+       |
+    14 |     assert value != 2
+       |     ^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
@@ -69,10 +121,67 @@ def test_generated():
 "#
         ),
     );
-    assert_cmd_snapshot!(
-        format!("external_source_invalid_{}", coordinates.replace(", ", "_")),
-        context.command()
-    );
+    match coordinates {
+        "0, 1" => assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test_generated`: Source line must be at least 1; received 0
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "3, 1" => assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test_generated`: Source line 3 exceeds document line count 2
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "1, 0" => assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test_generated`: Source column 0 must be in 1..=3 on line 1
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        _ => {
+            assert_eq!(coordinates, "1, 4");
+            assert_cmd_snapshot!(context.command(), @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+                Starting 1 test across 1 worker
+            diagnostics:
+
+            error[failed-to-import-module]: Failed to import python module `test_generated`: Source column 4 must be in 1..=3 on line 1
+
+            ────────────
+                 Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+            ----- stderr -----
+            ");
+        }
+    }
 }
 
 #[test]
@@ -89,7 +198,28 @@ def test_generated(first, second):
     pass
 "#,
     );
-    assert_cmd_snapshot!(context.command());
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test_generated::test_generated
+
+    failures:
+
+    test_generated::test_generated:
+
+    error[invalid-parametrize]: Source locations may appear in only one parametrization dimension
+     --> test_generated.py:7:5
+      |
+    7 | def test_generated(first, second):
+      |     ^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
@@ -124,7 +254,33 @@ def test_fixture(value, broken):
         "--profile=ci",
         "--retry=1",
         "--status-level=none"
-    ]));
+    ]), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_generated::test_fixture(fixture) (requires fixture `broken`):
+
+    error[fixture-failure]: Fixture `broken` failed
+     --> test_generated.py:7:5
+      |
+    7 | def broken():
+      |     ^^^^^^
+    info: Fixture failed here
+     --> test_generated.py:8:5
+      |
+    8 |     raise ValueError("fixture failed")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: fixture failed
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 error, 0 skipped
+       FLAKY 2/2 [TIME] test_generated::test_retry(retry)
+
+    ----- stderr -----
+    "#);
     let report = context.read_file("results.xml");
     assert!(report.contains("file=\"guide.rst\" line=\"1\" column=\"1\""));
     assert!(report.contains("file=\"guide.rst\" line=\"2\" column=\"1\""));
@@ -159,7 +315,15 @@ def test_plain(value):
         "--profile=ci",
         "--num-workers=2",
         "--status-level=none"
-    ]));
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 4 tests run: 3 passed, 1 skipped
+
+    ----- stderr -----
+    ");
     let report = context.read_file("results.xml");
     assert_eq!(report.matches("<testcase").count(), 4);
     assert_eq!(
@@ -182,5 +346,18 @@ fn external_source_rejects_empty_path() {
         "test_generated.py",
         "import karva\nsource = karva.SourceDocument('', 'example')\ndef test_generated():\n    pass\n",
     );
-    assert_cmd_snapshot!(context.command());
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_generated`: Source document path cannot be empty
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
