@@ -114,42 +114,48 @@ pub use unix::*;
 #[cfg(not(unix))]
 mod windows {
     use std::io;
-    use std::process::{ChildStderr, ChildStdout, Command, ExitStatus};
+    use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus};
+    use std::thread;
 
-    use process_wrap::std::{ChildWrapper, CommandWrap, JobObject};
+    use crate::orchestration::WORKER_POLL_INTERVAL;
+    use subc_jobobject::ContainedChild;
 
-    pub type WorkerChild = Box<dyn ChildWrapper>;
+    pub type WorkerChild = ContainedChild<Child>;
 
     pub fn configure_worker_command(_command: &mut Command) {}
 
-    pub fn spawn(command: Command) -> io::Result<WorkerChild> {
-        CommandWrap::from(command).wrap(JobObject).spawn()
+    pub fn spawn(mut command: Command) -> io::Result<WorkerChild> {
+        subc_jobobject::spawn_contained(&mut command)
     }
 
     pub fn take_stdout(child: &mut WorkerChild) -> Option<ChildStdout> {
-        child.stdout().take()
+        child.child.stdout.take()
     }
 
     pub fn take_stderr(child: &mut WorkerChild) -> Option<ChildStderr> {
-        child.stderr().take()
+        child.child.stderr.take()
     }
 
     /// Stops only the worker so its descendants can finish during the grace period.
     pub fn terminate(child: &mut WorkerChild) -> io::Result<()> {
-        child.inner_mut().start_kill()
+        child.child.kill()
     }
 
     /// Terminates the worker's Job Object and all descendants.
     pub fn force_kill(child: &mut WorkerChild) -> io::Result<()> {
-        child.start_kill()
+        child.job.terminate()
     }
 
     pub fn try_wait(child: &mut WorkerChild) -> io::Result<Option<ExitStatus>> {
-        child.inner_mut().try_wait()
+        child.child.try_wait()
     }
 
     pub fn wait(child: &mut WorkerChild) -> io::Result<ExitStatus> {
-        child.inner_mut().wait()
+        let status = child.child.wait()?;
+        while child.job.process_count()? != 0 {
+            thread::sleep(WORKER_POLL_INTERVAL);
+        }
+        Ok(status)
     }
 }
 

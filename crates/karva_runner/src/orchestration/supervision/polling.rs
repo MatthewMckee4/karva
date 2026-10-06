@@ -131,6 +131,7 @@ impl WorkerSupervisor {
                 Ok(None) => running.push(worker),
                 Err(error) => {
                     tracing::error!(target: "karva_runner::orchestration", "Error waiting on worker {}: {}", worker.id(), error);
+                    running.push(worker);
                 }
             }
         }
