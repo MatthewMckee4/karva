@@ -120,10 +120,16 @@ mod windows {
     use crate::orchestration::WORKER_POLL_INTERVAL;
     use subc_jobobject::ContainedChild;
 
+    /// Worker leader and its owning Job Object, assigned before the leader resumes.
+    ///
+    /// Keeping both handles in one value ensures dropping a worker closes the
+    /// kill-on-close Job Object instead of orphaning descendants.
     pub type WorkerChild = ContainedChild<Child>;
 
     pub fn configure_worker_command(_command: &mut Command) {}
 
+    /// Creates the worker suspended, assigns it to a kill-on-close Job Object,
+    /// and resumes it only after assignment succeeds.
     pub fn spawn(mut command: Command) -> io::Result<WorkerChild> {
         subc_jobobject::spawn_contained(&mut command)
     }
@@ -146,10 +152,12 @@ mod windows {
         child.job.terminate()
     }
 
+    /// Polls only the leader; callers retain the Job Object until force cleanup.
     pub fn try_wait(child: &mut WorkerChild) -> io::Result<Option<ExitStatus>> {
         child.child.try_wait()
     }
 
+    /// Reaps the leader and waits until the Job Object has no active members.
     pub fn wait(child: &mut WorkerChild) -> io::Result<ExitStatus> {
         let status = child.child.wait()?;
         while child.job.process_count()? != 0 {
