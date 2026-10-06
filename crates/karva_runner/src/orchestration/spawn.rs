@@ -74,17 +74,14 @@ pub(super) fn spawn_worker(
         Stdio::inherit()
     });
 
-    let mut child = command
-        .spawn()
-        .context("Failed to spawn karva-worker process")?;
+    let mut child =
+        process_control::spawn(command).context("Failed to spawn karva-worker process")?;
     let output = if forward_stdout {
-        child.stdout.take().map(WorkerOutputForwarder::spawn)
+        process_control::take_stdout(&mut child).map(WorkerOutputForwarder::spawn)
     } else {
         None
     };
-    let stderr = child
-        .stderr
-        .take()
+    let stderr = process_control::take_stderr(&mut child)
         .map(|stderr| WorkerStderrForwarder::spawn(stderr, stderr_file))
         .context("Failed to capture karva-worker stderr")?;
 

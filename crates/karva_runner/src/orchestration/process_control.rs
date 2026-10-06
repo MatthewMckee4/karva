@@ -1,13 +1,27 @@
 //! Platform-specific worker process control.
 //!
-//! Unix workers run in their own process groups so cancellation and crash cleanup
-//! cover descendants. Other platforms fall back to child-process termination.
+//! Unix workers run in their own process groups, while Windows workers run in
+//! Job Objects, so cancellation and crash cleanup cover descendants.
 
 #[cfg(unix)]
 mod unix {
     use std::io;
     use std::os::unix::process::CommandExt;
-    use std::process::{Child, Command};
+    use std::process::{Child, ChildStderr, ChildStdout, Command};
+
+    pub type WorkerChild = Child;
+
+    pub fn spawn(mut command: Command) -> io::Result<WorkerChild> {
+        command.spawn()
+    }
+
+    pub fn take_stdout(child: &mut WorkerChild) -> Option<ChildStdout> {
+        child.stdout.take()
+    }
+
+    pub fn take_stderr(child: &mut WorkerChild) -> Option<ChildStderr> {
+        child.stderr.take()
+    }
 
     pub fn configure_worker_command(command: &mut Command) {
         command.process_group(0);
@@ -100,22 +114,42 @@ pub use unix::*;
 #[cfg(not(unix))]
 mod windows {
     use std::io;
-    use std::process::{Child, Command};
+    use std::process::{ChildStderr, ChildStdout, Command, ExitStatus};
+
+    use process_wrap::std::{ChildWrapper, CommandWrap, JobObject};
+
+    pub type WorkerChild = Box<dyn ChildWrapper>;
 
     pub fn configure_worker_command(_command: &mut Command) {}
 
-    pub fn terminate(child: &mut Child) -> io::Result<()> {
-        child.kill()
+    pub fn spawn(command: Command) -> io::Result<WorkerChild> {
+        CommandWrap::from(command).wrap(JobObject).spawn()
     }
 
-    /// Process-group cleanup is Unix-only; callers kill the retained child
-    /// handle separately on this platform.
-    pub fn force_kill(_child: &Child) -> io::Result<()> {
-        Ok(())
+    pub fn take_stdout(child: &mut WorkerChild) -> Option<ChildStdout> {
+        child.stdout().take()
     }
 
-    pub fn force_kill_child(child: &mut Child) -> io::Result<()> {
-        child.kill()
+    pub fn take_stderr(child: &mut WorkerChild) -> Option<ChildStderr> {
+        child.stderr().take()
+    }
+
+    /// Stops only the worker so its descendants can finish during the grace period.
+    pub fn terminate(child: &mut WorkerChild) -> io::Result<()> {
+        child.inner_mut().start_kill()
+    }
+
+    /// Terminates the worker's Job Object and all descendants.
+    pub fn force_kill(child: &mut WorkerChild) -> io::Result<()> {
+        child.start_kill()
+    }
+
+    pub fn try_wait(child: &mut WorkerChild) -> io::Result<Option<ExitStatus>> {
+        child.inner_mut().try_wait()
+    }
+
+    pub fn wait(child: &mut WorkerChild) -> io::Result<ExitStatus> {
+        child.inner_mut().wait()
     }
 }
 

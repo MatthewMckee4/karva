@@ -4,8 +4,9 @@
 //! supervision can follow transitions without a flat collection of unrelated
 //! fields.
 
+use std::io;
 use std::io::{Read, Seek};
-use std::process::{Child, ExitStatus};
+use std::process::ExitStatus;
 use std::time::{Duration, Instant};
 
 use tempfile::NamedTempFile;
@@ -13,6 +14,7 @@ use tempfile::NamedTempFile;
 use crate::partition::Partition;
 
 use super::CANCELLATION_EVENT_SETTLE;
+use super::process_control::WorkerChild;
 use super::streams::{WorkerOutputForwarder, WorkerStderrForwarder};
 
 /// One worker's test assignment, process, streams, and lifecycle state.
@@ -34,7 +36,7 @@ pub(super) struct Worker {
 /// Resources acquired while constructing one child process.
 pub(super) struct WorkerResources {
     /// Spawned child process.
-    child: Child,
+    child: WorkerChild,
 
     /// Optional stdout forwarder.
     output: Option<WorkerOutputForwarder>,
@@ -49,7 +51,7 @@ pub(super) struct WorkerResources {
 impl WorkerResources {
     /// Groups all owned resources acquired before a worker enters supervision.
     pub(super) fn new(
-        child: Child,
+        child: WorkerChild,
         output: Option<WorkerOutputForwarder>,
         stderr: WorkerStderrForwarder,
         stderr_capture: NamedTempFile,
@@ -77,7 +79,7 @@ struct WorkerAssignment {
 #[derive(Debug)]
 struct WorkerProcess {
     /// Spawned karva-worker process.
-    child: Child,
+    child: WorkerChild,
 
     /// Timestamp used for worker and crash durations.
     started_at: Instant,
@@ -124,13 +126,32 @@ impl Worker {
     }
 
     /// Borrows the child while process state is inspected or its group is signalled.
-    pub(super) fn child(&self) -> &Child {
+    #[cfg(unix)]
+    pub(super) fn child(&self) -> &WorkerChild {
         &self.process.child
     }
 
     /// Borrows the child for polling, waiting, or termination.
-    pub(super) fn child_mut(&mut self) -> &mut Child {
+    pub(super) fn child_mut(&mut self) -> &mut WorkerChild {
         &mut self.process.child
+    }
+
+    /// Checks whether the worker process has exited without blocking.
+    #[cfg(not(unix))]
+    pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        super::process_control::try_wait(&mut self.process.child)
+    }
+
+    /// Reaps the worker process and, on Windows, its owned Job Object.
+    pub(super) fn wait(&mut self) -> io::Result<ExitStatus> {
+        #[cfg(unix)]
+        {
+            self.process.child.wait()
+        }
+        #[cfg(not(unix))]
+        {
+            super::process_control::wait(&mut self.process.child)
+        }
     }
 
     /// Whether process exit has already been observed without completing stream drain.
