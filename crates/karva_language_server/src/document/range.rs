@@ -1,9 +1,10 @@
 use lsp_types::{Position, Range};
 use ruff_source_file::{LineIndex, OneIndexed, SourceLocation};
-use ruff_text_size::{TextRange, TextSize};
+use ruff_text_size::{TextLen, TextRange, TextSize};
 
 use super::PositionEncoding;
 
+/// Converts a client position, clamping oversized columns before the line ending.
 #[expect(
     clippy::redundant_pub_crate,
     reason = "server endpoints consume position conversion through the document boundary"
@@ -14,14 +15,21 @@ pub(crate) fn position_to_text_size(
     index: &LineIndex,
     encoding: PositionEncoding,
 ) -> TextSize {
-    index.offset(
+    let line = OneIndexed::from_zero_indexed(position.line as usize);
+    let offset = index.offset(
         SourceLocation {
-            line: OneIndexed::from_zero_indexed(position.line as usize),
+            line,
             character_offset: OneIndexed::from_zero_indexed(position.character as usize),
         },
         text,
         encoding.into(),
-    )
+    );
+    if position.line as usize >= index.line_count() {
+        return offset;
+    }
+    let line_range = index.line_range(line, text);
+    let line_end = line_range.start() + text[line_range].trim_end_matches(['\r', '\n']).text_len();
+    offset.min(line_end)
 }
 
 fn source_location_to_position(location: SourceLocation) -> Option<Position> {

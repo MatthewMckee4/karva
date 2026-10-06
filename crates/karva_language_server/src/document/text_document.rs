@@ -236,6 +236,28 @@ mod tests {
         assert_eq!(document.contents(), "first\r\nchanged\r\n");
     }
 
+    #[rstest]
+    fn clamps_edits_to_line_content(
+        #[values(
+            PositionEncoding::UTF8,
+            PositionEncoding::UTF16,
+            PositionEncoding::UTF32
+        )]
+        encoding: PositionEncoding,
+        #[values("\n", "\r\n", "\r")] newline: &str,
+        #[values("first", "😀")] first_line: &str,
+    ) {
+        let mut document = document(&format!("{first_line}{newline}second{newline}"));
+        document
+            .apply_changes(vec![partial(0, 0, u32::MAX, "changed")], 2, encoding)
+            .expect("an oversized character offset should clamp to the line end");
+
+        assert_eq!(
+            document.contents(),
+            format!("changed{newline}second{newline}")
+        );
+    }
+
     #[test]
     fn rejects_stale_version() {
         let mut document = document("current");
