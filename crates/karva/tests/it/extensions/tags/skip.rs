@@ -726,7 +726,39 @@ def test_ordinary_failure():
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--status-level=all", "--show-output=true"])
+            .args(["--status-level=all", "--show-output=true"]),
+        @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+    resource cleaned up
+            SKIP [TIME] test_stdlib_skip::test_skip_body(resource=None): example unavailable
+            SKIP [TIME] test_stdlib_skip::test_skip_subclass: custom skip
+            SKIP [TIME] test_stdlib_skip::test_skip_fixture: fixture unavailable
+            FAIL [TIME] test_stdlib_skip::test_ordinary_failure
+
+    failures:
+
+    test_stdlib_skip::test_ordinary_failure:
+
+    error[test-failure]: Test `test_ordinary_failure` failed
+      --> test_stdlib_skip.py:26:5
+       |
+    26 | def test_ordinary_failure():
+       |     ^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_stdlib_skip.py:27:5
+       |
+    27 |     raise ValueError("ordinary failure")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: ordinary failure
+
+    ────────────
+         Summary [TIME] 4 tests run: 0 passed, 1 failed, 3 skipped
+
+    ----- stderr -----
+    "#
     );
 }
 
@@ -742,5 +774,15 @@ def test_example():
     assert False, "must not be reached"
 "#,
     );
-    assert_cmd_snapshot!(context.command().arg("--status-level=all"));
+    assert_cmd_snapshot!(context.command().arg("--status-level=all"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            SKIP [TIME] test_stdlib_skip::<module>: optional example dependency unavailable
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
 }
