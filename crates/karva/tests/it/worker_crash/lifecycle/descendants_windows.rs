@@ -32,12 +32,23 @@ fn completed_worker_kills_windows_grandchild() {
 fn timed_out_worker_kills_windows_grandchild_after_grace() {
     let context = descendant_context(true);
     // Receipt: one second leaves a half-second grace window before force-kill.
-    let output = run_karva(
-        &context,
-        &["--run-timeout=1", "--termination-grace-period=0.5"],
-    );
+    assert_cmd_snapshot!(
+        context
+            .command()
+            .args(["--run-timeout=1", "--termination-grace-period=0.5"]),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
 
-    assert_status(&output, false);
+    error: run timed out before all tests completed
+
+    ----- stderr -----
+    "
+    );
     assert_marker(&context, "child_after_worker");
     assert_descendants_stopped(&context);
 }
