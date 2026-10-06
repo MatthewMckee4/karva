@@ -92,6 +92,7 @@ home page brief; put details in the guides.
 - For new features, test both positive cases where tests pass and negative
   cases where tests fail, including the expected failure diagnostics.
 - Use `#[rstest]` with `#[values(...)]` instead of loops for repeated cases.
+- Use inline snapshots by default.
 - Never edit snapshots manually. Regenerate them, review every changed snapshot,
   and check for `.snap.new` files.
 - Use separate `#[cfg(unix)]` and `#[cfg(not(unix))]` snapshots for

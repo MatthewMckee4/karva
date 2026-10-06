@@ -3843,10 +3843,25 @@ fn rejects_unsupported_class_method_selector(
         "test.py",
         "class TestCheckout:\n    def test_total(self): assert True\n",
     );
-    let name = if selector.ends_with("[0]") {
-        "unsupported_class_method_case"
+    if selector.ends_with("[0]") {
+        assert_cmd_snapshot!(context.command().arg(selector), @"
+        success: false
+        exit_code: 2
+        ----- stdout -----
+
+        ----- stderr -----
+        karva failed
+          Cause: test selector `<temp_dir>/test.py::TestCheckout::test_total[0]` is unsupported: Karva only runs top-level test functions; use `path.py::test_function` instead of a class or nested selector
+        ");
     } else {
-        "unsupported_class_method"
-    };
-    assert_cmd_snapshot!(name, context.command().arg(selector));
+        assert_cmd_snapshot!(context.command().arg(selector), @"
+        success: false
+        exit_code: 2
+        ----- stdout -----
+
+        ----- stderr -----
+        karva failed
+          Cause: test selector `<temp_dir>/test.py::TestCheckout::test_total` is unsupported: Karva only runs top-level test functions; use `path.py::test_function` instead of a class or nested selector
+        ");
+    }
 }
