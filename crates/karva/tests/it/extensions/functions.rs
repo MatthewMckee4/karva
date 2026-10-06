@@ -1378,7 +1378,7 @@ fn test_approx_non_numeric_equality_fallback(
     let context = TestContext::with_file(
         "test.py",
         &format!(
-            r#"
+            r"
 import karva
 
 def test_exact_equality():
@@ -1389,7 +1389,7 @@ def test_exact_equality():
     assert not approximation != expected
     assert approximation != object()
     assert isinstance(repr(approximation), str)
-        "#
+        "
         ),
     );
 
