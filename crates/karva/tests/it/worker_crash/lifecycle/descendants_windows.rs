@@ -87,6 +87,8 @@ fn descendant_context(sleep_in_worker: bool) -> TestContext {
         (
             "child.py",
             r#"
+import ctypes
+from ctypes import wintypes
 import subprocess
 import sys
 import time
@@ -97,18 +99,27 @@ grandchild = subprocess.Popen([sys.executable, "grandchild.py"])
 Path("grandchild_pid").write_text(str(grandchild.pid))
 while not Path("grandchild_ready").exists():
     time.sleep(0.01)
+worker_pid = int(Path("worker_pid").read_text().strip())
+# Wait on the process handle directly. Launching tasklist can take longer than
+# the termination grace period and miss the worker's exit before tree cleanup.
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+kernel32.WaitForSingleObject.restype = wintypes.DWORD
+kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.CloseHandle.restype = wintypes.BOOL
+SYNCHRONIZE = 0x00100000
+INFINITE = 0xFFFFFFFF
+handle = kernel32.OpenProcess(SYNCHRONIZE, False, worker_pid)
+if not handle:
+    raise ctypes.WinError(ctypes.get_last_error())
 Path("child_ready").write_text("1")
-worker_pid = Path("worker_pid").read_text().strip()
-while any(
-    line.startswith('"') and f'","{worker_pid}","' in line
-    for line in subprocess.run(
-        ["tasklist", "/F" + "O", "CSV", "/NH"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
-):
-    time.sleep(0.01)
+try:
+    if kernel32.WaitForSingleObject(handle, INFINITE) != 0:
+        raise ctypes.WinError(ctypes.get_last_error())
+finally:
+    kernel32.CloseHandle(handle)
 Path("child_after_worker").write_text("1")
 time.sleep(30)
 "#,
