@@ -205,7 +205,7 @@ fn server_reports_main_loop_failure_with_stdin_open() -> anyhow::Result<()> {
             params: serde_json::Value::Null,
         }),
     )?;
-    // The old error path joined the reader indefinitely with stdin still open.
+    // Protocol errors must exit even while the editor keeps stdin open.
     let mut remaining = String::new();
     std::io::Read::read_to_string(&mut stdout, &mut remaining)?;
     let output = child.wait_with_output()?;
