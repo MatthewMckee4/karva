@@ -74,6 +74,19 @@ all project folders. Search accepts case-insensitive characters in order;
 fixture results use their public names. Unsaved Python buffers override saved
 files, and nested Karva projects use their own test prefixes.
 
+## Fixture call hierarchy
+
+With the cursor on a fixture declaration or reference, use `call hierarchy: show incoming calls` to see tests and fixtures that consume that provider. Use
+`call hierarchy: show outgoing calls` to see its direct fixture dependencies.
+Entries marked `(fixture)` distinguish fixture dependencies from ordinary
+Python calls. The picker can navigate deeper through either direction, including providers
+in ancestor `conftest.py` files. Fixture overrides remain separate; ordinary
+Python calls and built-in fixtures are left to the Python language server.
+
+When a Python language server also supports call hierarchy, start from an
+injected fixture parameter. Zed currently uses only the first prepared result
+at a declaration, which can select the ordinary Python hierarchy instead.
+
 ## Python snippets
 
 Type a trigger in a Python buffer and accept its completion with Enter. Tab then
