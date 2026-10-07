@@ -18,6 +18,11 @@ impl ConnectionInitializer {
         (Self { connection: server }, client)
     }
 
+    /// Sender retained by the panic boundary while the connection is usable.
+    pub(crate) fn sender(&self) -> crossbeam_channel::Sender<lsp::Message> {
+        self.connection.sender.clone()
+    }
+
     pub(super) fn initialize_start(
         &self,
     ) -> anyhow::Result<(lsp::RequestId, lsp_types::InitializeParams)> {

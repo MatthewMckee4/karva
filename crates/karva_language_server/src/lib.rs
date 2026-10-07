@@ -12,6 +12,7 @@ pub use server::{ConnectionInitializer, Server};
 
 mod capabilities;
 mod document;
+mod runtime;
 mod server;
 mod session;
 mod workspace;
@@ -78,16 +79,18 @@ fn discover_project(
 
 /// Runs the Karva language server over standard input and output.
 pub fn run_server() -> anyhow::Result<()> {
+    runtime::initialize_logging()?;
     let (connection, io_threads) = ConnectionInitializer::stdio();
-    let server_result = Server::new(connection)
-        .context("failed to initialize language server")?
-        .run();
-    let io_result = io_threads.join();
-
-    match (server_result, io_result) {
-        (Ok(()), Ok(())) => Ok(()),
-        (Err(server), Err(io)) => Err(server).context(format!("I/O thread error: {io}")),
-        (Err(server), _) => Err(server),
-        (_, Err(io)) => Err(io).context("I/O thread error"),
+    runtime::with_panic_reporting(connection.sender(), || {
+        Server::new(connection)
+            .context("failed to initialize language server")?
+            .run()
+            .context("language-server event loop failed")
+    })?;
+    // An error must exit promptly, even when the editor keeps stdin open.
+    // Only the successful shutdown sequence guarantees that the reader can join.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| io_threads.join())) {
+        Ok(result) => result.context("language-server I/O thread error"),
+        Err(payload) => Err(runtime::panic_error(payload.as_ref())),
     }
 }
