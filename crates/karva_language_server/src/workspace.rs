@@ -123,6 +123,10 @@ impl Workspaces {
         })
     }
 
+    pub(super) fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
+    }
+
     pub(super) fn folders(&self) -> impl Iterator<Item = &WorkspaceFolder> {
         self.folders.iter()
     }

@@ -4,8 +4,8 @@
 )]
 
 use lsp_types::{
-    ClientCapabilities, CompletionOptions, MarkupKind, RenameOptions, ServerCapabilities,
-    TextDocumentSyncKind, TextDocumentSyncOptions, WorkDoneProgressOptions,
+    ClientCapabilities, CodeLensOptions, CompletionOptions, MarkupKind, RenameOptions,
+    ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions, WorkDoneProgressOptions,
     WorkspaceFoldersServerCapabilities,
 };
 
@@ -74,6 +74,10 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
             }
             .into(),
         ),
+        code_lens_provider: Some(CodeLensOptions {
+            resolve_provider: Some(false),
+            ..CodeLensOptions::default()
+        }),
         completion_provider: Some(CompletionOptions::default()),
         definition_provider: Some(true.into()),
         implementation_provider: Some(true.into()),

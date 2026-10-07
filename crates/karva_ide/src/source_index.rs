@@ -79,6 +79,11 @@ impl WorkspaceSourceIndex {
         Some(Self::from_modules(project_root, settings, modules))
     }
 
+    /// Root used for project-relative CLI selectors and command working directories.
+    pub fn project_root(&self) -> &Utf8Path {
+        &self.project_root
+    }
+
     /// Returns the collected module for `path`, if the snapshot contains it.
     pub fn module(&self, path: &Utf8Path) -> Option<&CollectedModule> {
         self.modules.get(path)

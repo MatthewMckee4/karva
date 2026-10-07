@@ -504,6 +504,11 @@ impl Session {
     }
 
     /// Captures source state for a project-wide symbol query.
+    /// Profile passed to editor-run commands to preserve initialization overrides.
+    pub(super) fn configuration_profile(&self) -> Option<&str> {
+        self.workspaces.profile()
+    }
+
     pub(super) fn prepare_project_source_analysis(
         &self,
         uri: &Uri,

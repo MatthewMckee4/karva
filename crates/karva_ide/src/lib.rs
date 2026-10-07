@@ -30,7 +30,7 @@ pub use occurrences::{
 pub use references::{LocatedFixtureOccurrence, fixture_references};
 pub use rename::{is_valid_fixture_name, prepare_fixture_rename, rename_fixture};
 pub use source_index::WorkspaceSourceIndex;
-pub use symbols::{SourceSymbol, SourceSymbolKind, source_symbols};
+pub use symbols::{SourceSymbol, SourceSymbolKind, SourceTest, source_symbols, source_tests};
 
 /// Owned Python source used as an input to source-only analysis.
 #[derive(Clone, Debug, PartialEq, Eq)]

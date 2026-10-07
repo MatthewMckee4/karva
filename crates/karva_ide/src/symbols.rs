@@ -75,6 +75,36 @@ pub fn source_symbols(analysis: &SourceAnalysis) -> Vec<SourceSymbol> {
     symbols
 }
 
+/// A collected test declaration and its runtime-qualified identity.
+pub struct SourceTest {
+    /// Unqualified function name used in CLI selectors.
+    pub name: String,
+
+    /// Runtime test identity, including the dotted module name.
+    pub qualified_id: String,
+
+    /// Function-name range for editor actions.
+    pub range: TextRange,
+}
+
+/// Returns only collected tests, using the runtime's qualified-name formatter.
+pub fn source_tests(analysis: &SourceAnalysis) -> Vec<SourceTest> {
+    analysis
+        .module
+        .test_function_defs
+        .iter()
+        .map(|function| SourceTest {
+            name: function.name.to_string(),
+            qualified_id: karva_python_semantic::QualifiedFunctionName::new(
+                function.name.to_string(),
+                analysis.module.path.clone(),
+            )
+            .to_string(),
+            range: function.name.range,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use camino::{Utf8Path, Utf8PathBuf};

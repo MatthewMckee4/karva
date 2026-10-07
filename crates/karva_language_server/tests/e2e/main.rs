@@ -4,6 +4,7 @@
 //! next message on the wire. Servers may publish diagnostics or ask for configuration while a
 //! request is in flight, so the harness queues unrelated messages and matches by method or ID.
 
+mod code_lens;
 mod completion;
 mod config_reload;
 mod definition;

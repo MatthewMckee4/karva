@@ -2,12 +2,13 @@
 
 use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
-    CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
-    DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
-    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
-    DocumentSymbolRequest, HoverRequest, ImplementationRequest, InlayHintRequest,
-    LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
-    ReferencesRequest, RenameRequest, Request as _, ShutdownRequest,
+    CancelNotification, CodeLensRequest, CompletionRequest, DefinitionRequest,
+    DidChangeTextDocumentNotification, DidChangeWatchedFilesNotification,
+    DidChangeWorkspaceFoldersNotification, DidCloseTextDocumentNotification,
+    DidOpenTextDocumentNotification, DocumentHighlightRequest, DocumentSymbolRequest, HoverRequest,
+    ImplementationRequest, InlayHintRequest, LspNotificationMethod, LspRequestMethod,
+    Notification as _, PrepareRenameRequest, ReferencesRequest, RenameRequest, Request as _,
+    ShutdownRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -42,6 +43,7 @@ impl RequestError {
 
 pub(super) fn request(request: Request) -> Task {
     match LspRequestMethod::from(request.method.as_str()) {
+        CodeLensRequest::METHOD => background_request_task::<requests::CodeLenses>(request),
         ShutdownRequest::METHOD => sync_request_task::<requests::Shutdown>(request),
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
