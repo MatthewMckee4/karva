@@ -12,9 +12,11 @@ use thiserror::Error;
 use karva_python_semantic::ModulePath;
 use karva_python_semantic::{DecoratorBindings, is_fixture_function_with_bindings};
 
+mod imports;
 mod models;
 mod parametrize;
 
+pub use imports::project_import_paths;
 pub use models::{CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType};
 pub use parametrize::count_parametrize_cases_with_bindings;
 

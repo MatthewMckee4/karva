@@ -17,6 +17,9 @@ pub enum FixtureOccurrenceKind {
     /// A fixture provider declaration.
     Definition,
 
+    /// An explicit Python import exposing a fixture provider.
+    Import,
+
     /// A fixture dependency parameter.
     Dependency,
 
@@ -61,7 +64,18 @@ pub struct FixtureRenameTarget {
 
 /// Enumerates statically resolved fixture occurrences in the current source.
 pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
-    let mut occurrences = Vec::new();
+    let mut occurrences = analysis
+        .fixture_model
+        .imports()
+        .map(|(range, fixture)| FixtureOccurrence {
+            range,
+            // Source imports and public fixture names are different bindings. Until rename can
+            // update both independently, reject rename instead of returning a partial edit.
+            edit_range: None,
+            kind: FixtureOccurrenceKind::Import,
+            fixture: fixture.clone(),
+        })
+        .collect::<Vec<_>>();
 
     occurrences.extend(
         analysis

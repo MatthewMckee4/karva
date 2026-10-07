@@ -7,10 +7,10 @@ use karva_collector::CollectedModule;
 #[cfg(test)]
 use karva_collector::{CollectionSettings, collect_source, collect_source_with_module_name};
 
-use crate::{SourceAnalysis, SourceAnalysisSettings, analyze_collected_source};
+use crate::{SourceAnalysis, SourceAnalysisSettings};
 
 #[cfg(test)]
-use crate::SourceDocument;
+use crate::{SourceDocument, analyze_collected_source};
 
 /// Immutable syntax index for the Python sources in one Karva workspace.
 ///
@@ -37,7 +37,8 @@ impl WorkspaceSourceIndex {
     /// When a path occurs more than once, the last module wins. This permits a
     /// caller to layer an unsaved document over a disk snapshot without
     /// mutating an existing index.
-    pub fn from_modules(
+    #[cfg(test)]
+    fn from_modules(
         project_root: Utf8PathBuf,
         settings: SourceAnalysisSettings,
         modules: impl IntoIterator<Item = CollectedModule>,
@@ -48,7 +49,7 @@ impl WorkspaceSourceIndex {
     /// Builds an immutable index without copying syntax retained by a project cache.
     ///
     /// Shared modules must have been collected with these settings and project root.
-    /// As with `from_modules`, the last module for each path wins.
+    /// The last module for each path wins.
     pub fn from_shared_modules(
         project_root: Utf8PathBuf,
         settings: SourceAnalysisSettings,
@@ -148,7 +149,18 @@ impl WorkspaceSourceIndex {
         Some(
             cached
                 .get_or_init(|| {
-                    analyze_collected_source(current, &parents, builtin, &self.settings)
+                    let (fixture_model, diagnostics) = crate::fixture::analyze_modules_with_sources(
+                        &current,
+                        &parents,
+                        builtin,
+                        self.settings.try_import_fixtures,
+                        Some((&self.project_root, &self.modules)),
+                    );
+                    SourceAnalysis {
+                        module: current,
+                        fixture_model: Arc::new(fixture_model),
+                        diagnostics,
+                    }
                 })
                 .clone(),
         )
@@ -182,7 +194,6 @@ mod tests {
     use ruff_text_size::{TextRange, TextSize};
     use std::hint::black_box;
     use std::io::Write;
-    use std::sync::Arc;
     use std::time::Instant;
 
     use camino::Utf8Path;
