@@ -127,7 +127,7 @@ fn rejects_name_that_would_select_a_nested_provider() {
 }
 
 #[rstest::rstest]
-fn rejects_parameter_rename_with_unindexed_body_references(
+fn renames_parameter_body_references(
     #[values(
         "    assert database == 'hello'\n",
         "    def nested():\n        return database\n    assert nested()\n",
@@ -163,9 +163,16 @@ fn rejects_parameter_rename_with_unindexed_body_references(
     ));
 
     server.receive_notification::<PublishDiagnosticsNotification>();
-    assert_eq!(prepared, None);
-    assert_eq!(edit, None);
-    assert_eq!(provider_edit, None);
+    assert!(prepared.is_some());
+    let edit = edit.expect("body references should be renamed");
+    let provider_edit = provider_edit.expect("provider definition should be renamed");
+    assert_eq!(provider_edit, edit);
+    let changes = edit.changes.expect("rename should return text changes");
+    assert_eq!(
+        changes.values().map(Vec::len).sum::<usize>(),
+        3,
+        "provider, parameter, and body reference should all be edited"
+    );
 }
 
 fn open(server: &mut TestServer, uri: Uri, source: &str) {
