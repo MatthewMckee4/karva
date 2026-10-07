@@ -68,6 +68,18 @@ impl Server {
             .workspace
             .as_ref()
             .and_then(|workspace| workspace.inlay_hint);
+        let literal_code_actions = capabilities
+            .text_document
+            .as_ref()
+            .and_then(|document| document.code_action.as_ref())
+            .and_then(|actions| actions.code_action_literal_support.as_ref())
+            .is_some();
+        let versioned_code_actions = capabilities
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.workspace_edit.as_ref())
+            .filter(|_| literal_code_actions)
+            .cloned();
         let capabilities = server_capabilities(position_encoding);
         let workspace_folders = match workspace_folders {
             Some(WorkspaceFolders::WorkspaceFolderList(folders)) => folders,
@@ -104,7 +116,8 @@ impl Server {
                 supports_hierarchical_document_symbols,
                 inlay_hint_refresh,
                 workspaces,
-            ),
+            )
+            .with_versioned_code_actions(versioned_code_actions),
         })
     }
 

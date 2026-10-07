@@ -1,5 +1,6 @@
 //! Source-only editor analysis for Karva projects.
 
+mod code_actions;
 mod completion;
 mod definition;
 mod fixture;
@@ -16,6 +17,7 @@ use karva_collector::{CollectedModule, CollectionSettings, collect_source};
 use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextRange;
 
+pub use code_actions::{FixtureCodeAction, fixture_code_actions};
 pub use completion::{FixtureCompletion, complete_fixtures};
 pub use definition::{FixtureDefinitionTarget, fixture_definition};
 pub use fixture::{FixtureId, FixtureScope};

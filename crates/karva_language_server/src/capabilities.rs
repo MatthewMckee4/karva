@@ -4,9 +4,9 @@
 )]
 
 use lsp_types::{
-    ClientCapabilities, CodeLensOptions, CompletionOptions, MarkupKind, RenameOptions,
-    ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions, WorkDoneProgressOptions,
-    WorkspaceFoldersServerCapabilities,
+    ClientCapabilities, CodeActionKind, CodeActionOptions, CodeLensOptions, CompletionOptions,
+    MarkupKind, RenameOptions, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
+    WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
 };
 
 use crate::PositionEncoding;
@@ -71,6 +71,14 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
                 will_save: Some(false),
                 will_save_wait_until: Some(false),
                 save: None,
+            }
+            .into(),
+        ),
+        code_action_provider: Some(
+            CodeActionOptions {
+                code_action_kinds: Some(vec![CodeActionKind::QuickFix]),
+                resolve_provider: Some(false),
+                ..CodeActionOptions::default()
             }
             .into(),
         ),
