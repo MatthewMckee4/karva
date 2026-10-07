@@ -928,361 +928,573 @@ def test_1():
 }
 
 #[rstest]
-fn expected_exception_matches_subclasses_and_tuples(
-    #[values("karva", "pytest")] framework: &str,
-    #[values("ValueError", "(KeyError, ValueError)")] raises: &str,
-) {
+fn expected_exception_matches_subclasses(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
 import {framework}
-class SpecificError(ValueError): pass
-@{decorator}(raises={raises}, reason='specific bug')
+
+class SpecificError(ValueError):
+    pass
+
+@{decorator}(raises=ValueError, reason='specific bug')
 def test_expected():
     raise SpecificError('known')
 ",
-            decorator = get_expect_fail_decorator(framework)
+            decorator = get_expect_fail_decorator(framework),
         ),
     );
     allow_duplicates! {
         assert_cmd_snapshot!(context.command().arg("--retry=1"), @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-        Starting 1 test across 1 worker
-            PASS [TIME] test::test_expected
-    ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_expected
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
 
-    ----- stderr -----
+        ----- stderr -----
         ");
     }
 }
 
 #[rstest]
-fn expected_failure_does_not_absorb_other_failures(
-    #[values("karva", "pytest")] framework: &str,
-    #[values(
-        "mismatch",
-        "setup",
-        "teardown",
-        "missing",
-        "return",
-        "timeout",
-        "background"
-    )]
-    scenario: &str,
-) {
-    let body = match scenario {
-        "mismatch" => "raise TypeError('unexpected')",
-        "setup" | "teardown" | "missing" => "raise ValueError('expected body')",
-        "return" => "return 1",
-        "timeout" => "await asyncio.sleep(2)",
-        "background" => "asyncio.create_task(broken()); await asyncio.sleep(0)",
-        _ => "pass",
-    };
-    let fixture = match scenario {
-        "setup" => "@karva.fixture\ndef value(): raise ValueError('setup failed')",
-        "teardown" => {
-            "@karva.fixture\ndef value():\n    yield 1\n    raise ValueError('teardown failed')"
-        }
-        _ => "",
-    };
-    let parameter = if matches!(scenario, "setup" | "teardown" | "missing") {
-        "value"
-    } else {
-        ""
-    };
-    let asynchronous = if matches!(scenario, "timeout" | "background") {
-        "async "
-    } else {
-        ""
-    };
-    let timeout = if scenario == "timeout" {
-        "@karva.tags.timeout(0.1)"
-    } else {
-        ""
-    };
+fn expected_exception_matches_any_class_in_tuple(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
-import karva
-import pytest
-import asyncio
-{fixture}
-async def broken(): raise ValueError('background failed')
-{timeout}
-@{decorator}(raises=Exception, reason='body only')
-{asynchronous}def test_expected({parameter}):
-    {body}
+import {framework}
+
+@{decorator}(raises=(KeyError, ValueError), reason='specific bug')
+def test_expected():
+    raise ValueError('known')
 ",
-            decorator = get_expect_fail_decorator(framework)
+            decorator = get_expect_fail_decorator(framework),
         ),
     );
-    // A mismatching declaration must remain an ordinary retryable failure.
-    let source = if scenario == "mismatch" {
-        context
-            .read_file("test.py")
-            .replace("raises=Exception", "raises=ValueError")
-    } else {
-        context.read_file("test.py")
-    };
-    context.write_file("test.py", &source);
     allow_duplicates! {
-        match scenario {
-            "mismatch" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-              TRY 1 FAIL [TIME] test::test_expected
-              TRY 2 FAIL [TIME] test::test_expected
+        assert_cmd_snapshot!(context.command().arg("--retry=1"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_expected
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
 
-            failures:
-
-            test::test_expected:
-
-            error[test-failure]: Test `test_expected` failed
-             --> test.py:9:5
-              |
-            9 | def test_expected():
-              |     ^^^^^^^^^^^^^
-            info: Test failed here
-              --> test.py:10:5
-               |
-            10 |     raise TypeError('unexpected')
-               |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            info: unexpected
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
-
-            ----- stderr -----
-            "),
-            "setup" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-             TRY 1 ERROR [TIME] test::test_expected
-             TRY 2 ERROR [TIME] test::test_expected
-
-            failures:
-
-            test::test_expected (requires fixture `value`):
-
-            error[fixture-failure]: Fixture `value` failed
-             --> test.py:6:5
-              |
-            6 | def value(): raise ValueError('setup failed')
-              |     ^^^^^
-            info: Fixture failed here
-             --> test.py:6:1
-              |
-            6 | def value(): raise ValueError('setup failed')
-              | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            info: setup failed
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
-
-            ----- stderr -----
-            "),
-            "teardown" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-             TRY 1 ERROR [TIME] test::test_expected(value=1)
-             TRY 2 ERROR [TIME] test::test_expected(value=1)
-
-            failures:
-
-            test::test_expected(value=1):
-
-            error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `value`
-             --> test.py:6:5
-              |
-            6 | def value():
-              |     ^^^^^
-            info: Failed to reset fixture: teardown failed
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
-
-            ----- stderr -----
-            "),
-            "missing" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-                   ERROR [TIME] test::test_expected
-
-            failures:
-
-            test::test_expected:
-
-            error[missing-fixtures]: Test `test_expected` has missing fixtures
-             --> test.py:9:5
-              |
-            9 | def test_expected(value):
-              |     ^^^^^^^^^^^^^
-            info: Missing fixtures: `value`
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
-
-            ----- stderr -----
-            "),
-            "return" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-              TRY 1 FAIL [TIME] test::test_expected
-              TRY 2 FAIL [TIME] test::test_expected
-
-            failures:
-
-            test::test_expected:
-
-            error[test-returned-value]: Test `test_expected` returned `1`
-             --> test.py:9:5
-              |
-            9 | def test_expected():
-              |     ^^^^^^^^^^^^^
-            info: Test functions must return None. Did you mean to use `assert`?
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
-
-            ----- stderr -----
-            "),
-            "timeout" => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-              TRY 1 FAIL [TIME] test::test_expected
-              TRY 2 FAIL [TIME] test::test_expected
-
-            failures:
-
-            test::test_expected:
-
-            error[test-failure]: Test `test_expected` failed
-             --> test.py:9:11
-              |
-            9 | async def test_expected():
-              |           ^^^^^^^^^^^^^
-            info: Test exceeded timeout of 0.1 seconds
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
-
-            ----- stderr -----
-            "),
-            _ => assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
-            success: false
-            exit_code: 1
-            ----- stdout -----
-                Starting 1 test across 1 worker
-              TRY 1 FAIL [TIME] test::test_expected
-              TRY 2 FAIL [TIME] test::test_expected
-
-            failures:
-
-            test::test_expected:
-
-            error[test-failure]: Test `test_expected` failed
-             --> test.py:9:11
-              |
-            9 | async def test_expected():
-              |           ^^^^^^^^^^^^^
-            info: Test failed here
-             --> test.py:6:1
-              |
-            6 | async def broken(): raise ValueError('background failed')
-              | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            info: Unhandled exception in background task: Task-[N]: ValueError: background failed
-
-            ────────────
-                 Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
-
-            ----- stderr -----
-            "),
-        }
+        ----- stderr -----
+        ");
     }
 }
 
 #[rstest]
-fn invalid_expected_exception_policy_is_rejected(
+fn expected_failure_rejects_mismatching_exception_and_retries(
     #[values("karva", "pytest")] framework: &str,
-    #[values("42", "str", "(ValueError, 42)")] raises: &str,
 ) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
 import {framework}
-@{decorator}(raises={raises})
-def test_expected(): pass
+
+@{decorator}(raises=ValueError, reason='body only')
+def test_expected():
+    raise TypeError('unexpected')
 ",
-            decorator = get_expect_fail_decorator(framework)
+            decorator = get_expect_fail_decorator(framework),
         ),
     );
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
-    success: false
-    exit_code: 1
-    ----- stdout -----
-        Starting 1 test across 1 worker
-    diagnostics:
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+          TRY 1 FAIL [TIME] test::test_expected
+          TRY 2 FAIL [TIME] test::test_expected
 
-    error[failed-to-import-module]: Failed to import python module `test`: expect_fail raises must be an exception class or a tuple of exception classes
+        failures:
 
-    ────────────
-         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+        test::test_expected:
 
-    ----- stderr -----
+        error[test-failure]: Test `test_expected` failed
+         --> test.py:5:5
+          |
+        5 | def test_expected():
+          |     ^^^^^^^^^^^^^
+        info: Test failed here
+         --> test.py:6:5
+          |
+        6 |     raise TypeError('unexpected')
+          |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        info: unexpected
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
         ");
     }
 }
 
 #[rstest]
-fn expected_failure_matches_body_timeout_error(
+fn expected_failure_does_not_absorb_fixture_setup_failure(
     #[values("karva", "pytest")] framework: &str,
-    #[values(false, true)] asynchronous: bool,
 ) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r"
-import karva
-import pytest
-@karva.tags.timeout(1)
+import {framework}
+from karva import fixture
+
+@fixture
+def value():
+    raise ValueError('setup failed')
+
+@{decorator}(raises=Exception, reason='body only')
+def test_expected(value):
+    raise ValueError('expected body')
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+         TRY 1 ERROR [TIME] test::test_expected
+         TRY 2 ERROR [TIME] test::test_expected
+
+        failures:
+
+        test::test_expected (requires fixture `value`):
+
+        error[fixture-failure]: Fixture `value` failed
+         --> test.py:6:5
+          |
+        6 | def value():
+          |     ^^^^^
+        info: Fixture failed here
+         --> test.py:7:5
+          |
+        7 |     raise ValueError('setup failed')
+          |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        info: setup failed
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_does_not_absorb_fixture_teardown_failure(
+    #[values("karva", "pytest")] framework: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+from karva import fixture
+
+@fixture
+def value():
+    yield 1
+    raise ValueError('teardown failed')
+
+@{decorator}(raises=Exception, reason='body only')
+def test_expected(value):
+    raise ValueError('expected body')
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+         TRY 1 ERROR [TIME] test::test_expected(value=1)
+         TRY 2 ERROR [TIME] test::test_expected(value=1)
+
+        failures:
+
+        test::test_expected(value=1):
+
+        error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `value`
+         --> test.py:6:5
+          |
+        6 | def value():
+          |     ^^^^^
+        info: Failed to reset fixture: teardown failed
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_does_not_absorb_missing_fixture(#[values("karva", "pytest")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(raises=Exception, reason='body only')
+def test_expected(value):
+    raise ValueError('expected body')
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+               ERROR [TIME] test::test_expected
+
+        failures:
+
+        test::test_expected:
+
+        error[missing-fixtures]: Test `test_expected` has missing fixtures
+         --> test.py:5:5
+          |
+        5 | def test_expected(value):
+          |     ^^^^^^^^^^^^^
+        info: Missing fixtures: `value`
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_does_not_absorb_non_none_return(#[values("karva", "pytest")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(raises=Exception, reason='body only')
+def test_expected():
+    return 1
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+          TRY 1 FAIL [TIME] test::test_expected
+          TRY 2 FAIL [TIME] test::test_expected
+
+        failures:
+
+        test::test_expected:
+
+        error[test-returned-value]: Test `test_expected` returned `1`
+         --> test.py:5:5
+          |
+        5 | def test_expected():
+          |     ^^^^^^^^^^^^^
+        info: Test functions must return None. Did you mean to use `assert`?
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_does_not_absorb_async_timeout(#[values("karva", "pytest")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import asyncio
+import {framework}
+from karva import tags
+
+@tags.timeout(0.1)
+@{decorator}(raises=Exception, reason='body only')
+async def test_expected():
+    await asyncio.sleep(2)
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+          TRY 1 FAIL [TIME] test::test_expected
+          TRY 2 FAIL [TIME] test::test_expected
+
+        failures:
+
+        test::test_expected:
+
+        error[test-failure]: Test `test_expected` failed
+         --> test.py:8:11
+          |
+        8 | async def test_expected():
+          |           ^^^^^^^^^^^^^
+        info: Test exceeded timeout of 0.1 seconds
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_does_not_absorb_background_task_exception(
+    #[values("karva", "pytest")] framework: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import asyncio
+import {framework}
+
+async def broken():
+    raise ValueError('background failed')
+
+@{decorator}(raises=Exception, reason='body only')
+async def test_expected():
+    asyncio.create_task(broken())
+    await asyncio.sleep(0)
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+          TRY 1 FAIL [TIME] test::test_expected
+          TRY 2 FAIL [TIME] test::test_expected
+
+        failures:
+
+        test::test_expected:
+
+        error[test-failure]: Test `test_expected` failed
+         --> test.py:9:11
+          |
+        9 | async def test_expected():
+          |           ^^^^^^^^^^^^^
+        info: Test failed here
+         --> test.py:6:5
+          |
+        6 |     raise ValueError('background failed')
+          |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        info: Unhandled exception in background task: Task-[N]: ValueError: background failed
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_exception_policy_rejects_non_class(#[values("karva", "pytest")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(raises=42)
+def test_expected():
+    pass
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test`: expect_fail raises must be an exception class or a tuple of exception classes
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_exception_policy_rejects_non_exception_class(
+    #[values("karva", "pytest")] framework: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(raises=str)
+def test_expected():
+    pass
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test`: expect_fail raises must be an exception class or a tuple of exception classes
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_exception_policy_rejects_tuple_with_non_class(
+    #[values("karva", "pytest")] framework: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+
+@{decorator}(raises=(ValueError, 42))
+def test_expected():
+    pass
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test`: expect_fail raises must be an exception class or a tuple of exception classes
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_matches_sync_body_timeout_error(#[values("karva", "pytest")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+from karva import tags
+
+@tags.timeout(1)
 @{decorator}(raises=TimeoutError, reason='body exception')
-{asynchronous}def test_expected():
+def test_expected():
     raise TimeoutError('test body failed')
 ",
             decorator = get_expect_fail_decorator(framework),
-            asynchronous = if asynchronous { "async " } else { "" },
         ),
     );
     allow_duplicates! {
         assert_cmd_snapshot!(context.command_no_parallel(), @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-        Starting 1 test across 1 worker
-            PASS [TIME] test::test_expected
-    ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_expected
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
 
-    ----- stderr -----
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn expected_failure_matches_async_body_timeout_error(#[values("karva", "pytest")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import {framework}
+from karva import tags
+
+@tags.timeout(1)
+@{decorator}(raises=TimeoutError, reason='body exception')
+async def test_expected():
+    raise TimeoutError('test body failed')
+",
+            decorator = get_expect_fail_decorator(framework),
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_expected
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
         ");
     }
 }
