@@ -20,7 +20,7 @@ use karva_ide::{SourceAnalysis, SourceAnalysisSettings, SourceDiagnostic, Worksp
 use karva_project::Project;
 use lsp_types::{
     InlayHintWorkspaceClientCapabilities, LanguageKind, MarkupKind, TextDocumentContentChangeEvent,
-    Uri, WorkspaceFolder,
+    Uri, WorkspaceEditClientCapabilities, WorkspaceFolder,
 };
 use once_cell::sync::OnceCell;
 
@@ -354,6 +354,7 @@ pub struct Session {
     supports_diagnostic_related_information: bool,
     hierarchical_document_symbols: HierarchicalDocumentSymbols,
     inlay_hint_refresh: Option<InlayHintWorkspaceClientCapabilities>,
+    versioned_code_actions: Option<WorkspaceEditClientCapabilities>,
     workspaces: Workspaces,
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
@@ -384,6 +385,7 @@ impl Session {
                 HierarchicalDocumentSymbols::Unsupported
             },
             inlay_hint_refresh,
+            versioned_code_actions: None,
             workspaces,
             published_diagnostic_paths: HashSet::new(),
             cache_source_indexes: false,
@@ -391,6 +393,22 @@ impl Session {
             source_index_revision: SourceIndexRevision::default(),
             diagnostic_cancellation: RequestCancellationToken::default(),
         }
+    }
+
+    /// Enables edits only for clients that can reject obsolete document versions.
+    pub(super) fn with_versioned_code_actions(
+        mut self,
+        supported: Option<WorkspaceEditClientCapabilities>,
+    ) -> Self {
+        self.versioned_code_actions = supported;
+        self
+    }
+
+    pub(super) fn supports_versioned_code_actions(&self) -> bool {
+        self.versioned_code_actions
+            .as_ref()
+            .and_then(|capability| capability.document_changes)
+            .unwrap_or(false)
     }
 
     pub(super) fn is_shutdown_requested(&self) -> bool {

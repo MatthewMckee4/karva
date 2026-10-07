@@ -3,13 +3,13 @@
 use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
     CallHierarchyIncomingCallsRequest, CallHierarchyOutgoingCallsRequest,
-    CallHierarchyPrepareRequest, CancelNotification, CodeLensRequest, CompletionRequest,
-    DefinitionRequest, DidChangeTextDocumentNotification, DidChangeWatchedFilesNotification,
-    DidChangeWorkspaceFoldersNotification, DidCloseTextDocumentNotification,
-    DidOpenTextDocumentNotification, DocumentHighlightRequest, DocumentSymbolRequest, HoverRequest,
-    ImplementationRequest, InlayHintRequest, LspNotificationMethod, LspRequestMethod,
-    Notification as _, PrepareRenameRequest, ReferencesRequest, RenameRequest, Request as _,
-    ShutdownRequest, WorkspaceSymbolRequest,
+    CallHierarchyPrepareRequest, CancelNotification, CodeActionRequest, CodeLensRequest,
+    CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
+    DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
+    DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
+    DocumentSymbolRequest, HoverRequest, ImplementationRequest, InlayHintRequest,
+    LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
+    ReferencesRequest, RenameRequest, Request as _, ShutdownRequest, WorkspaceSymbolRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -53,6 +53,7 @@ pub(super) fn request(request: Request) -> Task {
         CallHierarchyOutgoingCallsRequest::METHOD => {
             background_request_task::<requests::OutgoingCalls>(request)
         }
+        CodeActionRequest::METHOD => background_request_task::<requests::CodeActions>(request),
         CodeLensRequest::METHOD => background_request_task::<requests::CodeLenses>(request),
         WorkspaceSymbolRequest::METHOD => {
             background_request_task::<requests::WorkspaceSymbols>(request)

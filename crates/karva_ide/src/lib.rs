@@ -1,6 +1,7 @@
 //! Source-only editor analysis for Karva projects.
 
 mod call_hierarchy;
+mod code_actions;
 mod completion;
 mod definition;
 mod fixture;
@@ -21,6 +22,7 @@ pub use call_hierarchy::{
     FixtureHierarchyCall, FixtureHierarchyItem, fixture_hierarchy_items,
     fixture_hierarchy_provider, fixture_incoming_calls, fixture_outgoing_calls,
 };
+pub use code_actions::{FixtureCodeAction, fixture_code_actions};
 pub use completion::{FixtureCompletion, complete_fixtures};
 pub use definition::{FixtureDefinitionTarget, fixture_definition};
 pub use fixture::{FixtureId, FixtureScope};

@@ -5,6 +5,7 @@
 //! request is in flight, so the harness queues unrelated messages and matches by method or ID.
 
 mod call_hierarchy;
+mod code_action;
 mod code_lens;
 mod completion;
 mod config_reload;
