@@ -693,3 +693,340 @@ fn optimized_assertions_remove_cleanup_with_assertions() {
     "
     );
 }
+
+#[test]
+fn assertion_cache_reuses_code_and_invalidates_safely() {
+    let context = TestContext::with_file(
+        "test_cached_assertion.py",
+        "def test_cached_assertion():\n    value = 1\n    assert value == 2\n",
+    );
+    context.write_file(
+        "sitecustomize.py",
+        r#"
+import ast
+import os
+
+if os.environ.get("KARVA_CACHE_PARSE_GUARD"):
+    _parse = ast.parse
+
+    def parse(source, filename="<unknown>", *args, **kwargs):
+        if filename.endswith("test_cached_assertion.py"):
+            raise RuntimeError("cache miss unexpectedly parsed the assertion module")
+        return _parse(source, filename, *args, **kwargs)
+
+    ast.parse = parse
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_cached_assertion::test_cached_assertion
+
+    failures:
+
+    test_cached_assertion::test_cached_assertion:
+
+    error[test-failure]: Test `test_cached_assertion` failed
+     --> test_cached_assertion.py:1:5
+      |
+    1 | def test_cached_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_cached_assertion.py:3:5
+      |
+    3 |     assert value == 2
+      |     ^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    let cache_dir = context.root().join("__pycache__");
+    let cache_file = std::fs::read_dir(&cache_dir)
+        .expect("assertion cache directory was not created")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.contains("karvaV1O"))
+        })
+        .expect("assertion cache file was not created");
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env("KARVA_CACHE_PARSE_GUARD", "1")
+            .env("PYTHONPATH", context.root()),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_cached_assertion::test_cached_assertion
+
+    failures:
+
+    test_cached_assertion::test_cached_assertion:
+
+    error[test-failure]: Test `test_cached_assertion` failed
+     --> test_cached_assertion.py:1:5
+      |
+    1 | def test_cached_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_cached_assertion.py:3:5
+      |
+    3 |     assert value == 2
+      |     ^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    std::fs::write(&cache_file, b"corrupt cache").expect("failed to corrupt assertion cache");
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_cached_assertion::test_cached_assertion
+
+    failures:
+
+    test_cached_assertion::test_cached_assertion:
+
+    error[test-failure]: Test `test_cached_assertion` failed
+     --> test_cached_assertion.py:1:5
+      |
+    1 | def test_cached_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_cached_assertion.py:3:5
+      |
+    3 |     assert value == 2
+      |     ^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    context.write_file(
+        "test_cached_assertion.py",
+        "def test_cached_assertion():\n    value = 3\n    assert value == 2\n",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_cached_assertion::test_cached_assertion
+
+    failures:
+
+    test_cached_assertion::test_cached_assertion:
+
+    error[test-failure]: Test `test_cached_assertion` failed
+     --> test_cached_assertion.py:1:5
+      |
+    1 | def test_cached_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_cached_assertion.py:3:5
+      |
+    3 |     assert value == 2
+      |     ^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 3
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn assertion_cache_respects_dont_write_bytecode() {
+    let context = TestContext::with_file(
+        "test_no_assertion_cache.py",
+        "def test_no_assertion_cache():\n    value = 1\n    assert value == 2\n",
+    );
+
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .env("PYTHONDONTWRITEBYTECODE", "1"),
+        @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_no_assertion_cache::test_no_assertion_cache
+
+    failures:
+
+    test_no_assertion_cache::test_no_assertion_cache:
+
+    error[test-failure]: Test `test_no_assertion_cache` failed
+     --> test_no_assertion_cache.py:1:5
+      |
+    1 | def test_no_assertion_cache():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_no_assertion_cache.py:3:5
+      |
+    3 |     assert value == 2
+      |     ^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+
+    let has_cache = std::fs::read_dir(context.root().join("__pycache__"))
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.contains("karvaV1O"))
+        });
+    assert!(
+        !has_cache,
+        "PYTHONDONTWRITEBYTECODE wrote an assertion cache"
+    );
+}
+
+#[test]
+fn multiline_assertion_keeps_focused_difference() {
+    let context = TestContext::with_file(
+        "test_multiline_assertion.py",
+        "def test_multiline_assertion():\n    value = [1, 3]\n    assert (\n        value == [\n            1,\n            2,\n        ]\n    )\n",
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_multiline_assertion::test_multiline_assertion
+
+    failures:
+
+    test_multiline_assertion::test_multiline_assertion:
+
+    error[test-failure]: Test `test_multiline_assertion` failed
+     --> test_multiline_assertion.py:1:5
+      |
+    1 | def test_multiline_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_multiline_assertion.py:4:9
+      |
+    4 |         value == [
+      |         ^^^^^^^^^^
+    info: Difference at [1]:
+      left: 3
+      right: 2
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    // The second import loads bytecode and reconstructs metadata on failure.
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_multiline_assertion::test_multiline_assertion
+
+    failures:
+
+    test_multiline_assertion::test_multiline_assertion:
+
+    error[test-failure]: Test `test_multiline_assertion` failed
+     --> test_multiline_assertion.py:1:5
+      |
+    1 | def test_multiline_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_multiline_assertion.py:4:9
+      |
+    4 |         value == [
+      |         ^^^^^^^^^^
+    info: Difference at [1]:
+      left: 3
+      right: 2
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn literal_assertions_preserve_native_module_globals() {
+    let context = TestContext::with_file(
+        "test_native_assertion.py",
+        r#"
+def test_native_assertion():
+    assert False, [name for name in globals() if name.startswith("_karva_")]
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_native_assertion::test_native_assertion
+
+    failures:
+
+    test_native_assertion::test_native_assertion:
+
+    error[test-failure]: Test `test_native_assertion` failed
+     --> test_native_assertion.py:2:5
+      |
+    2 | def test_native_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_native_assertion.py:3:5
+      |
+    3 |     assert False, [name for name in globals() if name.startswith("_karva_")]
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: []
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}

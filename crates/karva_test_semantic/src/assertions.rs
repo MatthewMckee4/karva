@@ -4,10 +4,17 @@
 //! captures, then uses `CPython`'s standard AST only for statement cleanup and
 //! compilation. This keeps Python's compiler semantics while avoiding a second
 //! expression-tree implementation in Rust.
+//!
+//! Unchanged modules reuse hash-validated bytecode in a separate Karva cache.
+//! Cached modules reconstruct diagnostic metadata only after a failure; only
+//! a cache miss needs the Python AST. Assertions without useful evaluated values retain
+//! native loading and compilation.
 
-use std::collections::{BTreeSet, HashMap};
+mod cache;
+
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use camino::Utf8Path;
 use pyo3::class::basic::CompareOp;
@@ -27,9 +34,9 @@ const MISSING_PREFIX: &str = "_karva_missing";
 
 // Entries live for the worker process and are keyed by canonical filename;
 // imports replace a file's metadata atomically before its code can run.
-static REGISTRY: OnceLock<RwLock<HashMap<String, Vec<AssertionMetadata>>>> = OnceLock::new();
+static REGISTRY: OnceLock<RwLock<HashMap<String, RegistryEntry>>> = OnceLock::new();
 
-fn registry() -> &'static RwLock<HashMap<String, Vec<AssertionMetadata>>> {
+fn registry() -> &'static RwLock<HashMap<String, RegistryEntry>> {
     REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
@@ -62,17 +69,37 @@ enum ComparisonKind {
 struct AssertionMetadata {
     /// The compiled `Assert` location; `test_location` selects same-line failures.
     location: Location,
+
+    /// Inclusive original source line span used when traceback points into a multiline assert.
+    end_line: u32,
     test_location: Location,
     captures: Vec<CaptureMetadata>,
     comparison: ComparisonKind,
     missing_name: String,
 }
 
+/// Cached modules retain source until their first failed assertion needs an
+/// explanation. Materialization uses Rust alone while holding the registry lock.
+enum RegistryEntry {
+    Ready(Vec<AssertionMetadata>),
+    Deferred {
+        source: String,
+        python_version: PythonVersion,
+        missing_name: String,
+    },
+}
+
 #[derive(Debug)]
 struct AssertionPlan {
+    statement_range: TextRange,
     test_range: TextRange,
     captures: Vec<CaptureMetadata>,
     comparison: ComparisonKind,
+    instrumented: bool,
+}
+
+struct CollectedPlans {
+    plans: Vec<AssertionPlan>,
 }
 
 struct EvaluatedCapture<'py> {
@@ -84,7 +111,7 @@ struct EvaluatedCapture<'py> {
 
 struct AssertionCollector<'a> {
     source: &'a str,
-    names: BTreeSet<String>,
+    names: HashSet<&'a str>,
     plans: Vec<AssertionPlan>,
     value_index: usize,
 }
@@ -93,7 +120,7 @@ impl<'a> AssertionCollector<'a> {
     fn new(source: &'a str) -> Self {
         Self {
             source,
-            names: BTreeSet::new(),
+            names: HashSet::new(),
             plans: Vec::new(),
             value_index: 0,
         }
@@ -104,12 +131,13 @@ impl<'a> AssertionCollector<'a> {
             .source
             .split(|character: char| !(character == '_' || character.is_ascii_alphanumeric()))
         {
-            if token
-                .chars()
-                .next()
-                .is_some_and(|character| character == '_' || character.is_ascii_alphabetic())
+            if (token.starts_with(VALUE_PREFIX) || token.starts_with(MISSING_PREFIX))
+                && token
+                    .chars()
+                    .next()
+                    .is_some_and(|character| character == '_' || character.is_ascii_alphabetic())
             {
-                self.names.insert(token.to_string());
+                self.names.insert(token);
             }
         }
     }
@@ -118,9 +146,24 @@ impl<'a> AssertionCollector<'a> {
         loop {
             let name = format!("{VALUE_PREFIX}{}", self.value_index);
             self.value_index += 1;
-            if self.names.insert(name.clone()) {
+            if !self.names.contains(name.as_str()) {
                 return name;
             }
+        }
+    }
+
+    fn missing_name(&self) -> String {
+        let mut suffix = 0;
+        loop {
+            let candidate = if suffix == 0 {
+                MISSING_PREFIX.to_string()
+            } else {
+                format!("{MISSING_PREFIX}_{suffix}")
+            };
+            if !self.names.contains(candidate.as_str()) {
+                return candidate;
+            }
+            suffix += 1;
         }
     }
 
@@ -142,10 +185,15 @@ impl<'a> AssertionCollector<'a> {
         };
         let mut captures = Vec::new();
         self.collect_expr(&assertion.test, false, &mut captures);
+        let instrumented = captures.iter().any(|capture| !capture.literal)
+            || (comparison == ComparisonKind::Equality
+                && literal_equality_needs_diagnostics(&assertion.test));
         self.plans.push(AssertionPlan {
+            statement_range: assertion.range(),
             test_range: assertion.test.range(),
             captures,
             comparison,
+            instrumented,
         });
     }
 
@@ -218,13 +266,46 @@ fn is_literal(expression: &Expr) -> bool {
     }
 }
 
-fn collect_plans(source: &str, python_version: PythonVersion) -> Option<Vec<AssertionPlan>> {
+fn collect_plans(source: &str, python_version: PythonVersion) -> Option<CollectedPlans> {
     let options = ParseOptions::from(Mode::Module).with_target_version(python_version);
     let parsed = parse_unchecked(source, options).try_into_module()?;
     let mut collector = AssertionCollector::new(source);
     collector.collect_names();
     collector.visit_body(parsed.suite());
-    Some(collector.plans)
+    Some(CollectedPlans {
+        plans: collector.plans,
+    })
+}
+
+fn missing_name_for_source(source: &str) -> String {
+    let mut collector = AssertionCollector::new(source);
+    collector.collect_names();
+    collector.missing_name()
+}
+
+fn literal_equality_needs_diagnostics(expression: &Expr) -> bool {
+    let Expr::Compare(compare) = expression else {
+        return false;
+    };
+    compare.comparators.iter().any(|expression| {
+        matches!(
+            expression,
+            Expr::List(_)
+                | Expr::Tuple(_)
+                | Expr::Dict(_)
+                | Expr::Set(_)
+                | Expr::StringLiteral(_)
+                | Expr::BytesLiteral(_)
+        )
+    }) || matches!(
+        compare.left.as_ref(),
+        Expr::List(_)
+            | Expr::Tuple(_)
+            | Expr::Dict(_)
+            | Expr::Set(_)
+            | Expr::StringLiteral(_)
+            | Expr::BytesLiteral(_)
+    )
 }
 
 struct Edit {
@@ -245,13 +326,7 @@ struct SourceMap {
 
 impl SourceMap {
     fn from_edits(source: &str, edits: &[Edit]) -> Self {
-        let mut line_starts = vec![0];
-        line_starts.extend(
-            source
-                .bytes()
-                .enumerate()
-                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
-        );
+        let line_starts = source_line_starts(source);
         let mut lines: HashMap<u32, Vec<ColumnEvent>> = HashMap::new();
         for edit in edits {
             let start = edit.range.start().to_usize();
@@ -318,6 +393,17 @@ impl SourceMap {
     }
 }
 
+fn source_line_starts(source: &str) -> Vec<usize> {
+    let mut line_starts = vec![0];
+    line_starts.extend(
+        source
+            .bytes()
+            .enumerate()
+            .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
+    );
+    line_starts
+}
+
 fn source_location(line_starts: &[usize], offset: usize) -> (u32, usize) {
     let line = line_starts
         .binary_search(&offset)
@@ -335,6 +421,9 @@ fn rewrite_source(
 ) -> (String, SourceMap) {
     let mut edits = Vec::new();
     for plan in plans {
+        if !plan.instrumented {
+            continue;
+        }
         for capture in &plan.captures {
             let original =
                 &source[capture.range.start().to_usize()..capture.range.end().to_usize()];
@@ -367,30 +456,33 @@ fn rewrite_source(
     }
     let source_map = SourceMap::from_edits(source, &edits);
     edits.sort_by(|left, right| {
-        right
-            .range
+        left.range
             .start()
-            .cmp(&left.range.start())
-            .then_with(|| right.range.len().cmp(&left.range.len()))
+            .cmp(&right.range.start())
+            .then_with(|| left.range.len().cmp(&right.range.len()))
     });
-    let mut rewritten = source.to_string();
+    let added = edits
+        .iter()
+        .map(|edit| {
+            edit.replacement
+                .len()
+                .saturating_sub(edit.range.len().to_usize())
+        })
+        .sum();
+    let mut rewritten = String::with_capacity(source.len().saturating_add(added));
+    let mut cursor = 0;
     for edit in edits {
         let start = edit.range.start().to_usize();
         let end = edit.range.end().to_usize();
-        rewritten.replace_range(start..end, &edit.replacement);
+        if start < cursor {
+            continue;
+        }
+        rewritten.push_str(&source[cursor..start]);
+        rewritten.push_str(&edit.replacement);
+        cursor = end;
     }
+    rewritten.push_str(&source[cursor..]);
     (rewritten, source_map)
-}
-
-fn line_location(node: &Bound<'_, PyAny>) -> PyResult<Location> {
-    Ok(Location {
-        line: node.getattr("lineno")?.extract()?,
-        column: node.getattr("col_offset")?.extract()?,
-    })
-}
-
-fn assertion_locations(node: &Bound<'_, PyAny>) -> PyResult<(Location, Location)> {
-    Ok((line_location(node)?, line_location(&node.getattr("test")?)?))
 }
 
 fn node_kind(node: &Bound<'_, PyAny>) -> PyResult<String> {
@@ -447,7 +539,11 @@ fn transform_assert<'py>(
     let targets = plan
         .captures
         .iter()
-        .map(|capture| make_name(py, ast, &capture.name, "Del"))
+        .map(|capture| {
+            let name = make_name(py, ast, &capture.name, "Del")?;
+            ast.getattr("copy_location")?
+                .call1((name, assertion.clone()))
+        })
         .collect::<PyResult<Vec<_>>>()?;
     let delete = construct(
         py,
@@ -455,12 +551,19 @@ fn transform_assert<'py>(
         "Delete",
         &[("targets", targets.into_pyobject(py)?.into_any())],
     )?;
+    let delete = ast
+        .getattr("copy_location")?
+        .call1((delete, assertion.clone()))?;
+    let debug = make_name(py, ast, "__debug__", "Load")?;
+    let debug = ast
+        .getattr("copy_location")?
+        .call1((debug, assertion.clone()))?;
     let wrapper = construct(
         py,
         ast,
         "If",
         &[
-            ("test", make_name(py, ast, "__debug__", "Load")?),
+            ("test", debug),
             (
                 "body",
                 vec![assertion.clone(), delete]
@@ -480,9 +583,27 @@ fn replace_statement_lists<'py>(
     py: Python<'py>,
     ast: &Bound<'py, PyModule>,
     node: &Bound<'py, PyAny>,
+    source_map: &SourceMap,
+    assertion_lines: &BTreeSet<u32>,
     plans: &[AssertionPlan],
     next: &mut usize,
 ) -> PyResult<()> {
+    if let Some(start) = node
+        .getattr("lineno")
+        .ok()
+        .and_then(|value| value.extract::<u32>().ok())
+    {
+        let end = node
+            .getattr("end_lineno")
+            .ok()
+            .and_then(|value| value.extract::<u32>().ok())
+            .unwrap_or(start);
+        if assertion_lines.range(start..=end).next().is_none() {
+            return Ok(());
+        }
+    }
+    remap_location(node, source_map, "lineno", "col_offset")?;
+    remap_location(node, source_map, "end_lineno", "end_col_offset")?;
     let fields = ast
         .getattr("iter_fields")?
         .call1((node,))?
@@ -497,14 +618,33 @@ fn replace_statement_lists<'py>(
                     let Some(plan) = plans.get(*next) else {
                         continue;
                     };
-                    list.set_item(index, transform_assert(py, ast, item, plan)?)?;
+                    replace_statement_lists(
+                        py,
+                        ast,
+                        &item,
+                        source_map,
+                        assertion_lines,
+                        plans,
+                        next,
+                    )?;
+                    if plan.instrumented {
+                        list.set_item(index, transform_assert(py, ast, item, plan)?)?;
+                    }
                     *next += 1;
                 } else if item.hasattr("_fields")? {
-                    replace_statement_lists(py, ast, &item, plans, next)?;
+                    replace_statement_lists(
+                        py,
+                        ast,
+                        &item,
+                        source_map,
+                        assertion_lines,
+                        plans,
+                        next,
+                    )?;
                 }
             }
         } else if value.hasattr("_fields")? {
-            replace_statement_lists(py, ast, &value, plans, next)?;
+            replace_statement_lists(py, ast, &value, source_map, assertion_lines, plans, next)?;
         }
     }
     Ok(())
@@ -531,101 +671,81 @@ fn remap_location(
     node.setattr(column_name, source_map.map_column(line, column))
 }
 
-fn remap_locations(
-    ast: &Bound<'_, PyModule>,
-    tree: &Bound<'_, PyAny>,
-    source_map: &SourceMap,
-) -> PyResult<()> {
-    let nodes = ast
-        .getattr("walk")?
-        .call1((tree.clone(),))?
-        .cast_into::<pyo3::types::PyIterator>()?;
-    for node in nodes.flatten() {
-        remap_location(&node, source_map, "lineno", "col_offset")?;
-        remap_location(&node, source_map, "end_lineno", "end_col_offset")?;
-    }
-    Ok(())
-}
-
-fn compile_and_exec<'py>(
+fn compile_assertions<'py>(
     py: Python<'py>,
     ast: &Bound<'py, PyModule>,
     source: &str,
     filename: &str,
-    module_dict: &Bound<'py, PyDict>,
-    plans: Vec<AssertionPlan>,
-) -> PyResult<()> {
-    let mut names = BTreeSet::new();
-    for token in
-        source.split(|character: char| !(character == '_' || character.is_ascii_alphanumeric()))
-    {
-        if token
-            .chars()
-            .next()
-            .is_some_and(|character| character == '_' || character.is_ascii_alphabetic())
-        {
-            names.insert(token.to_string());
-        }
-    }
-    let missing_name = (0..=names.len())
-        .map(|suffix| {
-            if suffix == 0 {
-                MISSING_PREFIX.to_string()
-            } else {
-                format!("{MISSING_PREFIX}_{suffix}")
-            }
-        })
-        .find(|candidate| !names.contains(candidate))
-        .unwrap_or_else(|| format!("{MISSING_PREFIX}_fallback"));
-    let (rewritten, source_map) = rewrite_source(source, &plans, &missing_name);
-    module_dict.set_item(&missing_name, py.eval(c"object()", None, None)?)?;
+    plans: &[AssertionPlan],
+    missing_name: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let (rewritten, source_map) = rewrite_source(source, plans, missing_name);
     let tree = ast.getattr("parse")?.call((rewritten, filename), None)?;
     let mut next = 0;
-    replace_statement_lists(py, ast, &tree, &plans, &mut next)?;
+    let line_starts = source_line_starts(source);
+    let assertion_lines = plans
+        .iter()
+        .map(|plan| source_location(&line_starts, plan.test_range.start().to_usize()).0)
+        .chain(source_map.lines.keys().copied())
+        .collect::<BTreeSet<_>>();
+    replace_statement_lists(
+        py,
+        ast,
+        &tree,
+        &source_map,
+        &assertion_lines,
+        plans,
+        &mut next,
+    )?;
     if next != plans.len() {
         return Err(pyo3::exceptions::PyRuntimeError::new_err(
             "assertion rewrite lost an assertion node",
         ));
     }
-    ast.getattr("fix_missing_locations")?
-        .call1((tree.clone(),))?;
-    remap_locations(ast, &tree, &source_map)?;
     let compile = py.import("builtins")?.getattr("compile")?;
     let dont_inherit = py.eval(c"True", None, None)?.clone().into_any();
     let options = kwargs(py, &[("dont_inherit", dont_inherit)])?;
     let code = compile.call((tree.clone(), filename, "exec"), Some(&options))?;
-    let mut locations = ast
-        .getattr("walk")?
-        .call1((tree.clone(),))?
-        .cast_into::<pyo3::types::PyIterator>()?
-        .filter_map(Result::ok)
-        .filter(|node| node_kind(node).is_ok_and(|kind| kind == "Assert"))
-        .map(|node| assertion_locations(&node))
-        .collect::<PyResult<Vec<_>>>()?;
-    locations.sort_by_key(|(location, _)| (location.line, location.column));
-    if locations.len() != plans.len() {
-        return Err(pyo3::exceptions::PyRuntimeError::new_err(
-            "assertion rewrite lost an assertion location",
-        ));
-    }
-    let metadata = plans
+    Ok(code)
+}
+
+fn metadata_from_plans(
+    source: &str,
+    plans: Vec<AssertionPlan>,
+    missing_name: &str,
+) -> Vec<AssertionMetadata> {
+    let line_starts = source_line_starts(source);
+    plans
         .into_iter()
-        .zip(locations)
-        .map(|(plan, (location, test_location))| AssertionMetadata {
-            location,
-            test_location,
-            captures: plan.captures,
-            comparison: plan.comparison,
-            missing_name: missing_name.clone(),
+        .filter(|plan| plan.instrumented)
+        .map(|plan| {
+            let (statement_line, statement_column) =
+                source_location(&line_starts, plan.statement_range.start().to_usize());
+            let (test_line, test_column) =
+                source_location(&line_starts, plan.test_range.start().to_usize());
+            AssertionMetadata {
+                location: Location {
+                    line: statement_line,
+                    column: u32::try_from(statement_column).unwrap_or(u32::MAX),
+                },
+                end_line: source_location(&line_starts, plan.statement_range.end().to_usize()).0,
+                test_location: Location {
+                    line: test_line,
+                    column: u32::try_from(test_column).unwrap_or(u32::MAX),
+                },
+                captures: plan.captures,
+                comparison: plan.comparison,
+                missing_name: missing_name.to_owned(),
+            }
         })
-        .collect();
+        .collect()
+}
+
+fn clear_metadata(filename: &str) -> PyResult<()> {
     registry()
         .write()
         .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("assertion registry poisoned"))?
-        .insert(filename.to_string(), metadata);
-    py.import("builtins")?
-        .getattr("exec")?
-        .call((code, module_dict, module_dict), None)?;
+        .remove(filename);
     Ok(())
 }
 
@@ -1288,7 +1408,7 @@ fn render_explanation(
 
 #[pyclass]
 struct AssertionFinder {
-    roots: Arc<Mutex<BTreeSet<PathBuf>>>,
+    roots: Arc<RwLock<BTreeSet<PathBuf>>>,
 }
 
 #[pyclass]
@@ -1320,15 +1440,8 @@ impl AssertionFinder {
         let Some(origin) = origin else {
             return Ok(None);
         };
-        let origin = std::fs::canonicalize(&origin).unwrap_or_else(|_| PathBuf::from(&origin));
-        let in_root = self
-            .roots
-            .lock()
-            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("assertion roots poisoned"))?
-            .iter()
-            .any(|root| origin.starts_with(root));
+        let origin = PathBuf::from(origin);
         if origin.extension().and_then(|extension| extension.to_str()) != Some("py")
-            || !in_root
             || origin.components().any(|component| {
                 matches!(
                     component.as_os_str().to_str(),
@@ -1336,6 +1449,23 @@ impl AssertionFinder {
                 )
             })
         {
+            return Ok(None);
+        }
+        let roots = self
+            .roots
+            .read()
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("assertion roots poisoned"))?
+            .clone();
+        let origin = if roots.iter().any(|root| origin.starts_with(root)) {
+            canonical_filename(&origin)
+        } else {
+            let canonical = canonical_filename(&origin);
+            if !roots.iter().any(|root| canonical.starts_with(root)) {
+                return Ok(None);
+            }
+            canonical
+        };
+        if !roots.iter().any(|root| origin.starts_with(root)) {
             return Ok(None);
         }
         let loader = spec.getattr("loader")?;
@@ -1370,33 +1500,111 @@ impl AssertionLoader {
     }
 
     fn exec_module(&self, py: Python<'_>, module: &Bound<'_, PyAny>) -> PyResult<()> {
-        let source = self
+        clear_metadata(&self.filename)?;
+        let optimize = py
+            .import("sys")?
+            .getattr("flags")?
+            .getattr("optimize")?
+            .extract::<u8>()?;
+        if optimize > 0 {
+            self.original
+                .bind(py)
+                .call_method1("exec_module", (module,))?;
+            return Ok(());
+        }
+        let (source, source_bytes) = if let Ok(raw) = self
             .original
             .bind(py)
-            .call_method1("get_source", (&self.fullname,))?;
-        if source.is_none() {
-            self.original
+            .call_method1("get_data", (&self.filename,))
+        {
+            let bytes = raw.cast::<PyBytes>()?.clone();
+            let source = py
+                .import("importlib.util")?
+                .call_method1("decode_source", (&bytes,))?
+                .extract::<String>()?;
+            (source, bytes)
+        } else {
+            let source = self
+                .original
                 .bind(py)
-                .call_method1("exec_module", (module,))?;
-            return Ok(());
-        }
-        let source = source.extract::<String>()?;
-        let plans = collect_plans(&source, current_python_version(py));
-        let Some(plans) = plans else {
-            self.original
-                .bind(py)
-                .call_method1("exec_module", (module,))?;
-            return Ok(());
+                .call_method1("get_source", (&self.fullname,))?;
+            if source.is_none() {
+                self.original
+                    .bind(py)
+                    .call_method1("exec_module", (module,))?;
+                return Ok(());
+            }
+            let source = source.extract::<String>()?;
+            let bytes = PyBytes::new(py, source.as_bytes()).clone();
+            (source, bytes)
         };
-        if plans.is_empty() {
+        if !source.contains("assert") {
             self.original
                 .bind(py)
                 .call_method1("exec_module", (module,))?;
             return Ok(());
         }
-        let ast = py.import("ast")?;
+        let python_version = current_python_version(py);
+        let missing_name = missing_name_for_source(&source);
         let dict = module.getattr("__dict__")?.cast_into::<PyDict>()?;
-        compile_and_exec(py, &ast, &source, &self.filename, &dict, plans)
+        let code = if let Some(code) = cache::read(
+            py,
+            self.original.bind(py),
+            &self.fullname,
+            &self.filename,
+            &source_bytes,
+        ) {
+            registry()
+                .write()
+                .map_err(|_| {
+                    pyo3::exceptions::PyRuntimeError::new_err("assertion registry poisoned")
+                })?
+                .insert(
+                    self.filename.clone(),
+                    RegistryEntry::Deferred {
+                        source,
+                        python_version,
+                        missing_name: missing_name.clone(),
+                    },
+                );
+            code
+        } else {
+            let Some(CollectedPlans { plans }) = collect_plans(&source, python_version) else {
+                self.original
+                    .bind(py)
+                    .call_method1("exec_module", (module,))?;
+                return Ok(());
+            };
+            if plans.iter().all(|plan| !plan.instrumented) {
+                self.original
+                    .bind(py)
+                    .call_method1("exec_module", (module,))?;
+                return Ok(());
+            }
+            let ast = py.import("ast")?;
+            let code =
+                compile_assertions(py, &ast, &source, &self.filename, &plans, &missing_name)?;
+            cache::write(
+                py,
+                self.original.bind(py),
+                &self.filename,
+                &source_bytes,
+                &code,
+            );
+            let metadata = metadata_from_plans(&source, plans, &missing_name);
+            registry()
+                .write()
+                .map_err(|_| {
+                    pyo3::exceptions::PyRuntimeError::new_err("assertion registry poisoned")
+                })?
+                .insert(self.filename.clone(), RegistryEntry::Ready(metadata));
+            code
+        };
+        dict.set_item(&missing_name, py.eval(c"object()", None, None)?)?;
+        py.import("builtins")?
+            .getattr("exec")?
+            .call((code, dict.clone(), dict), None)?;
+        Ok(())
     }
 
     fn get_filename(&self, py: Python<'_>, fullname: &str) -> PyResult<Py<PyAny>> {
@@ -1447,6 +1655,14 @@ fn current_python_version(py: Python<'_>) -> PythonVersion {
     PythonVersion::from((version.major, version.minor))
 }
 
+/// Keeps filesystem identity while removing Windows extended-path prefixes
+/// from filenames handed to Python's compiler and traceback renderer.
+fn canonical_filename(path: &std::path::Path) -> PathBuf {
+    std::fs::canonicalize(path)
+        .map(|path| dunce::simplified(&path).to_path_buf())
+        .unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Installs the first-party assertion finder for a project root.
 pub fn install(py: Python<'_>, root: &Utf8Path) -> PyResult<()> {
     let roots = if let Some(existing) = py
@@ -1458,7 +1674,7 @@ pub fn install(py: Python<'_>, root: &Utf8Path) -> PyResult<()> {
     {
         existing.cast::<AssertionFinder>()?.borrow().roots.clone()
     } else {
-        let roots = Arc::new(Mutex::new(BTreeSet::new()));
+        let roots = Arc::new(RwLock::new(BTreeSet::new()));
         let finder = Py::new(
             py,
             AssertionFinder {
@@ -1472,12 +1688,9 @@ pub fn install(py: Python<'_>, root: &Utf8Path) -> PyResult<()> {
         roots
     };
     roots
-        .lock()
+        .write()
         .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("assertion roots poisoned"))?
-        .insert(
-            std::fs::canonicalize(root.as_std_path())
-                .unwrap_or_else(|_| root.as_std_path().to_path_buf()),
-        );
+        .insert(canonical_filename(root.as_std_path()));
     Ok(())
 }
 
@@ -1509,10 +1722,27 @@ fn instruction_column(frame: &Bound<'_, PyAny>, traceback: &Bound<'_, PyAny>) ->
     })
 }
 
-/// Renders an assertion explanation from the failing frame.
-///
-/// The formatter is added after the loader path is proven against the focused
-/// import, scope, and optimization regressions.
+/// Materializes a cached module's metadata once, without invoking Python while
+/// the registry is locked.
+fn realize_deferred(filename: &str) -> Option<()> {
+    let mut registry = registry().write().ok()?;
+    let (source, python_version, missing_name) = match registry.get(filename)? {
+        RegistryEntry::Ready(_) => return Some(()),
+        RegistryEntry::Deferred {
+            source,
+            python_version,
+            missing_name,
+        } => (source.clone(), *python_version, missing_name.clone()),
+    };
+    let metadata = collect_plans(&source, python_version)
+        .map(|collected| metadata_from_plans(&source, collected.plans, &missing_name))
+        .unwrap_or_default();
+    registry.insert(filename.to_owned(), RegistryEntry::Ready(metadata));
+    Some(())
+}
+
+/// Explains a failed assertion without reevaluating expressions or invoking
+/// user representations. Cached metadata is reconstructed only on failure.
 pub fn explain(py: Python<'_>, error: &PyErr) -> Option<String> {
     let mut traceback = error.traceback(py)?.into_any();
     loop {
@@ -1531,16 +1761,26 @@ pub fn explain(py: Python<'_>, error: &PyErr) -> Option<String> {
         .ok()?
         .extract::<String>()
         .ok()?;
-    let filename = std::fs::canonicalize(&filename)
-        .unwrap_or_else(|_| PathBuf::from(&filename))
-        .to_string_lossy()
-        .into_owned();
+    let registry_filename = {
+        let registry = registry().read().ok()?;
+        if registry.contains_key(&filename) {
+            filename
+        } else {
+            let canonical = canonical_filename(std::path::Path::new(&filename));
+            registry
+                .contains_key(canonical.to_string_lossy().as_ref())
+                .then(|| canonical.to_string_lossy().into_owned())?
+        }
+    };
+    realize_deferred(&registry_filename)?;
     let registry = registry().read().ok()?;
-    let metadata = registry.get(&filename)?;
+    let RegistryEntry::Ready(metadata) = registry.get(&registry_filename)? else {
+        return None;
+    };
     let column = instruction_column(&frame, &traceback);
     let candidates = metadata
         .iter()
-        .filter(|metadata| metadata.location.line == line)
+        .filter(|metadata| metadata.location.line <= line && line <= metadata.end_line)
         .collect::<Vec<_>>();
     let locals = frame.getattr("f_locals").ok()?;
     let matching = if let Some(column) = column {

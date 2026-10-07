@@ -13,6 +13,7 @@ license = { workspace = true }
 
 [dependencies]
 camino = { workspace = true }
+dunce = { workspace = true }
 fs-err = { workspace = true }
 karva_collector = { workspace = true }
 karva_coverage = { workspace = true }
