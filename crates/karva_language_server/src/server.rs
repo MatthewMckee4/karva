@@ -64,6 +64,10 @@ impl Server {
             supports_diagnostic_related_information(&capabilities);
         let supports_hierarchical_document_symbols =
             supports_hierarchical_document_symbols(&capabilities);
+        let inlay_hint_refresh = capabilities
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.inlay_hint);
         let capabilities = server_capabilities(position_encoding);
         let workspace_folders = match workspace_folders {
             Some(WorkspaceFolders::WorkspaceFolderList(folders)) => folders,
@@ -98,6 +102,7 @@ impl Server {
                 hover_markup_kind,
                 supports_diagnostic_related_information,
                 supports_hierarchical_document_symbols,
+                inlay_hint_refresh,
                 workspaces,
             ),
         })

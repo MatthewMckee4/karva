@@ -16,7 +16,10 @@ use std::sync::{Arc, Mutex};
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_ide::{SourceAnalysis, SourceAnalysisSettings, SourceDiagnostic, WorkspaceSourceIndex};
 use karva_project::Project;
-use lsp_types::{LanguageKind, MarkupKind, TextDocumentContentChangeEvent, Uri, WorkspaceFolder};
+use lsp_types::{
+    InlayHintWorkspaceClientCapabilities, LanguageKind, MarkupKind, TextDocumentContentChangeEvent,
+    Uri, WorkspaceFolder,
+};
 use once_cell::sync::OnceCell;
 
 use crate::workspace::{WorkspaceError, Workspaces, uri_to_path};
@@ -348,6 +351,7 @@ pub struct Session {
     request_queue: RequestQueue,
     supports_diagnostic_related_information: bool,
     hierarchical_document_symbols: HierarchicalDocumentSymbols,
+    inlay_hint_refresh: Option<InlayHintWorkspaceClientCapabilities>,
     workspaces: Workspaces,
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
@@ -362,6 +366,7 @@ impl Session {
         hover_markup_kind: MarkupKind,
         supports_diagnostic_related_information: bool,
         supports_hierarchical_document_symbols: bool,
+        inlay_hint_refresh: Option<InlayHintWorkspaceClientCapabilities>,
         workspaces: Workspaces,
     ) -> Self {
         Self {
@@ -376,6 +381,7 @@ impl Session {
             } else {
                 HierarchicalDocumentSymbols::Unsupported
             },
+            inlay_hint_refresh,
             workspaces,
             published_diagnostic_paths: HashSet::new(),
             cache_source_indexes: false,
@@ -419,6 +425,13 @@ impl Session {
             self.hierarchical_document_symbols,
             HierarchicalDocumentSymbols::Supported
         )
+    }
+
+    pub(super) fn supports_inlay_hint_refresh(&self) -> bool {
+        self.inlay_hint_refresh
+            .as_ref()
+            .and_then(|capability| capability.refresh_support)
+            .unwrap_or(false)
     }
 
     fn open_document_uris(&self) -> impl Iterator<Item = &Uri> {
@@ -633,6 +646,7 @@ mod tests {
             lsp_types::MarkupKind::PlainText,
             false,
             false,
+            None,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         session.open_document(TextDocument::new(
@@ -687,6 +701,7 @@ mod tests {
             lsp_types::MarkupKind::PlainText,
             false,
             false,
+            None,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         for name in ["test_first.py", "test_second.py"] {
@@ -727,6 +742,7 @@ mod tests {
             lsp_types::MarkupKind::PlainText,
             false,
             false,
+            None,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         let diagnostics = session.prepare_diagnostics();
@@ -749,6 +765,7 @@ mod tests {
             lsp_types::MarkupKind::PlainText,
             false,
             false,
+            None,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         session.open_document(TextDocument::new(
