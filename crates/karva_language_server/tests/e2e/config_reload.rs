@@ -1,10 +1,13 @@
 use lsp_types::{
-    ClientCapabilities, DidChangeWatchedFilesClientCapabilities, DidChangeWatchedFilesNotification,
-    DidChangeWatchedFilesParams, FileChangeType, FileEvent, RegistrationRequest, Uri,
-    WorkspaceClientCapabilities,
+    ClientCapabilities, DefinitionParams, DefinitionRequest,
+    DidChangeWatchedFilesClientCapabilities, DidChangeWatchedFilesNotification,
+    DidChangeWatchedFilesParams, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
+    FileChangeType, FileEvent, LanguageKind, PartialResultParams, Position,
+    PublishDiagnosticsNotification, RegistrationRequest, TextDocumentIdentifier, TextDocumentItem,
+    TextDocumentPositionParams, Uri, WorkDoneProgressParams, WorkspaceClientCapabilities,
 };
 
-use super::TestServer;
+use super::{TestServer, Workspace};
 
 #[test]
 fn registers_and_accepts_source_file_changes() {
@@ -41,4 +44,71 @@ fn registers_and_accepts_source_file_changes() {
             kind: FileChangeType::Changed,
         }],
     });
+}
+
+#[rstest::rstest]
+fn disk_refresh_is_explicit_for_watched_clients_and_automatic_otherwise(
+    #[values(true, false)] watched: bool,
+) {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n@fixture\ndef database(): pass\n",
+    );
+    let mut capabilities = ClientCapabilities::default();
+    if watched {
+        capabilities.workspace = Some(WorkspaceClientCapabilities {
+            did_change_watched_files: Some(DidChangeWatchedFilesClientCapabilities {
+                dynamic_registration: Some(true),
+                ..DidChangeWatchedFilesClientCapabilities::default()
+            }),
+            ..WorkspaceClientCapabilities::default()
+        });
+    }
+    let mut server = TestServer::with_workspace(capabilities, workspace.folder());
+    if watched {
+        let (id, _) = server.receive_request::<RegistrationRequest>();
+        server.respond::<RegistrationRequest>(id, ());
+    }
+    let uri = workspace.uri("test_example.py");
+    server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: LanguageKind::Python,
+            version: 1,
+            text: "def test_example(database): pass\n".to_owned(),
+        },
+    });
+    server.receive_notification::<PublishDiagnosticsNotification>();
+    let params = DefinitionParams::new(
+        WorkDoneProgressParams::default(),
+        PartialResultParams::default(),
+        TextDocumentPositionParams::new(TextDocumentIdentifier::new(uri), Position::new(0, 20)),
+    );
+    let first = serde_json::to_value(server.request::<DefinitionRequest>(params.clone()))
+        .expect("definition JSON");
+    assert_eq!(first["range"]["start"]["line"], 2);
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n\n\n@fixture\ndef database(): pass\n",
+    );
+    let before_notification =
+        serde_json::to_value(server.request::<DefinitionRequest>(params.clone()))
+            .expect("definition JSON");
+    assert_eq!(
+        before_notification["range"]["start"]["line"],
+        if watched { 2 } else { 4 }
+    );
+    if watched {
+        server.notify::<DidChangeWatchedFilesNotification>(DidChangeWatchedFilesParams {
+            changes: vec![FileEvent {
+                uri: workspace.uri("conftest.py"),
+                kind: FileChangeType::Changed,
+            }],
+        });
+        server.receive_notification::<PublishDiagnosticsNotification>();
+    }
+    let refreshed =
+        serde_json::to_value(server.request::<DefinitionRequest>(params)).expect("definition JSON");
+    assert_eq!(refreshed["range"]["start"]["line"], 4);
 }

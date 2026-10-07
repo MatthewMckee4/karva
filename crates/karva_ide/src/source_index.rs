@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::CollectedModule;
@@ -21,7 +22,7 @@ use crate::SourceDocument;
 #[derive(Debug)]
 pub struct WorkspaceSourceIndex {
     project_root: Utf8PathBuf,
-    modules: BTreeMap<Utf8PathBuf, CollectedModule>,
+    modules: BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
     settings: SourceAnalysisSettings,
 }
 
@@ -35,6 +36,18 @@ impl WorkspaceSourceIndex {
         project_root: Utf8PathBuf,
         settings: SourceAnalysisSettings,
         modules: impl IntoIterator<Item = CollectedModule>,
+    ) -> Self {
+        Self::from_shared_modules(project_root, settings, modules.into_iter().map(Arc::new))
+    }
+
+    /// Builds an immutable index without copying syntax retained by a project cache.
+    ///
+    /// Shared modules must have been collected with these settings and project root.
+    /// As with `from_modules`, the last module for each path wins.
+    pub fn from_shared_modules(
+        project_root: Utf8PathBuf,
+        settings: SourceAnalysisSettings,
+        modules: impl IntoIterator<Item = Arc<CollectedModule>>,
     ) -> Self {
         let modules = modules
             .into_iter()
@@ -86,7 +99,7 @@ impl WorkspaceSourceIndex {
 
     /// Returns the collected module for `path`, if the snapshot contains it.
     pub fn module(&self, path: &Utf8Path) -> Option<&CollectedModule> {
-        self.modules.get(path)
+        self.modules.get(path).map(AsRef::as_ref)
     }
 
     /// Returns source paths in deterministic lexical order.
@@ -101,7 +114,7 @@ impl WorkspaceSourceIndex {
     /// current module is cloned because [`SourceAnalysis`] owns its parsed
     /// syntax tree; parent modules remain borrowed from the immutable index.
     pub fn analyze(&self, path: &Utf8Path) -> Option<SourceAnalysis> {
-        let current = self.modules.get(path)?.clone();
+        let current = self.modules.get(path)?.as_ref().clone();
         let parents = self.parent_modules(path);
         Some(analyze_collected_source(current, &parents, &self.settings))
     }
@@ -117,7 +130,7 @@ impl WorkspaceSourceIndex {
             if conftest != path
                 && let Some(module) = self.modules.get(&conftest)
             {
-                parents.push(module);
+                parents.push(module.as_ref());
             }
             if current == self.project_root {
                 break;

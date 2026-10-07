@@ -58,7 +58,7 @@ impl SourceDocument {
 }
 
 /// Settings required to analyze one Python source document.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceAnalysisSettings {
     /// Python grammar version used by the project.
     pub python_version: PythonVersion,
