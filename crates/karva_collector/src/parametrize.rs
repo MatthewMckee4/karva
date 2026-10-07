@@ -1,3 +1,4 @@
+use karva_python_semantic::DecoratorBindings;
 use ruff_python_ast::visitor::{Visitor, walk_expr};
 use ruff_python_ast::{Alias, Expr, Stmt, StmtFunctionDef};
 
@@ -9,6 +10,16 @@ use ruff_python_ast::{Alias, Expr, Stmt, StmtFunctionDef};
 /// `None` when no parametrize decorator exists or any `argvalues` is dynamic;
 /// callers should treat the function as one opaque scheduling unit.
 pub fn count_parametrize_cases(stmt: &StmtFunctionDef) -> Option<usize> {
+    count_parametrize_cases_with_bindings(stmt, &DecoratorBindings::legacy())
+}
+
+/// Counts parametrization cases using the module bindings visible at the
+/// function definition. This keeps aliases and shadowing consistent with
+/// fixture and `usefixtures` recognition.
+pub fn count_parametrize_cases_with_bindings(
+    stmt: &StmtFunctionDef,
+    bindings: &DecoratorBindings,
+) -> Option<usize> {
     let mut total: usize = 1;
     let mut found = false;
 
@@ -17,7 +28,7 @@ pub fn count_parametrize_cases(stmt: &StmtFunctionDef) -> Option<usize> {
             continue;
         };
 
-        if !is_parametrize_call(call.func.as_ref()) {
+        if !bindings.is_parametrize(call.func.as_ref()) {
             continue;
         }
         found = true;
@@ -29,29 +40,6 @@ pub fn count_parametrize_cases(stmt: &StmtFunctionDef) -> Option<usize> {
     }
 
     found.then_some(total)
-}
-
-/// Returns true if `func` resolves to a parametrize reference.
-///
-/// Matches bare `parametrize`, `pytest.mark.parametrize`, and
-/// `karva.tags.parametrize`.
-fn is_parametrize_call(func: &Expr) -> bool {
-    match func {
-        Expr::Name(name) => name.id == "parametrize",
-        Expr::Attribute(attr) if attr.attr.id == "parametrize" => {
-            let Expr::Attribute(namespace) = attr.value.as_ref() else {
-                return false;
-            };
-            let Expr::Name(root) = namespace.value.as_ref() else {
-                return false;
-            };
-            matches!(
-                (root.id.as_str(), namespace.attr.id.as_str()),
-                ("pytest", "mark") | ("karva", "tags")
-            )
-        }
-        _ => false,
-    }
 }
 
 /// Extract the `argvalues` argument from a parametrize call.

@@ -108,7 +108,10 @@ pub fn fixture_reference_hovers(analysis: &SourceAnalysis) -> Vec<FixtureHover> 
             let Expr::Call(call) = &decorator.expression else {
                 continue;
             };
-            if !analysis.fixture_model.is_use_fixtures_reference(&call.func) {
+            if !analysis
+                .fixture_model
+                .is_use_fixtures_reference(function, &call.func)
+            {
                 continue;
             }
             for argument in &call.arguments.args {
@@ -256,7 +259,10 @@ fn use_fixtures_reference(
         let Expr::Call(call) = &decorator.expression else {
             continue;
         };
-        if !analysis.fixture_model.is_use_fixtures_reference(&call.func) {
+        if !analysis
+            .fixture_model
+            .is_use_fixtures_reference(function, &call.func)
+        {
             continue;
         }
         for argument in &call.arguments.args {

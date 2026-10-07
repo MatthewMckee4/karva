@@ -808,7 +808,7 @@ fn use_fixtures_occurrences(
             };
             analysis
                 .fixture_model
-                .is_use_fixtures_reference(&call.func)
+                .is_use_fixtures_reference(function, &call.func)
                 .then_some(call)
         })
         .flat_map(move |call| {

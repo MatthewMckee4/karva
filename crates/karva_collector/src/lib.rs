@@ -10,13 +10,16 @@ use ruff_text_size::{Ranged, TextRange, TextSize};
 use thiserror::Error;
 
 use karva_python_semantic::ModulePath;
-use karva_python_semantic::is_fixture_function;
+use karva_python_semantic::{DecoratorBindings, is_fixture_function_with_bindings};
 
 mod models;
 mod parametrize;
 
 pub use models::{CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType};
-pub use parametrize::count_parametrize_cases;
+pub use parametrize::count_parametrize_cases_with_bindings;
+
+#[cfg(test)]
+use parametrize::count_parametrize_cases;
 
 #[derive(Debug, Error)]
 /// Failure to load source required for syntax collection.
@@ -138,15 +141,21 @@ fn collect_source_for_scheduling(
         }
     }
 
+    let mut bindings = DecoratorBindings::default();
     for statement in module_body {
+        let is_fixture = matches!(
+            &statement,
+            Stmt::FunctionDef(function)
+                if settings.collect_fixtures
+                    && is_fixture_function_with_bindings(function, &bindings)
+        );
+        bindings.update(&statement);
         let Stmt::FunctionDef(mut function_def) = statement else {
             continue;
         };
-        if settings.collect_fixtures && is_fixture_function(&function_def) {
+        if is_fixture {
             collected_module.add_fixture_function_def(function_def);
-            continue;
-        }
-        if is_test_function_to_collect(
+        } else if is_test_function_to_collect(
             &function_def.name,
             &function_names,
             settings.test_function_prefix,
@@ -209,21 +218,27 @@ fn collect_source_with_module_path(
 
     let function_names: HashSet<&str> = function_names.iter().map(String::as_str).collect();
     let module_body = parsed.into_suite();
+    let mut bindings = DecoratorBindings::default();
     let function_defs = module_body
         .iter()
         .filter_map(|stmt| {
             let Stmt::FunctionDef(function_def) = stmt else {
+                bindings.update(stmt);
                 return None;
             };
-            if settings.collect_fixtures && is_fixture_function(function_def) {
-                return Some(function_def.clone());
+            let is_fixture = settings.collect_fixtures
+                && is_fixture_function_with_bindings(function_def, &bindings);
+            bindings.update(stmt);
+            if is_fixture {
+                Some((function_def.clone(), true))
+            } else {
+                is_test_function_to_collect(
+                    &function_def.name,
+                    &function_names,
+                    settings.test_function_prefix,
+                )
+                .then(|| (function_def.clone(), false))
             }
-            is_test_function_to_collect(
-                &function_def.name,
-                &function_names,
-                settings.test_function_prefix,
-            )
-            .then(|| function_def.clone())
         })
         .collect::<Vec<_>>();
     let mut collected_module = CollectedModule::new(
@@ -243,8 +258,8 @@ fn collect_source_with_module_path(
         }
     }
 
-    for function_def in function_defs {
-        if settings.collect_fixtures && is_fixture_function(&function_def) {
+    for (function_def, is_fixture) in function_defs {
+        if is_fixture {
             collected_module.add_fixture_function_def(function_def);
             continue;
         }
@@ -812,6 +827,20 @@ class Thing:
             .expect("module should collect");
 
         assert_eq!(function_names(&module.fixture_function_defs), ["database"]);
+    }
+
+    #[test]
+    fn collect_source_resolves_fixture_aliases_and_shadowing() {
+        let (_temp_dir, root, path) = python_file("test_sample.py", "");
+        let source_text = "from karva import fixture as resource\n\n@resource\ndef first(): pass\n\nresource = custom\n\n@resource\ndef second(): pass\n\n@other.fixture\ndef third(): pass\n";
+        let settings = CollectionSettings {
+            collect_fixtures: true,
+            ..settings()
+        };
+        let module = collect_source(&path, &root, source_text.to_owned(), &settings, &[])
+            .expect("module should collect");
+
+        assert_eq!(function_names(&module.fixture_function_defs), ["first"]);
     }
 
     #[test]

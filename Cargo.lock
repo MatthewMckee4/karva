@@ -1312,6 +1312,8 @@ dependencies = [
  "camino",
  "pyo3",
  "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
  "serde",
 ]
 
