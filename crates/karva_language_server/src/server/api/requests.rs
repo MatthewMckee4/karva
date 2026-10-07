@@ -4,6 +4,7 @@ use super::traits::{RequestHandler, SyncRequestHandler};
 use crate::session::Session;
 use crate::session::client::Client;
 
+mod call_hierarchy;
 mod code_lens;
 mod completion;
 mod definition;
@@ -17,6 +18,7 @@ mod references;
 mod rename;
 mod workspace_symbols;
 
+pub(super) use call_hierarchy::{IncomingCalls, OutgoingCalls, PrepareCallHierarchy};
 pub(super) use code_lens::CodeLenses;
 pub(super) use completion::Completion;
 pub(super) use definition::Definition;

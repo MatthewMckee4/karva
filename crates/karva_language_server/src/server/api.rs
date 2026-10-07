@@ -2,8 +2,9 @@
 
 use lsp_server::{ErrorCode, Notification, Request, Response};
 use lsp_types::{
-    CancelNotification, CodeLensRequest, CompletionRequest, DefinitionRequest,
-    DidChangeTextDocumentNotification, DidChangeWatchedFilesNotification,
+    CallHierarchyIncomingCallsRequest, CallHierarchyOutgoingCallsRequest,
+    CallHierarchyPrepareRequest, CancelNotification, CodeLensRequest, CompletionRequest,
+    DefinitionRequest, DidChangeTextDocumentNotification, DidChangeWatchedFilesNotification,
     DidChangeWorkspaceFoldersNotification, DidCloseTextDocumentNotification,
     DidOpenTextDocumentNotification, DocumentHighlightRequest, DocumentSymbolRequest, HoverRequest,
     ImplementationRequest, InlayHintRequest, LspNotificationMethod, LspRequestMethod,
@@ -43,6 +44,15 @@ impl RequestError {
 
 pub(super) fn request(request: Request) -> Task {
     match LspRequestMethod::from(request.method.as_str()) {
+        CallHierarchyPrepareRequest::METHOD => {
+            background_request_task::<requests::PrepareCallHierarchy>(request)
+        }
+        CallHierarchyIncomingCallsRequest::METHOD => {
+            background_request_task::<requests::IncomingCalls>(request)
+        }
+        CallHierarchyOutgoingCallsRequest::METHOD => {
+            background_request_task::<requests::OutgoingCalls>(request)
+        }
         CodeLensRequest::METHOD => background_request_task::<requests::CodeLenses>(request),
         WorkspaceSymbolRequest::METHOD => {
             background_request_task::<requests::WorkspaceSymbols>(request)

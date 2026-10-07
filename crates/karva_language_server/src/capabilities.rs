@@ -78,6 +78,7 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
             resolve_provider: Some(false),
             ..CodeLensOptions::default()
         }),
+        call_hierarchy_provider: Some(true.into()),
         completion_provider: Some(CompletionOptions::default()),
         definition_provider: Some(true.into()),
         implementation_provider: Some(true.into()),
