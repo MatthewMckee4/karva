@@ -347,13 +347,6 @@ const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     },
 ];
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "completion and navigation consumers land in later stack layers"
-    )
-)]
 pub(super) fn analyze(
     module: &CollectedModule,
     try_import_fixtures: bool,
