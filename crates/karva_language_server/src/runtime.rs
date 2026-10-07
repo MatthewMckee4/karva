@@ -90,6 +90,7 @@ pub fn with_panic_reporting(
     }
 }
 
+/// Preserves a string panic payload in the error returned to the CLI.
 pub fn panic_error(payload: &(dyn Any + Send)) -> anyhow::Error {
     let message = payload
         .downcast_ref::<String>()
@@ -107,9 +108,23 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
+    #[derive(Clone, Copy)]
+    enum Outcome {
+        Shutdown,
+        InitializationFailure,
+        MainLoopPanic,
+        WorkerPanic,
+    }
+
     #[rstest::rstest]
     fn restores_hook_after_shutdown_initialization_failure_and_panic(
-        #[values(0, 1, 2)] outcome: u8,
+        #[values(
+            Outcome::Shutdown,
+            Outcome::InitializationFailure,
+            Outcome::MainLoopPanic,
+            Outcome::WorkerPanic
+        )]
+        outcome: Outcome,
     ) {
         // Process isolation also makes hook restoration safe under parallel cargo test.
         if std::env::var_os("KARVA_PANIC_BOUNDARY_TEST_CHILD").is_none() {
@@ -127,7 +142,7 @@ mod tests {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
-            if outcome == 2 {
+            if matches!(outcome, Outcome::MainLoopPanic | Outcome::WorkerPanic) {
                 assert!(
                     String::from_utf8_lossy(&output.stderr)
                         .contains("Karva language server panicked")
@@ -144,23 +159,36 @@ mod tests {
         }));
         let (sender, receiver) = crossbeam_channel::unbounded();
         let result = with_panic_reporting(sender, || match outcome {
-            0 => Ok(()),
-            1 => Err(anyhow::anyhow!(
+            Outcome::Shutdown => Ok(()),
+            Outcome::InitializationFailure => Err(anyhow::anyhow!(
                 "failed to initialize language server: invalid options"
             )),
-            _ => std::panic::panic_any("main-loop failure"),
+            Outcome::MainLoopPanic => std::panic::panic_any("main-loop failure"),
+            Outcome::WorkerPanic => {
+                let recovered = std::thread::spawn(|| {
+                    catch_unwind(|| std::panic::panic_any("worker failure")).is_err()
+                })
+                .join()
+                .expect("recoverable worker joins");
+                assert!(recovered);
+                Ok(())
+            }
         });
         let restored = catch_unwind(|| std::panic::panic_any("restored hook"));
         std::panic::set_hook(previous);
         assert!(restored.is_err());
         assert_eq!(calls.load(Ordering::Relaxed), 1);
-        if outcome == 2 {
-            assert!(
-                result
-                    .expect_err("panic returned error")
-                    .to_string()
-                    .contains("main-loop failure")
-            );
+        if matches!(outcome, Outcome::MainLoopPanic | Outcome::WorkerPanic) {
+            if matches!(outcome, Outcome::MainLoopPanic) {
+                assert!(
+                    result
+                        .expect_err("panic returned error")
+                        .to_string()
+                        .contains("main-loop failure")
+                );
+            } else {
+                assert!(result.is_ok());
+            }
             let message = receiver.try_recv().expect("editor panic report");
             assert!(matches!(message, Message::Notification(_)));
             let Message::Notification(notification) = message else {
@@ -173,9 +201,9 @@ mod tests {
             let params: ShowMessageParams =
                 serde_json::from_value(notification.params).expect("show message");
             assert_eq!(params.kind, MessageType::Error);
-            assert!(params.message.contains("main-loop failure"));
+            assert!(params.message.contains("failure"));
         } else {
-            assert_eq!(result.is_ok(), outcome == 0);
+            assert_eq!(result.is_ok(), matches!(outcome, Outcome::Shutdown));
             assert!(receiver.try_recv().is_err());
         }
     }
