@@ -55,9 +55,22 @@ fn discover_project(
     python_version: PythonVersion,
     profile: Option<&str>,
 ) -> Result<Project, workspace::WorkspaceError> {
-    let directory = path
+    let mut directory = path
         .parent()
         .ok_or_else(|| workspace::WorkspaceError::MissingParent(path.to_path_buf()))?;
+    // Unsaved documents can live beneath directories that the editor has not created yet.
+    // Discover configuration from their nearest existing ancestor without changing the URI.
+    while !directory
+        .try_exists()
+        .map_err(|source| workspace::WorkspaceError::ReadMetadata {
+            path: directory.to_path_buf(),
+            source,
+        })?
+    {
+        directory = directory
+            .parent()
+            .ok_or_else(|| workspace::WorkspaceError::MissingParent(path.to_path_buf()))?;
+    }
     let mut metadata = ProjectMetadata::discover(directory, python_version)?;
     if metadata.root() == directory
         && !directory.join("karva.toml").exists()

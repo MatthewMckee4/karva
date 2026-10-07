@@ -25,6 +25,17 @@ pub enum WorkspaceError {
     #[error("document has no containing directory: {0}")]
     MissingParent(Utf8PathBuf),
 
+    /// Filesystem metadata could not be inspected during project discovery.
+    #[error("failed to inspect project path '{path}': {source}")]
+    ReadMetadata {
+        /// Ancestor path that could not be inspected.
+        path: Utf8PathBuf,
+
+        /// Filesystem failure, retained for diagnostic reporting.
+        #[source]
+        source: std::io::Error,
+    },
+
     /// The process current directory could not be read while creating the default workspace.
     #[error("failed to determine process current directory: {0}")]
     CurrentDirectory(#[source] std::io::Error),
@@ -377,6 +388,42 @@ mod tests {
 
         assert_eq!(project.cwd(), &root);
         assert_eq!(prefix(&project), "test");
+    }
+
+    #[test]
+    fn nonexistent_document_directories_use_workspace_defaults() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let root = root(&temp_dir);
+        let mut workspaces =
+            Workspaces::new(vec![folder(&root, "root")], PythonVersion::PY311, None)
+                .expect("create workspaces");
+
+        let project = workspaces
+            .project_for_uri(&file_uri(&root.join("new/package/test_example.py")))
+            .expect("discover unsaved document project");
+
+        assert_eq!(project.cwd(), &root);
+        assert_eq!(prefix(&project), "test");
+        assert!(!root.join("new").exists());
+    }
+
+    #[test]
+    fn document_parent_that_is_a_file_is_rejected() {
+        let temp_dir = tempfile::tempdir().expect("create temp directory");
+        let root = root(&temp_dir);
+        fs::write(root.join("not_a_directory"), "").expect("write file");
+        let mut workspaces =
+            Workspaces::new(vec![folder(&root, "root")], PythonVersion::PY311, None)
+                .expect("create workspaces");
+
+        let error = workspaces
+            .project_for_uri(&file_uri(&root.join("not_a_directory/test_example.py")))
+            .expect_err("file cannot contain a document");
+
+        assert!(matches!(
+            error,
+            WorkspaceError::Metadata(ProjectMetadataError::NotADirectory(_))
+        ));
     }
 
     #[test]

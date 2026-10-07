@@ -91,3 +91,84 @@ fn normalize_uri(value: &mut serde_json::Value, workspace_uri: &str) {
         serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
     }
 }
+
+#[rstest::rstest]
+fn analyzes_unsaved_documents_in_nonexistent_directories(#[values("", "nested/")] project: &str) {
+    let workspace = Workspace::new();
+    workspace.write(
+        &format!("{project}karva.toml"),
+        "[profile.default.test]\ntest-function-prefix = 'check'\n",
+    );
+    workspace.write(
+        &format!("{project}conftest.py"),
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri(&format!("{project}new/package/test_example.py"));
+    server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: LanguageKind::Python,
+            version: 1,
+            text: "def check_example(database, missing): pass\n".to_owned(),
+        },
+    });
+    let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
+    let response = server.request::<DocumentSymbolRequest>(params(uri));
+
+    // Both projects must recognize the configured prefix and inherited fixture.
+    let mut normalized = workspace.normalize((diagnostics, response));
+    normalize_uri(&mut normalized, "file:///project/nested");
+    assert!(
+        !workspace
+            .directory
+            .path()
+            .join(format!("{project}new"))
+            .exists()
+    );
+    assert_json_snapshot!(normalized, @r#"
+    [
+      {
+        "diagnostics": [
+          {
+            "code": "missing-fixture",
+            "message": "Test `check_example` requires missing fixture `missing`",
+            "range": {
+              "end": {
+                "character": 35,
+                "line": 0
+              },
+              "start": {
+                "character": 28,
+                "line": 0
+              }
+            },
+            "severity": 1,
+            "source": "karva"
+          }
+        ],
+        "uri": "file:///project/new/package/test_example.py",
+        "version": 1
+      },
+      [
+        {
+          "kind": 12,
+          "location": {
+            "range": {
+              "end": {
+                "character": 42,
+                "line": 0
+              },
+              "start": {
+                "character": 0,
+                "line": 0
+              }
+            },
+            "uri": "file:///project/new/package/test_example.py"
+          },
+          "name": "check_example"
+        }
+      ]
+    ]
+    "#);
+}
