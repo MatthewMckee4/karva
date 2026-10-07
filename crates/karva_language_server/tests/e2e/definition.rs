@@ -1,8 +1,8 @@
 use insta::assert_json_snapshot;
 use lsp_types::{
-    ClientCapabilities, DefinitionParams, DefinitionRequest, DidOpenTextDocumentNotification,
-    DidOpenTextDocumentParams, LanguageKind, PartialResultParams, Position,
-    PublishDiagnosticsNotification, TextDocumentIdentifier, TextDocumentItem,
+    ClientCapabilities, Definition, DefinitionParams, DefinitionRequest, DefinitionResponse,
+    DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind, PartialResultParams,
+    Position, PublishDiagnosticsNotification, TextDocumentIdentifier, TextDocumentItem,
     TextDocumentPositionParams, Uri, WorkDoneProgressParams,
 };
 
@@ -74,6 +74,48 @@ fn goes_to_unsaved_local_fixture_override() {
       "uri": "file:///project/test_example.py"
     }
     "#);
+}
+
+#[test]
+fn goes_to_installed_builtin_fixture_source() {
+    let workspace = Workspace::new();
+    let builtin_source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../python/karva/_builtins.py"
+    ));
+    workspace.write(
+        ".venv/lib/python3.12/site-packages/karva/_builtins.py",
+        builtin_source,
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(tmp_path): pass\n",
+    );
+
+    let response =
+        server.request::<DefinitionRequest>(definition_params(uri, Position::new(0, 20)));
+    let Some(DefinitionResponse::Definition(Definition::Location(location))) = response else {
+        panic!("built-in fixture should resolve to a source definition");
+    };
+    let builtin_line = builtin_source
+        .lines()
+        .position(|line| line.starts_with("def tmp_path("))
+        .expect("tmp_path definition exists");
+
+    assert_eq!(
+        location.uri,
+        workspace.uri(".venv/lib/python3.12/site-packages/karva/_builtins.py")
+    );
+    assert_eq!(
+        location.range.start,
+        Position::new(
+            u32::try_from(builtin_line).expect("line fits LSP position"),
+            4
+        )
+    );
 }
 
 #[test]

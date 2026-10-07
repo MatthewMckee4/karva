@@ -4,7 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::CollectedModule;
 
 #[cfg(test)]
-use karva_collector::{CollectionSettings, collect_source};
+use karva_collector::{CollectionSettings, collect_source, collect_source_with_module_name};
 
 use crate::{SourceAnalysis, SourceAnalysisSettings, analyze_collected_source};
 
@@ -22,6 +22,7 @@ use crate::SourceDocument;
 pub struct WorkspaceSourceIndex {
     project_root: Utf8PathBuf,
     modules: BTreeMap<Utf8PathBuf, CollectedModule>,
+    builtin_module: Option<Utf8PathBuf>,
     settings: SourceAnalysisSettings,
 }
 
@@ -39,10 +40,15 @@ impl WorkspaceSourceIndex {
         let modules = modules
             .into_iter()
             .map(|module| (module.path.path().clone(), module))
-            .collect();
+            .collect::<BTreeMap<_, _>>();
+        let builtin_module = modules
+            .values()
+            .find(|module| module.path.module_name() == "karva._builtins")
+            .map(|module| module.path.path().clone());
         Self {
             project_root,
             modules,
+            builtin_module,
             settings,
         }
     }
@@ -91,7 +97,10 @@ impl WorkspaceSourceIndex {
 
     /// Returns source paths in deterministic lexical order.
     pub fn paths(&self) -> impl Iterator<Item = &Utf8Path> {
-        self.modules.keys().map(Utf8PathBuf::as_path)
+        self.modules
+            .keys()
+            .filter(|path| self.builtin_module.as_ref() != Some(*path))
+            .map(Utf8PathBuf::as_path)
     }
 
     /// Analyzes one indexed source with visible ancestor `conftest.py` files.
@@ -103,7 +112,16 @@ impl WorkspaceSourceIndex {
     pub fn analyze(&self, path: &Utf8Path) -> Option<SourceAnalysis> {
         let current = self.modules.get(path)?.clone();
         let parents = self.parent_modules(path);
-        Some(analyze_collected_source(current, &parents, &self.settings))
+        let builtin = self
+            .builtin_module
+            .as_ref()
+            .and_then(|path| self.modules.get(path));
+        Some(analyze_collected_source(
+            current,
+            &parents,
+            builtin,
+            &self.settings,
+        ))
     }
 
     fn parent_modules(&self, path: &Utf8Path) -> Vec<&CollectedModule> {
@@ -133,6 +151,7 @@ impl WorkspaceSourceIndex {
 mod tests {
     use camino::Utf8Path;
     use ruff_python_ast::PythonVersion;
+    use ruff_text_size::{TextRange, TextSize};
 
     use super::*;
     use crate::{FixtureResolution, SourceAnalysisSettings};
@@ -267,5 +286,109 @@ mod tests {
         assert!(index.parent_modules(path).is_empty());
         assert!(analysis.diagnostics.is_empty());
         assert_eq!(analysis.fixture_model.visible().len(), 1);
+    }
+
+    #[test]
+    fn resolves_builtin_definition_from_external_source_module() {
+        let collection_settings = CollectionSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test",
+            respect_ignore_files: true,
+            collect_fixtures: true,
+            collect_doctests: false,
+        };
+        let builtin_path = Utf8Path::new("/venv/lib/python3.12/site-packages/karva/_builtins.py");
+        let builtin_source =
+            "from karva._karva import fixture\n\n@fixture\ndef tmp_path():\n    yield path\n";
+        let builtin = collect_source_with_module_name(
+            &builtin_path.to_path_buf(),
+            "karva._builtins",
+            builtin_source.to_owned(),
+            &collection_settings,
+            &[],
+        )
+        .expect("built-in source should collect");
+        let test_path = Utf8Path::new("/project/test_example.py").to_path_buf();
+        let test_source = "def test_example(tmp_path): pass\n";
+        let test = collect_source(
+            &test_path,
+            Utf8Path::new("/project"),
+            test_source.to_owned(),
+            &collection_settings,
+            &[],
+        )
+        .expect("test source should collect");
+        let index =
+            WorkspaceSourceIndex::from_modules("/project".into(), settings(), [test, builtin]);
+        assert_eq!(
+            index.paths().collect::<Vec<_>>(),
+            [Utf8Path::new("/project/test_example.py")]
+        );
+        assert!(index.module(builtin_path).is_some());
+        let analysis = index.analyze(&test_path).expect("test should analyze");
+        let offset = TextSize::try_from(test_source.find("tmp_path").expect("parameter marker"))
+            .expect("source fits");
+        let target = crate::fixture_definition(&analysis, offset).expect("builtin definition");
+        assert_eq!(target.path, builtin_path);
+        let name_start = TextSize::try_from(builtin_source.find("tmp_path").expect("name marker"))
+            .expect("source fits");
+        assert_eq!(
+            target.range,
+            TextRange::new(
+                name_start,
+                name_start + TextSize::try_from("tmp_path".len()).expect("source fits"),
+            )
+        );
+        let implementation =
+            crate::fixture_implementation(&analysis, offset).expect("builtin implementation");
+        assert_eq!(implementation.path, builtin_path);
+        let implementation_start =
+            TextSize::try_from(builtin_source.find("yield path").expect("yield marker"))
+                .expect("source fits");
+        assert_eq!(
+            implementation.range,
+            TextRange::new(
+                implementation_start,
+                implementation_start + TextSize::try_from("yield path".len()).expect("source fits"),
+            )
+        );
+    }
+
+    #[test]
+    fn local_fixture_overrides_external_builtin_source() {
+        let collection_settings = CollectionSettings {
+            python_version: PythonVersion::PY312,
+            test_function_prefix: "test",
+            respect_ignore_files: true,
+            collect_fixtures: true,
+            collect_doctests: false,
+        };
+        let builtin_path = Utf8Path::new("/venv/lib/python3.12/site-packages/karva/_builtins.py");
+        let builtin_source = "from karva._karva import fixture\n@fixture\ndef tmp_path(): pass\n";
+        let builtin = collect_source_with_module_name(
+            &builtin_path.to_path_buf(),
+            "karva._builtins",
+            builtin_source.to_owned(),
+            &collection_settings,
+            &[],
+        )
+        .expect("built-in source should collect");
+        let test_path = Utf8Path::new("/project/test_example.py").to_path_buf();
+        let test_source = "from karva import fixture\n@fixture\ndef tmp_path(): pass\ndef test_example(tmp_path): pass\n";
+        let test = collect_source(
+            &test_path,
+            Utf8Path::new("/project"),
+            test_source.to_owned(),
+            &collection_settings,
+            &[],
+        )
+        .expect("test source should collect");
+        let index =
+            WorkspaceSourceIndex::from_modules("/project".into(), settings(), [test, builtin]);
+        let analysis = index.analyze(&test_path).expect("test should analyze");
+        let offset = TextSize::try_from(test_source.rfind("tmp_path").expect("parameter marker"))
+            .expect("source fits");
+        let target = crate::fixture_definition(&analysis, offset).expect("local definition");
+        assert_eq!(target.path, test_path);
     }
 }

@@ -138,6 +138,9 @@ fn hover_from_name(
     if !analysis.fixture_model.builtins_visible() {
         return None;
     }
+    if let Some(definition) = analysis.fixture_model.builtin_definition(&name) {
+        return Some(hover_from_builtin_definition(name, range, definition));
+    }
     let builtin = crate::fixture::builtin_info(&name)?;
     Some(FixtureHover {
         name,
@@ -160,12 +163,41 @@ fn hover_from_resolution(
     match resolution {
         FixtureResolution::Resolved(id) => {
             let definition = analysis.fixture_model.definition(id)?;
-            Some(hover_from_definition(name, range, definition))
+            if analysis
+                .fixture_model
+                .builtin_definition(&name)
+                .is_some_and(|builtin| builtin.id == *id)
+            {
+                Some(hover_from_builtin_definition(name, range, definition))
+            } else {
+                Some(hover_from_definition(name, range, definition))
+            }
         }
         FixtureResolution::Builtin => hover_from_name(analysis, name, range),
         FixtureResolution::Rejected(_)
         | FixtureResolution::Missing
         | FixtureResolution::Unknown => None,
+    }
+}
+
+fn hover_from_builtin_definition(
+    name: String,
+    range: TextRange,
+    definition: &FixtureDefinition,
+) -> FixtureHover {
+    FixtureHover {
+        name,
+        range,
+        provider: None,
+        scope: definition.scope,
+        auto_use: definition.auto_use,
+        source_signature: definition.signature.clone(),
+        docstring: definition.docstring.clone(),
+        dependencies: definition
+            .dependencies
+            .iter()
+            .map(|dependency| dependency.name.clone())
+            .collect(),
     }
 }
 

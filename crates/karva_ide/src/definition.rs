@@ -16,15 +16,18 @@ pub struct FixtureDefinitionTarget {
 /// Resolves a fixture reference to its provider function name.
 ///
 /// This follows the same conservative resolution as [`hover_fixture`].
-/// Built-ins, rejected definitions, missing providers, and dynamic providers
-/// do not produce a target.
+/// Rejected definitions, missing providers, and dynamic providers do not
+/// produce a target. Built-ins resolve to their installed Python source.
 pub fn fixture_definition(
     analysis: &SourceAnalysis,
     offset: TextSize,
 ) -> Option<FixtureDefinitionTarget> {
     let hover = hover_fixture(analysis, offset)?;
-    let provider = hover.provider?;
-    let definition = analysis.fixture_model.definition(&provider)?;
+    let definition = hover
+        .provider
+        .as_ref()
+        .and_then(|provider| analysis.fixture_model.definition(provider))
+        .or_else(|| analysis.fixture_model.builtin_definition(&hover.name))?;
     Some(FixtureDefinitionTarget {
         path: definition.id.path.clone(),
         range: definition.name_range,

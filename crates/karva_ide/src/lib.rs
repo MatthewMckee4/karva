@@ -212,8 +212,12 @@ pub(crate) fn analyze_source_with_parents(
         })
         .collect::<Vec<_>>();
     let parent_modules = parent_modules.iter().collect::<Vec<_>>();
-    let (fixture_model, diagnostics) =
-        fixture::analyze_modules(&current, &parent_modules, settings.try_import_fixtures);
+    let (fixture_model, diagnostics) = fixture::analyze_modules(
+        &current,
+        &parent_modules,
+        None,
+        settings.try_import_fixtures,
+    );
     Some(SourceAnalysis {
         module: current,
         fixture_model,
@@ -238,16 +242,21 @@ pub(crate) fn analyze_sources(
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
     let parent_modules = parents.iter().collect::<Vec<_>>();
-    analyze_collected_source(current, &parent_modules, settings)
+    analyze_collected_source(current, &parent_modules, None, settings)
 }
 
 pub(crate) fn analyze_collected_source(
     current: CollectedModule,
     parents: &[&CollectedModule],
+    builtin_module: Option<&CollectedModule>,
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
-    let (fixture_model, diagnostics) =
-        fixture::analyze_modules(&current, parents, settings.try_import_fixtures);
+    let (fixture_model, diagnostics) = fixture::analyze_modules(
+        &current,
+        parents,
+        builtin_module,
+        settings.try_import_fixtures,
+    );
     SourceAnalysis {
         module: current,
         fixture_model,

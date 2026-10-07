@@ -172,7 +172,35 @@ pub fn collect_source(
     function_names: &[String],
 ) -> Option<CollectedModule> {
     let module_path = ModulePath::new(path, cwd)?;
-    let module_type: ModuleType = path.into();
+    collect_source_with_module_path(module_path, source_text, settings, function_names)
+}
+
+/// Collects Python source whose import name is known independently of its path.
+///
+/// Framework modules may be installed outside the project root, so their dotted
+/// name cannot be derived from the project-relative path.
+pub fn collect_source_with_module_name(
+    path: &Utf8PathBuf,
+    module_name: &str,
+    source_text: String,
+    settings: &CollectionSettings,
+    function_names: &[String],
+) -> Option<CollectedModule> {
+    collect_source_with_module_path(
+        ModulePath::new_with_name(path.clone(), module_name.to_owned()),
+        source_text,
+        settings,
+        function_names,
+    )
+}
+
+fn collect_source_with_module_path(
+    module_path: ModulePath,
+    source_text: String,
+    settings: &CollectionSettings,
+    function_names: &[String],
+) -> Option<CollectedModule> {
+    let module_type: ModuleType = module_path.path().into();
 
     let parse_options =
         ParseOptions::from(Mode::Module).with_target_version(settings.python_version);
