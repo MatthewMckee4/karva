@@ -14,6 +14,7 @@ mod inlay_hint;
 mod prepare_rename;
 mod references;
 mod rename;
+mod workspace_symbols;
 
 pub(super) use completion::Completion;
 pub(super) use definition::Definition;
@@ -25,6 +26,7 @@ pub(super) use inlay_hint::InlayHints;
 pub(super) use prepare_rename::PrepareRename;
 pub(super) use references::References;
 pub(super) use rename::Rename;
+pub(super) use workspace_symbols::WorkspaceSymbols;
 
 pub(super) struct Shutdown;
 

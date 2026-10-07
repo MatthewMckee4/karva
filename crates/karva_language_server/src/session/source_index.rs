@@ -313,7 +313,7 @@ pub(crate) enum SourceIndexError {
     Cancelled,
 }
 
-fn discover_directory(
+pub(super) fn discover_directory(
     root: &Utf8Path,
     respect_ignore_files: bool,
     cancellation: &RequestCancellationToken,
@@ -348,7 +348,7 @@ fn discover_directory(
     Ok(())
 }
 
-fn reject_symlink_root(path: &Utf8Path) -> Result<(), SourceIndexError> {
+pub(super) fn reject_symlink_root(path: &Utf8Path) -> Result<(), SourceIndexError> {
     let metadata = fs::symlink_metadata(path).map_err(|source| SourceIndexError::Metadata {
         path: path.to_path_buf(),
         source,

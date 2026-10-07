@@ -82,6 +82,7 @@ pub(super) fn server_capabilities(position_encoding: PositionEncoding) -> Server
         references_provider: Some(true.into()),
         document_highlight_provider: Some(true.into()),
         document_symbol_provider: Some(true.into()),
+        workspace_symbol_provider: Some(true.into()),
         rename_provider: Some(
             RenameOptions::new(Some(true), WorkDoneProgressOptions::default()).into(),
         ),

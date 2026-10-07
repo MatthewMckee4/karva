@@ -7,7 +7,7 @@ use lsp_types::{
     DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
     DocumentSymbolRequest, HoverRequest, ImplementationRequest, InlayHintRequest,
     LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
-    ReferencesRequest, RenameRequest, Request as _, ShutdownRequest,
+    ReferencesRequest, RenameRequest, Request as _, ShutdownRequest, WorkspaceSymbolRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -42,6 +42,9 @@ impl RequestError {
 
 pub(super) fn request(request: Request) -> Task {
     match LspRequestMethod::from(request.method.as_str()) {
+        WorkspaceSymbolRequest::METHOD => {
+            background_request_task::<requests::WorkspaceSymbols>(request)
+        }
         ShutdownRequest::METHOD => sync_request_task::<requests::Shutdown>(request),
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
