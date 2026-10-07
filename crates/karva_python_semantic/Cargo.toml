@@ -18,7 +18,11 @@ python-runtime = ["dep:pyo3"]
 camino = { workspace = true }
 pyo3 = { workspace = true, optional = true }
 ruff_python_ast = { workspace = true }
+ruff_text_size = { workspace = true }
 serde = { workspace = true }
+
+[dev-dependencies]
+ruff_python_parser = { workspace = true }
 
 [lints]
 workspace = true

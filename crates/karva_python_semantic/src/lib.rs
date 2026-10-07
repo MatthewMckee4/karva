@@ -2,9 +2,11 @@
 
 use camino::Utf8Path;
 
+mod decorators;
 mod function_kind;
 mod name;
 
+pub use decorators::{DecoratorBindings, KnownBinding, is_fixture_function_with_bindings};
 pub use function_kind::FunctionKind;
 pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 #[cfg(feature = "python-runtime")]
@@ -13,28 +15,10 @@ use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
 #[cfg(feature = "python-runtime")]
 use ruff_python_ast::PythonVersion;
-use ruff_python_ast::{Expr, StmtFunctionDef};
 
 /// Check whether a file path has a `.py` extension.
 pub fn is_python_file(path: &Utf8Path) -> bool {
     path.extension().is_some_and(|extension| extension == "py")
-}
-
-/// Check if a function definition has a @fixture decorator
-pub fn is_fixture_function(val: &StmtFunctionDef) -> bool {
-    val.decorator_list
-        .iter()
-        .any(|decorator| is_fixture(&decorator.expression))
-}
-
-/// Check whether an expression resolves to a fixture reference.
-fn is_fixture(expr: &Expr) -> bool {
-    match expr {
-        Expr::Name(name) => name.id == "fixture",
-        Expr::Attribute(attr) => attr.attr.id == "fixture",
-        Expr::Call(call) => is_fixture(call.func.as_ref()),
-        _ => false,
-    }
 }
 
 /// Converts a Python file below `cwd` into its dotted import path.

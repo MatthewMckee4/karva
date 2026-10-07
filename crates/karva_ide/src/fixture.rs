@@ -16,9 +16,10 @@ use std::collections::{HashMap, HashSet};
 
 use camino::Utf8PathBuf;
 use karva_collector::{CollectedModule, ModuleType};
+use karva_python_semantic::{DecoratorBindings, KnownBinding};
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
-use ruff_text_size::{Ranged, TextRange};
+use ruff_text_size::{Ranged, TextRange, TextSize};
 
 use crate::{DiagnosticCode, RelatedInformation, SourceDiagnostic, SourceLocation};
 
@@ -179,7 +180,8 @@ struct FixtureProvider {
     definitions: Vec<FixtureDefinition>,
     by_name: HashMap<String, FixtureId>,
     rejected: HashMap<String, Vec<FixtureId>>,
-    bindings: FixtureBindings,
+    bindings: DecoratorBindings,
+    bindings_at: HashMap<TextSize, DecoratorBindings>,
     unknown: bool,
     diagnostics: Vec<SourceDiagnostic>,
 }
@@ -190,7 +192,8 @@ pub(super) struct FixtureModel {
     local: Vec<FixtureDefinition>,
     visible: Vec<FixtureDefinition>,
     blocked_names: HashSet<String>,
-    bindings: FixtureBindings,
+    bindings: DecoratorBindings,
+    bindings_at: HashMap<TextSize, DecoratorBindings>,
     builtins_visible: bool,
 
     /// Built-in providers parsed from Karva's installed Python package.
@@ -244,23 +247,33 @@ impl FixtureModel {
     }
 
     /// Returns whether `expression` is a recognized fixture-use decorator.
-    pub(super) fn is_use_fixtures_reference(&self, expression: &Expr) -> bool {
-        self.bindings.is_use_fixtures_reference(expression)
+    pub(super) fn is_use_fixtures_reference(
+        &self,
+        function: &StmtFunctionDef,
+        expression: &Expr,
+    ) -> bool {
+        self.bindings_for(function).is_use_fixtures(expression)
     }
 
     /// Returns whether a test parameter remains available for fixture injection.
     pub(super) fn parameter_is_fixture(&self, function: &StmtFunctionDef, name: &str) -> bool {
-        parameter_is_fixture(self.bindings, function, name)
+        parameter_is_fixture(self.bindings_for(function), function, name)
     }
 
     /// Returns whether parametrization may capture unknown parameter names.
     pub(super) fn parametrization_is_dynamic(&self, function: &StmtFunctionDef) -> bool {
-        parametrization_is_dynamic(self.bindings, function)
+        parametrization_is_dynamic(self.bindings_for(function), function)
     }
 
     /// Returns whether static lookup may fall back to Karva's built-ins.
     pub(super) const fn builtins_visible(&self) -> bool {
         self.builtins_visible
+    }
+
+    fn bindings_for(&self, function: &StmtFunctionDef) -> &DecoratorBindings {
+        self.bindings_at
+            .get(&function.range.start())
+            .unwrap_or(&self.bindings)
     }
 }
 
@@ -476,7 +489,12 @@ impl FixtureModel {
             .map_or_else(Vec::new, |provider| provider.definitions.clone());
         let bindings = providers
             .first()
-            .map_or_else(FixtureBindings::default, |provider| provider.bindings);
+            .map_or_else(DecoratorBindings::default, |provider| {
+                provider.bindings.clone()
+            });
+        let bindings_at = providers
+            .first()
+            .map_or_else(HashMap::new, |provider| provider.bindings_at.clone());
         let mut visible = Vec::new();
         let mut names = HashSet::new();
         let mut blocked_names = HashSet::new();
@@ -505,6 +523,7 @@ impl FixtureModel {
             visible,
             blocked_names,
             bindings,
+            bindings_at,
             builtins_visible,
             builtins: builtin_provider
                 .map(|provider| provider.definitions.clone())
@@ -529,7 +548,8 @@ impl FixtureProvider {
     fn from_parsed(
         parsed: &[ParsedFixture],
         path: &Utf8PathBuf,
-        bindings: FixtureBindings,
+        bindings: DecoratorBindings,
+        bindings_at: HashMap<TextSize, DecoratorBindings>,
         imported_fixtures_unknown: bool,
     ) -> Self {
         let mut diagnostics = Vec::new();
@@ -572,6 +592,7 @@ impl FixtureProvider {
             by_name,
             rejected,
             bindings,
+            bindings_at,
             unknown: imported_fixtures_unknown
                 || parsed.iter().any(|fixture| !fixture.public_name_known),
             diagnostics,
@@ -581,104 +602,63 @@ impl FixtureProvider {
 
 fn parse_provider(module: &CollectedModule, try_import_fixtures: bool) -> FixtureProvider {
     let path = module.path.path().clone();
-    let bindings = FixtureBindings::from_statements(&module.module_body);
+    let bindings = DecoratorBindings::from_statements(&module.module_body);
     let parsed = module
         .fixture_function_defs
         .iter()
-        .map(|function| parse_fixture(function, &path, bindings, &module.source_text))
+        .map(|function| {
+            let bindings = DecoratorBindings::before(&module.module_body, function.range.start());
+            parse_fixture(function, &path, &bindings, &module.source_text)
+        })
         .collect::<Vec<_>>();
+    let bindings_at = module
+        .test_function_defs
+        .iter()
+        .chain(module.fixture_function_defs.iter())
+        .map(|function| {
+            (
+                function.range.start(),
+                DecoratorBindings::before(&module.module_body, function.range.start()),
+            )
+        })
+        .collect();
     let imported_fixtures_unknown = (try_import_fixtures
         || module.module_type == ModuleType::Configuration)
         && has_external_imports(&module.module_body);
-    FixtureProvider::from_parsed(&parsed, &path, bindings, imported_fixtures_unknown)
+    let unknown_fixture_decorator = has_unknown_fixture_decorator(module);
+    FixtureProvider::from_parsed(
+        &parsed,
+        &path,
+        bindings,
+        bindings_at,
+        imported_fixtures_unknown || unknown_fixture_decorator,
+    )
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct FixtureBindings {
-    bare: bool,
-    karva: bool,
-    pytest: bool,
-}
-
-impl FixtureBindings {
-    fn from_statements(statements: &[Stmt]) -> Self {
-        let mut bindings = Self::default();
-        for statement in statements {
-            match statement {
-                Stmt::Import(import) => {
-                    for alias in &import.names {
-                        let binding = alias.asname.as_ref().map_or_else(
-                            || alias.name.as_str(),
-                            ruff_python_ast::Identifier::as_str,
-                        );
-                        match (alias.name.as_str(), binding) {
-                            ("karva", "karva") => bindings.karva = true,
-                            ("pytest", "pytest") => bindings.pytest = true,
-                            _ => {}
-                        }
-                    }
-                }
-                Stmt::ImportFrom(import)
-                    if import.module.as_ref().is_some_and(|module| {
-                        matches!(module.as_str(), "karva" | "pytest" | "karva._karva")
-                    }) =>
-                {
-                    bindings.bare |= import.names.iter().any(|alias| {
-                        alias.name.as_str() == "fixture"
-                            && alias
-                                .asname
-                                .as_ref()
-                                .is_none_or(|name| name.as_str() == "fixture")
-                    });
-                }
-                _ => {}
-            }
-        }
-        bindings
-    }
-
-    fn is_parametrize_reference(self, expression: &Expr) -> bool {
-        match expression {
-            Expr::Name(name) => name.id == "parametrize",
-            Expr::Attribute(attribute) if attribute.attr.id == "parametrize" => {
-                matches!(
-                    attribute.value.as_ref(),
-                    Expr::Attribute(namespace)
-                        if matches!(
-                            (namespace.value.as_ref(), namespace.attr.id.as_str()),
-                            (Expr::Name(name), "mark") if self.pytest && name.id == "pytest"
-                        ) || matches!(
-                            (namespace.value.as_ref(), namespace.attr.id.as_str()),
-                            (Expr::Name(name), "tags") if self.karva && name.id == "karva"
-                        )
-                )
-            }
-            _ => false,
-        }
-    }
-
-    fn is_use_fixtures_reference(self, expression: &Expr) -> bool {
-        let Expr::Attribute(attribute) = expression else {
+fn has_unknown_fixture_decorator(module: &CollectedModule) -> bool {
+    module.module_body.iter().any(|statement| {
+        let Stmt::FunctionDef(function) = statement else {
             return false;
         };
-        match attribute.attr.as_str() {
-            "use_fixtures" => matches!(
-                attribute.value.as_ref(),
-                Expr::Attribute(namespace)
-                    if self.karva
-                        && namespace.attr.as_str() == "tags"
-                        && matches!(namespace.value.as_ref(), Expr::Name(name) if name.id == "karva")
-            ),
-            "usefixtures" => matches!(
-                attribute.value.as_ref(),
-                Expr::Attribute(namespace)
-                    if self.pytest
-                        && namespace.attr.as_str() == "mark"
-                        && matches!(namespace.value.as_ref(), Expr::Name(name) if name.id == "pytest")
-            ),
-            _ => false,
-        }
-    }
+        let bindings = DecoratorBindings::before(&module.module_body, function.range.start());
+        function.decorator_list.iter().any(|decorator| {
+            let expression = match &decorator.expression {
+                Expr::Call(call) => call.func.as_ref(),
+                expression => expression,
+            };
+            if bindings.is_fixture(expression) {
+                return false;
+            }
+            match expression {
+                Expr::Name(name) => {
+                    name.id.as_str() == "fixture"
+                        || bindings.get(name.id.as_str()) == Some(KnownBinding::Unknown)
+                }
+                Expr::Attribute(attribute) => attribute.attr.as_str() == "fixture",
+                _ => false,
+            }
+        })
+    })
 }
 
 /// Returns the replaceable contents of a non-concatenated string literal.
@@ -694,7 +674,7 @@ pub(super) fn single_string_content_range(
 fn parse_fixture(
     function: &StmtFunctionDef,
     path: &Utf8PathBuf,
-    bindings: FixtureBindings,
+    bindings: &DecoratorBindings,
     source: &str,
 ) -> ParsedFixture {
     let mut public_name = function.name.to_string();
@@ -920,26 +900,8 @@ fn function_docstring(function: &StmtFunctionDef) -> Option<String> {
     Some(string.value.to_str().to_owned())
 }
 
-fn is_fixture_decorator(expression: &Expr, bindings: FixtureBindings) -> bool {
-    match expression {
-        Expr::Call(call) => is_fixture_reference(call.func.as_ref(), bindings),
-        _ => is_fixture_reference(expression, bindings),
-    }
-}
-
-fn is_fixture_reference(expression: &Expr, bindings: FixtureBindings) -> bool {
-    match expression {
-        Expr::Name(name) => bindings.bare && name.id == "fixture",
-        Expr::Attribute(attribute) if attribute.attr.id == "fixture" => {
-            matches!(
-                attribute.value.as_ref(),
-                Expr::Name(name)
-                    if (bindings.karva && name.id == "karva")
-                        || (bindings.pytest && name.id == "pytest")
-            )
-        }
-        _ => false,
-    }
+fn is_fixture_decorator(expression: &Expr, bindings: &DecoratorBindings) -> bool {
+    bindings.is_fixture(expression)
 }
 
 fn invalid_metadata_diagnostics(
@@ -1217,13 +1179,11 @@ fn test_diagnostics(
     module: &CollectedModule,
     providers: &[FixtureProvider],
 ) -> Vec<SourceDiagnostic> {
-    let bindings = providers
-        .first()
-        .map_or_else(FixtureBindings::default, |provider| provider.bindings);
     let path = module.path.path();
     let mut diagnostics = Vec::new();
     for test in &module.test_function_defs {
-        let Some(parametrized) = parametrized_names(bindings, test) else {
+        let bindings = DecoratorBindings::before(&module.module_body, test.range.start());
+        let Some(parametrized) = parametrized_names(&bindings, test) else {
             continue;
         };
         diagnostics.extend(
@@ -1269,12 +1229,16 @@ fn test_diagnostics(
     diagnostics
 }
 
-fn parameter_is_fixture(bindings: FixtureBindings, function: &StmtFunctionDef, name: &str) -> bool {
+fn parameter_is_fixture(
+    bindings: &DecoratorBindings,
+    function: &StmtFunctionDef,
+    name: &str,
+) -> bool {
     for decorator in &function.decorator_list {
         let Expr::Call(call) = &decorator.expression else {
             continue;
         };
-        if !bindings.is_parametrize_reference(call.func.as_ref()) {
+        if !bindings.is_parametrize(call.func.as_ref()) {
             continue;
         }
         let Some(argnames) = call.arguments.args.first().or_else(|| {
@@ -1301,12 +1265,12 @@ fn parameter_is_fixture(bindings: FixtureBindings, function: &StmtFunctionDef, n
     true
 }
 
-fn parametrization_is_dynamic(bindings: FixtureBindings, function: &StmtFunctionDef) -> bool {
+fn parametrization_is_dynamic(bindings: &DecoratorBindings, function: &StmtFunctionDef) -> bool {
     function.decorator_list.iter().any(|decorator| {
         let Expr::Call(call) = &decorator.expression else {
             return false;
         };
-        if !bindings.is_parametrize_reference(call.func.as_ref()) {
+        if !bindings.is_parametrize(call.func.as_ref()) {
             return false;
         }
         let argnames = call.arguments.args.first().or_else(|| {
@@ -1327,7 +1291,7 @@ fn parametrization_is_dynamic(bindings: FixtureBindings, function: &StmtFunction
 
 /// Returns `None` when a decorator may supply arguments dynamically.
 fn parametrized_names(
-    bindings: FixtureBindings,
+    bindings: &DecoratorBindings,
     function: &StmtFunctionDef,
 ) -> Option<HashSet<String>> {
     let mut names = HashSet::new();
@@ -1335,7 +1299,7 @@ fn parametrized_names(
         let Expr::Call(call) = &decorator.expression else {
             return None;
         };
-        if !bindings.is_parametrize_reference(call.func.as_ref()) {
+        if !bindings.is_parametrize(call.func.as_ref()) {
             return None;
         }
         let argnames = call.arguments.args.first().or_else(|| {

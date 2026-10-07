@@ -141,7 +141,10 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
             let Expr::Call(call) = &decorator.expression else {
                 continue;
             };
-            if !analysis.fixture_model.is_use_fixtures_reference(&call.func) {
+            if !analysis
+                .fixture_model
+                .is_use_fixtures_reference(function, &call.func)
+            {
                 continue;
             }
             for argument in &call.arguments.args {
