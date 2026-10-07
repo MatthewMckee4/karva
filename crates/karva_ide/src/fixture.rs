@@ -192,6 +192,9 @@ pub(super) struct FixtureModel {
     blocked_names: HashSet<String>,
     bindings: FixtureBindings,
     builtins_visible: bool,
+
+    /// Built-in providers parsed from Karva's installed Python package.
+    builtins: Vec<FixtureDefinition>,
 }
 
 impl FixtureModel {
@@ -215,7 +218,24 @@ impl FixtureModel {
 
     /// Returns the visible declaration with stable identity `id`.
     pub(super) fn definition(&self, id: &FixtureId) -> Option<&FixtureDefinition> {
-        self.visible.iter().find(|fixture| &fixture.id == id)
+        self.visible
+            .iter()
+            .chain(&self.builtins)
+            .find(|fixture| &fixture.id == id)
+    }
+
+    /// Returns the parsed built-in provider for `name`, when its source is available.
+    pub(super) fn builtin_definition(&self, name: &str) -> Option<&FixtureDefinition> {
+        self.builtins.iter().find(|fixture| fixture.name == name)
+    }
+
+    /// Returns parsed built-ins for completion and metadata consumers.
+    pub(super) fn builtin_completions(
+        &self,
+    ) -> impl Iterator<Item = (&str, Option<FixtureScope>, Option<bool>)> {
+        self.builtins
+            .iter()
+            .map(|fixture| (fixture.name.as_str(), fixture.scope, fixture.auto_use))
     }
 
     /// Returns names whose rejected declarations prevent provider fallback.
@@ -351,7 +371,7 @@ pub(super) fn analyze(
     module: &CollectedModule,
     try_import_fixtures: bool,
 ) -> (FixtureModel, Vec<SourceDiagnostic>) {
-    analyze_modules(module, &[], try_import_fixtures)
+    analyze_modules(module, &[], None, try_import_fixtures)
 }
 
 /// Analyzes a module against configuration providers ordered from the session
@@ -359,6 +379,7 @@ pub(super) fn analyze(
 pub(super) fn analyze_modules(
     current: &CollectedModule,
     parents: &[&CollectedModule],
+    builtin_module: Option<&CollectedModule>,
     try_import_fixtures: bool,
 ) -> (FixtureModel, Vec<SourceDiagnostic>) {
     let mut providers = parents
@@ -368,6 +389,10 @@ pub(super) fn analyze_modules(
         .collect::<Vec<_>>();
     let current_provider = parse_provider(current, try_import_fixtures);
     providers.insert(0, current_provider);
+    let builtin_provider = builtin_module.map(|module| parse_provider(module, false));
+    if let Some(provider) = &builtin_provider {
+        providers.push(provider.clone());
+    }
 
     let resolutions = providers
         .iter()
@@ -426,11 +451,26 @@ pub(super) fn analyze_modules(
                 right.code.as_str(),
             ))
     });
-    (FixtureModel::from_providers(&providers), diagnostics)
+    (
+        FixtureModel::from_providers(&providers, builtin_module.and_then(|_| providers.last())),
+        diagnostics,
+    )
 }
 
 impl FixtureModel {
-    fn from_providers(providers: &[FixtureProvider]) -> Self {
+    fn from_providers(
+        providers: &[FixtureProvider],
+        builtin_provider: Option<&FixtureProvider>,
+    ) -> Self {
+        let builtin_ids = builtin_provider
+            .into_iter()
+            .flat_map(|provider| {
+                provider
+                    .definitions
+                    .iter()
+                    .map(|definition| definition.id.clone())
+            })
+            .collect::<HashSet<_>>();
         let local = providers
             .first()
             .map_or_else(Vec::new, |provider| provider.definitions.clone());
@@ -448,6 +488,9 @@ impl FixtureModel {
                 }
             }
             for definition in &provider.definitions {
+                if builtin_ids.contains(&definition.id) {
+                    continue;
+                }
                 if names.insert(definition.name.clone()) {
                     visible.push(definition.clone());
                 }
@@ -463,6 +506,9 @@ impl FixtureModel {
             blocked_names,
             bindings,
             builtins_visible,
+            builtins: builtin_provider
+                .map(|provider| provider.definitions.clone())
+                .unwrap_or_default(),
         }
     }
 }
@@ -573,10 +619,9 @@ impl FixtureBindings {
                     }
                 }
                 Stmt::ImportFrom(import)
-                    if import
-                        .module
-                        .as_ref()
-                        .is_some_and(|module| matches!(module.as_str(), "karva" | "pytest")) =>
+                    if import.module.as_ref().is_some_and(|module| {
+                        matches!(module.as_str(), "karva" | "pytest" | "karva._karva")
+                    }) =>
                 {
                     bindings.bare |= import.names.iter().any(|alias| {
                         alias.name.as_str() == "fixture"

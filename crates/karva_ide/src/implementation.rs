@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use ruff_text_size::{TextRange, TextSize};
 
-use crate::{SourceAnalysis, fixture_target};
+use crate::{SourceAnalysis, hover_fixture};
 
 /// A source location for a fixture's implementation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,14 +18,17 @@ pub struct FixtureImplementationTarget {
 ///
 /// This follows the exact source-provider identity selected by fixture
 /// resolution, including providers inherited from parent configuration
-/// modules. Built-ins, rejected definitions, missing providers, and dynamic
-/// providers do not produce a target.
+/// modules. Built-ins resolve to their installed Python source.
 pub fn fixture_implementation(
     analysis: &SourceAnalysis,
     offset: TextSize,
 ) -> Option<FixtureImplementationTarget> {
-    let fixture = fixture_target(analysis, offset)?;
-    let definition = analysis.fixture_model.definition(&fixture)?;
+    let hover = hover_fixture(analysis, offset)?;
+    let definition = hover
+        .provider
+        .as_ref()
+        .and_then(|provider| analysis.fixture_model.definition(provider))
+        .or_else(|| analysis.fixture_model.builtin_definition(&hover.name))?;
     Some(FixtureImplementationTarget {
         path: definition.id.path.clone(),
         range: definition.implementation_range,

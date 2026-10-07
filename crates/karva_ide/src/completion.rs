@@ -45,14 +45,17 @@ pub fn complete_fixtures(
         }
     }
     if analysis.fixture_model.builtins_visible() {
-        for (name, scope) in crate::fixture::builtin_fixtures() {
+        for (name, scope, auto_use) in analysis.fixture_model.builtin_completions().chain(
+            crate::fixture::builtin_fixtures()
+                .map(|(name, scope)| (name, Some(scope), Some(false))),
+        ) {
             if names.insert(name.to_owned()) && name.starts_with(prefix) {
                 completions.push(completion(
                     name.to_owned(),
                     replacement,
                     None,
-                    Some(scope),
-                    Some(false),
+                    scope,
+                    auto_use,
                 ));
             }
         }

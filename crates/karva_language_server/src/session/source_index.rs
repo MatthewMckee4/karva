@@ -18,7 +18,7 @@ use std::time::Instant;
 use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
 use ignore::types::Types;
-use karva_collector::{CollectionSettings, collect_source};
+use karva_collector::{CollectionSettings, collect_source, collect_source_with_module_name};
 use karva_ide::{SourceAnalysisSettings, WorkspaceSourceIndex};
 use karva_project::path::{TestPath, TestPathError, TestPathFunction, absolute};
 use once_cell::sync::OnceCell;
@@ -219,6 +219,19 @@ impl PreparedSourceIndex {
                 return Err(SourceIndexError::CollectSource { path });
             };
             modules.push(module);
+        }
+        if let Some(path) = find_builtin_source(&project_root) {
+            if let Ok(source_text) = fs::read_to_string(&path)
+                && let Some(module) = collect_source_with_module_name(
+                    &path,
+                    "karva._builtins",
+                    source_text,
+                    &collection_settings,
+                    &[],
+                )
+            {
+                modules.push(module);
+            }
         }
         check_cancelled(cancellation)?;
 
@@ -447,6 +460,100 @@ fn ancestor_paths<'a>(
 
 fn is_python_path(path: &Utf8Path) -> bool {
     path.extension().is_some_and(|extension| extension == "py")
+}
+
+/// Locates the bundled fixture source without importing Python.
+fn find_builtin_source(project_root: &Utf8Path) -> Option<Utf8PathBuf> {
+    let virtual_env = std::env::var_os("VIRTUAL_ENV")
+        .and_then(|path| Utf8PathBuf::from_path_buf(path.into()).ok());
+    let executable = std::env::current_exe()
+        .ok()
+        .and_then(|path| Utf8PathBuf::from_path_buf(path).ok());
+    let python_paths = std::env::var_os("PYTHONPATH")
+        .as_deref()
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .filter_map(|path| Utf8PathBuf::from_path_buf(path).ok())
+        .collect::<Vec<_>>();
+    find_builtin_source_in(
+        project_root,
+        virtual_env.as_deref(),
+        executable.as_deref(),
+        &python_paths,
+    )
+}
+
+fn find_builtin_source_in(
+    project_root: &Utf8Path,
+    virtual_env: Option<&Utf8Path>,
+    executable: Option<&Utf8Path>,
+    python_paths: &[Utf8PathBuf],
+) -> Option<Utf8PathBuf> {
+    let mut candidates = Vec::new();
+    add_environment_root(&mut candidates, &project_root.join(".venv"));
+    add_environment_root(&mut candidates, &project_root.join("venv"));
+    if let Some(virtual_env) = virtual_env {
+        add_environment_root(&mut candidates, virtual_env);
+    }
+    if let Some(executable) = executable {
+        if let Some(environment_root) = executable_environment_root(executable) {
+            add_environment_root(&mut candidates, environment_root);
+        }
+    }
+    for python_path in python_paths {
+        add_unique(&mut candidates, python_path.join("karva/_builtins.py"));
+    }
+    candidates.into_iter().find(|path| path.is_file())
+}
+
+fn add_environment_root(candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
+    add_source_root(candidates, root);
+    add_unique(
+        candidates,
+        root.join("lib/site-packages/karva/_builtins.py"),
+    );
+    add_unique(
+        candidates,
+        root.join("Lib/site-packages/karva/_builtins.py"),
+    );
+    for library in [root.join("lib"), root.join("Lib")] {
+        let Ok(mut entries) = fs::read_dir(library) else {
+            continue;
+        };
+        let mut python_dirs = entries
+            .by_ref()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().into_string().ok()?;
+                name.starts_with("python")
+                    .then(|| Utf8PathBuf::from_path_buf(entry.path()).ok())
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        python_dirs.sort_unstable();
+        for python_dir in python_dirs {
+            add_unique(
+                candidates,
+                python_dir.join("site-packages/karva/_builtins.py"),
+            );
+        }
+    }
+}
+
+fn add_source_root(candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
+    add_unique(candidates, root.join("python/karva/_builtins.py"));
+    add_unique(candidates, root.join("karva/_builtins.py"));
+}
+
+fn add_unique(candidates: &mut Vec<Utf8PathBuf>, candidate: Utf8PathBuf) {
+    if !candidates.contains(&candidate) {
+        candidates.push(candidate);
+    }
+}
+
+fn executable_environment_root(executable: &Utf8Path) -> Option<&Utf8Path> {
+    let bin = executable.parent()?;
+    matches!(bin.file_name(), Some("bin" | "Scripts")).then(|| bin.parent())?
 }
 
 fn check_cancelled(cancellation: &RequestCancellationToken) -> Result<(), SourceIndexError> {
@@ -898,6 +1005,51 @@ mod tests {
             .expect_err("outside root should fail");
 
         assert!(matches!(error, SourceIndexError::OutsideProjectRoot { .. }));
+    }
+
+    #[test]
+    fn builtin_source_lookup_prefers_project_virtualenv() {
+        let fixture = Fixture::new();
+        let project_builtin = fixture.write(
+            ".venv/lib/python3.12/site-packages/karva/_builtins.py",
+            "project",
+        );
+        let active_env = fixture.root.join("active-env");
+        let active_builtin = fixture.write(
+            "active-env/lib/python3.12/site-packages/karva/_builtins.py",
+            "active",
+        );
+
+        let found = find_builtin_source_in(&fixture.root, Some(&active_env), None, &[])
+            .expect("project virtualenv source");
+
+        assert_eq!(found, project_builtin);
+        assert_ne!(found, active_builtin);
+    }
+
+    #[test]
+    fn builtin_source_lookup_uses_executable_environment_without_ancestor_scanning() {
+        let fixture = Fixture::new();
+        let executable = fixture.root.join("environment/bin/karva");
+        let installed = fixture.write(
+            "environment/lib/python3.12/site-packages/karva/_builtins.py",
+            "installed",
+        );
+        let unrelated = fixture.write(
+            "environment/target/lib/python3.12/site-packages/karva/_builtins.py",
+            "unrelated",
+        );
+
+        let found = find_builtin_source_in(
+            &fixture.root.join("other-project"),
+            None,
+            Some(&executable),
+            &[],
+        )
+        .expect("executable environment source");
+
+        assert_eq!(found, installed);
+        assert_ne!(found, unrelated);
     }
 
     impl Fixture {
