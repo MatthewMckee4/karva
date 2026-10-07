@@ -150,14 +150,7 @@ pub struct SourceAnalysis {
 }
 
 /// Analyzes unsaved Python source without importing Python or launching workers.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "completion and navigation consumers land in later stack layers"
-    )
-)]
-pub(crate) fn analyze_source(
+pub fn analyze_source(
     path: &Utf8PathBuf,
     project_root: &Utf8Path,
     source_text: String,

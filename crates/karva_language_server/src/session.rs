@@ -9,6 +9,8 @@ pub(super) mod client;
 mod index;
 mod request_queue;
 mod source_index;
+mod workspace_symbols;
+pub(super) use workspace_symbols::PreparedWorkspaceSymbols;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -503,12 +505,28 @@ impl Session {
         self.prepare_source_analysis_with_scope(uri, SourceIndexScope::TestSelection)
     }
 
-    /// Captures source state for a project-wide symbol query.
     /// Profile passed to editor-run commands to preserve initialization overrides.
     pub(super) fn configuration_profile(&self) -> Option<&str> {
         self.workspaces.profile()
     }
 
+    /// Captures workspace roots and Python overlays without filesystem I/O.
+    pub(super) fn prepare_workspace_symbols(&self) -> PreparedWorkspaceSymbols {
+        PreparedWorkspaceSymbols::new(
+            self.workspaces.clone(),
+            self.index
+                .documents()
+                .filter(|document| document.language_id() == &LanguageKind::Python)
+                .filter_map(|document| {
+                    uri_to_path(document.uri())
+                        .ok()
+                        .map(|path| (path, document.shared_contents()))
+                })
+                .collect(),
+        )
+    }
+
+    /// Captures source state for a project-wide symbol query.
     pub(super) fn prepare_project_source_analysis(
         &self,
         uri: &Uri,

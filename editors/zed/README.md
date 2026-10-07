@@ -67,6 +67,13 @@ to test parameters, fixture dependencies, and `usefixtures` names:
 Hints follow fixture overrides and unsaved provider edits. Unknown fixtures and
 ordinary Python parameters are left to diagnostics and the Python language server.
 
+## Workspace symbol search
+
+Use the editor's workspace symbol search to find Karva tests and fixtures across
+all project folders. Search accepts case-insensitive characters in order;
+fixture results use their public names. Unsaved Python buffers override saved
+files, and nested Karva projects use their own test prefixes.
+
 ## Python snippets
 
 Type a trigger in a Python buffer and accept its completion with Enter. Tab then

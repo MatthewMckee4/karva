@@ -42,7 +42,7 @@ pub enum WorkspaceError {
     UnknownProfile(#[from] UnknownProfile),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Workspace {
     root: Utf8PathBuf,
     projects: HashMap<Utf8PathBuf, Arc<Project>>,
@@ -75,7 +75,7 @@ impl Workspace {
 }
 
 /// Independent project caches for every editor workspace folder.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Workspaces {
     folders: Vec<WorkspaceFolder>,
     profile: Option<String>,
@@ -125,6 +125,11 @@ impl Workspaces {
 
     pub(super) fn profile(&self) -> Option<&str> {
         self.profile.as_deref()
+    }
+
+    /// Configured search roots, including the default current-directory workspace.
+    pub(super) fn roots(&self) -> impl Iterator<Item = &Utf8Path> {
+        self.roots.iter().map(|workspace| workspace.root.as_path())
     }
 
     pub(super) fn folders(&self) -> impl Iterator<Item = &WorkspaceFolder> {
