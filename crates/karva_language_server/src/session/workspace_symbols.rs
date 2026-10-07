@@ -6,22 +6,40 @@ use std::sync::Arc;
 use camino::Utf8PathBuf;
 use karva_ide::{SourceAnalysisSettings, SourceSymbol, analyze_source, source_symbols};
 use lsp_types::Uri;
+use once_cell::sync::OnceCell;
 
 use super::RequestCancellationToken;
 use super::source_index::{SourceIndexError, discover_directory, reject_symlink_root};
 use crate::workspace::Workspaces;
 
+/// Resolved source and symbol locations for one workspace notification generation.
+#[derive(Debug)]
+pub(super) struct IndexedWorkspaceSymbols {
+    path: Utf8PathBuf,
+    source: String,
+    symbols: Vec<SourceSymbol>,
+}
+
+pub(super) type WorkspaceSymbolCache = Arc<OnceCell<Vec<IndexedWorkspaceSymbols>>>;
+
 /// A coherent set of workspace roots and unsaved Python source overlays.
 pub struct PreparedWorkspaceSymbols {
     workspaces: Workspaces,
     overlays: BTreeMap<Utf8PathBuf, Arc<str>>,
+    /// Reused only while the session's notification generation is current.
+    cache: WorkspaceSymbolCache,
 }
 
 impl PreparedWorkspaceSymbols {
-    pub(super) fn new(workspaces: Workspaces, overlays: BTreeMap<Utf8PathBuf, Arc<str>>) -> Self {
+    pub(super) fn new(
+        workspaces: Workspaces,
+        overlays: BTreeMap<Utf8PathBuf, Arc<str>>,
+        cache: WorkspaceSymbolCache,
+    ) -> Self {
         Self {
             workspaces,
             overlays,
+            cache,
         }
     }
 
@@ -31,6 +49,25 @@ impl PreparedWorkspaceSymbols {
         cancellation: &RequestCancellationToken,
         mut visit: impl FnMut(&Utf8PathBuf, &str, Vec<SourceSymbol>),
     ) -> anyhow::Result<()> {
+        if cancellation.is_cancelled() {
+            return Err(SourceIndexError::Cancelled.into());
+        }
+        let cache = Arc::clone(&self.cache);
+        let modules = cache.get_or_try_init(|| self.collect(cancellation))?;
+        for module in modules {
+            if cancellation.is_cancelled() {
+                return Err(SourceIndexError::Cancelled.into());
+            }
+            visit(&module.path, &module.source, module.symbols.clone());
+        }
+        Ok(())
+    }
+
+    /// Resolves nested project settings before storing a coherent symbol snapshot.
+    fn collect(
+        self,
+        cancellation: &RequestCancellationToken,
+    ) -> anyhow::Result<Vec<IndexedWorkspaceSymbols>> {
         if cancellation.is_cancelled() {
             return Err(SourceIndexError::Cancelled.into());
         }
@@ -62,6 +99,7 @@ impl PreparedWorkspaceSymbols {
                 })
                 .cloned(),
         );
+        let mut modules = Vec::with_capacity(paths.len());
         for path in paths {
             if cancellation.is_cancelled() {
                 return Err(SourceIndexError::Cancelled.into());
@@ -87,10 +125,14 @@ impl PreparedWorkspaceSymbols {
             };
             if let Some(analysis) = analyze_source(&path, project.cwd(), source.clone(), &settings)
             {
-                visit(&path, &source, source_symbols(&analysis));
+                modules.push(IndexedWorkspaceSymbols {
+                    path,
+                    source,
+                    symbols: source_symbols(&analysis),
+                });
             }
         }
-        Ok(())
+        Ok(modules)
     }
 }
 
@@ -99,13 +141,20 @@ mod tests {
     use super::*;
     use ruff_python_ast::PythonVersion;
 
-    #[test]
-    fn cancelled_search_never_visits_sources() -> anyhow::Result<()> {
+    #[rstest::rstest]
+    fn cancelled_search_never_visits_sources(
+        #[values(false, true)] warm: bool,
+    ) -> anyhow::Result<()> {
         let token = RequestCancellationToken::default();
         token.cancel();
         let workspaces = Workspaces::new(Vec::new(), PythonVersion::PY312, None)?;
+        let cache = WorkspaceSymbolCache::default();
+        if warm {
+            PreparedWorkspaceSymbols::new(workspaces.clone(), BTreeMap::new(), Arc::clone(&cache))
+                .visit(&RequestCancellationToken::default(), |_, _, _| {})?;
+        }
         let mut visited = false;
-        let result = PreparedWorkspaceSymbols::new(workspaces, BTreeMap::new())
+        let result = PreparedWorkspaceSymbols::new(workspaces, BTreeMap::new(), cache)
             .visit(&token, |_, _, _| visited = true);
         assert!(result.is_err());
         assert!(!visited);

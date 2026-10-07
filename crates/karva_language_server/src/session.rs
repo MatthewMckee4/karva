@@ -11,6 +11,7 @@ mod request_queue;
 mod source_index;
 mod workspace_symbols;
 pub(super) use workspace_symbols::PreparedWorkspaceSymbols;
+use workspace_symbols::WorkspaceSymbolCache;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -389,6 +390,7 @@ pub struct Session {
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
     source_indexes: SharedSourceIndexes,
+    workspace_symbol_cache: WorkspaceSymbolCache,
     source_index_revision: SourceIndexRevision,
     diagnostic_cancellation: RequestCancellationToken,
 }
@@ -420,6 +422,7 @@ impl Session {
             published_diagnostic_paths: HashSet::new(),
             cache_source_indexes: false,
             source_indexes: Arc::default(),
+            workspace_symbol_cache: Arc::default(),
             source_index_revision: SourceIndexRevision::default(),
             diagnostic_cancellation: RequestCancellationToken::default(),
         }
@@ -572,6 +575,11 @@ impl Session {
                         .map(|path| (path, document.shared_contents()))
                 })
                 .collect(),
+            if self.cache_source_indexes {
+                Arc::clone(&self.workspace_symbol_cache)
+            } else {
+                Arc::default()
+            },
         )
     }
 
@@ -697,6 +705,7 @@ impl Session {
     }
 
     fn invalidate_source_indexes(&mut self) {
+        self.workspace_symbol_cache = Arc::default();
         let next = self
             .source_indexes
             .lock()

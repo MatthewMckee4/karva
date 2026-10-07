@@ -5,6 +5,7 @@ use lsp_types::{
     FileChangeType, FileEvent, LanguageKind, PartialResultParams, Position,
     PublishDiagnosticsNotification, RegistrationRequest, TextDocumentIdentifier, TextDocumentItem,
     TextDocumentPositionParams, Uri, WorkDoneProgressParams, WorkspaceClientCapabilities,
+    WorkspaceSymbolParams, WorkspaceSymbolRequest,
 };
 
 use super::{TestServer, Workspace};
@@ -88,6 +89,15 @@ fn disk_refresh_is_explicit_for_watched_clients_and_automatic_otherwise(
     let first = serde_json::to_value(server.request::<DefinitionRequest>(params.clone()))
         .expect("definition JSON");
     assert_eq!(first["range"]["start"]["line"], 2);
+    let symbols = WorkspaceSymbolParams::new(
+        "database".to_owned(),
+        WorkDoneProgressParams::default(),
+        PartialResultParams::default(),
+    );
+    let first_symbols =
+        serde_json::to_value(server.request::<WorkspaceSymbolRequest>(symbols.clone()))
+            .expect("symbol JSON");
+    assert_eq!(first_symbols[0]["location"]["range"]["start"]["line"], 2);
     workspace.write(
         "conftest.py",
         "from karva import fixture\n\n\n@fixture\ndef database(): pass\n",
@@ -97,6 +107,13 @@ fn disk_refresh_is_explicit_for_watched_clients_and_automatic_otherwise(
             .expect("definition JSON");
     assert_eq!(
         before_notification["range"]["start"]["line"],
+        if watched { 2 } else { 4 }
+    );
+    let before_symbols =
+        serde_json::to_value(server.request::<WorkspaceSymbolRequest>(symbols.clone()))
+            .expect("symbol JSON");
+    assert_eq!(
+        before_symbols[0]["location"]["range"]["start"]["line"],
         if watched { 2 } else { 4 }
     );
     if watched {
@@ -111,4 +128,10 @@ fn disk_refresh_is_explicit_for_watched_clients_and_automatic_otherwise(
     let refreshed =
         serde_json::to_value(server.request::<DefinitionRequest>(params)).expect("definition JSON");
     assert_eq!(refreshed["range"]["start"]["line"], 4);
+    let refreshed_symbols = serde_json::to_value(server.request::<WorkspaceSymbolRequest>(symbols))
+        .expect("symbol JSON");
+    assert_eq!(
+        refreshed_symbols[0]["location"]["range"]["start"]["line"],
+        4
+    );
 }
