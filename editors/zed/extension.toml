@@ -6,6 +6,8 @@ schema_version = 1
 authors = ["Matthew Mckee <matthewmckee04@yahoo.co.uk>"]
 repository = "https://github.com/MatthewMckee4/karva"
 
+snippets = ["snippets/python.json"]
+
 [language_servers.karva]
 name = "Karva"
 languages = ["Python"]

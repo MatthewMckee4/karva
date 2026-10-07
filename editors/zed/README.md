@@ -67,6 +67,36 @@ to test parameters, fixture dependencies, and `usefixtures` names:
 Hints follow fixture overrides and unsaved provider edits. Unknown fixtures and
 ordinary Python parameters are left to diagnostics and the Python language server.
 
+## Python snippets
+
+Type a trigger in a Python buffer and accept its completion with Enter. Tab then
+moves between editable placeholders. Snippets use module-level declarations
+and Karva's public APIs, with inline snapshots by default.
+
+| Trigger | Expansion |
+| --- | --- |
+| `karva_test` | Module-level test |
+| `karva_fixture` | Sync fixture |
+| `karva_async_fixture` | Async fixture |
+| `karva_teardown` | Generator fixture with cleanup |
+| `karva_auto_use` | Fixture with `auto_use=True` |
+| `karva_parametrize` | Parametrized test with stable case IDs |
+| `karva_tag` | Custom-tagged test |
+| `karva_expect_fail` | Expected failure with a reason |
+| `karva_snapshot` | Inline text snapshot |
+| `karva_json_snapshot` | Inline JSON snapshot |
+| `karva_doctest` | Function with a doctest |
+
+Doctests need `uv run karva test --doctest-modules` or the corresponding profile
+setting. Imports appear in standalone snippets; keep one `import karva` at the
+top of the module when combining expansions.
+
+Validate snippet expansions against an installed Karva wheel:
+
+```sh
+just test -p karva zed_snippets
+```
+
 ## Gutter test runs
 
 Zed detects Python `test_*` functions itself and binds their gutter play icons
