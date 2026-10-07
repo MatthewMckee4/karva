@@ -312,6 +312,7 @@ mod tests {
             MarkupKind::PlainText,
             false,
             false,
+            None,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         let (event_sender, event_receiver) = crossbeam_channel::unbounded();
