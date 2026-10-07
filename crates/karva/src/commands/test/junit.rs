@@ -134,6 +134,16 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
         escape_xml(case.name()),
     )?;
 
+    if let Some(source) = case.source() {
+        write!(
+            xml,
+            " file=\"{}\" line=\"{}\" column=\"{}\"",
+            escape_xml(&source.path),
+            source.line,
+            source.column
+        )?;
+    }
+
     if is_self_closing {
         xml.push_str("/>\n");
         return Ok(());

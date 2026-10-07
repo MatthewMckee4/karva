@@ -8,6 +8,7 @@ use crate::extensions::functions::raises::raises;
 use crate::extensions::functions::snapshot::{
     assert_cmd_snapshot, assert_json_snapshot, assert_snapshot, snapshot_settings,
 };
+use crate::extensions::functions::source::{SourceDocument, SourceLocation};
 use crate::extensions::functions::{
     Command, ExceptionInfo, FailError, RaisesContext, SkipError, SnapshotMismatchError,
     SnapshotSettings, fail, param, skip,
@@ -34,6 +35,8 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RaisesContext>()?;
     m.add_class::<SnapshotSettings>()?;
     m.add_class::<Command>()?;
+    m.add_class::<SourceDocument>()?;
+    m.add_class::<SourceLocation>()?;
 
     m.add_wrapped(wrap_pymodule!(tags))?;
 

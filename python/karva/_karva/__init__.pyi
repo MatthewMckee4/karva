@@ -75,10 +75,25 @@ class Param:
         """The values to parameterize the test case with."""
 
 
+class SourceLocation:
+    """Validated source position returned by SourceDocument.location."""
+
+
+class SourceDocument:
+    """Original decoded document shared by generated test cases."""
+
+    def __init__(self, path: str, text: str) -> None:
+        """Retain a shared decoded document and its display path."""
+
+    def location(self, line: int, column: int) -> SourceLocation:
+        """Return a position with one-based line and character column."""
+
+
 def param(
     *values: object,
     tags: Sequence[Tags | Callable[[], Tags]] | None = None,
     id: str | None = None,
+    source: SourceLocation | None = None,
 ) -> Param:
     """Define a parameterized test case.
 
@@ -86,6 +101,7 @@ def param(
         *values: The values to parameterize the test case with.
         tags: The tag or tag functions.
         id: A stable name for the parameterized test case.
+        source: Original document position used in diagnostics and case reports.
 
     Examples:
         Parameterize a test and tag individual cases:

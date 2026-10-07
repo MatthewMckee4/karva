@@ -16,7 +16,7 @@ use kind::TestResultKind;
 
 pub use case::{
     FixtureFailure, FixtureUsage, TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry,
-    TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
+    TestCaseSource, TestExecutionAttempt, TestExecutionOutcome, TestExecutionResult,
 };
 pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTests, FlakyTest};

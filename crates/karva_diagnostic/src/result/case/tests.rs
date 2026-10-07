@@ -41,6 +41,7 @@ fn test_case_result_keeps_its_flat_serialized_shape() {
     assert_eq!(value["name"], json!("test_example"));
     assert_eq!(value["full_name"], json!("tests.test::test_example"));
     assert_eq!(value["outcome"], json!("passed"));
+    assert!(value.get("source").is_none());
     assert!(value.get("identity").is_none());
     assert!(value.get("payload").is_none());
     assert_eq!(
@@ -85,6 +86,25 @@ fn test_case_result_round_trips_retry_payload() {
     assert!(value.get("attempts").is_some());
     assert_eq!(
         serde_json::from_value::<TestCaseResult<()>>(value).expect("deserialize retry result"),
+        result
+    );
+}
+
+#[test]
+fn test_case_result_round_trips_original_source() {
+    let name = QualifiedTestName::new(QualifiedFunctionName::new(
+        "test_example".to_string(),
+        ModulePath::new_with_name("test.py", "tests.test".to_string()),
+    ));
+    let result = TestCaseResult::<()>::new(&name, TestCaseOutcome::Passed, Duration::ZERO, None)
+        .with_source(Some(TestCaseSource::new("guide.rst".to_string(), 2, 3)));
+    let value = serde_json::to_value(&result).expect("serialize result");
+    assert_eq!(
+        value["source"],
+        json!({"path": "guide.rst", "line": 2, "column": 3})
+    );
+    assert_eq!(
+        serde_json::from_value::<TestCaseResult<()>>(value).expect("deserialize result"),
         result
     );
 }

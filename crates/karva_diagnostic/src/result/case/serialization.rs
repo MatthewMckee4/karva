@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{
     CapturedTestOutput, TestCaseAttempt, TestCaseIdentity, TestCaseOutcome, TestCaseResult,
-    TestCaseResultPayload, TestCaseRetry,
+    TestCaseResultPayload, TestCaseRetry, TestCaseSource,
 };
 
 /// Flat compatibility shape used to decode persisted and IPC results directly.
@@ -25,6 +25,10 @@ struct SerializedTestCaseResult<D> {
 
     /// Fully qualified user-visible test name.
     full_name: String,
+
+    /// Original document source when supplied by an adapter.
+    #[serde(default)]
+    source: Option<TestCaseSource>,
 
     /// Final semantic outcome after retry policy has completed.
     outcome: TestCaseOutcome<D>,
@@ -50,13 +54,17 @@ impl<D: Serialize> Serialize for TestCaseResult<D> {
     where
         S: Serializer,
     {
-        let optional_fields = usize::from(self.payload.retry.is_some())
+        let optional_fields = usize::from(self.identity.source.is_some())
+            + usize::from(self.payload.retry.is_some())
             + usize::from(self.payload.captured_output.is_some())
             + usize::from(!self.payload.attempts.is_empty());
         let mut result = serializer.serialize_struct("TestCaseResult", 5 + optional_fields)?;
         result.serialize_field("module_name", &self.identity.module_name)?;
         result.serialize_field("name", &self.identity.name)?;
         result.serialize_field("full_name", &self.identity.full_name)?;
+        if let Some(source) = self.identity.source.as_ref() {
+            result.serialize_field("source", source)?;
+        }
         result.serialize_field("outcome", &self.payload.outcome)?;
         result.serialize_field("duration", &self.payload.duration)?;
         if let Some(retry) = self.payload.retry.as_ref() {
@@ -83,6 +91,7 @@ impl<'de, D: Deserialize<'de>> Deserialize<'de> for TestCaseResult<D> {
                 module_name: result.module_name,
                 name: result.name,
                 full_name: result.full_name,
+                source: result.source,
             },
             payload: TestCaseResultPayload {
                 outcome: result.outcome,

@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
 use karva_diagnostic::{
-    CapturedTestOutput, Diagnostic, IndividualTestResultKind, Reporter, TestExecutionOutcome,
-    TestExecutionResult, sort_diagnostics_for_display,
+    CapturedTestOutput, Diagnostic, IndividualTestResultKind, Reporter, TestCaseSource,
+    TestExecutionOutcome, TestExecutionResult, sort_diagnostics_for_display,
 };
 use karva_metadata::ProjectSettings;
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
@@ -126,11 +126,30 @@ impl Context<'_> {
         duration: std::time::Duration,
         captured_output: Option<CapturedTestOutput>,
     ) -> bool {
+        self.register_test_case_result_with_source(
+            test_case_name,
+            outcome,
+            duration,
+            captured_output,
+            None,
+        )
+    }
+
+    /// Reports one case with original document metadata from an external adapter.
+    pub(super) fn register_test_case_result_with_source(
+        &self,
+        test_case_name: &QualifiedTestName,
+        outcome: TestExecutionOutcome,
+        duration: std::time::Duration,
+        captured_output: Option<CapturedTestOutput>,
+        source: Option<TestCaseSource>,
+    ) -> bool {
         let passed = !outcome.is_non_success();
 
         let cache_key = test_case_name.cache_key();
         let test_case =
-            TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
+            TestExecutionResult::new(test_case_name, outcome, duration, captured_output)
+                .with_source(source);
         let result_kind = test_case.outcome().result_kind();
         self.reporter.report_test_completed(&cache_key, test_case);
         self.reporter
