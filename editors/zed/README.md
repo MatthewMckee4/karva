@@ -161,3 +161,21 @@ rustup target add wasm32-wasip2
 cargo test --manifest-path editors/zed/Cargo.toml
 cargo build --manifest-path editors/zed/Cargo.toml --target wasm32-wasip2
 ```
+
+### Code-lens client contract
+
+The language server returns resolved lenses for collected test declarations.
+Editor integrations can implement these client-side command handlers:
+
+`karva.runTests` receives one object with `cwd`, `program`, and `args`. Save
+modified buffers, then launch the program in that working directory with the
+argument array, without combining arguments into a shell string. The payload
+uses `uv run karva test`, a project-relative file or function selector, and the
+initialization profile when supplied.
+
+`karva.copyTestId` receives one string: the runtime-qualified function ID,
+including its dotted module name. Copy it to the clipboard.
+
+Requesting lenses does not run a process. Clients without these handlers can
+continue using the gutter tasks above; this extension does not register lens
+command handlers yet.

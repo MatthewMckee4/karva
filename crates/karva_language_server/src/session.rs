@@ -505,7 +505,11 @@ impl Session {
         self.prepare_source_analysis_with_scope(uri, SourceIndexScope::TestSelection)
     }
 
-    /// Captures source state for a project-wide symbol query.
+    /// Profile passed to editor-run commands to preserve initialization overrides.
+    pub(super) fn configuration_profile(&self) -> Option<&str> {
+        self.workspaces.profile()
+    }
+
     /// Captures workspace roots and Python overlays without filesystem I/O.
     pub(super) fn prepare_workspace_symbols(&self) -> PreparedWorkspaceSymbols {
         PreparedWorkspaceSymbols::new(
@@ -522,6 +526,7 @@ impl Session {
         )
     }
 
+    /// Captures source state for a project-wide symbol query.
     pub(super) fn prepare_project_source_analysis(
         &self,
         uri: &Uri,

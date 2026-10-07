@@ -123,6 +123,10 @@ impl Workspaces {
         })
     }
 
+    pub(super) fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
+    }
+
     /// Configured search roots, including the default current-directory workspace.
     pub(super) fn roots(&self) -> impl Iterator<Item = &Utf8Path> {
         self.roots.iter().map(|workspace| workspace.root.as_path())

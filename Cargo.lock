@@ -1172,6 +1172,7 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "karva_collector",
+ "karva_python_semantic",
  "ruff_python_ast",
  "ruff_python_stdlib",
  "ruff_text_size",

@@ -4,6 +4,7 @@ use super::traits::{RequestHandler, SyncRequestHandler};
 use crate::session::Session;
 use crate::session::client::Client;
 
+mod code_lens;
 mod completion;
 mod definition;
 mod document_highlight;
@@ -16,6 +17,7 @@ mod references;
 mod rename;
 mod workspace_symbols;
 
+pub(super) use code_lens::CodeLenses;
 pub(super) use completion::Completion;
 pub(super) use definition::Definition;
 pub(super) use document_highlight::DocumentHighlight;
