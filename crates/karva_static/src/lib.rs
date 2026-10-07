@@ -53,6 +53,11 @@ macro_rules! env_vars {
 env_vars! {
     /// Environment variables that Karva itself reads from the environment.
     pub struct EnvVars {
+        /// Tracing filter for `uv run karva server`. Defaults to warnings and errors.
+        /// Logs and panic backtraces go to stderr, leaving stdout for LSP messages.
+        /// For example, `karva_language_server=debug` enables server debug tracing.
+        pub const RUST_LOG: &'static str = "RUST_LOG";
+
         /// This is a standard Rayon environment variable.
         pub const RAYON_NUM_THREADS: &'static str = "RAYON_NUM_THREADS";
 

@@ -8,6 +8,12 @@ This page lists every environment variable that Karva reads from the environment
 
 Variables Karva reads from the environment to influence its own behavior.
 
+### `RUST_LOG`
+
+Tracing filter for `uv run karva server`. Defaults to warnings and errors.
+Logs and panic backtraces go to stderr, leaving stdout for LSP messages.
+For example, `karva_language_server=debug` enables server debug tracing.
+
 ### `RAYON_NUM_THREADS`
 
 This is a standard Rayon environment variable.

@@ -271,3 +271,86 @@ where
         })
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::schedule::Scheduler;
+    use crate::server::{Action, Event};
+    use crate::session::client::Client;
+    use crate::session::{RequestCancellationToken, Session};
+    use crate::workspace::Workspaces;
+    use lsp_types::MarkupKind;
+    use ruff_python_ast::PythonVersion;
+    use std::num::NonZeroUsize;
+
+    struct PanickingRequest<const PREPARE: bool>;
+    impl<const PREPARE: bool> traits::RequestHandler for PanickingRequest<PREPARE> {
+        type RequestType = ShutdownRequest;
+    }
+    impl<const PREPARE: bool> BackgroundRequestHandler for PanickingRequest<PREPARE> {
+        type Snapshot = ();
+        fn prepare(_session: &mut Session, _params: &()) -> anyhow::Result<()> {
+            if PREPARE {
+                std::panic::panic_any("snapshot failure");
+            }
+            Ok(())
+        }
+        fn run(
+            _snapshot: (),
+            _client: &Client,
+            _params: (),
+            _cancellation: &RequestCancellationToken,
+        ) -> anyhow::Result<()> {
+            std::panic::panic_any("worker failure")
+        }
+    }
+
+    #[rstest::rstest]
+    fn request_panics_complete_with_internal_error(
+        #[values(false, true)] prepare_panics: bool,
+    ) -> anyhow::Result<()> {
+        let mut session = Session::new(
+            crate::PositionEncoding::UTF16,
+            MarkupKind::PlainText,
+            false,
+            false,
+            None,
+            Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
+        );
+        let (event_sender, event_receiver) = crossbeam_channel::unbounded();
+        let (connection_sender, _connection_receiver) = crossbeam_channel::unbounded();
+        let client = Client::new(event_sender, connection_sender);
+        let id = lsp_server::RequestId::from(1);
+        session
+            .request_queue_mut()
+            .incoming_mut()
+            .register(id.clone(), "shutdown".to_owned());
+        let request = Request::new(id.clone(), "shutdown".to_owned(), ());
+        let task = if prepare_panics {
+            background_request_task::<PanickingRequest<true>>(request)
+        } else {
+            background_request_task::<PanickingRequest<false>>(request)
+        };
+        let mut scheduler = Scheduler::new(NonZeroUsize::MIN)?;
+        scheduler.dispatch(task, &mut session, client);
+        drop(scheduler);
+        let Event::Action(Action::SendResponse(response)) = event_receiver.try_recv()? else {
+            anyhow::bail!("expected a panic response");
+        };
+        assert_eq!(response.id, id);
+        assert_eq!(
+            response.response_result.expect_err("internal error").code,
+            ErrorCode::InternalError as i32
+        );
+        assert!(
+            session
+                .request_queue_mut()
+                .incoming_mut()
+                .complete(&id)
+                .is_some()
+        );
+        assert!(event_receiver.try_recv().is_err());
+        Ok(())
+    }
+}
