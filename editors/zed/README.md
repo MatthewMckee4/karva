@@ -121,6 +121,13 @@ uv run karva test tests/test_example.py::check_example
 This file changes only the gutter action; the language server does not require
 it.
 
+## Language-server logs
+
+Karva writes language-server warnings, errors, and panic backtraces to stderr,
+which Zed captures in its language-server logs. Set `RUST_LOG=karva_language_server=debug`
+in the environment that starts Zed to enable debug tracing. Panics also produce
+an editor error message; a failed request receives an internal-error response.
+
 ## Development
 
 Check and build the extension from the repository root:
