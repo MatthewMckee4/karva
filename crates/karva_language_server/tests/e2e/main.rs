@@ -14,6 +14,7 @@ mod document_sync;
 mod hover;
 mod implementation;
 mod initialize;
+mod inlay_hint;
 mod references;
 mod rename;
 

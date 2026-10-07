@@ -13,6 +13,7 @@ use lsp_server::RequestId;
 pub struct RequestQueue {
     incoming: Incoming,
     outgoing: HashSet<RequestId>,
+    next_outgoing_id: u64,
 }
 
 impl RequestQueue {
@@ -26,6 +27,17 @@ impl RequestQueue {
 
     pub(crate) fn register_outgoing(&mut self, id: RequestId) {
         self.outgoing.insert(id);
+    }
+
+    /// Allocates and registers an ID that cannot collide with outstanding requests.
+    pub(crate) fn register_next_outgoing(&mut self) -> anyhow::Result<RequestId> {
+        let id = RequestId::from(format!("karva/request/{}", self.next_outgoing_id));
+        self.next_outgoing_id = self
+            .next_outgoing_id
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("language-server outgoing request ID exhausted"))?;
+        self.register_outgoing(id.clone());
+        Ok(id)
     }
 
     pub(crate) fn complete_outgoing(&mut self, id: &RequestId) -> bool {

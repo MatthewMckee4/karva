@@ -5,9 +5,9 @@ use lsp_types::{
     CancelNotification, CompletionRequest, DefinitionRequest, DidChangeTextDocumentNotification,
     DidChangeWatchedFilesNotification, DidChangeWorkspaceFoldersNotification,
     DidCloseTextDocumentNotification, DidOpenTextDocumentNotification, DocumentHighlightRequest,
-    DocumentSymbolRequest, HoverRequest, ImplementationRequest, LspNotificationMethod,
-    LspRequestMethod, Notification as _, PrepareRenameRequest, ReferencesRequest, RenameRequest,
-    Request as _, ShutdownRequest,
+    DocumentSymbolRequest, HoverRequest, ImplementationRequest, InlayHintRequest,
+    LspNotificationMethod, LspRequestMethod, Notification as _, PrepareRenameRequest,
+    ReferencesRequest, RenameRequest, Request as _, ShutdownRequest,
 };
 
 use crate::server::schedule::{BackgroundSchedule, Task};
@@ -46,6 +46,7 @@ pub(super) fn request(request: Request) -> Task {
         CompletionRequest::METHOD => background_request_task::<requests::Completion>(request),
         DefinitionRequest::METHOD => background_request_task::<requests::Definition>(request),
         HoverRequest::METHOD => background_request_task::<requests::Hover>(request),
+        InlayHintRequest::METHOD => background_request_task::<requests::InlayHints>(request),
         ImplementationRequest::METHOD => {
             background_request_task::<requests::Implementation>(request)
         }

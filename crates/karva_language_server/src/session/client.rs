@@ -125,6 +125,7 @@ mod tests {
             lsp_types::MarkupKind::PlainText,
             false,
             false,
+            None,
             Workspaces::new(Vec::new(), PythonVersion::PY312, None)?,
         );
         let id = RequestId::from(7);
