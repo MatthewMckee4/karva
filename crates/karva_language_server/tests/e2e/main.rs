@@ -17,6 +17,7 @@ mod initialize;
 mod inlay_hint;
 mod references;
 mod rename;
+mod workspace_symbols;
 
 use std::collections::{HashMap, VecDeque};
 use std::fs;
