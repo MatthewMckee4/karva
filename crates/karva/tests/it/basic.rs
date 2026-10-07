@@ -1125,49 +1125,62 @@ fn test_failfast_multiple_threads() {
         "test_a.py",
         r"
 import time
+from pathlib import Path
 
 def test_fail():
     assert False
 
 def test_1():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_2():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_3():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_4():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_5():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_6():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_7():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_8():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
 
 def test_9():
-    time.sleep(0.5)
+    while not Path('release_padding').exists():
+        time.sleep(0.01)
     assert True
     ",
     );
 
-    assert_cmd_snapshot!(context.command().arg("--fail-fast").arg("--num-workers").arg("2"), @"
+    // Padding tests stay in flight until fail-fast terminates their worker.
+    // Receipt: the failing Windows CI attempt took 15.7 seconds including
+    // environment setup; a minute is a generous tripwire for broken fail-fast.
+    assert_cmd_snapshot!(context.command().arg("--run-timeout=60").arg("--fail-fast").arg("--num-workers").arg("2"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1179,14 +1192,14 @@ def test_9():
     test_a::test_fail:
 
     error[test-failure]: Test `test_fail` failed
-     --> test_a.py:4:5
-      |
-    4 | def test_fail():
-      |     ^^^^^^^^^
-    info: Test failed here
      --> test_a.py:5:5
       |
-    5 |     assert False
+    5 | def test_fail():
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:6:5
+      |
+    6 |     assert False
       |     ^^^^^^^^^^^^
 
     ────────────
