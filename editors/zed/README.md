@@ -202,7 +202,7 @@ configuration reload and shutdown:
 ```sh
 cargo build --manifest-path editors/zed/Cargo.toml --target wasm32-wasip2
 cargo build -p karva
-python3 scripts/zed_smoke.py --server target/debug/karva --server-arg server \
+uv run scripts/zed_smoke.py --server target/debug/karva --server-arg server \
   --wasm editors/zed/target/wasm32-wasip2/debug/karva_zed.wasm \
   --output /tmp/karva-zed-smoke
 ```
