@@ -175,8 +175,8 @@ fn resolve_import(
     resolution
 }
 
-/// Captures final top-level bindings. Assignments and conditional definitions are conservative:
-/// they can carry fixture wrappers, but this model does not execute or infer their values.
+/// Captures final top-level bindings. Literal values cannot expose callable fixture wrappers.
+/// Other assignments and conditional definitions stay unknown without executing Python.
 fn exports(module: &CollectedModule) -> (BTreeMap<String, Export<'_>>, bool) {
     let mut exports = BTreeMap::new();
     let mut wildcard = false;
@@ -220,8 +220,14 @@ fn exports(module: &CollectedModule) -> (BTreeMap<String, Export<'_>>, bool) {
             _ => {
                 let mut bindings = ChangedBindings::default();
                 bindings.visit_stmt(statement);
+                let nonfixtures = nonfixture_assignment_names(statement);
                 for name in bindings.names {
-                    exports.insert(name, Export::Unknown);
+                    let export = if nonfixtures.contains(name.as_str()) {
+                        Export::NonFixture
+                    } else {
+                        Export::Unknown
+                    };
+                    exports.insert(name, export);
                 }
                 if bindings.wildcard {
                     wildcard = true;
@@ -233,6 +239,57 @@ fn exports(module: &CollectedModule) -> (BTreeMap<String, Export<'_>>, bool) {
         }
     }
     (exports, wildcard)
+}
+
+/// Restricts literal classification to complete named assignment targets. Unpacking can expose
+/// callable elements, and named expressions inside a value may independently bind fixtures.
+fn nonfixture_assignment_names(statement: &Stmt) -> HashSet<&str> {
+    match statement {
+        Stmt::Assign(assign) if is_nonfixture_value(&assign.value) => assign
+            .targets
+            .iter()
+            .filter_map(|target| match target {
+                Expr::Name(name) => Some(name.id.as_str()),
+                _ => None,
+            })
+            .collect(),
+        Stmt::AnnAssign(assign)
+            if assign
+                .value
+                .as_ref()
+                .is_some_and(|value| is_nonfixture_value(value)) =>
+        {
+            if let Expr::Name(name) = assign.target.as_ref() {
+                HashSet::from([name.id.as_str()])
+            } else {
+                HashSet::new()
+            }
+        }
+        _ => HashSet::new(),
+    }
+}
+
+/// These expressions produce built-in values that cannot carry Karva's callable fixture marker.
+/// Container elements may be fixtures, but runtime discovery scans module values, not elements.
+fn is_nonfixture_value(expression: &Expr) -> bool {
+    match expression {
+        Expr::NumberLiteral(_)
+        | Expr::BooleanLiteral(_)
+        | Expr::NoneLiteral(_)
+        | Expr::EllipsisLiteral(_)
+        | Expr::StringLiteral(_)
+        | Expr::BytesLiteral(_)
+        | Expr::FString(_)
+        | Expr::List(_)
+        | Expr::Tuple(_)
+        | Expr::Set(_)
+        | Expr::Dict(_) => true,
+        Expr::UnaryOp(unary) => matches!(
+            unary.operand.as_ref(),
+            Expr::NumberLiteral(_) | Expr::BooleanLiteral(_)
+        ),
+        _ => false,
+    }
 }
 
 #[derive(Default)]

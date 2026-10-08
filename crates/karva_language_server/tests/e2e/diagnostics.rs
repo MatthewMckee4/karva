@@ -209,3 +209,50 @@ fn capabilities() -> ClientCapabilities {
         ..ClientCapabilities::default()
     }
 }
+
+#[rstest::rstest]
+fn literal_configuration_values_preserve_missing_fixture_diagnostics(
+    #[values(("TIMEOUT = 30\n", true), ("setting = provider\n", false))] case: (&str, bool),
+) {
+    let workspace = Workspace::new();
+    workspace.write("conftest.py", case.0);
+    let mut server = TestServer::with_workspace(capabilities(), workspace.folder());
+    server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: workspace.uri("test_example.py"),
+            language_id: LanguageKind::Python,
+            version: 1,
+            text: "def test_example(missing): pass\n".to_owned(),
+        },
+    });
+    let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
+    if case.1 {
+        insta::assert_json_snapshot!(workspace.normalize(diagnostics), @r#"
+        {
+          "diagnostics": [
+            {
+              "code": "missing-fixture",
+              "message": "Test `test_example` requires missing fixture `missing`",
+              "range": {
+                "end": {
+                  "character": 24,
+                  "line": 0
+                },
+                "start": {
+                  "character": 17,
+                  "line": 0
+                }
+              },
+              "relatedInformation": [],
+              "severity": 1,
+              "source": "karva"
+            }
+          ],
+          "uri": "file:///project/test_example.py",
+          "version": 1
+        }
+        "#);
+    } else {
+        assert!(diagnostics.diagnostics.is_empty());
+    }
+}
