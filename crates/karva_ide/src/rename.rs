@@ -970,18 +970,26 @@ mod tests {
         assert!(rename_fixture(&index, &occurrence, "replacement").is_none());
     }
 
-    #[test]
-    fn rejects_rename_that_would_capture_a_nested_parameter() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    def inner(replacement):\n        return database\n    return inner\n";
+    #[rstest::rstest]
+    #[case("def inner(replacement):\n        return database\n    return inner")]
+    #[case("return lambda replacement: database")]
+    #[case("return [database for replacement in [1]]")]
+    #[case("return {database for replacement in [1]}")]
+    #[case("return {replacement: database for replacement in [1]}")]
+    #[case("return (database for replacement in [1])")]
+    fn rejects_rename_that_would_capture_a_nested_parameter(#[case] body: &str) {
+        let source = format!(
+            "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    {body}\n"
+        );
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
-            [SourceDocument::new(path.clone(), source.to_owned())],
+            [SourceDocument::new(path.clone(), source.clone())],
             settings(),
         )
         .expect("source should index");
         let analysis = index.analyze(&path).expect("source should analyze");
-        let occurrence = fixture_occurrence(&analysis, offset(source, "database):"))
+        let occurrence = fixture_occurrence(&analysis, offset(&source, "database):"))
             .expect("parameter should resolve");
 
         assert!(rename_fixture(&index, &occurrence, "replacement").is_none());

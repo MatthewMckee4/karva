@@ -343,6 +343,13 @@ impl From<&Utf8PathBuf> for ModuleType {
     }
 }
 
+/// Collected syntax can back a shared semantic snapshot without copying source text.
+impl AsRef<str> for CollectedModule {
+    fn as_ref(&self) -> &str {
+        &self.source_text
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use camino::Utf8PathBuf;

@@ -1,6 +1,11 @@
-//! Fast, syntax-only collection of Python test and fixture definitions.
+//! Python test and fixture collection with a cheap syntax-only scheduling path.
+//!
+//! Source-analysis consumers can enable `source-analysis` to resolve collected functions against
+//! a shared ty snapshot. Collection never executes project Python.
 
 use std::collections::HashSet;
+#[cfg(feature = "source-analysis")]
+use std::sync::Arc;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
@@ -203,6 +208,69 @@ pub fn collect_source_with_module_name(
         settings,
         function_names,
     )
+}
+
+/// Applies resolved decorator identities to a complete source collection.
+///
+/// Unchanged classifications retain the same shared syntax allocation. A changed classification
+/// copies the module and rebuilds its function lists; it never mutates another source snapshot.
+/// The snapshot must contain this source and Python version; mismatched inputs return None.
+/// This is for complete source collections, not scheduling modules with discarded syntax or
+/// collections restricted to selected function names. Missing semantic results return None.
+#[cfg(feature = "source-analysis")]
+pub fn resolve_collected_decorators<S: AsRef<str>>(
+    module: Arc<CollectedModule>,
+    settings: &CollectionSettings,
+    semantics: &karva_python_semantic::source_analysis::PythonSourceSnapshot<S>,
+) -> Option<Arc<CollectedModule>> {
+    if !semantics.contains_source(
+        module.path.path(),
+        &module.source_text,
+        settings.python_version,
+    ) {
+        return None;
+    }
+    let bindings = semantics.decorator_bindings(module.path.path())?;
+    let classified = module
+        .module_body
+        .iter()
+        .filter_map(|statement| {
+            let Stmt::FunctionDef(function) = statement else {
+                return None;
+            };
+            let environment = bindings.get(&function.range.start())?;
+            let fixture = settings.collect_fixtures
+                && is_fixture_function_with_bindings(function, environment);
+            (fixture || function.name.starts_with(settings.test_function_prefix))
+                .then_some((function, fixture))
+        })
+        .collect::<Vec<_>>();
+    let fixtures = classified
+        .iter()
+        .filter(|(_, fixture)| *fixture)
+        .map(|(function, _)| *function);
+    let tests = classified
+        .iter()
+        .filter(|(_, fixture)| !*fixture)
+        .map(|(function, _)| *function);
+    if fixtures
+        .clone()
+        .map(Ranged::range)
+        .eq(module.fixture_function_defs.iter().map(Ranged::range))
+        && tests
+            .clone()
+            .map(Ranged::range)
+            .eq(module.test_function_defs.iter().map(Ranged::range))
+    {
+        return Some(module);
+    }
+    let fixtures = fixtures.cloned().collect();
+    let tests = tests.cloned().collect();
+    let mut module = module;
+    let mutable = Arc::make_mut(&mut module);
+    mutable.fixture_function_defs = fixtures;
+    mutable.test_function_defs = tests;
+    Some(module)
 }
 
 fn collect_source_with_module_path(
@@ -878,5 +946,129 @@ class Thing:
             .iter()
             .map(|function| function.name.as_str())
             .collect()
+    }
+}
+
+#[cfg(all(test, feature = "source-analysis"))]
+mod semantic_tests {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    use karva_python_semantic::source_analysis::PythonSourceSnapshot;
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case("from karva import fixture\nalias = fixture", "alias", true)]
+    #[case("import karva as framework\nalias = framework.fixture", "alias", true)]
+    #[case(
+        "import pytest as framework\nalias: object = framework.fixture",
+        "alias",
+        true
+    )]
+    #[case(
+        "from karva import fixture\nalias = fixture\nfixture = None",
+        "alias",
+        true
+    )]
+    #[case(
+        "from karva import fixture\nalias = fixture\nalias = None",
+        "alias",
+        false
+    )]
+    #[case(
+        "from karva import fixture\nif enabled:\n    alias = fixture",
+        "alias",
+        false
+    )]
+    #[case(
+        "from karva import fixture\nif enabled:\n    alias = fixture\nelse:\n    alias = None",
+        "alias",
+        false
+    )]
+    #[case(
+        "from karva import fixture\nif enabled:\n    alias = fixture\nelse:\n    alias = fixture",
+        "alias",
+        true
+    )]
+    #[case(
+        "from karva import fixture\nalias, other = fixture, None",
+        "alias",
+        false
+    )]
+    #[case("from .karva import fixture", "fixture", false)]
+    #[case("", "fixture", true)]
+    fn collection_resolves_decorator_bindings(
+        #[case] setup: &str,
+        #[case] decorator: &str,
+        #[case] is_fixture: bool,
+        #[values(false, true)] collect_fixtures: bool,
+    ) {
+        let root = Utf8PathBuf::from("/project");
+        let path = root.join("test_value.py");
+        let source = format!("{setup}\n@{decorator}\ndef test_value():\n    return True\n");
+        let semantics = PythonSourceSnapshot::new(
+            root.clone(),
+            Arc::new(BTreeMap::from([(path.clone(), Arc::new(source.clone()))])),
+            PythonVersion::PY314,
+            Arc::default(),
+        );
+        let settings = CollectionSettings {
+            python_version: PythonVersion::PY314,
+            test_function_prefix: "test",
+            respect_ignore_files: true,
+            collect_fixtures,
+            collect_doctests: false,
+        };
+        let collected = Arc::new(
+            collect_source(&path, &root, source, &settings, &[]).expect("syntax collection"),
+        );
+        let module = resolve_collected_decorators(collected, &settings, &semantics)
+            .expect("semantic collection");
+        assert_eq!(
+            module.fixture_function_defs.len(),
+            usize::from(is_fixture && collect_fixtures)
+        );
+        assert_eq!(
+            module.test_function_defs.len(),
+            usize::from(!(is_fixture && collect_fixtures))
+        );
+    }
+
+    #[rstest]
+    fn semantic_collection_refuses_mismatched_inputs(#[values(false, true)] wrong_version: bool) {
+        let root = Utf8PathBuf::from("/project");
+        let path = root.join("test_value.py");
+        let source = "@fixture\ndef test_value():\n    pass\n";
+        let semantics = PythonSourceSnapshot::new(
+            root.clone(),
+            Arc::new(BTreeMap::from([(
+                path.clone(),
+                Arc::new(source.to_owned()),
+            )])),
+            PythonVersion::PY314,
+            Arc::default(),
+        );
+        let settings = CollectionSettings {
+            python_version: if wrong_version {
+                PythonVersion::PY313
+            } else {
+                PythonVersion::PY314
+            },
+            test_function_prefix: "test",
+            respect_ignore_files: true,
+            collect_fixtures: true,
+            collect_doctests: false,
+        };
+        let supplied = if wrong_version {
+            source.to_owned()
+        } else {
+            format!("{source}# changed")
+        };
+        let module = Arc::new(
+            collect_source(&path, &root, supplied, &settings, &[]).expect("syntax collection"),
+        );
+        assert!(resolve_collected_decorators(module, &settings, &semantics).is_none());
     }
 }

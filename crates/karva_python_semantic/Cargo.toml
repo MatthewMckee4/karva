@@ -13,6 +13,13 @@ license.workspace = true
 [features]
 default = []
 python-runtime = ["dep:pyo3"]
+source-analysis = [
+    "dep:ruff_db",
+    "dep:ruff_ranged_value",
+    "dep:ty_project",
+    "dep:ty_python_core",
+    "dep:ty_python_semantic",
+]
 
 [dependencies]
 camino = { workspace = true }
@@ -20,6 +27,12 @@ pyo3 = { workspace = true, optional = true }
 ruff_python_ast = { workspace = true }
 ruff_text_size = { workspace = true }
 serde = { workspace = true }
+
+ruff_db = { workspace = true, optional = true }
+ruff_ranged_value = { workspace = true, optional = true }
+ty_project = { workspace = true, optional = true }
+ty_python_core = { workspace = true, optional = true }
+ty_python_semantic = { workspace = true, optional = true }
 
 [dev-dependencies]
 ruff_python_parser = { workspace = true }

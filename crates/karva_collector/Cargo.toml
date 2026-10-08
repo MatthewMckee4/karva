@@ -10,6 +10,10 @@ repository.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+default = []
+source-analysis = ["karva_python_semantic/source-analysis"]
+
 [dependencies]
 karva_python_semantic = { workspace = true }
 
@@ -21,6 +25,7 @@ ruff_text_size = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+rstest = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

@@ -631,29 +631,44 @@ impl FixtureProvider {
     }
 }
 
-pub(super) fn parse_provider(module: &CollectedModule) -> FixtureProvider {
+pub(super) fn parse_provider(
+    module: &CollectedModule,
+    semantics: &crate::semantic::PythonSemantics,
+) -> FixtureProvider {
     let path = module.path.path().clone();
     let bindings = DecoratorBindings::from_statements(&module.module_body);
-    let parsed = module
-        .fixture_function_defs
-        .iter()
+    let resolved = semantics
+        .decorator_bindings(module.path.path())
+        .unwrap_or_default();
+    let before = |function: &StmtFunctionDef| {
+        resolved
+            .get(&function.range.start())
+            .cloned()
+            .unwrap_or_else(|| {
+                DecoratorBindings::before(&module.module_body, function.range.start())
+            })
+    };
+    let functions = module.module_body.iter().filter_map(|statement| {
+        if let Stmt::FunctionDef(function) = statement {
+            Some(function)
+        } else {
+            None
+        }
+    });
+    let parsed = functions
+        .clone()
+        .filter(|function| {
+            karva_python_semantic::is_fixture_function_with_bindings(function, &before(function))
+        })
         .map(|function| {
-            let bindings = DecoratorBindings::before(&module.module_body, function.range.start());
+            let bindings = before(function);
             parse_fixture(function, &path, &bindings, &module.source_text)
         })
         .collect::<Vec<_>>();
-    let bindings_at = module
-        .test_function_defs
-        .iter()
-        .chain(module.fixture_function_defs.iter())
-        .map(|function| {
-            (
-                function.range.start(),
-                DecoratorBindings::before(&module.module_body, function.range.start()),
-            )
-        })
+    let bindings_at = functions
+        .map(|function| (function.range.start(), before(function)))
         .collect();
-    let unknown_fixture_decorator = has_unknown_fixture_decorator(module);
+    let unknown_fixture_decorator = has_unknown_fixture_decorator(module, &resolved);
     FixtureProvider::from_parsed(
         &parsed,
         &path,
@@ -663,12 +678,20 @@ pub(super) fn parse_provider(module: &CollectedModule) -> FixtureProvider {
     )
 }
 
-fn has_unknown_fixture_decorator(module: &CollectedModule) -> bool {
+fn has_unknown_fixture_decorator(
+    module: &CollectedModule,
+    resolved: &BTreeMap<TextSize, DecoratorBindings>,
+) -> bool {
     module.module_body.iter().any(|statement| {
         let Stmt::FunctionDef(function) = statement else {
             return false;
         };
-        let bindings = DecoratorBindings::before(&module.module_body, function.range.start());
+        let bindings = resolved
+            .get(&function.range.start())
+            .cloned()
+            .unwrap_or_else(|| {
+                DecoratorBindings::before(&module.module_body, function.range.start())
+            });
         function.decorator_list.iter().any(|decorator| {
             let expression = match &decorator.expression {
                 Expr::Call(call) => call.func.as_ref(),

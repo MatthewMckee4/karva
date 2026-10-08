@@ -16,16 +16,11 @@ doctest = false
 
 [dependencies]
 camino = { workspace = true }
-karva_collector = { workspace = true }
-karva_python_semantic = { workspace = true }
-ruff_db = { workspace = true }
+karva_collector = { workspace = true, features = ["source-analysis"] }
+karva_python_semantic = { workspace = true, features = ["source-analysis"] }
 ruff_python_ast = { workspace = true }
 ruff_python_stdlib = { workspace = true }
-ruff_ranged_value = { workspace = true }
 ruff_text_size = { workspace = true }
-ty_project = { workspace = true }
-ty_python_core = { workspace = true }
-ty_python_semantic = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

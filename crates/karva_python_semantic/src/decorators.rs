@@ -50,7 +50,51 @@ impl Default for DecoratorBindings {
     }
 }
 
+impl KnownBinding {
+    pub(super) fn from_module(module: &str) -> Option<Self> {
+        match module {
+            "karva" => Some(Self::Karva),
+            "pytest" => Some(Self::Pytest),
+            "karva.tags" => Some(Self::KarvaTags),
+            "pytest.mark" => Some(Self::PytestMark),
+            _ => None,
+        }
+    }
+
+    pub(super) fn from_import(module: &str, name: &str) -> Option<Self> {
+        match (module, name) {
+            ("karva" | "karva._karva" | "pytest", "fixture") => Some(Self::Fixture),
+            ("karva.tags" | "pytest.mark", "parametrize") => Some(Self::Parametrize),
+            ("karva.tags", "use_fixtures") | ("pytest.mark", "usefixtures") => {
+                Some(Self::UseFixtures)
+            }
+            ("karva", "tags") => Some(Self::KarvaTags),
+            ("pytest", "mark") => Some(Self::PytestMark),
+            _ => None,
+        }
+    }
+
+    pub(super) fn attribute(self, name: &str) -> Option<Self> {
+        match (self, name) {
+            (Self::Karva, "tags") => Some(Self::KarvaTags),
+            (Self::Pytest, "mark") => Some(Self::PytestMark),
+            (Self::Karva | Self::Pytest, "fixture") => Some(Self::Fixture),
+            (Self::KarvaTags | Self::PytestMark, "parametrize") => Some(Self::Parametrize),
+            (Self::KarvaTags, "use_fixtures") | (Self::PytestMark, "usefixtures") => {
+                Some(Self::UseFixtures)
+            }
+            _ => None,
+        }
+    }
+}
+
 impl DecoratorBindings {
+    /// Builds a framework name environment from resolved Python bindings.
+    #[cfg(feature = "source-analysis")]
+    pub(super) fn resolved(names: HashMap<String, KnownBinding>) -> Self {
+        Self { names }
+    }
+
     /// Returns permissive bindings used by the legacy syntax-only collector.
     ///
     /// Editor analysis starts with [`Default::default`] so an unimported
@@ -99,8 +143,12 @@ impl DecoratorBindings {
                         ruff_python_ast::Identifier::as_str,
                     );
                     let binding = alias.asname.as_ref().map_or_else(
-                        || known_module(alias.name.as_str().split('.').next().unwrap_or_default()),
-                        |_| known_module(alias.name.as_str()),
+                        || {
+                            KnownBinding::from_module(
+                                alias.name.as_str().split('.').next().unwrap_or_default(),
+                            )
+                        },
+                        |_| KnownBinding::from_module(alias.name.as_str()),
                     );
                     self.set(name, binding.unwrap_or(KnownBinding::Unknown));
                 }
@@ -122,7 +170,7 @@ impl DecoratorBindings {
                     let binding = (import.level == 0)
                         .then_some(module)
                         .flatten()
-                        .and_then(|module| known_from_import(module, alias.name.as_str()))
+                        .and_then(|module| KnownBinding::from_import(module, alias.name.as_str()))
                         .unwrap_or(KnownBinding::Unknown);
                     self.set(name, binding);
                 }
@@ -204,35 +252,7 @@ impl DecoratorBindings {
             Expr::Call(call) => call.func.as_ref(),
             expression => expression,
         };
-        if let Expr::Name(name) = expression {
-            return self.get(name.id.as_str()) == Some(expected);
-        }
-        let Expr::Attribute(attribute) = expression else {
-            return false;
-        };
-        let Some(binding) = self.namespace_binding(attribute.value.as_ref()) else {
-            return false;
-        };
-        matches!(
-            (binding, attribute.attr.as_str(), expected),
-            (
-                KnownBinding::Karva | KnownBinding::Pytest,
-                "fixture",
-                KnownBinding::Fixture
-            ) | (
-                KnownBinding::KarvaTags | KnownBinding::PytestMark,
-                "parametrize",
-                KnownBinding::Parametrize,
-            ) | (
-                KnownBinding::KarvaTags,
-                "use_fixtures",
-                KnownBinding::UseFixtures
-            ) | (
-                KnownBinding::PytestMark,
-                "usefixtures",
-                KnownBinding::UseFixtures
-            )
-        )
+        self.namespace_binding(expression) == Some(expected)
     }
 
     fn set(&mut self, name: &str, binding: KnownBinding) {
@@ -244,11 +264,7 @@ impl DecoratorBindings {
             Expr::Name(name) => self.get(name.id.as_str()),
             Expr::Attribute(attribute) => {
                 let namespace = self.namespace_binding(attribute.value.as_ref())?;
-                match (namespace, attribute.attr.as_str()) {
-                    (KnownBinding::Karva, "tags") => Some(KnownBinding::KarvaTags),
-                    (KnownBinding::Pytest, "mark") => Some(KnownBinding::PytestMark),
-                    _ => None,
-                }
+                namespace.attribute(attribute.attr.as_str())
             }
             _ => None,
         }
@@ -374,29 +390,6 @@ impl DecoratorBindings {
         for binding in self.names.values_mut() {
             *binding = KnownBinding::Unknown;
         }
-    }
-}
-
-fn known_module(module: &str) -> Option<KnownBinding> {
-    match module {
-        "karva" => Some(KnownBinding::Karva),
-        "pytest" => Some(KnownBinding::Pytest),
-        "karva.tags" => Some(KnownBinding::KarvaTags),
-        "pytest.mark" => Some(KnownBinding::PytestMark),
-        _ => None,
-    }
-}
-
-fn known_from_import(module: &str, name: &str) -> Option<KnownBinding> {
-    match (module, name) {
-        ("karva" | "karva._karva" | "pytest", "fixture") => Some(KnownBinding::Fixture),
-        ("karva.tags" | "pytest.mark", "parametrize") => Some(KnownBinding::Parametrize),
-        ("karva.tags", "use_fixtures") | ("pytest.mark", "usefixtures") => {
-            Some(KnownBinding::UseFixtures)
-        }
-        ("karva", "tags") => Some(KnownBinding::KarvaTags),
-        ("pytest", "mark") => Some(KnownBinding::PytestMark),
-        _ => None,
     }
 }
 

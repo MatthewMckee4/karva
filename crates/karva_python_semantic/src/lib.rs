@@ -1,10 +1,17 @@
 //! Shared Python semantic types independent of Karva's test runner.
+//!
+//! Default features provide lightweight names and syntax-level decorator recognition.
+//! The `source-analysis` feature adds ty-backed source snapshots for imports, lexical bindings,
+//! decorator aliases, and value inference. Workers and IPC do not enable this feature.
 
 use camino::Utf8Path;
 
 mod decorators;
 mod function_kind;
 mod name;
+
+#[cfg(feature = "source-analysis")]
+pub mod source_analysis;
 
 pub use decorators::{DecoratorBindings, KnownBinding, is_fixture_function_with_bindings};
 pub use function_kind::FunctionKind;

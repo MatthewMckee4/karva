@@ -348,3 +348,41 @@ fn hints_inferred_fixture_values(#[case] body: &str, #[case] expected: &str) {
     assert_eq!(result[0].label, expected.into());
     assert_eq!(result[0].kind, Some(lsp_types::InlayHintKind::Type));
 }
+
+#[rstest::rstest]
+#[case("from karva import fixture\nalias = fixture", "alias", "", ": bool")]
+#[case(
+    "import karva as framework\nalias = framework.fixture",
+    "alias",
+    "",
+    ": bool"
+)]
+#[case(
+    "from karva import fixture\nif enabled:\n    alias = fixture\nelse:\n    alias = fixture",
+    "alias",
+    "",
+    ": bool"
+)]
+#[case(
+    "from typing import Literal\nfrom karva import fixture",
+    "fixture",
+    " -> Literal[True]",
+    ": Literal[True]"
+)]
+fn hints_use_shared_core_semantics(
+    #[case] setup: &str,
+    #[case] decorator: &str,
+    #[case] annotation: &str,
+    #[case] expected: &str,
+) {
+    let workspace = Workspace::new();
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_hints.py");
+    let source = format!(
+        "{setup}\n@{decorator}\ndef sample(){annotation}:\n    return True\ndef test_example(sample): pass\n"
+    );
+    open(&mut server, uri.clone(), &source);
+    let result = hints(&mut server, uri, &source);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].label, expected.into());
+}

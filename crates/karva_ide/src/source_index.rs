@@ -4,8 +4,9 @@ use std::sync::{Arc, OnceLock};
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::CollectedModule;
 
+use karva_collector::CollectionSettings;
 #[cfg(test)]
-use karva_collector::{CollectionSettings, collect_source, collect_source_with_module_name};
+use karva_collector::{collect_source, collect_source_with_module_name};
 
 use crate::{SourceAnalysis, SourceAnalysisSettings};
 
@@ -176,6 +177,19 @@ impl WorkspaceSourceIndex {
                             ))
                         })
                         .clone();
+                    let collection = CollectionSettings {
+                        python_version: self.settings.python_version,
+                        test_function_prefix: &self.settings.test_function_prefix,
+                        respect_ignore_files: true,
+                        collect_fixtures: true,
+                        collect_doctests: false,
+                    };
+                    let current = karva_collector::resolve_collected_decorators(
+                        Arc::clone(&current),
+                        &collection,
+                        &semantics,
+                    )
+                    .unwrap_or(current);
                     let (fixture_model, diagnostics) = crate::fixture::analyze_modules_with_sources(
                         &current,
                         &parents,

@@ -1291,6 +1291,7 @@ dependencies = [
  "camino",
  "fs-err",
  "karva_python_semantic",
+ "rstest",
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_text_size",
@@ -1377,14 +1378,9 @@ dependencies = [
  "karva_collector",
  "karva_python_semantic",
  "rstest",
- "ruff_db",
  "ruff_python_ast",
  "ruff_python_stdlib",
- "ruff_ranged_value",
  "ruff_text_size",
- "ty_project",
- "ty_python_core",
- "ty_python_semantic",
 ]
 
 [[package]]
@@ -1520,10 +1516,15 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "pyo3",
+ "ruff_db",
  "ruff_python_ast",
  "ruff_python_parser",
+ "ruff_ranged_value",
  "ruff_text_size",
  "serde",
+ "ty_project",
+ "ty_python_core",
+ "ty_python_semantic",
 ]
 
 [[package]]
