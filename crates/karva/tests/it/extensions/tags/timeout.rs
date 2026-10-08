@@ -61,6 +61,7 @@ def test_slow():
     6 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -113,15 +114,13 @@ fn test_timeout_with_retry_eventually_passes() {
     let context = TestContext::with_file(
         "test.py",
         r"
+import os
 import time
 import karva
 
-attempts = [0]
-
 @karva.tags.timeout(0.5)
 def test_slow_then_fast():
-    attempts[0] += 1
-    if attempts[0] == 1:
+    if os.environ['KARVA_ATTEMPT'] == '1':
         time.sleep(2)
         ",
     );
@@ -244,9 +243,8 @@ def test_1(sleep_for):
       |
     7 | def test_1(sleep_for):
       |     ^^^^^^
-    info: Test ran with arguments:
-    info:   `sleep_for`: `2.0`
     info: Test exceeded timeout of 0.3 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
@@ -314,6 +312,7 @@ def test_always_slow():
     6 | def test_always_slow():
       |     ^^^^^^^^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -353,6 +352,7 @@ def test_slow():
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -487,6 +487,7 @@ def test_slow():
     4 | def test_slow():
       |     ^^^^^^^^^
     info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -679,5 +680,349 @@ def test_name(value):
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn hard_timeout_stops_python_and_native_calls_and_preserves_output(
+    #[values(
+        "while True: pass",
+        "time.sleep(3600)",
+        "lock = threading.Lock(); lock.acquire(); lock.acquire()"
+    )]
+    blocking: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+import karva
+import os
+import sys
+import time
+import threading
+from pathlib import Path
+
+@karva.fixture
+def resource():
+    yield
+    Path('teardown.txt').write_text('completed')
+
+@karva.tags.timeout(0.1)
+@karva.tags.expect_fail(raises=Exception)
+def test_a_blocking(resource):
+    print('output before deadline')
+    print('stderr before deadline', file=sys.stderr)
+    {blocking}
+
+def test_b_remaining():
+    assert not Path('teardown.txt').exists()
+    print('remaining test ran once')
+"
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                FAIL [TIME] test::test_a_blocking(resource=None)
+                PASS [TIME] test::test_b_remaining
+
+        failures:
+
+        test::test_a_blocking(resource=None):
+
+        error[test-failure]: Test `test_a_blocking` failed
+          --> test.py:16:5
+           |
+        16 | def test_a_blocking(resource):
+           |     ^^^^^^^^^^^^^^^
+        info: Test exceeded timeout of 0.1 seconds
+        info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
+
+        captured stdout:
+        output before deadline
+        captured stderr:
+        stderr before deadline
+
+        ────────────
+             Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[test]
+fn hard_timeout_retry_uses_fresh_python_state_and_reports_all_attempts() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            "[profile.default.junit]\npath = 'results.xml'\nstore-failure-output = true\n",
+        ),
+        (
+            "test.py",
+            r"
+import karva
+import os
+import time
+state = []
+@karva.tags.timeout(0.1)
+def test_timeout():
+    assert state == []
+    state.append('dirty')
+    attempt = os.environ['KARVA_ATTEMPT']
+    print(f'attempt {attempt}')
+    if attempt == '1':
+        while True: pass
+",
+        ),
+    ]);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--result-output=results.json"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_timeout
+      TRY 2 PASS [TIME] test::test_timeout
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_timeout
+
+    ----- stderr -----
+    "
+    );
+    insta::assert_snapshot!(context.read_file("results.json"), @r#"
+    {
+      "schema_version": 2,
+      "status": "passed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failure": 0,
+        "flaky": 1,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test",
+          "name": "test_timeout",
+          "full_name": "test::test_timeout",
+          "status": "passed",
+          "duration_seconds": "[TIME]",
+          "flaky": true,
+          "retry": {
+            "attempts": 2,
+            "max_attempts": 2
+          },
+          "captured_output": {
+            "stdout": "attempt 1/nattempt 2\n"
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "attempt 1\n"
+              },
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_timeout` failed",
+                "rendered": "error[test-failure]: Test `test_timeout` failed\n --> test.py:7:5\n  |/n7 | def test_timeout():\n  |     ^^^^^^^^^^^^/ninfo: Test exceeded timeout of 0.1 seconds/ninfo: Worker terminated at the deadline; fixture teardown could not be guaranteed.\n\n"
+              }
+            },
+            {
+              "attempt": 2,
+              "status": "passed",
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "attempt 2\n"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    "#);
+    assert!(context.read_file("results.xml").contains("flakyFailure"));
+}
+
+#[test]
+fn hard_timeout_preserves_history_when_retry_crashes() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import karva
+import os
+@karva.tags.timeout(0.1)
+def test_timeout():
+    if os.environ['KARVA_ATTEMPT'] == '1':
+        print('first attempt timed out')
+        while True: pass
+    os._exit(17)
+",
+    );
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=1", "--result-output=results.json",]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_timeout
+           CRASH [TIME] test::test_timeout
+
+    failures:
+
+    test::test_timeout:
+
+    error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`
+
+    captured stdout:
+    first attempt timed out
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ERROR Worker 1 failed with exit code 17 in [TIME]
+    "
+    );
+    insta::assert_snapshot!(context.read_file("results.json"), @r#"
+    {
+      "schema_version": 2,
+      "status": "failed",
+      "elapsed_seconds": "[TIME]",
+      "stats": {
+        "total": 1,
+        "passed": 0,
+        "failed": 0,
+        "errors": 1,
+        "skipped": 0,
+        "expected_failure": 0,
+        "flaky": 0,
+        "slow": 0
+      },
+      "tests": [
+        {
+          "module": "test",
+          "name": "test_timeout",
+          "full_name": "test::test_timeout",
+          "status": "error",
+          "duration_seconds": "[TIME]",
+          "retry": {
+            "attempts": 2,
+            "max_attempts": 2
+          },
+          "captured_output": {
+            "stdout": "first attempt timed out\n"
+          },
+          "diagnostic": {
+            "code": "worker-crashed",
+            "severity": "error",
+            "message": "Worker terminated with exit code 17 while running `test::test_timeout`",
+            "rendered": "error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`\n"
+          },
+          "attempts": [
+            {
+              "attempt": 1,
+              "status": "failed",
+              "duration_seconds": "[TIME]",
+              "captured_output": {
+                "stdout": "first attempt timed out\n"
+              },
+              "diagnostic": {
+                "code": "test-failure",
+                "severity": "error",
+                "message": "Test `test_timeout` failed",
+                "rendered": "error[test-failure]: Test `test_timeout` failed\n --> test.py:5:5\n  |/n5 | def test_timeout():\n  |     ^^^^^^^^^^^^/ninfo: Test exceeded timeout of 0.1 seconds/ninfo: Worker terminated at the deadline; fixture teardown could not be guaranteed.\n\n"
+              }
+            },
+            {
+              "attempt": 2,
+              "status": "error",
+              "duration_seconds": "[TIME]",
+              "diagnostic": {
+                "code": "worker-crashed",
+                "severity": "error",
+                "message": "Worker terminated with exit code 17 while running `test::test_timeout`",
+                "rendered": "error[worker-crashed]: Worker terminated with exit code 17 while running `test::test_timeout`\n"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    "#);
+}
+
+#[cfg(unix)]
+#[test]
+fn hard_timeout_stops_native_call_holding_the_gil() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+import ctypes
+import karva
+import os
+
+@karva.tags.timeout(0.1)
+def test_a_native():
+    # Native exit handlers may themselves wait for the GIL held by the test.
+    callback_type = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    exit_callback = callback_type(lambda argument: None)
+    native = ctypes.CDLL(None)
+    native.__cxa_atexit.argtypes = [callback_type, ctypes.c_void_p, ctypes.c_void_p]
+    native.__cxa_atexit(exit_callback, None, None)
+    print('before native call')
+    os.write(2, b'native stderr before deadline\n')
+    ctypes.PyDLL(None).sleep(3600)
+
+def test_b_remaining():
+    pass
+",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_a_native
+            PASS [TIME] test::test_b_remaining
+
+    failures:
+
+    test::test_a_native:
+
+    error[test-failure]: Test `test_a_native` failed
+     --> test.py:7:5
+      |
+    7 | def test_a_native():
+      |     ^^^^^^^^^^^^^
+    info: Test exceeded timeout of 0.1 seconds
+    info: Worker terminated at the deadline; fixture teardown could not be guaranteed.
+
+    captured stdout:
+    before native call
+    captured stderr:
+    native stderr before deadline
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    native stderr before deadline
     ");
 }

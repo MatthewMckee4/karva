@@ -65,6 +65,25 @@ pub(super) fn recover_crashed_workers(
 
     for crashed_worker in crashed_workers {
         worker_manager.abandon_worker(crashed_worker.id);
+        if let Some((cache_key, next_attempt)) =
+            worker_manager.recover_timeout(crashed_worker.id, &crashed_worker.stderr)
+        {
+            let pending = if let Some(next_attempt) = next_attempt {
+                crashed_worker.partition.pending_after_timeout(
+                    &completed_index,
+                    &cache_key,
+                    next_attempt,
+                )
+            } else {
+                crashed_worker
+                    .partition
+                    .pending_after_test_crash(&completed_index, &cache_key)
+            };
+            pending_recovery.push(PendingCrashRecovery::Active(
+                (!pending.is_empty()).then_some(pending),
+            ));
+            continue;
+        }
         match &crashed_worker.checkpoint {
             CrashCheckpoint::Complete(Some(active)) => {
                 let pending = recover_active_test(

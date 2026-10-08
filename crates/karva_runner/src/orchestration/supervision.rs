@@ -62,6 +62,15 @@ impl WorkerSupervisor {
         self.dispatcher.abandon_worker(worker_id);
     }
 
+    /// Consumes a timeout event after the corresponding process has exited.
+    pub(super) fn recover_timeout(
+        &mut self,
+        worker_id: usize,
+        stderr: &str,
+    ) -> Option<(TestCacheKey, Option<u32>)> {
+        self.dispatcher.recover_timeout(worker_id, stderr)
+    }
+
     /// Records a run-level diagnostic for an exit with no active test checkpoint.
     pub(super) fn register_worker_exit(&mut self, summary: &str, recovery: &str, stderr: &str) {
         self.dispatcher

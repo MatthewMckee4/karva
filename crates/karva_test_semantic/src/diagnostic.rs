@@ -919,3 +919,15 @@ fn indent_continuation_lines(message: &str) -> String {
     }
     result
 }
+
+/// Reports a process-enforced call deadline, including the cleanup contract.
+pub fn test_timeout_diagnostic(definition: &TestDefinition, seconds: f64) -> Diagnostic {
+    let mut diagnostic = TEST_FAILURE.diagnostic(format!(
+        "Test `{}` failed",
+        definition.name().function_name()
+    ));
+    annotate_test(&mut diagnostic, definition);
+    diagnostic.info(format!("Test exceeded timeout of {seconds} seconds"));
+    diagnostic.info("Worker terminated at the deadline; fixture teardown could not be guaranteed.");
+    diagnostic
+}

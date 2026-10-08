@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use camino::Utf8Path;
 use karva_collector::CollectionSettings;
@@ -29,6 +29,9 @@ pub struct Context<'a> {
     /// Cases already committed by an earlier worker generation.
     resume_skip: &'a BTreeSet<TestCacheKey>,
 
+    /// Next attempt numbers supplied by controller-side timeout recovery.
+    resume_attempts: &'a BTreeMap<TestCacheKey, u32>,
+
     /// Whether diagnostics should include the full Python call chain.
     verbose: bool,
 }
@@ -49,6 +52,7 @@ impl<'a> Context<'a> {
             python_version: request.python_version,
             reporter: request.reporter,
             resume_skip: request.resume_skip,
+            resume_attempts: request.resume_attempts,
             verbose: request.verbose,
         }
     }
@@ -68,6 +72,22 @@ impl<'a> Context<'a> {
     /// Whether crash recovery already committed this exact case.
     pub(super) fn should_resume_skip(&self, test_name: &QualifiedTestName) -> bool {
         !self.resume_skip.is_empty() && self.resume_skip.contains(&test_name.cache_key())
+    }
+
+    /// Returns the first attempt for this fresh interpreter generation.
+    pub(super) fn resume_attempt(&self, test_name: &QualifiedTestName) -> u32 {
+        if self.resume_attempts.is_empty() {
+            return 1;
+        }
+        self.resume_attempts
+            .get(&test_name.cache_key())
+            .copied()
+            .unwrap_or(1)
+    }
+
+    /// Reporting is independent of Python and can be used by a timeout watchdog.
+    pub(super) fn reporter(&self) -> &dyn Reporter {
+        self.reporter
     }
 
     pub(super) fn collection_settings(&'a self) -> CollectionSettings<'a> {
@@ -133,8 +153,13 @@ impl Context<'_> {
             TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
         let result_kind = test_case.outcome().result_kind();
         self.reporter.report_test_completed(&cache_key, test_case);
-        self.reporter
-            .report_test_case_result(test_case_name, result_kind, duration);
+        if let Some(attempt) = self.resume_attempts.get(&cache_key) {
+            self.reporter
+                .report_test_attempt(test_case_name, *attempt, result_kind, duration);
+        } else {
+            self.reporter
+                .report_test_case_result(test_case_name, result_kind, duration);
+        }
 
         passed
     }

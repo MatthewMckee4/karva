@@ -105,6 +105,21 @@ impl Partition {
             .with_unattributed_retry_baseline(completed)
     }
 
+    /// Keeps the timed-out case selected, with a bounded next attempt in a fresh process.
+    pub(crate) fn pending_after_timeout(
+        &self,
+        completed: &CompletedTestIndex<'_>,
+        timed_out: &TestCacheKey,
+        next_attempt: u32,
+    ) -> Self {
+        let mut pending = self.pending_after_crash(completed, None);
+        pending.resume_attempts.retain(|(key, _)| key != timed_out);
+        pending
+            .resume_attempts
+            .push((timed_out.clone(), next_attempt));
+        pending
+    }
+
     /// Decides whether an unattributed exit has useful work left to retry.
     pub fn recover_unattributed_crash(
         &self,
@@ -134,6 +149,7 @@ impl Partition {
     ) -> Self {
         let mut pending = Self::new();
         pending.resume_skip.clone_from(&self.resume_skip);
+        pending.resume_attempts.clone_from(&self.resume_attempts);
         for test in &self.tests {
             let cache_key = test.cache_key();
             let completed_function =

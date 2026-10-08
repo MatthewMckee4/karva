@@ -78,13 +78,6 @@ impl ActiveSettings {
     }
 }
 
-/// Snapshot context and shared settings passed to a timeout worker thread.
-#[derive(Clone)]
-pub struct SnapshotThreadState {
-    context: SnapshotContext,
-    settings: Vec<Arc<ActiveSettings>>,
-}
-
 thread_local! {
     static SNAPSHOT_CONTEXT: RefCell<Option<SnapshotContext>> = const { RefCell::new(None) };
     static SNAPSHOT_SETTINGS: RefCell<Vec<Arc<ActiveSettings>>> = const { RefCell::new(Vec::new()) };
@@ -310,22 +303,6 @@ fn display_relative(path: &Utf8Path) -> String {
 pub fn set_snapshot_context(context: SnapshotContext) {
     SNAPSHOT_CONTEXT.with(|ctx| {
         *ctx.borrow_mut() = Some(context);
-    });
-}
-
-/// Captures thread-local snapshot settings for execution on a timeout worker thread.
-pub fn capture_snapshot_thread_state(context: SnapshotContext) -> SnapshotThreadState {
-    SnapshotThreadState {
-        context,
-        settings: SNAPSHOT_SETTINGS.with(|stack| stack.borrow().clone()),
-    }
-}
-
-/// Installs snapshot state previously captured on the test runner thread.
-pub fn set_snapshot_thread_state(state: SnapshotThreadState) {
-    set_snapshot_context(state.context);
-    SNAPSHOT_SETTINGS.with(|stack| {
-        *stack.borrow_mut() = state.settings;
     });
 }
 

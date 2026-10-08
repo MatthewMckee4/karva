@@ -60,6 +60,18 @@ pub trait Reporter: Send + Sync {
         let _ = (cache_key, result);
     }
 
+    /// Publishes a hard timeout before the worker exits without Python cleanup.
+    /// The controller owns retries because the timed-out interpreter must be discarded.
+    fn report_test_timed_out(
+        &self,
+        test_name: &QualifiedTestName,
+        result: TestExecutionResult,
+        fail_on_flaky: bool,
+        junit_fail_on_flaky: bool,
+    ) {
+        let _ = (test_name, result, fail_on_flaky, junit_fail_on_flaky);
+    }
+
     /// Commits buffered test results before broader-scope teardown can terminate execution.
     fn flush_test_results(&self) {}
 }

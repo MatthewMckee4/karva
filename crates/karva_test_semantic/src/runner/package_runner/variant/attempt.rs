@@ -7,7 +7,7 @@ use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOu
 use pyo3::prelude::*;
 
 use crate::extensions::functions::snapshot::set_snapshot_context;
-use crate::utils::{run_coroutine, run_test_with_timeout};
+use crate::utils::{run_async_test_with_timeout, run_coroutine};
 
 use super::reporting::finish_output_capture;
 use super::{VariantRunner, VariantSettings};
@@ -27,8 +27,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         test_name_env_result: &PyResult<()>,
         attempt_env_result: PyResult<()>,
         prepared: PreparedTestAttempt,
-        attempt_number: u32,
+        progress: (u32, &[TestLifecycleAttempt]),
     ) -> AttemptResult {
+        let (attempt_number, prior_attempts) = progress;
         let PreparedTestAttempt {
             fixtures:
                 PreparedFixtures {
@@ -37,8 +38,22 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     test_finalizers,
                 },
             setup_duration,
-            output_capture,
+            mut output_capture,
         } = prepared;
+        let shared_output =
+            if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
+                output_capture
+                    .as_mut()
+                    .and_then(|capture| match capture.watchdog_output(self.py) {
+                        Ok(output) => Some(output),
+                        Err(error) => {
+                            tracing::warn!("failed to mirror timeout output: {error}");
+                            None
+                        }
+                    })
+            } else {
+                None
+            };
 
         let body = match setup_result {
             Ok(()) => self.execute_test_body(
@@ -47,6 +62,12 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 test_name_env_result,
                 attempt_env_result,
                 &function_arguments,
+                super::timeout::TimeoutAttempt {
+                    attempt_number,
+                    setup_duration,
+                    prior_attempts,
+                    shared_output,
+                },
             ),
             Err(error) => {
                 let outcome = error.skip_outcome(self.py).unwrap_or_else(|| {
@@ -110,6 +131,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         test_name_env_result: &PyResult<()>,
         attempt_env_result: PyResult<()>,
         function_arguments: &crate::runner::FixtureArguments,
+        timeout_attempt: super::timeout::TimeoutAttempt<'_>,
     ) -> AttemptBody {
         set_snapshot_context(settings.identity.snapshot_context.clone());
         let prepared_call = attempt_env_result.and_then(|()| {
@@ -119,7 +141,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             if let Err(error) = &settings.execution.async_patch_result {
                 return Err(error.clone_ref(self.py));
             }
-            if function_arguments.is_empty() || settings.execution.timeout_seconds.is_some() {
+            if function_arguments.is_empty() {
                 Ok(None)
             } else {
                 function_arguments.to_kwargs(self.py).map(Some)
@@ -130,14 +152,22 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             Ok(keyword_arguments) => {
                 let call_start = Instant::now();
                 let result = if let Some(seconds) = settings.execution.timeout_seconds {
-                    run_test_with_timeout(
-                        self.py,
-                        function,
-                        function_arguments,
-                        settings.execution.is_async,
-                        seconds,
-                        &settings.identity.snapshot_context,
-                    )
+                    if settings.execution.is_async {
+                        run_async_test_with_timeout(
+                            self.py,
+                            function,
+                            keyword_arguments.as_ref(),
+                            seconds,
+                        )
+                    } else {
+                        self.run_sync_with_deadline(
+                            settings,
+                            function,
+                            keyword_arguments.as_ref(),
+                            seconds,
+                            timeout_attempt,
+                        )
+                    }
                 } else {
                     let result = if let Some(keyword_arguments) = keyword_arguments {
                         function.call(self.py, (), Some(&keyword_arguments))
@@ -209,6 +239,7 @@ pub(super) struct AttemptResult {
 }
 
 /// Reportable result for one initial or retry attempt.
+#[derive(Clone)]
 pub(super) struct TestLifecycleAttempt {
     /// One-based attempt number.
     pub(super) attempt: u32,

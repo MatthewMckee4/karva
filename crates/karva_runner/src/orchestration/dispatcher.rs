@@ -4,12 +4,12 @@
 //! frames serially so result aggregation and active-test attribution have one
 //! owner.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::process::ExitStatus;
 use std::time::Duration;
 
 use anyhow::Result;
-use karva_diagnostic::AggregatedResults;
+use karva_diagnostic::{AggregatedResults, TestCaseAttempt, TestCaseResult};
 use karva_ipc::{ControllerServer, WorkerCheckpoint, WorkerEvent};
 use karva_python_semantic::TestCacheKey;
 
@@ -34,6 +34,29 @@ pub(super) struct EventDispatcher {
 
     /// Completed case bodies retained for final report formats.
     result_retention: TestResultRetention,
+
+    /// Timeout events waiting for their worker generation to be reaped.
+    timed_out_workers: HashMap<usize, TimedOutWorker>,
+
+    /// Earlier attempts awaiting a final result from a replacement interpreter.
+    timeout_history: HashMap<TestCacheKey, TimeoutHistory>,
+}
+
+/// Flushed timeout event, retained until process exit establishes safe retry isolation.
+struct TimedOutWorker {
+    cache_key: TestCacheKey,
+    result: TestCaseResult,
+    fail_on_flaky: bool,
+    junit_fail_on_flaky: bool,
+}
+
+/// Attempt history retained only for cases still eligible to retry.
+struct TimeoutHistory {
+    attempts: Vec<TestCaseAttempt>,
+    next_attempt: u32,
+    max_attempts: u32,
+    fail_on_flaky: bool,
+    junit_fail_on_flaky: bool,
 }
 
 /// Unexpected test termination retained until crash recovery completes.
@@ -105,6 +128,8 @@ impl EventDispatcher {
             results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
             crashed_tests: Vec::new(),
             result_retention,
+            timed_out_workers: HashMap::new(),
+            timeout_history: HashMap::new(),
         }
     }
 
@@ -127,7 +152,42 @@ impl EventDispatcher {
             }
             match *message.event {
                 WorkerEvent::TestSlow => self.results.register_slow_test(),
+                WorkerEvent::TestTimedOut {
+                    cache_key,
+                    result,
+                    fail_on_flaky,
+                    junit_fail_on_flaky,
+                } => {
+                    if self
+                        .timed_out_workers
+                        .insert(
+                            worker_id,
+                            TimedOutWorker {
+                                cache_key,
+                                result: *result,
+                                fail_on_flaky,
+                                junit_fail_on_flaky,
+                            },
+                        )
+                        .is_some()
+                    {
+                        anyhow::bail!(
+                            "Karva worker {worker_id} reported more than one hard timeout"
+                        );
+                    }
+                }
                 WorkerEvent::TestFinished { cache_key, result } => {
+                    let result = if let Some(history) = self.timeout_history.remove(&cache_key) {
+                        Box::new(result.with_previous_attempts(
+                            history.attempts,
+                            history.next_attempt,
+                            history.max_attempts,
+                            history.fail_on_flaky,
+                            history.junit_fail_on_flaky,
+                        ))
+                    } else {
+                        result
+                    };
                     self.results.register_rendered_test_case(
                         cache_key,
                         *result,
@@ -167,6 +227,11 @@ impl EventDispatcher {
         self.results.durations.keys().cloned().collect()
     }
 
+    /// Whether a native deadline handler reported this worker exit in advance.
+    pub(super) fn worker_timed_out(&self, worker_id: usize) -> bool {
+        self.timed_out_workers.contains_key(&worker_id)
+    }
+
     /// Whether a worker delivered its terminal event exactly once.
     pub(super) fn worker_completed(&self, worker_id: usize) -> bool {
         self.completed_workers.contains(&worker_id)
@@ -181,6 +246,51 @@ impl EventDispatcher {
             .collect::<Vec<_>>();
         missing.sort_unstable();
         missing
+    }
+
+    /// Resolves a flushed timeout only after its interpreter has exited.
+    pub(super) fn recover_timeout(
+        &mut self,
+        worker_id: usize,
+        stderr: &str,
+    ) -> Option<(TestCacheKey, Option<u32>)> {
+        let timed_out = self.timed_out_workers.remove(&worker_id)?;
+        let retry = timed_out.result.retry()?;
+        let attempt_number = retry.attempts();
+        let max_attempts = retry.max_attempts();
+        let mut result = timed_out.result;
+        result.append_captured_stderr(stderr);
+        let history = self.timeout_history.remove(&timed_out.cache_key);
+        let previous = history.map_or_else(Vec::new, |history| history.attempts);
+        if attempt_number < max_attempts {
+            let mut attempts = previous;
+            attempts.extend_from_slice(result.attempts());
+            self.timeout_history.insert(
+                timed_out.cache_key.clone(),
+                TimeoutHistory {
+                    attempts,
+                    next_attempt: attempt_number + 1,
+                    max_attempts,
+                    fail_on_flaky: timed_out.fail_on_flaky,
+                    junit_fail_on_flaky: timed_out.junit_fail_on_flaky,
+                },
+            );
+            Some((timed_out.cache_key, Some(attempt_number + 1)))
+        } else {
+            let result = result.with_previous_attempts(
+                previous,
+                attempt_number,
+                max_attempts,
+                timed_out.fail_on_flaky,
+                timed_out.junit_fail_on_flaky,
+            );
+            self.results.register_rendered_test_case(
+                timed_out.cache_key.clone(),
+                result,
+                matches!(self.result_retention, TestResultRetention::All),
+            );
+            Some((timed_out.cache_key, None))
+        }
     }
 
     /// Adds a run-level diagnostic when no active test checkpoint survived an exit.
@@ -221,13 +331,30 @@ impl EventDispatcher {
     pub(super) fn take_results(&mut self) -> AggregatedResults {
         let mut results = std::mem::take(&mut self.results);
         for crashed in self.crashed_tests.drain(..) {
-            results.register_crashed_test(
-                &crashed.name,
-                crashed.cache_key,
-                crashed.duration,
-                &crashed.termination,
-                &crashed.stderr,
-            );
+            if let Some(history) = self.timeout_history.remove(&crashed.cache_key) {
+                let result = TestCaseResult::crashed(
+                    &crashed.name,
+                    crashed.duration,
+                    &crashed.termination,
+                    &crashed.stderr,
+                )
+                .with_previous_attempts(
+                    history.attempts,
+                    history.next_attempt,
+                    history.max_attempts,
+                    history.fail_on_flaky,
+                    history.junit_fail_on_flaky,
+                );
+                results.register_rendered_test_case(crashed.cache_key, result, true);
+            } else {
+                results.register_crashed_test(
+                    &crashed.name,
+                    crashed.cache_key,
+                    crashed.duration,
+                    &crashed.termination,
+                    &crashed.stderr,
+                );
+            }
         }
         results
     }
