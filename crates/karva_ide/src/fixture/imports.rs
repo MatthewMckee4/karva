@@ -503,6 +503,7 @@ fn exports(module: &CollectedModule) -> Exports<'_> {
                         let name = alias.asname.as_ref().unwrap_or(&alias.name);
                         if name.as_str() == "__all__" {
                             all = ExportNames::Unknown;
+                            exports.insert(name.to_string(), Export::Import(import, alias));
                         } else {
                             let mut bindings = DecoratorBindings::before(
                                 &module.module_body,

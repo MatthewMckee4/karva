@@ -528,6 +528,32 @@ fn aliased_all_binding_does_not_hide_wildcard_exports() {
 }
 
 #[test]
+fn imported_fixture_bound_to_all_remains_navigable() {
+    let test = "def test_query(database): pass\n";
+    let index = index(
+        &[
+            (
+                "/project/support.py",
+                "from karva import fixture\n@fixture\ndef database(): pass\n",
+            ),
+            (
+                "/project/conftest.py",
+                "from support import database as __all__\n",
+            ),
+            ("/project/test_query.py", test),
+        ],
+        false,
+    );
+    let analysis = index
+        .analyze(Utf8Path::new("/project/test_query.py"))
+        .expect("analysis");
+    let definition =
+        crate::fixture_definition(&analysis, offset(test, "database")).expect("fixture");
+    assert_eq!(definition.path, Utf8Path::new("/project/support.py"));
+    assert!(analysis.diagnostics.is_empty());
+}
+
+#[test]
 fn all_binding_alias_invalidates_wildcard_exports() {
     let test = "def test_query(database): pass\n";
     let index = index(
