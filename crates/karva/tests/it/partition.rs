@@ -373,6 +373,9 @@ def test_value(value):
       |
     9 |     assert value != 1 or Path("fixed").exists()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+      Path("fixed").exists() = False
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
