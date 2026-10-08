@@ -18,7 +18,9 @@ use std::time::Instant;
 use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
 use ignore::types::Types;
-use karva_collector::{CollectedModule, CollectionSettings, collect_source};
+use karva_collector::{
+    CollectedModule, CollectionSettings, collect_source, collect_source_with_module_name,
+};
 use karva_ide::{SourceAnalysisSettings, WorkspaceSourceIndex};
 use karva_project::path::{TestPath, TestPathError, TestPathFunction, absolute};
 use once_cell::sync::OnceCell;
@@ -54,6 +56,8 @@ struct ParsedModules {
     settings: Option<SourceAnalysisSettings>,
     respect_ignore_files: bool,
     modules: BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
+    /// Bundled fixtures use a fixed module name, even outside the project namespace.
+    builtin: Option<Arc<CollectedModule>>,
 }
 
 /// Files included in one immutable source snapshot.
@@ -234,6 +238,7 @@ impl PreparedSourceIndex {
             || parsed.respect_ignore_files != respect_ignore_files
         {
             parsed.modules.clear();
+            parsed.builtin = None;
             parsed.settings = Some(settings.clone());
             parsed.respect_ignore_files = respect_ignore_files;
         }
@@ -273,6 +278,32 @@ impl PreparedSourceIndex {
                 module
             };
             modules.push(module);
+        }
+        if let Some(path) = find_builtin_source(&project_root)
+            && let Ok(source_text) = fs::read_to_string(&path)
+        {
+            let builtin =
+                if let Some(module) = parsed.builtin.as_ref().filter(|module| {
+                    module.path.path() == &path && module.source_text == source_text
+                }) {
+                    Some(Arc::clone(module))
+                } else {
+                    collect_source_with_module_name(
+                        &path,
+                        "karva._builtins",
+                        source_text,
+                        &collection_settings,
+                        &[],
+                    )
+                    .map(|module| {
+                        collect_count += 1;
+                        Arc::new(module)
+                    })
+                };
+            parsed.builtin.clone_from(&builtin);
+            modules.extend(builtin);
+        } else {
+            parsed.builtin = None;
         }
         check_cancelled(cancellation)?;
 
@@ -506,6 +537,100 @@ fn ancestor_paths<'a>(
 
 fn is_python_path(path: &Utf8Path) -> bool {
     path.extension().is_some_and(|extension| extension == "py")
+}
+
+/// Locates the bundled fixture source without importing Python.
+fn find_builtin_source(project_root: &Utf8Path) -> Option<Utf8PathBuf> {
+    let virtual_env = std::env::var_os("VIRTUAL_ENV")
+        .and_then(|path| Utf8PathBuf::from_path_buf(path.into()).ok());
+    let executable = std::env::current_exe()
+        .ok()
+        .and_then(|path| Utf8PathBuf::from_path_buf(path).ok());
+    let python_paths = std::env::var_os("PYTHONPATH")
+        .as_deref()
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .filter_map(|path| Utf8PathBuf::from_path_buf(path).ok())
+        .collect::<Vec<_>>();
+    find_builtin_source_in(
+        project_root,
+        virtual_env.as_deref(),
+        executable.as_deref(),
+        &python_paths,
+    )
+}
+
+fn find_builtin_source_in(
+    project_root: &Utf8Path,
+    virtual_env: Option<&Utf8Path>,
+    executable: Option<&Utf8Path>,
+    python_paths: &[Utf8PathBuf],
+) -> Option<Utf8PathBuf> {
+    let mut candidates = Vec::new();
+    add_environment_root(&mut candidates, &project_root.join(".venv"));
+    add_environment_root(&mut candidates, &project_root.join("venv"));
+    if let Some(virtual_env) = virtual_env {
+        add_environment_root(&mut candidates, virtual_env);
+    }
+    if let Some(executable) = executable {
+        if let Some(environment_root) = executable_environment_root(executable) {
+            add_environment_root(&mut candidates, environment_root);
+        }
+    }
+    for python_path in python_paths {
+        add_unique(&mut candidates, python_path.join("karva/_builtins.py"));
+    }
+    candidates.into_iter().find(|path| path.is_file())
+}
+
+fn add_environment_root(candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
+    add_source_root(candidates, root);
+    add_unique(
+        candidates,
+        root.join("lib/site-packages/karva/_builtins.py"),
+    );
+    add_unique(
+        candidates,
+        root.join("Lib/site-packages/karva/_builtins.py"),
+    );
+    for library in [root.join("lib"), root.join("Lib")] {
+        let Ok(mut entries) = fs::read_dir(library) else {
+            continue;
+        };
+        let mut python_dirs = entries
+            .by_ref()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().into_string().ok()?;
+                name.starts_with("python")
+                    .then(|| Utf8PathBuf::from_path_buf(entry.path()).ok())
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        python_dirs.sort_unstable();
+        for python_dir in python_dirs {
+            add_unique(
+                candidates,
+                python_dir.join("site-packages/karva/_builtins.py"),
+            );
+        }
+    }
+}
+
+fn add_source_root(candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
+    add_unique(candidates, root.join("python/karva/_builtins.py"));
+    add_unique(candidates, root.join("karva/_builtins.py"));
+}
+
+fn add_unique(candidates: &mut Vec<Utf8PathBuf>, candidate: Utf8PathBuf) {
+    if !candidates.contains(&candidate) {
+        candidates.push(candidate);
+    }
+}
+
+fn executable_environment_root(executable: &Utf8Path) -> Option<&Utf8Path> {
+    let bin = executable.parent()?;
+    matches!(bin.file_name(), Some("bin" | "Scripts")).then(|| bin.parent())?
 }
 
 fn check_cancelled(cancellation: &RequestCancellationToken) -> Result<(), SourceIndexError> {
@@ -982,6 +1107,69 @@ mod tests {
     }
 
     #[test]
+    fn reuses_bundled_fixture_syntax_until_its_source_changes() {
+        let fixture = Fixture::new();
+        fixture.write("tests/test_sample.py", "def test_sample(tmp_path): pass\n");
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../python/karva/_builtins.py"
+        ));
+        let path = fixture.write(
+            ".venv/lib/python3.12/site-packages/karva/_builtins.py",
+            source,
+        );
+        let cache = SourceIndexCache::default();
+        let prepare = |cache| {
+            PreparedSourceIndex::with_cache(
+                fixture.root.clone(),
+                Vec::new(),
+                BTreeMap::new(),
+                Fixture::settings(),
+                true,
+                SourceIndexScope::TestSelection,
+                cache,
+            )
+        };
+        prepare(Arc::clone(&cache))
+            .build(&RequestCancellationToken::default())
+            .expect("first generation");
+        let first = cache
+            .parsed
+            .lock()
+            .expect("parsed state")
+            .builtin
+            .clone()
+            .expect("bundled module");
+        let next = Arc::new(cache.invalidated());
+        let index = prepare(Arc::clone(&next))
+            .build(&RequestCancellationToken::default())
+            .expect("next generation");
+        let parsed = next.parsed.lock().expect("parsed state");
+        assert!(Arc::ptr_eq(
+            &first,
+            parsed.builtin.as_ref().expect("bundled module")
+        ));
+        assert!(std::ptr::eq(
+            index.module(&path).expect("shared bundled module"),
+            first.as_ref()
+        ));
+        drop(parsed);
+        fs::write(&path, format!("{source}\n")).expect("edit bundled source");
+        prepare(Arc::new(next.invalidated()))
+            .build(&RequestCancellationToken::default())
+            .expect("changed source generation");
+        assert!(!Arc::ptr_eq(
+            &first,
+            next.parsed
+                .lock()
+                .expect("parsed state")
+                .builtin
+                .as_ref()
+                .expect("updated bundled module")
+        ));
+    }
+
+    #[test]
     fn changed_collection_settings_recollect_identical_source() {
         let fixture = Fixture::new();
         let path = fixture.write("tests/test_sample.py", "def check_example(): pass\n");
@@ -1062,6 +1250,51 @@ mod tests {
             .expect_err("outside root should fail");
 
         assert!(matches!(error, SourceIndexError::OutsideProjectRoot { .. }));
+    }
+
+    #[test]
+    fn builtin_source_lookup_prefers_project_virtualenv() {
+        let fixture = Fixture::new();
+        let project_builtin = fixture.write(
+            ".venv/lib/python3.12/site-packages/karva/_builtins.py",
+            "project",
+        );
+        let active_env = fixture.root.join("active-env");
+        let active_builtin = fixture.write(
+            "active-env/lib/python3.12/site-packages/karva/_builtins.py",
+            "active",
+        );
+
+        let found = find_builtin_source_in(&fixture.root, Some(&active_env), None, &[])
+            .expect("project virtualenv source");
+
+        assert_eq!(found, project_builtin);
+        assert_ne!(found, active_builtin);
+    }
+
+    #[test]
+    fn builtin_source_lookup_uses_executable_environment_without_ancestor_scanning() {
+        let fixture = Fixture::new();
+        let executable = fixture.root.join("environment/bin/karva");
+        let installed = fixture.write(
+            "environment/lib/python3.12/site-packages/karva/_builtins.py",
+            "installed",
+        );
+        let unrelated = fixture.write(
+            "environment/target/lib/python3.12/site-packages/karva/_builtins.py",
+            "unrelated",
+        );
+
+        let found = find_builtin_source_in(
+            &fixture.root.join("other-project"),
+            None,
+            Some(&executable),
+            &[],
+        )
+        .expect("executable environment source");
+
+        assert_eq!(found, installed);
+        assert_ne!(found, unrelated);
     }
 
     impl Fixture {
