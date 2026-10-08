@@ -1,5 +1,7 @@
 //! Source-only editor analysis for Karva projects.
 
+use std::sync::Arc;
+
 mod call_hierarchy;
 mod code_actions;
 mod completion;
@@ -144,13 +146,13 @@ pub struct SourceDiagnostic {
 }
 
 /// Parsed source plus Karva-specific semantic facts.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceAnalysis {
     /// Collector output retained for later editor features.
-    module: CollectedModule,
+    module: Arc<CollectedModule>,
 
     /// Resolved fixture declarations and provider visibility.
-    fixture_model: FixtureModel,
+    fixture_model: Arc<FixtureModel>,
 
     /// Definite diagnostics. Unknown dynamic behavior remains silent.
     pub diagnostics: Vec<SourceDiagnostic>,
@@ -173,8 +175,8 @@ pub fn analyze_source(
     let module = collect_source(path, project_root, source_text, &collection_settings, &[])?;
     let (fixture_model, diagnostics) = fixture::analyze(&module, settings.try_import_fixtures);
     Some(SourceAnalysis {
-        module,
-        fixture_model,
+        module: Arc::new(module),
+        fixture_model: Arc::new(fixture_model),
         diagnostics,
     })
 }
@@ -226,8 +228,8 @@ pub(crate) fn analyze_source_with_parents(
         settings.try_import_fixtures,
     );
     Some(SourceAnalysis {
-        module: current,
-        fixture_model,
+        module: Arc::new(current),
+        fixture_model: Arc::new(fixture_model),
         diagnostics,
     })
 }
@@ -249,11 +251,11 @@ pub(crate) fn analyze_sources(
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
     let parent_modules = parents.iter().collect::<Vec<_>>();
-    analyze_collected_source(current, &parent_modules, None, settings)
+    analyze_collected_source(Arc::new(current), &parent_modules, None, settings)
 }
 
 pub(crate) fn analyze_collected_source(
-    current: CollectedModule,
+    current: Arc<CollectedModule>,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
     settings: &SourceAnalysisSettings,
@@ -266,7 +268,7 @@ pub(crate) fn analyze_collected_source(
     );
     SourceAnalysis {
         module: current,
-        fixture_model,
+        fixture_model: Arc::new(fixture_model),
         diagnostics,
     }
 }

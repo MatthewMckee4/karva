@@ -89,7 +89,12 @@ pub fn fixture_incoming_calls(
         };
         let items = fixture_hierarchy_items(&analysis);
         for occurrence in fixture_occurrences(&analysis) {
-            if occurrence.kind == FixtureOccurrenceKind::Definition || &occurrence.fixture != target
+            if !matches!(
+                occurrence.kind,
+                FixtureOccurrenceKind::Dependency
+                    | FixtureOccurrenceKind::TestParameter
+                    | FixtureOccurrenceKind::UseFixtures
+            ) || &occurrence.fixture != target
             {
                 continue;
             }
@@ -119,8 +124,12 @@ pub fn fixture_outgoing_calls(
     }
     let mut calls = Vec::new();
     for occurrence in fixture_occurrences(&analysis) {
-        if occurrence.kind == FixtureOccurrenceKind::Definition
-            || !consumer.range.contains_range(occurrence.range)
+        if !matches!(
+            occurrence.kind,
+            FixtureOccurrenceKind::Dependency
+                | FixtureOccurrenceKind::TestParameter
+                | FixtureOccurrenceKind::UseFixtures
+        ) || !consumer.range.contains_range(occurrence.range)
         {
             continue;
         }

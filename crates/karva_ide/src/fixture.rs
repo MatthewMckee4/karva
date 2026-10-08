@@ -1407,6 +1407,8 @@ mod tests {
         )
         .expect("source should analyze")
         .module
+        .as_ref()
+        .clone()
     }
 
     #[test]
