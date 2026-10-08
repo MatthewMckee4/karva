@@ -189,6 +189,9 @@ def test_module_tags(value, expected):
        |
     11 |     assert value == expected
        |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      left (value) = 1
+      right (expected) = 2
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped

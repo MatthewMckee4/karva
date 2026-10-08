@@ -239,6 +239,9 @@ def test_flaky():
       |
     9 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: &apos;1&apos;
+      right: &apos;2&apos;
 
     </flakyFailure>
           <system-out>attempt 1
@@ -305,6 +308,9 @@ def test_flaky():
       |
     5 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: &apos;1&apos;
+      right: &apos;2&apos;
 
     </flakyFailure>
         </testcase>
@@ -380,6 +386,9 @@ def test_lenient():
        |
     10 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: &apos;1&apos;
+      right: &apos;2&apos;
 
     </flakyFailure>
         </testcase>
@@ -395,6 +404,9 @@ def test_lenient():
       |
     7 |     assert os.environ[&quot;KARVA_ATTEMPT&quot;] == &quot;2&quot;
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: &apos;1&apos;
+      right: &apos;2&apos;
 
     </flakyFailure>
         </testcase>

@@ -916,6 +916,8 @@ fn test_fixture_generator_two_yields_failing_test() {
        |
     10 |     assert fixture_generator == 2
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      fixture_generator = 1
 
     error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `fixture_generator`
      --> test.py:5:5
@@ -2325,6 +2327,9 @@ def test_needs_retry():
       |
     5 |     assert os.environ["KARVA_ATTEMPT"] == "2"
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: '1'
+      right: '2'
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped

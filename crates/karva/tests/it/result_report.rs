@@ -192,7 +192,7 @@ fn writes_json_result_report() {
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_flaky` failed",
-                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^\n\n"
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n  --> test_report.py:21:5\n   |/n21 | def test_flaky():\n   |     ^^^^^^^^^^/ninfo: Test failed here\n  --> test_report.py:26:5\n   |/n26 |     assert count >= 1\n   |     ^^^^^^^^^^^^^^^^^/ninfo: Evaluated values:\n  count = 0\n\n"
               }
             },
             {
@@ -482,7 +482,7 @@ def test_flaky():
                 "code": "test-failure",
                 "severity": "error",
                 "message": "Test `test_flaky` failed",
-                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"
+                "rendered": "error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^/ninfo: String difference:\n  left: '1'\n  right: '2'\n\n"
               }
             },
             {
@@ -530,7 +530,7 @@ def test_flaky():
     "
     );
     assert_snapshot!(context.read_file("results.jsonl"), @r#"
-    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
+    {"schema_version":2,"type":"test","module":"test_flaky","name":"test_flaky","full_name":"test_flaky::test_flaky","status":"passed","duration_seconds":"[TIME]","flaky":true,"retry":{"attempts":2,"max_attempts":2},"attempts":[{"attempt":1,"status":"failed","duration_seconds":"[TIME]","diagnostic":{"code":"test-failure","severity":"error","message":"Test `test_flaky` failed","rendered":"error[test-failure]: Test `test_flaky` failed\n --> test_flaky.py:4:5\n  |/n4 | def test_flaky():\n  |     ^^^^^^^^^^/ninfo: Test failed here\n --> test_flaky.py:5:5\n  |/n5 |     assert os.environ[/"KARVA_ATTEMPT/"] == /"2/"\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^/ninfo: String difference:\n  left: '1'\n  right: '2'\n\n"}},{"attempt":2,"status":"passed","duration_seconds":"[TIME]"}]}
     {"schema_version":2,"type":"run_finished","status":"failed","elapsed_seconds":"[TIME]","stats":{"total":1,"passed":1,"failed":0,"errors":0,"skipped":0,"expected_failure":0,"flaky":1,"slow":0}}
     "#);
 }

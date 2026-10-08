@@ -53,6 +53,8 @@ fn seed_failed_test(context: &TestContext) {
        |
     13 |     assert Path("fixed").exists()
        |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      Path("fixed").exists() = False
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -238,6 +240,9 @@ def test_value(value):
       |
     9 |     assert value != 1 or Path("fixed").exists()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+      Path("fixed").exists() = False
 
     ────────────
          Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
@@ -309,6 +314,9 @@ def test_b():
       |
     9 |     assert value != 1 or Path("fixed").exists()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      value = 1
+      Path("fixed").exists() = False
 
     test_b::test_b:
 
@@ -322,6 +330,8 @@ def test_b():
       |
     7 |     assert Path("fixed").exists()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      Path("fixed").exists() = False
 
     ────────────
          Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
@@ -448,6 +458,8 @@ def test_b_pass():
       |
     7 |     assert Path("fixed").exists()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      Path("fixed").exists() = False
 
     test_a::test_a_fail:
 
@@ -461,6 +473,8 @@ def test_b_pass():
       |
     7 |     assert Path("fixed").exists()
       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      Path("fixed").exists() = False
 
     ────────────
          Summary [TIME] 4 tests run: 2 passed, 2 failed, 0 skipped

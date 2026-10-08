@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+mod assertions;
 pub(crate) mod collection;
 mod context;
 pub(crate) mod diagnostic;
@@ -78,6 +79,10 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
     let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {
+        if let Err(error) = assertions::install(py, context.cwd()) {
+            tracing::warn!("failed to install assertion instrumentation: {error}");
+        }
+
         let cov_session =
             coverage.and_then(|cfg| match CoverageSession::start(py, context.cwd(), cfg) {
                 Ok(session) => Some(session),
