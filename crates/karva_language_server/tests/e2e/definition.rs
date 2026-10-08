@@ -365,3 +365,59 @@ fn follows_project_fixture_imports_outside_open_document_selection() {
         server.request::<DefinitionRequest>(definition_params(uri, Position::new(0, 20)));
     assert_json_snapshot!(workspace.normalize(response));
 }
+
+#[test]
+fn follows_project_fixture_wildcard_imports() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "support/providers.py",
+        "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+    );
+    workspace.write("conftest.py", "from support.providers import *\n");
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(database): pass\n",
+    );
+
+    let response =
+        server.request::<DefinitionRequest>(definition_params(uri, Position::new(0, 20)));
+    assert_json_snapshot!(workspace.normalize(response), @r#"
+    {
+      "range": {
+        "end": {
+          "character": 12,
+          "line": 2
+        },
+        "start": {
+          "character": 4,
+          "line": 2
+        }
+      },
+      "uri": "file:///project/support/providers.py"
+    }
+    "#);
+}
+
+#[test]
+fn does_not_follow_private_fixture_through_default_wildcard_import() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "support/providers.py",
+        "from karva import fixture\n@fixture\ndef _private(): pass\n",
+    );
+    workspace.write("conftest.py", "from support.providers import *\n");
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(_private): pass\n",
+    );
+
+    let response =
+        server.request::<DefinitionRequest>(definition_params(uri, Position::new(0, 20)));
+    assert_eq!(response, None);
+}
