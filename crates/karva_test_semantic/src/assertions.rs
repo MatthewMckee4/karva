@@ -210,9 +210,8 @@ impl<'a> AssertionCollector<'a> {
                 }
             }
             Expr::Compare(compare) => {
-                self.capture(compare.left.as_ref(), may_skip, captures);
-                for (index, comparator) in compare.comparators.iter().enumerate() {
-                    self.capture(comparator, may_skip || index > 0, captures);
+                for (index, operand) in compare.operands.iter().enumerate() {
+                    self.capture(operand, may_skip || index > 1, captures);
                 }
             }
             Expr::UnaryOp(unary) if unary.op == ruff_python_ast::UnaryOp::Not => {
@@ -287,7 +286,7 @@ fn literal_equality_needs_diagnostics(expression: &Expr) -> bool {
     let Expr::Compare(compare) = expression else {
         return false;
     };
-    compare.comparators.iter().any(|expression| {
+    compare.operands.iter().any(|expression| {
         matches!(
             expression,
             Expr::List(_)
@@ -297,15 +296,7 @@ fn literal_equality_needs_diagnostics(expression: &Expr) -> bool {
                 | Expr::StringLiteral(_)
                 | Expr::BytesLiteral(_)
         )
-    }) || matches!(
-        compare.left.as_ref(),
-        Expr::List(_)
-            | Expr::Tuple(_)
-            | Expr::Dict(_)
-            | Expr::Set(_)
-            | Expr::StringLiteral(_)
-            | Expr::BytesLiteral(_)
-    )
+    })
 }
 
 struct Edit {

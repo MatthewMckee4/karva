@@ -403,7 +403,7 @@ AssertionError"#;
             };
 
             assert_eq!(resolved_source_file, source_file);
-            assert_eq!(resolved_source_file.slice(range), "assert False");
+            assert_eq!(resolved_source_file.to_source_code().slice(range), "assert False");
         }
 
         #[test]

@@ -898,7 +898,7 @@ fn doctest_failure_range(py: Python, error: &PyErr, source_file: &SourceFile) ->
     if line.get() > source.line_count() {
         return None;
     }
-    let line_range = source.line_range(line);
+    let line_range = TextRange::new(source.line_start(line), source.line_end_exclusive(line));
     let prompt = source.slice(line_range).find(">>>")?;
     let prompt = TextSize::try_from(prompt).ok()?;
     Some(TextRange::at(line_range.start() + prompt, TextSize::new(3)))
