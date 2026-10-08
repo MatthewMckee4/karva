@@ -57,6 +57,8 @@ files and lines, and distinguish blockers from improvements.
 
 - Write `Karva` for the project and `karva` for the executable or package name.
 - Always invoke Karva as `uv run karva` in documentation commands and examples.
+- Always run Python scripts with `uv run <script>`; never invoke `python` or
+  `python3` directly in commands, documentation, CI, or examples.
 - Prefer narrow visibility because this workspace is generally its own
   consumer; use `pub` when another workspace crate genuinely needs an item.
 - Keep Rust imports at the top of files and prefer short imports.
