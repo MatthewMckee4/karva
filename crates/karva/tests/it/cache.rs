@@ -23,18 +23,9 @@ fn prune_removes_all_but_most_recent() {
     ----- stderr -----
     ");
 
-    let remaining = std::fs::read_dir(&cache_dir)
-        .unwrap()
-        .filter(|e| {
-            e.as_ref()
-                .unwrap()
-                .file_name()
-                .to_str()
-                .unwrap()
-                .starts_with("run-")
-        })
-        .count();
-    assert_eq!(remaining, 1);
+    assert!(cache_dir.join("run-300").is_dir());
+    assert!(!cache_dir.join("run-100").exists());
+    assert!(!cache_dir.join("run-200").exists());
 }
 
 #[test]
@@ -58,7 +49,17 @@ fn prune_with_single_run_removes_nothing() {
 fn test_run_persists_history_without_run_artifacts() {
     let context = TestContext::with_file("test_a.py", "def test_1(): pass");
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_a::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let cache_dir = context.root().join(".karva_cache");
     assert!(cache_dir.join("durations.json").exists());
@@ -89,7 +90,17 @@ fn prune_with_no_cache_dir() {
 fn clean_removes_cache_directory() {
     let context = TestContext::with_file("test_a.py", "def test_1(): pass");
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_a::test_1
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let cache_dir = context.root().join(".karva_cache");
     assert!(cache_dir.exists());

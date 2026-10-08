@@ -12,7 +12,34 @@ fn last_failed_reruns_only_failures() {
             ",
     )]);
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail
+
+    failures:
+
+    test_a::test_fail:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail(): assert False
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--last-failed"), @"
     success: false
@@ -53,7 +80,34 @@ fn last_failed_lf_alias() {
             ",
     )]);
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail
+
+    failures:
+
+    test_a::test_fail:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail(): assert False
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--lf"), @"
     success: false
@@ -94,7 +148,18 @@ fn last_failed_with_no_previous_failures_runs_all() {
             ",
     )]);
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_one
+            PASS [TIME] test_a::test_two
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--last-failed"), @"
     success: true
@@ -153,7 +218,49 @@ def test_fail_b(): assert False
         ),
     ]);
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail_a
+            PASS [TIME] test_b::test_pass_b
+            FAIL [TIME] test_b::test_fail_b
+
+    failures:
+
+    test_a::test_fail_a:
+
+    error[test-failure]: Test `test_fail_a` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail_a(): assert False
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail_a(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    test_b::test_fail_b:
+
+    error[test-failure]: Test `test_fail_b` failed
+     --> test_b.py:3:5
+      |
+    3 | def test_fail_b(): assert False
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test_b.py:3:1
+      |
+    3 | def test_fail_b(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 4 tests run: 2 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--last-failed").arg("--status-level=none"), @"
     success: false
@@ -208,7 +315,48 @@ def test_fail_b(): assert False
         ",
     );
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail_a
+            FAIL [TIME] test_a::test_fail_b
+
+    failures:
+
+    test_a::test_fail_a:
+
+    error[test-failure]: Test `test_fail_a` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail_a(): assert False
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail_a(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    test_a::test_fail_b:
+
+    error[test-failure]: Test `test_fail_b` failed
+     --> test_a.py:4:5
+      |
+    4 | def test_fail_b(): assert False
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:4:1
+      |
+    4 | def test_fail_b(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(
         context
@@ -257,7 +405,48 @@ def test_fail_b(): assert False
         ",
     );
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail_a
+            FAIL [TIME] test_a::test_fail_b
+
+    failures:
+
+    test_a::test_fail_a:
+
+    error[test-failure]: Test `test_fail_a` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail_a(): assert False
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail_a(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    test_a::test_fail_b:
+
+    error[test-failure]: Test `test_fail_b` failed
+     --> test_a.py:4:5
+      |
+    4 | def test_fail_b(): assert False
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:4:1
+      |
+    4 | def test_fail_b(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(
         context
@@ -303,7 +492,34 @@ def test_fail(): assert False
         ",
     );
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail
+
+    failures:
+
+    test_a::test_fail:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail(): assert False
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test_a.py",
@@ -354,7 +570,34 @@ def test_fail(): assert False
         ",
     );
 
-    context.command_no_parallel().output().unwrap();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_a::test_pass
+            FAIL [TIME] test_a::test_fail
+
+    failures:
+
+    test_a::test_fail:
+
+    error[test-failure]: Test `test_fail` failed
+     --> test_a.py:3:5
+      |
+    3 | def test_fail(): assert False
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:3:1
+      |
+    3 | def test_fail(): assert False
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test_a.py",
@@ -395,11 +638,40 @@ def test_clean():
 "#,
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--retry=1")
-        .output()
-        .expect("run initial tests");
+        .arg("--retry=1"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+      TRY 1 FAIL [TIME] test_a::test_flaky
+      TRY 2 PASS [TIME] test_a::test_flaky
+      TRY 1 FAIL [TIME] test_a::test_failure
+      TRY 2 FAIL [TIME] test_a::test_failure
+            PASS [TIME] test_a::test_clean
+
+    failures:
+
+    test_a::test_failure:
+
+    error[test-failure]: Test `test_failure` failed
+     --> test_a.py:7:5
+      |
+    7 | def test_failure():
+      |     ^^^^^^^^^^^^
+    info: Test failed here
+     --> test_a.py:8:5
+      |
+    8 |     assert False
+      |     ^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 3 tests run: 2 passed (1 flaky), 1 failed, 0 skipped
+       FLAKY 2/2 [TIME] test_a::test_flaky
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test_a.py",

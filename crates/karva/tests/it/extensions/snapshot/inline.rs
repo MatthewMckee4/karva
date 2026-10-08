@@ -1,6 +1,3 @@
-use std::io::Write;
-use std::process::Stdio;
-
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -287,7 +284,35 @@ def test_hello():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("hello world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_hello' in snapshots/test__test_hello_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     let source_before = context.read_file("test.py");
     assert!(
@@ -327,7 +352,35 @@ def test_hello():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("hello world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_hello' in snapshots/test__test_hello_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     assert_cmd_snapshot!(context.snapshot("reject"), @r"
     success: true
@@ -426,7 +479,35 @@ def test_hello():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("hello world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_hello' in snapshots/test__test_hello_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     assert_cmd_snapshot!(context.snapshot("pending"), @r"
     success: true
@@ -455,21 +536,97 @@ def test_second():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_first
+            FAIL [TIME] test::test_second
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\ns\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_first:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:4:5
+      |
+    4 | def test_first():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("hello", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_first' in snapshots/test__test_first_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_second:
+
+    error[test-failure]: Test `test_second` failed
+     --> test.py:7:5
+      |
+    7 | def test_second():
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot("world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_second' in snapshots/test__test_second_inline_8.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    Source: test.py:5::test_first
+
+    ────────────┬[LONG-LINE]
+              1 │ +hello
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    Snapshot 2/2
+    File: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+    Source: test.py:8::test_second
+
+    ────────────┬[LONG-LINE]
+              1 │ +world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    skipped:
+      <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -486,19 +643,33 @@ def test_second():
         .join("snapshots/test__test_second_inline_8.snap.new");
     assert!(pending.exists(), "Expected second .snap.new to still exist");
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+    Source: test.py:8::test_second
+
+    ────────────┬[LONG-LINE]
+              1 │ +world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -540,21 +711,97 @@ def test_second():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_first
+            FAIL [TIME] test::test_second
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\ns\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_first:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:4:5
+      |
+    4 | def test_first():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("hello", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_first' in snapshots/test__test_first_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_second:
+
+    error[test-failure]: Test `test_second` failed
+     --> test.py:7:5
+      |
+    7 | def test_second():
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot("world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_second' in snapshots/test__test_second_inline_8.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    Source: test.py:5::test_first
+
+    ────────────┬[LONG-LINE]
+              1 │ +hello
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    Snapshot 2/2
+    File: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+    Source: test.py:8::test_second
+
+    ────────────┬[LONG-LINE]
+              1 │ +world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    skipped:
+      <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -562,7 +809,36 @@ def test_second():
         "Expected first inline rewritten, got:\n{source}"
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_first
+            FAIL [TIME] test::test_second
+
+    failures:
+
+    test::test_second:
+
+    error[test-failure]: Test `test_second` failed
+     --> test.py:7:5
+      |
+    7 | def test_second():
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot("world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_second' in snapshots/test__test_second_inline_8.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     assert_cmd_snapshot!(context.snapshot("accept"), @"
     success: true
@@ -608,21 +884,99 @@ def test_second():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_first
+            FAIL [TIME] test::test_second
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\ns\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_first:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:4:5
+      |
+    4 | def test_first():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("line1/nline2/nline3", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_first' in snapshots/test__test_first_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_second:
+
+    error[test-failure]: Test `test_second` failed
+     --> test.py:7:5
+      |
+    7 | def test_second():
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot("world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_second' in snapshots/test__test_second_inline_8.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    Source: test.py:5::test_first
+
+    ────────────┬[LONG-LINE]
+              1 │ +line1
+              2 │ +line2
+              3 │ +line3
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    Snapshot 2/2
+    File: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+    Source: test.py:8::test_second
+
+    ────────────┬[LONG-LINE]
+              1 │ +world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    skipped:
+      <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -639,19 +993,33 @@ def test_second():
         .join("snapshots/test__test_second_inline_8.snap.new");
     assert!(pending.exists(), "Expected second .snap.new to still exist");
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+    Source: test.py:8::test_second
+
+    ────────────┬[LONG-LINE]
+              1 │ +world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -676,21 +1044,99 @@ def test_second():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_first
+            FAIL [TIME] test::test_second
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\ns\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_first:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:4:5
+      |
+    4 | def test_first():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("line1/nline2/nline3", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_first' in snapshots/test__test_first_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_second:
+
+    error[test-failure]: Test `test_second` failed
+     --> test.py:7:5
+      |
+    7 | def test_second():
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot("world", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_second' in snapshots/test__test_second_inline_8.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    Source: test.py:5::test_first
+
+    ────────────┬[LONG-LINE]
+              1 │ +line1
+              2 │ +line2
+              3 │ +line3
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    Snapshot 2/2
+    File: <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+    Source: test.py:8::test_second
+
+    ────────────┬[LONG-LINE]
+              1 │ +world
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    skipped:
+      <temp_dir>/snapshots/test__test_second_inline_8.snap.new
+
+    ----- stderr -----
+    ");
 
     let old_pending = context
         .root()
@@ -698,7 +1144,36 @@ def test_second():
     assert!(old_pending.exists(), "Expected old .snap.new at line 8");
 
     // Re-run: second test now fails at shifted line 12, creating a second .snap.new
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_first
+            FAIL [TIME] test::test_second
+
+    failures:
+
+    test::test_second:
+
+    error[test-failure]: Test `test_second` failed
+      --> test.py:11:5
+       |
+    11 | def test_second():
+       |     ^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:12:5
+       |
+    12 |     karva.assert_snapshot("world", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_second' in snapshots/test__test_second_inline_12.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     let new_pending = context
         .root()
@@ -754,7 +1229,52 @@ def test_third():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            FAIL [TIME] test::test_first
+            PASS [TIME] test::test_middle
+            FAIL [TIME] test::test_third
+
+    failures:
+
+    test::test_first:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:4:5
+      |
+    4 | def test_first():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("a/nb/nc", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_first' in snapshots/test__test_first_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_third:
+
+    error[test-failure]: Test `test_third` failed
+      --> test.py:10:5
+       |
+    10 | def test_third():
+       |     ^^^^^^^^^^
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     karva.assert_snapshot("hello", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_third' in snapshots/test__test_third_inline_11.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     assert_cmd_snapshot!(context.snapshot("accept"), @"
     success: true
@@ -799,35 +1319,128 @@ def test_third():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            FAIL [TIME] test::test_first
+            PASS [TIME] test::test_middle
+            FAIL [TIME] test::test_third
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\ns\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn review");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    test::test_first:
+
+    error[test-failure]: Test `test_first` failed
+     --> test.py:4:5
+      |
+    4 | def test_first():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("a/nb/nc", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_first' in snapshots/test__test_first_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_third:
+
+    error[test-failure]: Test `test_third` failed
+      --> test.py:10:5
+       |
+    10 | def test_third():
+       |     ^^^^^^^^^^
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     karva.assert_snapshot("hello", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_third' in snapshots/test__test_third_inline_11.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    Source: test.py:5::test_first
+
+    ────────────┬[LONG-LINE]
+              1 │ +a
+              2 │ +b
+              3 │ +c
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    Snapshot 2/2
+    File: <temp_dir>/snapshots/test__test_third_inline_11.snap.new
+    Source: test.py:11::test_third
+
+    ────────────┬[LONG-LINE]
+              1 │ +hello
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_first_inline_5.snap.new
+    skipped:
+      <temp_dir>/snapshots/test__test_third_inline_11.snap.new
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/1
+    File: <temp_dir>/snapshots/test__test_third_inline_11.snap.new
+    Source: test.py:11::test_third
+
+    ────────────┬[LONG-LINE]
+              1 │ +hello
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_third_inline_11.snap.new
+
+    ----- stderr -----
+    ");
 
     let source = context.read_file("test.py");
     assert!(
@@ -871,7 +1484,115 @@ def test_f():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 6 tests across 1 worker
+            FAIL [TIME] test::test_a
+            FAIL [TIME] test::test_b
+            FAIL [TIME] test::test_c
+            FAIL [TIME] test::test_d
+            FAIL [TIME] test::test_e
+            FAIL [TIME] test::test_f
+
+    failures:
+
+    test::test_a:
+
+    error[test-failure]: Test `test_a` failed
+     --> test.py:4:5
+      |
+    4 | def test_a():
+      |     ^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot("a1/na2", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_a' in snapshots/test__test_a_inline_5.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_b:
+
+    error[test-failure]: Test `test_b` failed
+     --> test.py:7:5
+      |
+    7 | def test_b():
+      |     ^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot("b1/nb2", inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_b' in snapshots/test__test_b_inline_8.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_c:
+
+    error[test-failure]: Test `test_c` failed
+      --> test.py:10:5
+       |
+    10 | def test_c():
+       |     ^^^^^^
+    info: Test failed here
+      --> test.py:11:5
+       |
+    11 |     karva.assert_snapshot("c1/nc2", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_c' in snapshots/test__test_c_inline_11.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_d:
+
+    error[test-failure]: Test `test_d` failed
+      --> test.py:13:5
+       |
+    13 | def test_d():
+       |     ^^^^^^
+    info: Test failed here
+      --> test.py:14:5
+       |
+    14 |     karva.assert_snapshot("d1/nd2", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_d' in snapshots/test__test_d_inline_14.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_e:
+
+    error[test-failure]: Test `test_e` failed
+      --> test.py:16:5
+       |
+    16 | def test_e():
+       |     ^^^^^^
+    info: Test failed here
+      --> test.py:17:5
+       |
+    17 |     karva.assert_snapshot("e1/ne2", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_e' in snapshots/test__test_e_inline_17.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_f:
+
+    error[test-failure]: Test `test_f` failed
+      --> test.py:19:5
+       |
+    19 | def test_f():
+       |     ^^^^^^
+    info: Test failed here
+      --> test.py:20:5
+       |
+    20 |     karva.assert_snapshot("f1/nf2", inline="")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_f' in snapshots/test__test_f_inline_20.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 6 tests run: 0 passed, 6 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     assert_cmd_snapshot!(context.snapshot("accept"), @"
     success: true
@@ -967,7 +1688,35 @@ def test_custom():
         "#,
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_custom
+
+    failures:
+
+    test::test_custom:
+
+    error[test-failure]: Test `test_custom` failed
+     --> test.py:4:5
+      |
+    4 | def test_custom():
+      |     ^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:9:5
+      |
+    9 |     karva.assert_snapshot(repr(Custom()), inline="")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New inline snapshot for 'test_custom' in snapshots/test__test_custom_inline_9.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     assert_cmd_snapshot!(context.snapshot("accept"), @"
     success: true

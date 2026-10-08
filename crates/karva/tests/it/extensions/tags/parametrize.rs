@@ -3,86 +3,108 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
 use crate::common::TestContext;
-
-fn get_parametrize_function(framework: &str) -> &str {
-    match framework {
-        "pytest" => "pytest.mark.parametrize",
-        "karva" => "karva.tags.parametrize",
-        _ => panic!("Invalid framework"),
-    }
-}
+use crate::extensions::get_parametrize_function;
 
 #[rstest]
-fn test_parametrize_rejects_wrong_row_arity(#[values("pytest", "karva")] framework: &str) {
+fn test_parametrize_rejects_too_few_values_before_execution(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
+from pathlib import Path
 import {framework}
 parametrize = {parametrize}
 
 @parametrize("left,right", [(1, 2), (3,)])
-def test_too_few(left, right, fixture):
-    assert fixture
+def test_invalid(left, right):
+    Path("test-ran").touch()
 
-@parametrize("left,right", [(1, 2), (3, 4, 5)])
-def test_too_many(left, right):
-    pass
-
-def test_never_runs():
-    raise AssertionError("test ran")
-"#,
-            parametrize = get_parametrize_function(framework),
+def test_valid():
+    Path("test-ran").touch()
+"#
         ),
     );
-    context.write_file(
-        "conftest.py",
-        r#"
-import karva
-
-@karva.fixture
-def fixture():
-    raise AssertionError("fixture ran")
-"#,
-    );
-
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @r#"
+        assert_cmd_snapshot!(context.command_no_parallel(), @r#"
         success: false
         exit_code: 1
         ----- stdout -----
-            Starting 3 tests across 1 worker
-               ERROR [TIME] test::test_too_few
-               ERROR [TIME] test::test_too_many
+            Starting 2 tests across 1 worker
+               ERROR [TIME] test::test_invalid
 
         failures:
 
-        test::test_too_few:
+        test::test_invalid:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 1 value
-         --> test.py:5:37
+         --> test.py:6:37
           |
-        5 | @parametrize("left,right", [(1, 2), (3,)])
+        6 | @parametrize("left,right", [(1, 2), (3,)])
           |              ------------           ^^^^ contains 1 value
           |              |
           |              expects 2 values
 
-        test::test_too_many:
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        "#);
+    }
+    assert!(!context.root().join("test-ran").exists());
+}
+
+#[rstest]
+fn test_parametrize_rejects_too_many_values_before_execution(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let parametrize = get_parametrize_function(framework);
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+from pathlib import Path
+import {framework}
+parametrize = {parametrize}
+
+@parametrize("left,right", [(1, 2), (3, 4, 5)])
+def test_invalid(left, right):
+    Path("test-ran").touch()
+
+def test_valid():
+    Path("test-ran").touch()
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+               ERROR [TIME] test::test_invalid
+
+        failures:
+
+        test::test_invalid:
 
         error[invalid-parametrize]: Expected 2 values for `left,right`, but case 2 contains 3 values
-         --> test.py:9:37
+         --> test.py:6:37
           |
-        9 | @parametrize("left,right", [(1, 2), (3, 4, 5)])
+        6 | @parametrize("left,right", [(1, 2), (3, 4, 5)])
           |              ------------           ^^^^^^^^^ contains 3 values
           |              |
           |              expects 2 values
 
         ────────────
-             Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
         ----- stderr -----
         "#);
     }
+    assert!(!context.root().join("test-ran").exists());
 }
 
 #[test]
@@ -216,56 +238,76 @@ def test_value(left, right):
 }
 
 #[test]
-fn test_parametrize_rejects_wrong_arity_with_unpacked_arguments() {
+fn test_parametrize_rejects_wrong_arity_with_unpacked_positional_arguments() {
     let context = TestContext::with_file(
         "test.py",
         r#"
 import karva
 
 ARGS = ("left,right", [(1,)])
-KWARGS = {
-    "arg_names": "left,right",
-    "arg_values": [(1,)],
-}
 
 @karva.tags.parametrize(*ARGS)
-def test_args(left, right):
-    pass
-
-@karva.tags.parametrize(**KWARGS)
-def test_kwargs(left, right):
+def test_value(left, right):
     pass
 "#,
     );
-
-    assert_cmd_snapshot!(context.command(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 2 tests across 1 worker
-           ERROR [TIME] test::test_args
-           ERROR [TIME] test::test_kwargs
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_value
 
     failures:
 
-    test::test_args:
+    test::test_value:
 
     error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
-      --> test.py:11:5
-       |
-    11 | def test_args(left, right):
-       |     ^^^^^^^^^
-
-    test::test_kwargs:
-
-    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
-      --> test.py:15:5
-       |
-    15 | def test_kwargs(left, right):
-       |     ^^^^^^^^^^^
+     --> test.py:7:5
+      |
+    7 | def test_value(left, right):
+      |     ^^^^^^^^^^
 
     ────────────
-         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_parametrize_rejects_wrong_arity_with_unpacked_keyword_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+KWARGS = {"arg_names": "left,right", "arg_values": [(1,)]}
+
+@karva.tags.parametrize(**KWARGS)
+def test_value(left, right):
+    pass
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_value
+
+    failures:
+
+    test::test_value:
+
+    error[invalid-parametrize]: Expected 2 values for `left,right`, but case 1 contains 1 value
+     --> test.py:7:5
+      |
+    7 | def test_value(left, right):
+      |     ^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     ");
@@ -538,6 +580,7 @@ def test_value(value):
 
 #[rstest]
 fn test_parametrize_rejects_duplicate_name_list(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -548,8 +591,7 @@ parametrize = {parametrize}
 @parametrize(["value", "value"], [(1, 2)])
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -585,6 +627,7 @@ def test_value(value):
 fn test_parametrize_rejects_duplicate_name_across_decorators(
     #[values("pytest", "karva")] framework: &str,
 ) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -596,8 +639,7 @@ parametrize = {parametrize}
 @parametrize("value", [2])
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -633,6 +675,7 @@ def test_value(value):
 
 #[rstest]
 fn test_parametrize_rejects_unknown_name(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -643,8 +686,7 @@ parametrize = {parametrize}
 @parametrize("missing", [1])
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -723,6 +765,7 @@ def test_value(value):
 
 #[rstest]
 fn test_parametrize_rejects_empty_cases(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -733,8 +776,7 @@ parametrize = {parametrize}
 @parametrize("value", [])
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -809,6 +851,7 @@ def test_value(value):
 
 #[rstest]
 fn test_parametrize_rejects_empty_name(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -819,8 +862,7 @@ parametrize = {parametrize}
 @parametrize("", [1])
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -856,6 +898,7 @@ def test_value(value):
 
 #[rstest]
 fn test_parametrize_rejects_invalid_name(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -866,8 +909,7 @@ parametrize = {parametrize}
 @parametrize("not valid", [1])
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -902,86 +944,41 @@ def test_value(value):
 }
 
 #[test]
-fn test_parametrize_name_diagnostics_with_multiline_function_parameters() {
+fn test_parametrize_unknown_name_diagnostic_with_multiline_signature() {
     let context = TestContext::with_file(
         "test.py",
         r#"
 import karva
 
 @karva.tags.parametrize("missing", [1])
-def test_unknown(
+def test_value(
     value,
     *,
     other,
 ):
     pass
-
-@karva.tags.parametrize("", [1])
-def test_empty(
-    value,
-):
-    pass
-
-@karva.tags.parametrize("not valid", [1])
-def test_invalid(
-    value: int = 1,
-):
-    pass
 "#,
     );
-
-    assert_cmd_snapshot!(context.command(), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
-        Starting 3 tests across 1 worker
-           ERROR [TIME] test::test_unknown
-           ERROR [TIME] test::test_empty
-           ERROR [TIME] test::test_invalid
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_value
 
     failures:
 
-    test::test_empty:
-
-    error[invalid-parametrize]: Parameter name cannot be empty
-      --> test.py:12:25
-       |
-    12 |   @karva.tags.parametrize("", [1])
-       |                           ^^ empty parameter name
-      ::: test.py:13:15
-       |
-    13 |   def test_empty(
-       |  _______________-
-    14 | |     value,
-    15 | | ):
-       | |_- available parameter
-
-    test::test_invalid:
-
-    error[invalid-parametrize]: `not valid` is not a valid Python identifier
-      --> test.py:18:25
-       |
-    18 |   @karva.tags.parametrize("not valid", [1])
-       |                           ^^^^^^^^^^^ invalid parameter name
-      ::: test.py:19:17
-       |
-    19 |   def test_invalid(
-       |  _________________-
-    20 | |     value: int = 1,
-    21 | | ):
-       | |_- available parameter
-
-    test::test_unknown:
+    test::test_value:
 
     error[invalid-parametrize]: Parameter `missing` does not exist in the test function signature
      --> test.py:4:25
       |
     4 |   @karva.tags.parametrize("missing", [1])
       |                           ^^^^^^^^^ not accepted by test
-     ::: test.py:5:17
+     ::: test.py:5:15
       |
-    5 |   def test_unknown(
-      |  _________________-
+    5 |   def test_value(
+      |  _______________-
     6 | |     value,
     7 | |     *,
     8 | |     other,
@@ -989,7 +986,97 @@ def test_invalid(
       | |_- available parameters
 
     ────────────
-         Summary [TIME] 3 tests run: 0 passed, 3 errors, 0 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_empty_name_diagnostic_with_multiline_signature() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("", [1])
+def test_value(
+    value,
+):
+    pass
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_value
+
+    failures:
+
+    test::test_value:
+
+    error[invalid-parametrize]: Parameter name cannot be empty
+     --> test.py:4:25
+      |
+    4 |   @karva.tags.parametrize("", [1])
+      |                           ^^ empty parameter name
+     ::: test.py:5:15
+      |
+    5 |   def test_value(
+      |  _______________-
+    6 | |     value,
+    7 | | ):
+      | |_- available parameter
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn test_parametrize_invalid_name_diagnostic_with_multiline_signature() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.parametrize("not valid", [1])
+def test_value(
+    value: int = 1,
+):
+    pass
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_value
+
+    failures:
+
+    test::test_value:
+
+    error[invalid-parametrize]: `not valid` is not a valid Python identifier
+     --> test.py:4:25
+      |
+    4 |   @karva.tags.parametrize("not valid", [1])
+      |                           ^^^^^^^^^^^ invalid parameter name
+     ::: test.py:5:15
+      |
+    5 |   def test_value(
+      |  _______________-
+    6 | |     value: int = 1,
+    7 | | ):
+      | |_- available parameter
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
 
     ----- stderr -----
     "#);
@@ -1028,7 +1115,8 @@ def test_parametrize_with_fixture(a, fixture_value):
 }
 
 #[rstest]
-fn test_parametrize_accepts_arbitrary_iterables(#[values("pytest", "karva")] framework: &str) {
+fn test_parametrize_accepts_generator(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -1037,29 +1125,53 @@ import {framework}
 parametrize = {parametrize}
 
 @parametrize("value", (value for value in [1, 2]))
-def test_generator(value):
+def test_value(value):
     assert value in [1, 2]
-
-@parametrize("value", {{3: None, 4: None}}.keys())
-def test_dict_keys(value):
-    assert value in [3, 4]
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
-
     allow_duplicates! {
-        assert_cmd_snapshot!(context.command(), @"
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
-            Starting 2 tests across 1 worker
-                PASS [TIME] test::test_generator(value=1)
-                PASS [TIME] test::test_generator(value=2)
-                PASS [TIME] test::test_dict_keys(value=3)
-                PASS [TIME] test::test_dict_keys(value=4)
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_value(value=1)
+                PASS [TIME] test::test_value(value=2)
         ────────────
-             Summary [TIME] 4 tests run: 4 passed, 0 skipped
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_parametrize_accepts_dict_keys(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+parametrize = {parametrize}
+
+@parametrize("value", {{1: None, 2: None}}.keys())
+def test_value(value):
+    assert value in [1, 2]
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_value(value=1)
+                PASS [TIME] test::test_value(value=2)
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
         ----- stderr -----
         ");
@@ -1389,21 +1501,20 @@ def test_function(a: int, b: int, c: int):
 
 #[rstest]
 fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
-                import {}
+                import {framework}
 
-                @{}("input,expected", [
+                @{parametrize}("input,expected", [
                     (2, 4),
                     (3, 9),
                 ])
                 def test_square(input, expected):
                     assert input ** 2 == expected
-                "#,
-            framework,
-            get_parametrize_function(framework)
+                "#
         ),
     );
 
@@ -1425,6 +1536,7 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
 
 #[rstest]
 fn test_parametrize_with_ids(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
         &format!(
@@ -1441,8 +1553,7 @@ def parameter_id(value):
 @{parametrize}("number,label", [(1, "one"), (2, "two")], ids=parameter_id)
 def test_pair(number, label):
     assert number == {{"one": 1, "two": 2}}[label]
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -1466,6 +1577,7 @@ def test_pair(number, label):
 
 #[rstest]
 fn test_parametrize_quotes_default_string_ids(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
         &format!(
@@ -1492,8 +1604,7 @@ def no_id(value):
 @{parametrize}("value", ["callable"], ids=no_id)
 def test_callable(value):
     assert value == "callable"
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -1544,6 +1655,7 @@ def test_value(value):
 
 #[rstest]
 fn test_stacked_parametrize_combines_ids(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
         &format!(
@@ -1554,8 +1666,7 @@ import {framework}
 @{parametrize}("right", [3, 4], ids=["three", "four"])
 def test_values(left, right):
     assert left < right
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -1579,6 +1690,7 @@ def test_values(left, right):
 
 #[rstest]
 fn test_parametrize_disambiguates_duplicate_ids(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
         &format!(
@@ -1592,8 +1704,7 @@ import {framework}
 )
 def test_value(value):
     pass
-"#,
-            parametrize = get_parametrize_function(framework),
+"#
         ),
     );
 
@@ -1756,14 +1867,11 @@ import pytest
     [
         pytest.param(1, [1]),
         pytest.param(2, [1, 2]),
-        pytest.param(None, []),
+        pytest.param(0, []),
     ],
 )
-def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int]):
-    if length is not None:
-        assert len(nums) == length
-    else:
-        assert len(nums) == 0
+def test_list_value(length, nums):
+    assert len(nums) == length
 "#,
     );
 
@@ -1772,9 +1880,9 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_markup_mode_bullets_single_newline(length=1, nums=[1])
-            PASS [TIME] test::test_markup_mode_bullets_single_newline(length=2, nums=[1, 2])
-            PASS [TIME] test::test_markup_mode_bullets_single_newline(length=None, nums=[])
+            PASS [TIME] test::test_list_value(length=1, nums=[1])
+            PASS [TIME] test::test_list_value(length=2, nums=[1, 2])
+            PASS [TIME] test::test_list_value(length=0, nums=[])
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -1783,34 +1891,29 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
 }
 
 #[test]
-fn test_parametrize_with_pytest_param_and_skip() {
-    let test_context = TestContext::with_file(
+fn test_pytest_param_skip_does_not_execute_case() {
+    let context = TestContext::with_file(
         "test.py",
         r#"
+from pathlib import Path
 import pytest
 
-@pytest.mark.parametrize("input,expected", [
-    pytest.param(2, 4),
-    pytest.param(4, 17, marks=pytest.mark.skip),
-    pytest.param(5, 26, marks=pytest.mark.xfail),
-])
-def test_square(input, expected):
-    assert input ** 2 == expected
+@pytest.mark.parametrize("value", [pytest.param(1, marks=pytest.mark.skip)])
+def test_value(value):
+    Path("test-ran").touch()
 "#,
     );
-
-    assert_cmd_snapshot!(test_context.command(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(input=2, expected=4)
-            PASS [TIME] test::test_square(input=5, expected=26)
     ────────────
-         Summary [TIME] 3 tests run: 2 passed, 1 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
 
     ----- stderr -----
     ");
+    assert!(!context.root().join("test-ran").exists());
 }
 
 #[rstest]
@@ -2045,14 +2148,11 @@ import karva
     [
         karva.param(1, [1]),
         karva.param(2, [1, 2]),
-        karva.param(None, []),
+        karva.param(0, []),
     ],
 )
-def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int]):
-    if length is not None:
-        assert len(nums) == length
-    else:
-        assert len(nums) == 0
+def test_list_value(length, nums):
+    assert len(nums) == length
 "#,
     );
 
@@ -2061,9 +2161,9 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_markup_mode_bullets_single_newline(length=1, nums=[1])
-            PASS [TIME] test::test_markup_mode_bullets_single_newline(length=2, nums=[1, 2])
-            PASS [TIME] test::test_markup_mode_bullets_single_newline(length=None, nums=[])
+            PASS [TIME] test::test_list_value(length=1, nums=[1])
+            PASS [TIME] test::test_list_value(length=2, nums=[1, 2])
+            PASS [TIME] test::test_list_value(length=0, nums=[])
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -2071,38 +2171,68 @@ def test_markup_mode_bullets_single_newline(length: int | None, nums: list[int])
     ");
 }
 
-#[test]
-fn test_parametrize_with_karva_param_and_skip() {
-    let test_context = TestContext::with_file(
+#[rstest]
+fn test_karva_param_skip(#[values("karva.tags.skip", "karva.tags.skip(True)")] tag: &str) {
+    let context = TestContext::with_file(
         "test.py",
-        r#"
+        &format!(
+            r#"
+from pathlib import Path
 import karva
 
-@karva.tags.parametrize("input,expected", [
-    karva.param(2, 4),
-    karva.param(4, 17, tags=(karva.tags.skip,)),
-    karva.param(5, 26, tags=(karva.tags.expect_fail,)),
-    karva.param(6, 36, tags=(karva.tags.skip(True),)),
-    karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
-])
-def test_square(input, expected):
-    assert input ** 2 == expected
-"#,
+@karva.tags.parametrize("value", [karva.param(1, tags=({tag},))])
+def test_value(value):
+    Path("test-ran").touch()
+"#
+        ),
     );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 skipped
 
-    assert_cmd_snapshot!(test_context.command(), @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-        Starting 1 test across 1 worker
-            PASS [TIME] test::test_square(input=2, expected=4)
-            PASS [TIME] test::test_square(input=5, expected=26)
-            PASS [TIME] test::test_square(input=7, expected=50)
-    ────────────
-         Summary [TIME] 5 tests run: 3 passed, 2 skipped
+        ----- stderr -----
+        ");
+    }
+    assert!(!context.root().join("test-ran").exists());
+}
 
-    ----- stderr -----
-    ");
+#[rstest]
+fn test_karva_param_expected_failure(
+    #[values("karva.tags.expect_fail", "karva.tags.expect_fail(True)")] tag: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+from pathlib import Path
+import karva
+
+@karva.tags.parametrize("value", [karva.param(1, tags=({tag},))])
+def test_value(value):
+    Path("test-ran").touch()
+    assert False, "expected failure"
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_value(value=1)
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+    assert!(context.root().join("test-ran").exists());
 }
 
 #[test]
@@ -2137,34 +2267,29 @@ def test_value(value):
 }
 
 #[test]
-fn test_parametrize_with_pytest_param_marks_list() {
-    let test_context = TestContext::with_file(
+fn test_pytest_param_accepts_mark_list() {
+    let context = TestContext::with_file(
         "test.py",
         r#"
+from pathlib import Path
 import pytest
 
-@pytest.mark.parametrize("x", [
-    pytest.param(1),
-    pytest.param(2, marks=[pytest.mark.skip]),
-    pytest.param(3, marks=[pytest.mark.xfail]),
-])
-def test_marks_list(x):
-    assert x != 3
+@pytest.mark.parametrize("value", [pytest.param(1, marks=[pytest.mark.skip])])
+def test_value(value):
+    Path("test-ran").touch()
 "#,
     );
-
-    assert_cmd_snapshot!(test_context.command(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_marks_list(x=1)
-            PASS [TIME] test::test_marks_list(x=3)
     ────────────
-         Summary [TIME] 3 tests run: 2 passed, 1 skipped
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
 
     ----- stderr -----
     ");
+    assert!(!context.root().join("test-ran").exists());
 }
 
 #[test]
@@ -2229,39 +2354,52 @@ def test_with_skipif(x):
 }
 
 #[test]
-fn test_parametrize_kwargs() {
-    let test_context = TestContext::with_file(
+fn test_pytest_parametrize_mixed_arguments() {
+    let context = TestContext::with_file(
         "test.py",
         r#"
 import pytest
 
-@pytest.mark.parametrize(["input", "expected"], argvalues=[
-    pytest.param(2, 4),
-    pytest.param(4, 16),
-])
-def test1(input, expected):
-    assert input ** 2 == expected
-
-@pytest.mark.parametrize(argnames=["input", "expected"], argvalues=[
-    pytest.param(2, 4),
-    pytest.param(4, 16),
-])
-def test2(input, expected):
-    assert input ** 2 == expected
-    "#,
+@pytest.mark.parametrize(["value"], argvalues=[1, 2])
+def test_value(value):
+    assert value in [1, 2]
+"#,
     );
-
-    assert_cmd_snapshot!(test_context.command_no_parallel(), @"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 2 tests across 1 worker
-            PASS [TIME] test::test1(input=2, expected=4)
-            PASS [TIME] test::test1(input=4, expected=16)
-            PASS [TIME] test::test2(input=2, expected=4)
-            PASS [TIME] test::test2(input=4, expected=16)
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+            PASS [TIME] test::test_value(value=2)
     ────────────
-         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_pytest_parametrize_keyword_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize(argnames=["value"], argvalues=[1, 2])
+def test_value(value):
+    assert value in [1, 2]
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+            PASS [TIME] test::test_value(value=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
     ");
@@ -2383,4 +2521,60 @@ def test_invalid(x):
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn test_pytest_param_expected_failure_executes_case() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from pathlib import Path
+import pytest
+
+@pytest.mark.parametrize("value", [pytest.param(1, marks=pytest.mark.xfail)])
+def test_value(value):
+    Path("test-ran").touch()
+    assert False, "expected failure"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(context.root().join("test-ran").exists());
+}
+
+#[test]
+fn test_pytest_param_accepts_expected_failure_mark_list() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from pathlib import Path
+import pytest
+
+@pytest.mark.parametrize("value", [pytest.param(1, marks=[pytest.mark.xfail])])
+def test_value(value):
+    Path("test-ran").touch()
+    assert False, "expected failure"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_value(value=1)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(context.root().join("test-ran").exists());
 }

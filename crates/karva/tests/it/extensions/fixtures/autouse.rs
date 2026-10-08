@@ -3,17 +3,11 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
 use crate::common::TestContext;
-
-fn get_auto_use_kw(framework: &str) -> &str {
-    match framework {
-        "pytest" => "autouse",
-        "karva" => "auto_use",
-        _ => panic!("Invalid framework"),
-    }
-}
+use crate::extensions::get_auto_use_kw;
 
 #[rstest]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         format!(
@@ -33,8 +27,7 @@ def test_something():
 
 def test_something_else():
     assert arr == [1, 2, 1]
-"#,
-            auto_use_kw = get_auto_use_kw(framework),
+"#
         )
         .as_str(),
     );
@@ -56,52 +49,149 @@ def test_something_else():
 }
 
 #[rstest]
-fn test_scope_auto_use_fixture(
+fn test_module_auto_use_fixture_is_shared_and_finalized(
     #[values("pytest", "karva")] framework: &str,
-    #[values("module", "package", "session")] scope: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
             r#"
+from pathlib import Path
 import {framework}
 
-arr = []
+calls = []
 
-@{framework}.fixture(scope="{scope}", {auto_use_kw}=True)
-def auto_function_fixture():
-    arr.append(1)
+@{framework}.fixture(scope="module", {auto_use_kw}=True)
+def automatic():
+    calls.append("setup")
     yield
-    arr.append(2)
+    Path("cleaned-up").write_text("teardown")
 
-def test_something():
-    assert arr == [1]
+def test_first():
+    assert calls == ["setup"]
+    assert not Path("cleaned-up").exists()
 
-def test_something_else():
-    assert arr == [1]
-"#,
-            auto_use_kw = get_auto_use_kw(framework),
+def test_second():
+    assert calls == ["setup"]
+    assert not Path("cleaned-up").exists()
+"#
         ),
     );
-
     allow_duplicates! {
         assert_cmd_snapshot!(context.command_no_parallel(), @"
         success: true
         exit_code: 0
         ----- stdout -----
             Starting 2 tests across 1 worker
-                PASS [TIME] test::test_something
-                PASS [TIME] test::test_something_else
+                PASS [TIME] test::test_first
+                PASS [TIME] test::test_second
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
         ----- stderr -----
         ");
     }
+    assert_eq!(context.read_file("cleaned-up"), "teardown");
+}
+
+#[rstest]
+fn test_package_auto_use_fixture_is_shared_and_finalized(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let auto_use_kw = get_auto_use_kw(framework);
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+from pathlib import Path
+import {framework}
+
+calls = []
+
+@{framework}.fixture(scope="package", {auto_use_kw}=True)
+def automatic():
+    calls.append("setup")
+    yield
+    Path("cleaned-up").write_text("teardown")
+
+def test_first():
+    assert calls == ["setup"]
+    assert not Path("cleaned-up").exists()
+
+def test_second():
+    assert calls == ["setup"]
+    assert not Path("cleaned-up").exists()
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                PASS [TIME] test::test_first
+                PASS [TIME] test::test_second
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+    assert_eq!(context.read_file("cleaned-up"), "teardown");
+}
+
+#[rstest]
+fn test_session_auto_use_fixture_is_shared_and_finalized(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let auto_use_kw = get_auto_use_kw(framework);
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+from pathlib import Path
+import {framework}
+
+calls = []
+
+@{framework}.fixture(scope="session", {auto_use_kw}=True)
+def automatic():
+    calls.append("setup")
+    yield
+    Path("cleaned-up").write_text("teardown")
+
+def test_first():
+    assert calls == ["setup"]
+    assert not Path("cleaned-up").exists()
+
+def test_second():
+    assert calls == ["setup"]
+    assert not Path("cleaned-up").exists()
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                PASS [TIME] test::test_first
+                PASS [TIME] test::test_second
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+    assert_eq!(context.read_file("cleaned-up"), "teardown");
 }
 
 #[rstest]
 fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -126,8 +216,7 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
                 def test_string_and_int(order, first_entry):
                     order.append(2)
                     assert order == [first_entry, 2]
-                "#,
-            auto_use_kw = get_auto_use_kw(framework)
+                "#
         ),
     );
 
@@ -454,6 +543,7 @@ def test_second():
 fn test_nearest_conftest_auto_use_fixture_shadows_outer_fixture(
     #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::new();
     context.write_file(
         "conftest.py",
@@ -464,8 +554,7 @@ import {framework}
 @{framework}.fixture({auto_use_kw}=True)
 def selected_fixture():
     return "outer"
-"#,
-            auto_use_kw = get_auto_use_kw(framework),
+"#
         ),
     );
     context.write_file(
@@ -477,8 +566,7 @@ import {framework}
 @{framework}.fixture({auto_use_kw}=True)
 def selected_fixture():
     return "inner"
-"#,
-            auto_use_kw = get_auto_use_kw(framework),
+"#
         ),
     );
     context.write_file(
@@ -514,6 +602,7 @@ def test_selected_fixture(selected_fixture):
 fn test_multiple_autouse_fixtures_in_subdirectory_conftest(
     #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let parent_conftest = format!(
         r#"
 import {framework}
@@ -534,8 +623,7 @@ def first_autouse(monkeypatch):
 @{framework}.fixture({auto_use_kw}=True)
 def second_autouse(monkeypatch, parent_value):
     monkeypatch.setenv("SECOND_SET", parent_value)
-"#,
-        auto_use_kw = get_auto_use_kw(framework)
+"#
     );
     let context = TestContext::with_files([
         ("unit_test/conftest.py", parent_conftest.as_str()),
@@ -570,6 +658,7 @@ def test_both_autouse_ran():
 /// All autouse fixtures in a module must be applied, not just the first one.
 #[rstest]
 fn test_multiple_auto_use_fixtures(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -588,8 +677,7 @@ def second_fixture():
 
 def test_both_fixtures_run():
     assert arr == ["first", "second"], arr
-"#,
-            auto_use_kw = get_auto_use_kw(framework),
+"#
         ),
     );
 

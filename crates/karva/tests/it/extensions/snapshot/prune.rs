@@ -14,10 +14,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -62,10 +71,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -104,10 +122,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -152,10 +179,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("prune"), @r"
     success: true
@@ -180,10 +216,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     std::fs::remove_file(context.root().join("test.py")).expect("remove test file");
 
@@ -279,10 +324,20 @@ def test_param(x):
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_param(x=1)
+            PASS [TIME] test::test_param(x=2)
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -330,10 +385,20 @@ def test_from_two():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_one::test_from_one
+            PASS [TIME] test_two::test_from_two
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file("test_one.py", "def test_other():\n    pass\n");
     context.write_file("test_two.py", "def test_other():\n    pass\n");
@@ -392,10 +457,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",

@@ -113,16 +113,13 @@ async def test_retry(values):
 }
 
 #[test]
-fn retry_handles_fixture_setup_and_teardown_failures() {
+fn retry_handles_fixture_setup_failure() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-import os
-
 import karva
 
 setups = 0
-cleanups = []
 
 @karva.fixture
 def setup_once():
@@ -131,79 +128,177 @@ def setup_once():
     if setups == 1:
         raise RuntimeError("setup failed")
 
-def test_setup(setup_once):
+def test_retry(setup_once):
     assert setups == 2
-
-@karva.fixture
-def remaining_cleanup():
-    yield
-    cleanups.append("remaining")
-
-@karva.fixture
-def broken_teardown(remaining_cleanup):
-    yield
-    if os.environ["KARVA_ATTEMPT"] == "1":
-        raise RuntimeError("teardown failed")
-
-def test_teardown(broken_teardown):
-    if os.environ["KARVA_ATTEMPT"] == "2":
-        assert cleanups == ["remaining"]
 "#,
     );
-
     assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
     success: true
     exit_code: 0
     ----- stdout -----
-        Starting 2 tests across 1 worker
-     TRY 1 ERROR [TIME] test::test_setup
-      TRY 2 PASS [TIME] test::test_setup
-     TRY 1 ERROR [TIME] test::test_teardown(broken_teardown=None)
-      TRY 2 PASS [TIME] test::test_teardown(broken_teardown=None)
+        Starting 1 test across 1 worker
+     TRY 1 ERROR [TIME] test::test_retry
+      TRY 2 PASS [TIME] test::test_retry
     ────────────
-         Summary [TIME] 2 tests run: 2 passed (2 flaky), 0 skipped
-       FLAKY 2/2 [TIME] test::test_setup
-       FLAKY 2/2 [TIME] test::test_teardown(broken_teardown=None)
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry
 
     ----- stderr -----
     ");
 }
 
 #[test]
-fn retry_recreates_cleanup_aware_builtin_fixtures() {
+fn retry_handles_fixture_teardown_failure() {
     let context = TestContext::with_file(
         "test.py",
         r#"
 import os
-import logging
-import warnings
+import karva
 
-def test_retry(capsys, caplog, monkeypatch, recwarn):
+cleanups = []
+
+@karva.fixture
+def resource():
+    yield
+    cleanups.append("resource")
+
+@karva.fixture
+def broken_teardown(resource):
+    yield
+    if os.environ["KARVA_ATTEMPT"] == "1":
+        raise RuntimeError("teardown failed")
+
+def test_retry(broken_teardown):
     if os.environ["KARVA_ATTEMPT"] == "2":
-        assert os.environ.get("RETRY_VALUE") is None
-        assert capsys.readouterr().out == ""
-        assert caplog.records == []
-        assert len(recwarn) == 0
-    monkeypatch.setenv("RETRY_VALUE", "set")
-    logging.warning("attempt log")
-    warnings.warn("attempt warning")
-    print("attempt output")
-    assert len(recwarn) == 1
-    assert capsys.readouterr().out == "attempt output\n"
-    assert os.environ["KARVA_ATTEMPT"] == "2"
+        assert cleanups == ["resource"]
 "#,
     );
-
     assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
     success: true
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-      TRY 1 FAIL [TIME] test::test_retry(capsys, caplog, monkeypatch, recwarn)
-      TRY 2 PASS [TIME] test::test_retry(capsys, caplog, monkeypatch, recwarn)
+     TRY 1 ERROR [TIME] test::test_retry(broken_teardown=None)
+      TRY 2 PASS [TIME] test::test_retry(broken_teardown=None)
     ────────────
          Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
-       FLAKY 2/2 [TIME] test::test_retry(capsys, caplog, monkeypatch, recwarn)
+       FLAKY 2/2 [TIME] test::test_retry(broken_teardown=None)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn retry_recreates_monkeypatch() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+def test_retry(monkeypatch):
+    assert os.environ.get("RETRY_VALUE") is None
+    monkeypatch.setenv("RETRY_VALUE", "set")
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry(monkeypatch)
+      TRY 2 PASS [TIME] test::test_retry(monkeypatch)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry(monkeypatch)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn retry_recreates_capsys() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+def test_retry(capsys):
+    assert capsys.readouterr().out == ""
+    print("attempt output")
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry(capsys)
+      TRY 2 PASS [TIME] test::test_retry(capsys)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry(capsys)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn retry_recreates_caplog() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import logging
+
+def test_retry(caplog):
+    assert caplog.records == []
+    logging.warning("attempt log")
+    assert len(caplog.records) == 1
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry(caplog)
+      TRY 2 PASS [TIME] test::test_retry(caplog)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry(caplog)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn retry_recreates_recwarn() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import warnings
+
+def test_retry(recwarn):
+    assert len(recwarn) == 0
+    warnings.warn("attempt warning")
+    assert len(recwarn) == 1
+    assert os.environ["KARVA_ATTEMPT"] == "2"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+      TRY 1 FAIL [TIME] test::test_retry(recwarn)
+      TRY 2 PASS [TIME] test::test_retry(recwarn)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_retry(recwarn)
 
     ----- stderr -----
     ");
