@@ -37,6 +37,9 @@ pub fn prepare_fixture_rename(
     if has_unsafe_project_imports(index, &current.fixture) {
         return None;
     }
+    if has_unsafe_all_bindings(index, &current.fixture) {
+        return None;
+    }
     editable_fixture_occurrences(index, current, None).map(|_| current.range)
 }
 
@@ -55,9 +58,76 @@ pub fn rename_fixture(
     if has_unsafe_project_imports(index, &current.fixture) {
         return None;
     }
+    if has_unsafe_all_bindings(index, &current.fixture) {
+        return None;
+    }
     editable_fixture_occurrences(index, current, Some(new_name))
 }
 
+/// Rejects renames whose default Python binding is exposed through `__all__`.
+fn has_unsafe_all_bindings(index: &WorkspaceSourceIndex, target: &FixtureId) -> bool {
+    index.paths().any(|path| {
+        let Some(analysis) = index.analyze(path) else {
+            return true;
+        };
+        let local_default = analysis.fixture_model.local().iter().any(|definition| {
+            definition.id == *target
+                && definition.name == definition.defining_name
+                && definition.name_range == definition.public_name_range
+        });
+        let imported_default =
+            analysis.fixture_model.imports().any(|import| {
+                import.fixture == *target && !import.has_alias && import.rename_source
+            }) && analysis
+                .fixture_model
+                .definition(target)
+                .is_some_and(|definition| {
+                    definition.name == definition.defining_name
+                        && definition.name_range == definition.public_name_range
+                });
+        if !local_default && !imported_default {
+            return false;
+        }
+
+        let mut visitor = AllBindingVisitor { found: false };
+        source_order::walk_body(&mut visitor, &analysis.module.module_body);
+        visitor.found
+    })
+}
+
+struct AllBindingVisitor {
+    found: bool,
+}
+
+impl SourceOrderVisitor<'_> for AllBindingVisitor {
+    fn visit_stmt(&mut self, statement: &'_ Stmt) {
+        match statement {
+            Stmt::FunctionDef(function) if function.name.as_str() == "__all__" => self.found = true,
+            Stmt::ClassDef(class) if class.name.as_str() == "__all__" => self.found = true,
+            _ => source_order::walk_stmt(self, statement),
+        }
+    }
+
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if let Expr::Name(name) = expression
+            && name.id == "__all__"
+        {
+            self.found = true;
+        } else {
+            source_order::walk_expr(self, expression);
+        }
+    }
+
+    fn visit_alias(&mut self, alias: &'_ ruff_python_ast::Alias) {
+        self.found = alias.name.as_str() == "__all__"
+            || alias
+                .asname
+                .as_ref()
+                .is_some_and(|name| name.as_str() == "__all__");
+    }
+}
+
+/// Rejects wildcard and unresolved imports that could expose an unindexed fixture binding.
 fn has_unsafe_project_imports(index: &WorkspaceSourceIndex, target: &FixtureId) -> bool {
     let Some((public_name, defining_name)) = index.paths().find_map(|path| {
         index
@@ -812,6 +882,71 @@ mod tests {
             .expect("provider should resolve");
 
         assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn rejects_default_provider_exported_through_all() {
+        let source =
+            "from karva import fixture\n@fixture\ndef database(): pass\n__all__ = [\"database\"]\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [SourceDocument::new(
+                "/project/conftest.py".into(),
+                source.to_owned(),
+            )],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/conftest.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(source, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn rejects_unaliased_import_exported_through_all() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let reexport = "from support import database\n__all__ = [\"database\"]\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/support.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(provider, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn custom_public_name_ignores_python_exports() {
+        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n__all__ = [\"provider\"]\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [SourceDocument::new(
+                "/project/conftest.py".into(),
+                source.to_owned(),
+            )],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/conftest.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(source, "database\""))
+            .expect("public name should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_some());
     }
 
     #[test]

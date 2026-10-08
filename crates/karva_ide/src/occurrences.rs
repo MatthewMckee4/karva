@@ -159,6 +159,8 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
     occurrences
 }
 
+/// Finds ordinary uses of unaliased default fixture imports; unsupported scopes are omitted so
+/// rename safety checks reject the incomplete occurrence set.
 fn imported_fixture_body_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
     let mut targets = HashMap::new();
     for import in analysis.fixture_model.imports() {
