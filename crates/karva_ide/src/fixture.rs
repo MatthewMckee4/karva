@@ -153,6 +153,9 @@ pub(super) struct FixtureDefinition {
     /// Source signature of the provider function.
     pub(super) signature: String,
 
+    /// Explicit annotation for the injected fixture value, when available.
+    pub(super) value_type: Option<String>,
+
     /// Leading function docstring, when statically available.
     pub(super) docstring: Option<String>,
 
@@ -178,6 +181,15 @@ struct ParsedFixture {
 struct PublicNameRanges {
     occurrence: TextRange,
     edit: Option<TextRange>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct FixtureMetadata {
+    /// Statically known fixture scope.
+    scope: Option<FixtureScope>,
+
+    /// Statically known autouse setting.
+    auto_use: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -730,8 +742,7 @@ fn parse_fixture(
         edit: Some(function.name.range),
     };
     let mut public_name_known = false;
-    let mut scope = None;
-    let mut auto_use = None;
+    let mut metadata = FixtureMetadata::default();
     let mut invalid = Vec::new();
 
     if let Some(decorator) = function
@@ -740,8 +751,8 @@ fn parse_fixture(
         .find(|decorator| is_fixture_decorator(&decorator.expression, bindings))
     {
         public_name_known = true;
-        scope = Some(FixtureScope::Function);
-        auto_use = Some(false);
+        metadata.scope = Some(FixtureScope::Function);
+        metadata.auto_use = Some(false);
         let Some(call) = (match &decorator.expression {
             Expr::Call(call) => Some(call),
             _ => None,
@@ -752,8 +763,8 @@ fn parse_fixture(
                     path,
                     public_name,
                     public_name_ranges,
-                    scope,
-                    auto_use,
+                    metadata,
+                    bindings,
                     source,
                 ),
                 public_name_known,
@@ -762,8 +773,8 @@ fn parse_fixture(
         };
         if !call.arguments.args.is_empty() {
             public_name_known = false;
-            scope = None;
-            auto_use = None;
+            metadata.scope = None;
+            metadata.auto_use = None;
         }
         for keyword in &call.arguments.keywords {
             let Some(name) = keyword
@@ -772,8 +783,8 @@ fn parse_fixture(
                 .map(ruff_python_ast::Identifier::as_str)
             else {
                 public_name_known = false;
-                scope = None;
-                auto_use = None;
+                metadata.scope = None;
+                metadata.auto_use = None;
                 continue;
             };
             match name {
@@ -799,7 +810,7 @@ fn parse_fixture(
                     Expr::StringLiteral(value) => {
                         let value = value.value.to_str();
                         match FixtureScope::try_from(value) {
-                            Ok(value) => scope = Some(value),
+                            Ok(value) => metadata.scope = Some(value),
                             Err(()) => invalid.push(InvalidMetadata {
                                 range: keyword.value.range(),
                                 message: format!("Invalid fixture scope `{value}`"),
@@ -812,17 +823,17 @@ fn parse_fixture(
                             message: "Fixture `scope` must be a string or callable".to_owned(),
                         });
                     }
-                    _ => scope = None,
+                    _ => metadata.scope = None,
                 },
                 "auto_use" | "autouse" => match &keyword.value {
-                    Expr::BooleanLiteral(value) => auto_use = Some(value.value),
+                    Expr::BooleanLiteral(value) => metadata.auto_use = Some(value.value),
                     Expr::StringLiteral(_) | Expr::NumberLiteral(_) | Expr::NoneLiteral(_) => {
                         invalid.push(InvalidMetadata {
                             range: keyword.value.range(),
                             message: "Fixture autouse value must be a boolean".to_owned(),
                         });
                     }
-                    _ => auto_use = None,
+                    _ => metadata.auto_use = None,
                 },
                 _ => invalid.push(InvalidMetadata {
                     range: keyword.range,
@@ -838,8 +849,8 @@ fn parse_fixture(
             path,
             public_name,
             public_name_ranges,
-            scope,
-            auto_use,
+            metadata,
+            bindings,
             source,
         ),
         public_name_known,
@@ -852,8 +863,8 @@ fn fixture_definition(
     path: &Utf8PathBuf,
     name: String,
     public_name_ranges: PublicNameRanges,
-    scope: Option<FixtureScope>,
-    auto_use: Option<bool>,
+    metadata: FixtureMetadata,
+    bindings: &DecoratorBindings,
     source: &str,
 ) -> FixtureDefinition {
     FixtureDefinition {
@@ -868,9 +879,10 @@ fn fixture_definition(
         public_name_range: public_name_ranges.occurrence,
         public_name_edit_range: public_name_ranges.edit,
         signature: function_signature(function, source),
+        value_type: fixture_value_type(function, bindings, source),
         docstring: function_docstring(function),
-        scope,
-        auto_use,
+        scope: metadata.scope,
+        auto_use: metadata.auto_use,
         dependencies: function
             .parameters
             .iter_non_variadic_params()
@@ -881,6 +893,44 @@ fn fixture_definition(
             })
             .collect(),
     }
+}
+
+fn fixture_value_type(
+    function: &StmtFunctionDef,
+    bindings: &DecoratorBindings,
+    source: &str,
+) -> Option<String> {
+    let returns = function.returns.as_deref()?;
+    let annotation = source
+        .get(returns.range().start().to_usize()..returns.range().end().to_usize())?
+        .trim();
+    if fixture_implementation_range(function) == function.name.range {
+        return Some(annotation.to_owned());
+    }
+
+    let Expr::Subscript(subscript) = returns else {
+        return None;
+    };
+    let binding = bindings.binding_for(&subscript.value)?;
+    let expected_arity = match binding {
+        KnownBinding::Iterator | KnownBinding::AsyncIterator => 1,
+        KnownBinding::Generator => 3,
+        KnownBinding::AsyncGenerator => 2,
+        _ => return None,
+    };
+    let elements: &[Expr] = match subscript.slice.as_ref() {
+        Expr::Tuple(tuple) => &tuple.elts,
+        slice => std::slice::from_ref(slice),
+    };
+    if elements.len() != expected_arity {
+        return None;
+    }
+    let element = elements.first()?;
+    source
+        .get(element.range().start().to_usize()..element.range().end().to_usize())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }
 
 fn fixture_implementation_range(function: &StmtFunctionDef) -> TextRange {

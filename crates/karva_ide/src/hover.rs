@@ -25,6 +25,9 @@ pub struct FixtureHover {
     /// Provider function signature, or built-in signature.
     pub source_signature: String,
 
+    /// Explicit annotation for the injected fixture value, when available.
+    pub value_type: Option<String>,
+
     /// Provider docstring, when statically available.
     pub docstring: Option<String>,
 
@@ -152,6 +155,7 @@ fn hover_from_name(
         scope: Some(builtin.scope),
         auto_use: Some(false),
         source_signature: builtin.signature.to_owned(),
+        value_type: None,
         docstring: Some(builtin.docstring.to_owned()),
         dependencies: Vec::new(),
     })
@@ -195,6 +199,7 @@ fn hover_from_builtin_definition(
         scope: definition.scope,
         auto_use: definition.auto_use,
         source_signature: definition.signature.clone(),
+        value_type: definition.value_type.clone(),
         docstring: definition.docstring.clone(),
         dependencies: definition
             .dependencies
@@ -216,6 +221,7 @@ fn hover_from_definition(
         scope: definition.scope,
         auto_use: definition.auto_use,
         source_signature: definition.signature.clone(),
+        value_type: definition.value_type.clone(),
         docstring: definition.docstring.clone(),
         dependencies: definition
             .dependencies
@@ -282,11 +288,13 @@ fn use_fixtures_reference(
 #[cfg(test)]
 mod tests {
     use camino::{Utf8Path, Utf8PathBuf};
+    use rstest::rstest;
     use ruff_python_ast::PythonVersion;
 
     use super::*;
     use crate::{
-        SourceAnalysisSettings, SourceDocument, analyze_source, analyze_source_with_parents,
+        SourceAnalysisSettings, SourceDocument, WorkspaceSourceIndex, analyze_source,
+        analyze_source_with_parents,
     };
 
     fn settings() -> SourceAnalysisSettings {
@@ -363,6 +371,69 @@ mod tests {
     }
 
     #[test]
+    fn hovers_inherited_fixture_value_type() {
+        let parent = SourceDocument::new(
+            Utf8PathBuf::from("/project/conftest.py"),
+            concat!(
+                "from typing import Iterator\n",
+                "from karva import fixture\n",
+                "@fixture\n",
+                "def client() -> Iterator[Client]:\n",
+                "    yield Client()\n",
+            )
+            .to_owned(),
+        );
+        let source = "def test_example(client): pass\n";
+        let current = SourceDocument::new(
+            Utf8PathBuf::from("/project/test_example.py"),
+            source.to_owned(),
+        );
+        let result = hover_fixture(
+            &analyze_source_with_parents(current, [parent], Utf8Path::new("/project"), &settings())
+                .expect("source should analyze"),
+            at(source, "client):") + TextSize::from(2),
+        )
+        .expect("inherited fixture hover");
+        assert_eq!(result.value_type.as_deref(), Some("Client"));
+    }
+
+    #[test]
+    fn hovers_imported_fixture_value_type() {
+        let source = "from support import client\ndef test_example(client): pass\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            Utf8PathBuf::from("/project"),
+            [
+                SourceDocument::new(
+                    Utf8PathBuf::from("/project/support.py"),
+                    concat!(
+                        "from collections.abc import Generator\n",
+                        "from karva import fixture\n",
+                        "@fixture\n",
+                        "def client() -> Generator[Client, None, None]:\n",
+                        "    yield Client()\n",
+                    )
+                    .to_owned(),
+                ),
+                SourceDocument::new(
+                    Utf8PathBuf::from("/project/test_example.py"),
+                    source.to_owned(),
+                ),
+            ],
+            SourceAnalysisSettings {
+                try_import_fixtures: true,
+                ..settings()
+            },
+        )
+        .expect("sources should analyze");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/test_example.py"))
+            .expect("source analysis");
+        let result = hover_fixture(&analysis, at(source, "client):") + TextSize::from(2))
+            .expect("imported fixture hover");
+        assert_eq!(result.value_type.as_deref(), Some("Client"));
+    }
+
+    #[test]
     fn hovers_builtin_and_suppresses_unknown_fixture() {
         let source = "def test_example(tmp_path): pass\n\ndef test_unknown(missing): pass\n";
         let result = hover_fixture(
@@ -430,5 +501,80 @@ mod tests {
         let offset = at(source, "\"database\"") + TextSize::from(3);
 
         assert!(hover_fixture(&analysis(source), offset).is_none());
+    }
+
+    #[rstest]
+    fn reports_explicit_fixture_value_types(
+        #[values(
+        ("direct):", Some("Client")),
+        ("yielded):", Some("Client")),
+        ("generated):", Some("Client")),
+        ("async_yielded):", Some("Client")),
+        ("async_iterated):", Some("Client")),
+        ("malformed_iterator):", None),
+        ("malformed_generator):", None),
+        ("unknown):", None),
+        )]
+        case: (&str, Option<&str>),
+    ) {
+        let (marker, expected) = case;
+        let source = concat!(
+            "from collections.abc import Iterator as Iter\n",
+            "from collections.abc import AsyncIterator as AsyncIter\n",
+            "from typing import AsyncGenerator, Generator\n\n",
+            "from karva import fixture\n",
+            "@fixture\n",
+            "def direct() -> Client: pass\n\n",
+            "@fixture\n",
+            "def yielded() -> Iter[Client]:\n",
+            "    yield Client()\n\n",
+            "@fixture\n",
+            "def generated() -> Generator[Client, None, None]:\n",
+            "    yield Client()\n\n",
+            "@fixture\n",
+            "async def async_yielded() -> AsyncGenerator[Client, None]:\n",
+            "    yield Client()\n\n",
+            "@fixture\n",
+            "async def async_iterated() -> AsyncIter[Client]:\n",
+            "    yield Client()\n\n",
+            "@fixture\n",
+            "def malformed_iterator() -> Iter[Client, None]:\n",
+            "    yield Client()\n\n",
+            "@fixture\n",
+            "def malformed_generator() -> Generator[Client, None]:\n",
+            "    yield Client()\n\n",
+            "@fixture\n",
+            "def unknown(): pass\n\n",
+            "def test_example(direct): pass\n",
+            "def test_yielded(yielded): pass\n",
+            "def test_generated(generated): pass\n",
+            "def test_async(async_yielded): pass\n",
+            "def test_async_iterated(async_iterated): pass\n",
+            "def test_malformed_iterator(malformed_iterator): pass\n",
+            "def test_malformed_generator(malformed_generator): pass\n",
+            "def test_unknown(unknown): pass\n",
+        );
+
+        let analyzed = analysis(source);
+        let hover = hover_fixture(&analyzed, at(source, marker) + TextSize::from(2))
+            .expect("fixture hover");
+        assert_eq!(hover.value_type.as_deref(), expected);
+    }
+
+    #[test]
+    fn does_not_unwrap_rebound_generator_aliases() {
+        let source = concat!(
+            "from typing import Iterator\n",
+            "from karva import fixture\n\n",
+            "class Iterator: pass\n",
+            "@fixture\n",
+            "def yielded() -> Iterator[Client]:\n",
+            "    yield Client()\n\n",
+            "def test_example(yielded): pass\n",
+        );
+        let analysis = analysis(source);
+        let hover = hover_fixture(&analysis, at(source, "yielded):") + TextSize::from(2))
+            .expect("yielded fixture hover");
+        assert_eq!(hover.value_type, None);
     }
 }

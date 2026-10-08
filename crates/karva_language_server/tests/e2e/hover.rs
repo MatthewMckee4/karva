@@ -50,6 +50,45 @@ fn hovers_unsaved_fixture_with_metadata_and_dependencies() {
 }
 
 #[test]
+fn hovers_explicit_fixture_value_type() {
+    let workspace = Workspace::new();
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
+    let source = concat!(
+        "from typing import Iterator\n",
+        "from karva import fixture\n\n",
+        "@fixture\n",
+        "def client() -> Iterator[Client]:\n",
+        "    yield Client()\n\n",
+        "def test_example(client): pass\n",
+    );
+    open(&mut server, uri.clone(), source);
+
+    let response = server
+        .request::<HoverRequest>(hover_params(uri, Position::new(7, 20)))
+        .expect("fixture hover");
+
+    insta::assert_json_snapshot!(workspace.normalize(response), @r#"
+    {
+      "contents": {
+        "kind": "plaintext",
+        "value": "def client() -> Iterator[Client]:\n\nKarva fixture: client\nScope: function\nAutouse: false\nProvider: /project/test_example.py\nValue: Client"
+      },
+      "range": {
+        "end": {
+          "character": 23,
+          "line": 7
+        },
+        "start": {
+          "character": 17,
+          "line": 7
+        }
+      }
+    }
+    "#);
+}
+
+#[test]
 fn hovers_builtin_fixture_with_markdown_preference() {
     let workspace = Workspace::new();
     let capabilities = ClientCapabilities {
