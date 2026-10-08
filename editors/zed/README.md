@@ -30,9 +30,29 @@ Karva in `settings.json`:
 }
 ```
 
-The extension starts the project version with `uv run karva server`. Keep `uv`
-on Zed's worktree `PATH`; no language-server binary path or release download is
-needed.
+The extension uses an explicit `lsp.karva.binary.path`, then `karva server` from
+the worktree PATH, then the project version through `uv run karva server`.
+Install Karva in the project when using uv. If no command is available, the
+extension reports how to configure a local installation.
+
+For a debug Karva binary, configure the server subcommand explicitly:
+
+```json
+{
+  "lsp": {
+    "karva": {
+      "binary": {
+        "path": "/path/to/target/debug/karva",
+        "arguments": ["server"],
+        "env": {"RUST_LOG": "debug"}
+      }
+    }
+  }
+}
+```
+
+Explicit and PATH binaries default to the `server` argument. Binary arguments
+and environment overrides apply to every resolution mode.
 
 Initialization and workspace settings remain available under `lsp.karva`:
 
