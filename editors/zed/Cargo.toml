@@ -10,10 +10,6 @@ crate-type = ["cdylib"]
 [dependencies]
 zed_extension_api = "0.7.0"
 
-[dev-dependencies]
-rstest = "0.26"
-tempfile = "3"
-
 [lints.rust]
 unsafe_code = "warn"
 

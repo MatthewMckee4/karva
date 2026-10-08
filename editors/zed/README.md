@@ -30,15 +30,10 @@ Karva in `settings.json`:
 }
 ```
 
-The extension uses an explicit `lsp.karva.binary.path`, then a standalone
-`karva-language-server` or `karva` on the worktree PATH, then the project version
-through `uv run karva server`. With none available, it downloads the matching
-standalone server from the latest Karva GitHub release and caches it by version.
-Older releases without server assets report how to configure a local binary.
-
-Managed builds support macOS ARM64 and x86-64, Linux ARM64 and x86-64, and
-Windows x86-64. Linux builds require the runner's glibc baseline (Ubuntu 24.04
-on ARM64, Ubuntu 22.04 on x86-64); other platforms can use a local build.
+The extension uses an explicit `lsp.karva.binary.path`, then `karva server` from
+the worktree PATH, then the project version through `uv run karva server`.
+Install Karva in the project when using uv. If no command is available, the
+extension reports how to configure a local installation.
 
 For a debug Karva binary, configure the server subcommand explicitly:
 
@@ -56,8 +51,8 @@ For a debug Karva binary, configure the server subcommand explicitly:
 }
 ```
 
-For the standalone `karva-language-server`, set `arguments` to `[]`. Binary
-arguments and environment overrides apply to every resolution mode.
+Explicit and PATH binaries default to the `server` argument. Binary arguments
+and environment overrides apply to every resolution mode.
 
 Initialization and workspace settings remain available under `lsp.karva`:
 
