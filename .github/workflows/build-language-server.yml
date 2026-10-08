@@ -1,0 +1,54 @@
+name: Build Language Server
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - .github/workflows/build-language-server.yml
+      - .github/workflows/release.yml
+      - crates/karva_language_server/**
+      - editors/zed/**
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+
+permissions: {}
+
+jobs:
+  binaries:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            asset: karva-language-server-aarch64-apple-darwin
+          - runner: macos-15-intel
+            asset: karva-language-server-x86_64-apple-darwin
+          - runner: ubuntu-22.04
+            asset: karva-language-server-x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            asset: karva-language-server-aarch64-unknown-linux-gnu
+          - runner: windows-latest
+            asset: karva-language-server-x86_64-pc-windows-msvc.exe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build standalone server
+        run: cargo build --locked --release -p karva_language_server --bin karva-language-server
+      - name: Name release asset
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          mkdir dist
+          if [[ "$ASSET" == *.exe ]]; then
+            cp target/release/karva-language-server.exe "dist/$ASSET"
+          else
+            cp target/release/karva-language-server "dist/$ASSET"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: language-server-${{ matrix.asset }}
+          path: dist/*
