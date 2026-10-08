@@ -192,3 +192,34 @@ including its dotted module name. Copy it to the clipboard.
 Requesting lenses does not run a process. Clients without these handlers can
 continue using the gutter tasks above; this extension does not register lens
 command handlers yet.
+
+## Clean package smoke test
+
+Build the WebAssembly extension and a debug server, then prepare an isolated
+package from committed sources and verify initialization, test code lenses,
+configuration reload and shutdown:
+
+```sh
+cargo build --manifest-path editors/zed/Cargo.toml --target wasm32-wasip2
+cargo build -p karva
+uv run scripts/zed_smoke.py --server target/debug/karva --server-arg server \
+  --wasm editors/zed/target/wasm32-wasip2/debug/karva_zed.wasm \
+  --output /tmp/karva-zed-smoke
+```
+
+The output directory must be new. The script prints the clean extension and
+workspace paths. In real Zed, use `Install Dev Extension` on the printed
+extension directory and open the printed workspace. Confirm Karva appears in
+the language-server status, navigate from `sample` to its fixture, and run
+`test_smoke` using the gutter. Test execution needs the project Karva package;
+add it with `uv add --dev karva`, or install a current local wheel.
+
+Change the fixture workspace's binary path to a nonexistent file, restart the
+server and confirm the startup error names that path. Restore the printed
+binary and restart. Change `test-function-prefix` from `test` to `check` in
+`karva.toml` and confirm Karva's test actions disappear, then restore it.
+These editor checks verify the installed extension; the protocol script alone
+does not claim to automate Zed's extension host or gutter UI.
+
+CI runs the clean-package protocol smoke. Managed-platform selection, missing
+asset errors and download-cache behavior are covered by extension unit tests.
