@@ -89,11 +89,6 @@ impl DecoratorBindings {
         self.names.get(name).copied()
     }
 
-    /// Returns the known binding represented by a possibly qualified expression.
-    pub fn binding_for(&self, expression: &Expr) -> Option<KnownBinding> {
-        self.namespace_binding(expression)
-    }
-
     /// Applies one module-level statement to the visible-name environment.
     pub fn update(&mut self, statement: &Stmt) {
         match statement {

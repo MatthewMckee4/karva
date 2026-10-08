@@ -54,7 +54,7 @@ impl WorkspaceSourceIndex {
     ///
     /// Shared modules must have been collected with these settings and project root.
     /// The last module for each path wins.
-    pub fn from_shared_modules(
+    pub(super) fn from_shared_modules(
         project_root: Utf8PathBuf,
         settings: SourceAnalysisSettings,
         modules: impl IntoIterator<Item = Arc<CollectedModule>>,

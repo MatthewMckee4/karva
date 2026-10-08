@@ -191,7 +191,7 @@ struct FixtureMetadata {
 
 #[derive(Clone, Debug)]
 pub(super) struct FixtureProvider {
-    pub(super) definitions: Vec<FixtureDefinition>,
+    definitions: Vec<FixtureDefinition>,
     by_name: HashMap<String, FixtureId>,
     rejected: HashMap<String, Vec<FixtureId>>,
     bindings: DecoratorBindings,

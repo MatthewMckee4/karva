@@ -155,7 +155,7 @@ impl NameQuery<'_, '_> {
 impl PythonSemantics {
     /// Creates isolated semantics without reading project files or executing Python.
     #[cfg(test)]
-    pub(super) fn new(
+    fn new(
         root: &Utf8Path,
         modules: &BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
         python_version: PythonVersion,
@@ -590,7 +590,7 @@ impl PythonSemantics {
     }
 
     /// Infers an expression using ty's own AST, never a separately parsed node identity.
-    pub(super) fn expression_type(&self, path: &Utf8Path, range: TextRange) -> Option<String> {
+    fn expression_type(&self, path: &Utf8Path, range: TextRange) -> Option<String> {
         self.with_database(|db| {
             let file = system_path_to_file(db, SystemPath::new(path.as_str())).ok()?;
             let program_file = db.program_file(file);
@@ -625,11 +625,7 @@ impl PythonSemantics {
     }
 
     /// Returns the injected value type, using ty for annotation and expression inference.
-    pub(super) fn fixture_value_type(
-        &self,
-        path: &Utf8Path,
-        function: &StmtFunctionDef,
-    ) -> Option<String> {
+    fn fixture_value_type(&self, path: &Utf8Path, function: &StmtFunctionDef) -> Option<String> {
         if let Some(annotation) = &function.returns {
             let invalid = self.with_database(|db| {
                 let file = system_path_to_file(db, SystemPath::new(path.as_str())).ok()?;
