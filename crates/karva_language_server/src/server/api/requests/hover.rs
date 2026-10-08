@@ -104,6 +104,10 @@ fn render_hover(hover: &FixtureHover, kind: MarkupKind) -> String {
             content.push_str(&escape_markdown(&hover.name));
             content.push_str("**\n\nScope: `");
             content.push_str(scope);
+            if let Some(value_type) = &hover.value_type {
+                content.push_str("`  \nValue: `");
+                content.push_str(&escape_markdown(value_type));
+            }
             content.push_str("`  \nAutouse: `");
             content.push_str(&auto_use);
             content.push_str("`  \nProvider: ");
@@ -123,6 +127,10 @@ fn render_hover(hover: &FixtureHover, kind: MarkupKind) -> String {
                 "{}\n\nKarva fixture: {}\nScope: {scope}\nAutouse: {auto_use}\nProvider: {provider}",
                 hover.source_signature, hover.name
             );
+            if let Some(value_type) = &hover.value_type {
+                content.push_str("\nValue: ");
+                content.push_str(value_type);
+            }
             if let Some(dependencies) = dependencies {
                 content.push_str("\nDependencies: ");
                 content.push_str(&dependencies);
