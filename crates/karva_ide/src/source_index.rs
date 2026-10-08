@@ -29,6 +29,10 @@ pub struct WorkspaceSourceIndex {
     /// Lazily computed analyses; the map is fixed with the module snapshot.
     analyses: BTreeMap<Utf8PathBuf, OnceLock<SourceAnalysis>>,
     builtin_module: Option<Utf8PathBuf>,
+
+    /// Shared lazy Python semantics for all module analyses in this snapshot.
+    semantic_cache: Arc<crate::semantic::PythonSemanticCache>,
+    semantics: OnceLock<Arc<crate::semantic::PythonSemantics>>,
 }
 
 impl WorkspaceSourceIndex {
@@ -55,6 +59,16 @@ impl WorkspaceSourceIndex {
         settings: SourceAnalysisSettings,
         modules: impl IntoIterator<Item = Arc<CollectedModule>>,
     ) -> Self {
+        Self::from_shared_modules_with_cache(project_root, settings, modules, Arc::default())
+    }
+
+    /// Builds a new immutable snapshot while retaining ty's incremental queries.
+    pub fn from_shared_modules_with_cache(
+        project_root: Utf8PathBuf,
+        settings: SourceAnalysisSettings,
+        modules: impl IntoIterator<Item = Arc<CollectedModule>>,
+        semantic_cache: Arc<crate::PythonSemanticCache>,
+    ) -> Self {
         let modules: BTreeMap<Utf8PathBuf, Arc<CollectedModule>> = modules
             .into_iter()
             .map(|module| (module.path.path().clone(), module))
@@ -73,6 +87,8 @@ impl WorkspaceSourceIndex {
             settings,
             analyses,
             builtin_module,
+            semantics: OnceLock::new(),
+            semantic_cache,
         }
     }
 
@@ -149,16 +165,29 @@ impl WorkspaceSourceIndex {
         Some(
             cached
                 .get_or_init(|| {
+                    let semantics = self
+                        .semantics
+                        .get_or_init(|| {
+                            Arc::new(crate::semantic::PythonSemantics::with_cache(
+                                &self.project_root,
+                                &self.modules,
+                                self.settings.python_version,
+                                Arc::clone(&self.semantic_cache),
+                            ))
+                        })
+                        .clone();
                     let (fixture_model, diagnostics) = crate::fixture::analyze_modules_with_sources(
                         &current,
                         &parents,
                         builtin,
                         self.settings.try_import_fixtures,
-                        Some((&self.project_root, &self.modules)),
+                        (&self.modules, &semantics),
                     );
                     SourceAnalysis {
                         module: current,
                         fixture_model: Arc::new(fixture_model),
+                        semantics,
+                        occurrences: Arc::default(),
                         diagnostics,
                     }
                 })

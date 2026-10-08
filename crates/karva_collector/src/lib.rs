@@ -162,7 +162,7 @@ fn collect_source_for_scheduling(
             &function_names,
             settings.test_function_prefix,
         ) {
-            function_def.body = Vec::new();
+            function_def.body.clear();
             collected_module.add_test_function_def(function_def);
         }
     }
@@ -246,7 +246,7 @@ fn collect_source_with_module_path(
     let mut collected_module = CollectedModule::new(
         module_path,
         module_type,
-        module_body.into_boxed_slice(),
+        module_body.into_iter().collect(),
         source_text,
     );
 

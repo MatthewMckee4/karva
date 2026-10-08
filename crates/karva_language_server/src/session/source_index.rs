@@ -38,6 +38,9 @@ pub(super) struct SourceIndexState {
     /// Immutable index for this notification generation only.
     snapshot: OnceCell<Arc<WorkspaceSourceIndex>>,
 
+    /// ty query storage shared across edits, with source views activated under its lock.
+    semantics: Arc<karva_ide::PythonSemanticCache>,
+
     /// Syntax shared with later generations; every reuse checks source and settings.
     parsed: Arc<Mutex<ParsedModules>>,
 }
@@ -47,6 +50,7 @@ impl SourceIndexState {
     pub(super) fn invalidated(&self) -> Self {
         Self {
             snapshot: OnceCell::new(),
+            semantics: Arc::clone(&self.semantics),
             parsed: Arc::clone(&self.parsed),
         }
     }
@@ -333,7 +337,12 @@ impl PreparedSourceIndex {
         }
         check_cancelled(cancellation)?;
 
-        let index = WorkspaceSourceIndex::from_shared_modules(project_root, settings, modules);
+        let index = WorkspaceSourceIndex::from_shared_modules_with_cache(
+            project_root,
+            settings,
+            modules,
+            Arc::clone(&cache.semantics),
+        );
         check_cancelled(cancellation)?;
 
         tracing::debug!(

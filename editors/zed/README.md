@@ -72,17 +72,20 @@ Initialization and workspace settings remain available under `lsp.karva`:
 
 ## Fixture inlay hints
 
-Enable Zed's inlay hints to see each injected fixture's scope and provider next
+Enable Zed's inlay hints to see each injected fixture's value type next
 to test parameters, fixture dependencies, and `usefixtures` names:
 
 ```json
 {
   "inlay_hints": {
     "enabled": true,
-    "show_other_hints": true
+    "show_type_hints": true
   }
 }
 ```
+
+Karva uses ty to resolve annotations and infer simple return and yield values.
+Unresolved values show `unknown`; the tooltip retains scope and provider.
 
 Hints follow fixture overrides and unsaved provider edits. Unknown fixtures and
 ordinary Python parameters are left to diagnostics and the Python language server.

@@ -1,6 +1,6 @@
 //! Source-only editor analysis for Karva projects.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 mod call_hierarchy;
 mod code_actions;
@@ -12,6 +12,7 @@ mod implementation;
 mod occurrences;
 mod references;
 mod rename;
+mod semantic;
 mod source_index;
 mod symbols;
 
@@ -38,6 +39,7 @@ pub use occurrences::{
 };
 pub use references::{LocatedFixtureOccurrence, fixture_references};
 pub use rename::{is_valid_fixture_name, prepare_fixture_rename, rename_fixture};
+pub use semantic::PythonSemanticCache;
 pub use source_index::WorkspaceSourceIndex;
 pub use symbols::{SourceSymbol, SourceSymbolKind, SourceTest, source_symbols, source_tests};
 
@@ -154,6 +156,12 @@ pub struct SourceAnalysis {
     /// Resolved fixture declarations and provider visibility.
     fixture_model: Arc<FixtureModel>,
 
+    /// Source view used for lazy ty queries after fixture resolution.
+    semantics: Arc<semantic::PythonSemantics>,
+
+    /// Shared occurrences avoid recomputing framework-to-Python bindings for cached requests.
+    occurrences: Arc<OnceLock<Vec<FixtureOccurrence>>>,
+
     /// Definite diagnostics. Unknown dynamic behavior remains silent.
     pub diagnostics: Vec<SourceDiagnostic>,
 }
@@ -173,12 +181,12 @@ pub fn analyze_source(
         collect_doctests: false,
     };
     let module = collect_source(path, project_root, source_text, &collection_settings, &[])?;
-    let (fixture_model, diagnostics) = fixture::analyze(&module, settings.try_import_fixtures);
-    Some(SourceAnalysis {
-        module: Arc::new(module),
-        fixture_model: Arc::new(fixture_model),
-        diagnostics,
-    })
+    WorkspaceSourceIndex::from_shared_modules(
+        project_root.to_owned(),
+        settings.clone(),
+        [Arc::new(module)],
+    )
+    .analyze(path)
 }
 
 /// Analyzes an unsaved source document with fixture providers from ancestor
@@ -213,38 +221,23 @@ pub(crate) fn analyze_source_with_parents(
         &[],
     )?;
 
-    let parent_modules = parents
-        .into_iter()
-        .filter_map(|parent| {
-            let (path, source_text) = parent.into_parts();
-            collect_source(&path, project_root, source_text, &collection_settings, &[])
-        })
-        .collect::<Vec<_>>();
-    let parent_modules = parent_modules.iter().collect::<Vec<_>>();
-    let (fixture_model, diagnostics) = fixture::analyze_modules(
-        &current,
-        &parent_modules,
-        None,
-        settings.try_import_fixtures,
-    );
-    Some(SourceAnalysis {
-        module: Arc::new(current),
-        fixture_model: Arc::new(fixture_model),
-        diagnostics,
-    })
+    let parent_modules = parents.into_iter().filter_map(|parent| {
+        let (path, source_text) = parent.into_parts();
+        collect_source(&path, project_root, source_text, &collection_settings, &[])
+    });
+    WorkspaceSourceIndex::from_shared_modules(
+        project_root.to_owned(),
+        settings.clone(),
+        parent_modules.chain([current]).map(Arc::new),
+    )
+    .analyze(&current_path)
 }
 
 /// Analyzes a current document against already-collected configuration modules.
 ///
 /// `parents` must be ordered from the project/session root toward the current
 /// package, matching runtime fixture lookup precedence.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "workspace source indexing lands in a later stack layer"
-    )
-)]
+#[cfg(test)]
 pub(crate) fn analyze_sources(
     current: CollectedModule,
     parents: &[CollectedModule],
@@ -254,23 +247,31 @@ pub(crate) fn analyze_sources(
     analyze_collected_source(Arc::new(current), &parent_modules, None, settings)
 }
 
+#[cfg(test)]
 fn analyze_collected_source(
     current: Arc<CollectedModule>,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
-    let (fixture_model, diagnostics) = fixture::analyze_modules(
-        &current,
-        parents,
-        builtin_module,
-        settings.try_import_fixtures,
-    );
-    SourceAnalysis {
-        module: current,
-        fixture_model: Arc::new(fixture_model),
-        diagnostics,
-    }
+    let path = current.path.path().clone();
+    let root = parents
+        .first()
+        .copied()
+        .unwrap_or(&current)
+        .path
+        .path()
+        .parent()
+        .unwrap_or_else(|| Utf8Path::new("/"))
+        .to_owned();
+    let modules = parents
+        .iter()
+        .map(|module| Arc::new((*module).clone()))
+        .chain(builtin_module.map(|module| Arc::new(module.clone())))
+        .chain([current]);
+    WorkspaceSourceIndex::from_shared_modules(root, settings.clone(), modules)
+        .analyze(&path)
+        .expect("current source is indexed")
 }
 
 #[cfg(test)]

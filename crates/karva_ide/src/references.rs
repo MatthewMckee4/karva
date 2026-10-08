@@ -1,8 +1,7 @@
+use crate::occurrences::cached_fixture_occurrences;
 use camino::Utf8PathBuf;
 
-use crate::{
-    FixtureId, FixtureOccurrence, FixtureOccurrenceKind, WorkspaceSourceIndex, fixture_occurrences,
-};
+use crate::{FixtureId, FixtureOccurrence, FixtureOccurrenceKind, WorkspaceSourceIndex};
 
 /// Fixture occurrence paired with its source path.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,15 +30,15 @@ pub fn fixture_references(
             continue;
         };
         references.extend(
-            fixture_occurrences(&analysis)
-                .into_iter()
+            cached_fixture_occurrences(&analysis)
+                .iter()
                 .filter(|occurrence| &occurrence.fixture == target)
                 .filter(|occurrence| {
                     include_declaration || occurrence.kind != FixtureOccurrenceKind::Definition
                 })
                 .map(|occurrence| LocatedFixtureOccurrence {
                     path: path.to_path_buf(),
-                    occurrence,
+                    occurrence: occurrence.clone(),
                 }),
         );
     }

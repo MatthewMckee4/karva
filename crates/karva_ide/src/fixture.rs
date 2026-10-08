@@ -12,15 +12,15 @@
     reason = "the crate root re-exports fixture analysis across this private module"
 )]
 
-mod imports;
+pub(super) mod imports;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use imports::{FixtureImport, provider_with_imports};
+use imports::FixtureImport;
 
 use camino::Utf8PathBuf;
-use karva_collector::{CollectedModule, ModuleType};
+use karva_collector::CollectedModule;
 use karva_python_semantic::{DecoratorBindings, KnownBinding};
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
@@ -153,9 +153,6 @@ pub(super) struct FixtureDefinition {
     /// Source signature of the provider function.
     pub(super) signature: String,
 
-    /// Explicit annotation for the injected fixture value, when available.
-    pub(super) value_type: Option<String>,
-
     /// Leading function docstring, when statically available.
     pub(super) docstring: Option<String>,
 
@@ -193,8 +190,8 @@ struct FixtureMetadata {
 }
 
 #[derive(Clone, Debug)]
-struct FixtureProvider {
-    definitions: Vec<FixtureDefinition>,
+pub(super) struct FixtureProvider {
+    pub(super) definitions: Vec<FixtureDefinition>,
     by_name: HashMap<String, FixtureId>,
     rejected: HashMap<String, Vec<FixtureId>>,
     bindings: DecoratorBindings,
@@ -403,41 +400,18 @@ const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     },
 ];
 
-pub(super) fn analyze(
-    module: &CollectedModule,
-    try_import_fixtures: bool,
-) -> (FixtureModel, Vec<SourceDiagnostic>) {
-    analyze_modules(module, &[], None, try_import_fixtures)
-}
-
-/// Analyzes a module against configuration providers ordered from the session
-/// root toward the nearest package.
-pub(super) fn analyze_modules(
-    current: &CollectedModule,
-    parents: &[&CollectedModule],
-    builtin_module: Option<&CollectedModule>,
-    try_import_fixtures: bool,
-) -> (FixtureModel, Vec<SourceDiagnostic>) {
-    analyze_modules_with_sources(current, parents, builtin_module, try_import_fixtures, None)
-}
-
 pub(super) fn analyze_modules_with_sources(
     current: &CollectedModule,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
     try_import_fixtures: bool,
-    sources: Option<(
-        &camino::Utf8Path,
+    sources: (
         &BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
-    )>,
+        &crate::semantic::PythonSemantics,
+    ),
 ) -> (FixtureModel, Vec<SourceDiagnostic>) {
-    let parse = |module: &CollectedModule| {
-        if let Some((root, modules)) = sources {
-            provider_with_imports(module, root, modules, try_import_fixtures)
-        } else {
-            parse_provider(module, try_import_fixtures)
-        }
-    };
+    let (modules, semantics) = sources;
+    let parse = |module: &CollectedModule| semantics.provider(module, modules, try_import_fixtures);
     let mut providers = parents
         .iter()
         .rev()
@@ -445,7 +419,7 @@ pub(super) fn analyze_modules_with_sources(
         .collect::<Vec<_>>();
     let current_provider = parse(current);
     providers.insert(0, current_provider);
-    let builtin_provider = builtin_module.map(|module| parse_provider(module, false));
+    let builtin_provider = builtin_module.map(|module| semantics.raw_provider(module));
     if let Some(provider) = &builtin_provider {
         providers.push(provider.clone());
     }
@@ -657,7 +631,7 @@ impl FixtureProvider {
     }
 }
 
-fn parse_provider(module: &CollectedModule, try_import_fixtures: bool) -> FixtureProvider {
+pub(super) fn parse_provider(module: &CollectedModule) -> FixtureProvider {
     let path = module.path.path().clone();
     let bindings = DecoratorBindings::from_statements(&module.module_body);
     let parsed = module
@@ -679,16 +653,13 @@ fn parse_provider(module: &CollectedModule, try_import_fixtures: bool) -> Fixtur
             )
         })
         .collect();
-    let imported_fixtures_unknown = (try_import_fixtures
-        || module.module_type == ModuleType::Configuration)
-        && has_external_imports(&module.module_body);
     let unknown_fixture_decorator = has_unknown_fixture_decorator(module);
     FixtureProvider::from_parsed(
         &parsed,
         &path,
         bindings,
         bindings_at,
-        imported_fixtures_unknown || unknown_fixture_decorator,
+        unknown_fixture_decorator,
     )
 }
 
@@ -762,7 +733,6 @@ fn parse_fixture(
                     public_name,
                     public_name_ranges,
                     metadata,
-                    bindings,
                     source,
                 ),
                 public_name_known,
@@ -848,7 +818,6 @@ fn parse_fixture(
             public_name,
             public_name_ranges,
             metadata,
-            bindings,
             source,
         ),
         public_name_known,
@@ -862,7 +831,6 @@ fn fixture_definition(
     name: String,
     public_name_ranges: PublicNameRanges,
     metadata: FixtureMetadata,
-    bindings: &DecoratorBindings,
     source: &str,
 ) -> FixtureDefinition {
     FixtureDefinition {
@@ -877,7 +845,6 @@ fn fixture_definition(
         public_name_range: public_name_ranges.occurrence,
         public_name_edit_range: public_name_ranges.edit,
         signature: function_signature(function, source),
-        value_type: fixture_value_type(function, bindings, source),
         docstring: function_docstring(function),
         scope: metadata.scope,
         auto_use: metadata.auto_use,
@@ -893,45 +860,7 @@ fn fixture_definition(
     }
 }
 
-fn fixture_value_type(
-    function: &StmtFunctionDef,
-    bindings: &DecoratorBindings,
-    source: &str,
-) -> Option<String> {
-    let returns = function.returns.as_deref()?;
-    let annotation = source
-        .get(returns.range().start().to_usize()..returns.range().end().to_usize())?
-        .trim();
-    if fixture_implementation_range(function) == function.name.range {
-        return Some(annotation.to_owned());
-    }
-
-    let Expr::Subscript(subscript) = returns else {
-        return None;
-    };
-    let binding = bindings.binding_for(&subscript.value)?;
-    let expected_arity = match binding {
-        KnownBinding::Iterator | KnownBinding::AsyncIterator => 1,
-        KnownBinding::Generator => 3,
-        KnownBinding::AsyncGenerator => 2,
-        _ => return None,
-    };
-    let elements: &[Expr] = match subscript.slice.as_ref() {
-        Expr::Tuple(tuple) => &tuple.elts,
-        slice => std::slice::from_ref(slice),
-    };
-    if elements.len() != expected_arity {
-        return None;
-    }
-    let element = elements.first()?;
-    source
-        .get(element.range().start().to_usize()..element.range().end().to_usize())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
-}
-
-fn fixture_implementation_range(function: &StmtFunctionDef) -> TextRange {
+pub(super) fn fixture_implementation_range(function: &StmtFunctionDef) -> TextRange {
     let mut visitor = FixtureImplementationVisitor::default();
     source_order::walk_body(&mut visitor, &function.body);
     visitor.implementation_range.unwrap_or(function.name.range)
@@ -1432,24 +1361,6 @@ fn literal_name(expression: &Expr) -> Option<String> {
         return None;
     };
     Some(value.value.to_str().to_owned())
-}
-
-fn has_external_imports(statements: &[Stmt]) -> bool {
-    statements.iter().any(|statement| match statement {
-        Stmt::Import(import) => import.names.iter().any(|name| {
-            !matches!(
-                name.name.as_str(),
-                "karva" | "pytest" | "typing" | "collections"
-            )
-        }),
-        Stmt::ImportFrom(import) => import.module.as_ref().is_some_and(|module| {
-            !matches!(
-                module.as_str(),
-                "karva" | "pytest" | "typing" | "collections.abc"
-            )
-        }),
-        _ => false,
-    })
 }
 
 fn builtin(name: &str) -> Option<BuiltinFixture> {

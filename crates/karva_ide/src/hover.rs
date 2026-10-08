@@ -25,7 +25,7 @@ pub struct FixtureHover {
     /// Provider function signature, or built-in signature.
     pub source_signature: String,
 
-    /// Explicit annotation for the injected fixture value, when available.
+    /// Injected fixture value type resolved or inferred by ty, when known.
     pub value_type: Option<String>,
 
     /// Provider docstring, when statically available.
@@ -139,13 +139,15 @@ fn hover_from_name(
     range: TextRange,
 ) -> Option<FixtureHover> {
     if let Some(definition) = analysis.fixture_model.resolve(&name) {
-        return Some(hover_from_definition(name, range, definition));
+        return Some(hover_from_definition(analysis, name, range, definition));
     }
     if !analysis.fixture_model.builtins_visible() {
         return None;
     }
     if let Some(definition) = analysis.fixture_model.builtin_definition(&name) {
-        return Some(hover_from_builtin_definition(name, range, definition));
+        return Some(hover_from_builtin_definition(
+            analysis, name, range, definition,
+        ));
     }
     let builtin = crate::fixture::builtin_info(&name)?;
     Some(FixtureHover {
@@ -175,9 +177,11 @@ fn hover_from_resolution(
                 .builtin_definition(&name)
                 .is_some_and(|builtin| builtin.id == *id)
             {
-                Some(hover_from_builtin_definition(name, range, definition))
+                Some(hover_from_builtin_definition(
+                    analysis, name, range, definition,
+                ))
             } else {
-                Some(hover_from_definition(name, range, definition))
+                Some(hover_from_definition(analysis, name, range, definition))
             }
         }
         FixtureResolution::Builtin => hover_from_name(analysis, name, range),
@@ -188,28 +192,18 @@ fn hover_from_resolution(
 }
 
 fn hover_from_builtin_definition(
+    analysis: &SourceAnalysis,
     name: String,
     range: TextRange,
     definition: &FixtureDefinition,
 ) -> FixtureHover {
-    FixtureHover {
-        name,
-        range,
-        provider: None,
-        scope: definition.scope,
-        auto_use: definition.auto_use,
-        source_signature: definition.signature.clone(),
-        value_type: definition.value_type.clone(),
-        docstring: definition.docstring.clone(),
-        dependencies: definition
-            .dependencies
-            .iter()
-            .map(|dependency| dependency.name.clone())
-            .collect(),
-    }
+    let mut hover = hover_from_definition(analysis, name, range, definition);
+    hover.provider = None;
+    hover
 }
 
 fn hover_from_definition(
+    analysis: &SourceAnalysis,
     name: String,
     range: TextRange,
     definition: &FixtureDefinition,
@@ -221,7 +215,7 @@ fn hover_from_definition(
         scope: definition.scope,
         auto_use: definition.auto_use,
         source_signature: definition.signature.clone(),
-        value_type: definition.value_type.clone(),
+        value_type: analysis.semantics.value_type(&definition.id),
         docstring: definition.docstring.clone(),
         dependencies: definition
             .dependencies
@@ -377,6 +371,7 @@ mod tests {
             concat!(
                 "from typing import Iterator\n",
                 "from karva import fixture\n",
+                "class Client: pass\n",
                 "@fixture\n",
                 "def client() -> Iterator[Client]:\n",
                 "    yield Client()\n",
@@ -408,6 +403,7 @@ mod tests {
                     concat!(
                         "from collections.abc import Generator\n",
                         "from karva import fixture\n",
+                        "class Client: pass\n",
                         "@fixture\n",
                         "def client() -> Generator[Client, None, None]:\n",
                         "    yield Client()\n",
@@ -523,6 +519,7 @@ mod tests {
             "from collections.abc import AsyncIterator as AsyncIter\n",
             "from typing import AsyncGenerator, Generator\n\n",
             "from karva import fixture\n",
+            "class Client: pass\n",
             "@fixture\n",
             "def direct() -> Client: pass\n\n",
             "@fixture\n",
@@ -541,7 +538,7 @@ mod tests {
             "def malformed_iterator() -> Iter[Client, None]:\n",
             "    yield Client()\n\n",
             "@fixture\n",
-            "def malformed_generator() -> Generator[Client, None]:\n",
+            "def malformed_generator() -> Generator[Client, None, None, None]:\n",
             "    yield Client()\n\n",
             "@fixture\n",
             "def unknown(): pass\n\n",

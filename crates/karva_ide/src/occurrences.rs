@@ -5,8 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
-use ruff_python_ast::{Comprehension, Expr, ExprContext, Stmt, StmtFunctionDef};
+use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
 use crate::{FixtureId, FixtureResolution, SourceAnalysis};
@@ -64,6 +63,17 @@ pub struct FixtureRenameTarget {
 
 /// Enumerates statically resolved fixture occurrences in the current source.
 pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
+    cached_fixture_occurrences(analysis).to_vec()
+}
+
+/// Borrows snapshot-owned occurrences when a workspace query only needs selected providers.
+pub(crate) fn cached_fixture_occurrences(analysis: &SourceAnalysis) -> &[FixtureOccurrence] {
+    analysis
+        .occurrences
+        .get_or_init(|| collect_fixture_occurrences(analysis))
+}
+
+fn collect_fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
     let mut occurrences = analysis
         .fixture_model
         .imports()
@@ -125,6 +135,7 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
         ));
         occurrences.extend(use_fixtures_occurrences(analysis, function));
         occurrences.extend(body_fixture_occurrences(
+            analysis,
             function,
             fixture_parameters(analysis, function),
         ));
@@ -140,6 +151,7 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
             continue;
         };
         occurrences.extend(body_fixture_occurrences(
+            analysis,
             function,
             definition.dependencies.iter().filter_map(|reference| {
                 let FixtureResolution::Resolved(fixture) = &reference.resolution else {
@@ -179,7 +191,12 @@ fn imported_fixture_body_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOc
         return Vec::new();
     }
 
-    let (references, unsupported) = body_fixture_references(&analysis.module.module_body, &targets);
+    let (references, unsupported) = analysis.semantics.references(
+        analysis.module.path.path(),
+        TextRange::default(),
+        body_range(&analysis.module.module_body),
+        &targets,
+    );
     if unsupported {
         return Vec::new();
     }
@@ -214,11 +231,16 @@ fn fixture_parameters(
 }
 
 fn body_fixture_occurrences(
+    analysis: &SourceAnalysis,
     function: &StmtFunctionDef,
     parameters: impl IntoIterator<Item = (String, FixtureId)>,
 ) -> Vec<FixtureOccurrence> {
-    let targets = parameters.into_iter().collect();
-    let (references, _) = body_fixture_references(&function.body, &targets);
+    let (references, _) = analysis.semantics.references(
+        analysis.module.path.path(),
+        function.range(),
+        body_range(&function.body),
+        &parameters.into_iter().collect(),
+    );
     references
         .into_iter()
         .map(|(range, fixture)| FixtureOccurrence {
@@ -230,526 +252,87 @@ fn body_fixture_occurrences(
         .collect()
 }
 
-fn body_fixture_references(
-    body: &[Stmt],
-    targets: &HashMap<String, FixtureId>,
-) -> (Vec<(TextRange, FixtureId)>, bool) {
-    if targets.is_empty() {
-        return (Vec::new(), false);
-    }
-
-    let mut visitor = BodyReferenceVisitor {
-        targets,
-        shadowed: HashSet::new(),
-        occurrences: Vec::new(),
-        match_name: None,
-        found: false,
-        unsupported: false,
-    };
-    source_order::walk_body(&mut visitor, body);
-    (visitor.occurrences, visitor.unsupported)
+fn body_range(body: &[Stmt]) -> TextRange {
+    body.first()
+        .zip(body.last())
+        .map_or_else(TextRange::default, |(first, last)| {
+            TextRange::new(first.start(), last.end())
+        })
 }
 
-struct BodyReferenceVisitor<'a> {
-    targets: &'a HashMap<String, FixtureId>,
-    shadowed: HashSet<String>,
-    occurrences: Vec<(TextRange, FixtureId)>,
-    match_name: Option<&'a str>,
-    found: bool,
-    unsupported: bool,
-}
-
-impl BodyReferenceVisitor<'_> {
-    fn visit_nested_function(&mut self, function: &StmtFunctionDef) {
-        for decorator in &function.decorator_list {
-            self.visit_decorator(decorator);
-        }
-        self.visit_parameters(&function.parameters);
-        if let Some(returns) = &function.returns {
-            self.visit_annotation(returns);
-        }
-
-        let mut child = Self {
-            targets: self.targets,
-            shadowed: self.shadowed.clone(),
-            occurrences: Vec::new(),
-            match_name: self.match_name,
-            found: false,
-            unsupported: false,
-        };
-        let (global, nonlocal) = scope_directives(&function.body);
-        if global
-            .iter()
-            .chain(&nonlocal)
-            .any(|name| self.targets.contains_key(name))
-        {
-            child.unsupported = true;
-        }
-        child.shadowed.extend(local_bindings(function));
-        child.shadowed.extend(global);
-        source_order::walk_body(&mut child, &function.body);
-        self.found |= child.found;
-        self.unsupported |= child.unsupported;
-        self.occurrences.extend(child.occurrences);
-    }
-
-    fn visit_lambda(&mut self, lambda: &ruff_python_ast::ExprLambda) {
-        if let Some(parameters) = &lambda.parameters {
-            self.visit_parameters(parameters);
-        }
-        let mut child = Self {
-            targets: self.targets,
-            shadowed: self.shadowed.clone(),
-            occurrences: Vec::new(),
-            match_name: self.match_name,
-            found: false,
-            unsupported: false,
-        };
-        if let Some(parameters) = &lambda.parameters {
-            child.shadowed.extend(parameter_names(parameters));
-        }
-        child.shadowed.extend(expression_bindings(&lambda.body));
-        child.visit_expr(&lambda.body);
-        self.found |= child.found;
-        self.unsupported |= child.unsupported;
-        self.occurrences.extend(child.occurrences);
-    }
-
-    fn visit_comprehension_expression(&mut self, element: &Expr, generators: &[Comprehension]) {
-        self.visit_comprehension_elements(&[element], generators);
-    }
-
-    fn visit_comprehension_elements(&mut self, elements: &[&Expr], generators: &[Comprehension]) {
-        let Some(first) = generators.first() else {
-            for element in elements {
-                self.visit_expr(element);
-            }
-            return;
-        };
-        self.visit_expr(&first.iter);
-
-        let mut child = Self {
-            targets: self.targets,
-            shadowed: self.shadowed.clone(),
-            occurrences: Vec::new(),
-            match_name: self.match_name,
-            found: false,
-            unsupported: false,
-        };
-        for (index, generator) in generators.iter().enumerate() {
-            if index > 0 {
-                child.visit_expr(&generator.iter);
-            }
-            child
-                .shadowed
-                .extend(comprehension_target_names(&generator.target));
-            for condition in &generator.ifs {
-                child.visit_expr(condition);
-            }
-        }
-        for element in elements {
-            child.visit_expr(element);
-        }
-        self.found |= child.found;
-        self.unsupported |= child.unsupported;
-        self.occurrences.extend(child.occurrences);
-    }
-
-    fn visit_nested_class(&mut self, class: &ruff_python_ast::StmtClassDef) {
-        for decorator in &class.decorator_list {
-            self.visit_decorator(decorator);
-        }
-        if let Some(type_params) = &class.type_params {
-            self.visit_type_params(type_params);
-        }
-        if let Some(arguments) = &class.arguments {
-            self.visit_arguments(arguments);
-        }
-
-        if class_bindings(class)
-            .iter()
-            .any(|name| self.targets.contains_key(name))
-        {
-            self.unsupported = true;
-            return;
-        }
-        source_order::walk_body(self, &class.body);
-    }
-}
-
-impl SourceOrderVisitor<'_> for BodyReferenceVisitor<'_> {
-    fn visit_stmt(&mut self, statement: &'_ Stmt) {
-        match statement {
-            Stmt::FunctionDef(function) => self.visit_nested_function(function),
-            Stmt::ClassDef(class) => self.visit_nested_class(class),
-            Stmt::Global(global) => {
-                if global
-                    .names
-                    .iter()
-                    .any(|name| self.targets.contains_key(name.as_str()))
-                {
-                    self.unsupported = true;
-                }
-            }
-            Stmt::Nonlocal(nonlocal) => {
-                if nonlocal
-                    .names
-                    .iter()
-                    .any(|name| self.targets.contains_key(name.as_str()))
-                {
-                    self.unsupported = true;
-                }
-                source_order::walk_stmt(self, statement);
-            }
-            _ => source_order::walk_stmt(self, statement),
-        }
-    }
-
-    fn visit_expr(&mut self, expression: &'_ Expr) {
-        if let Expr::Name(name) = expression {
-            if !matches!(
-                name.ctx,
-                ExprContext::Load | ExprContext::Store | ExprContext::Del
-            ) {
-                return;
-            }
-            if !self.shadowed.contains(name.id.as_str())
-                && let Some(fixture) = self.targets.get(name.id.as_str())
-            {
-                self.occurrences.push((name.range, fixture.clone()));
-            }
-            if !self.shadowed.contains(name.id.as_str())
-                && self
-                    .match_name
-                    .is_some_and(|match_name| name.id == match_name)
-            {
-                self.found = true;
-            }
-        }
-
-        match expression {
-            Expr::Lambda(lambda) => self.visit_lambda(lambda),
-            Expr::ListComp(comp) => {
-                self.visit_comprehension_expression(&comp.elt, &comp.generators);
-            }
-            Expr::SetComp(comp) => self.visit_comprehension_expression(&comp.elt, &comp.generators),
-            Expr::DictComp(comp) => {
-                self.visit_comprehension_elements(&[&comp.key, &comp.value], &comp.generators);
-            }
-            Expr::Generator(comp) => {
-                self.visit_comprehension_expression(&comp.elt, &comp.generators);
-            }
-            _ => source_order::walk_expr(self, expression),
-        }
-    }
-}
-
-pub(super) fn body_contains_name(function: &StmtFunctionDef, name: &str) -> bool {
-    body_contains_name_in_scope(&function.body, name, HashSet::new())
-}
-
-fn body_contains_name_in_scope(body: &[Stmt], name: &str, shadowed: HashSet<String>) -> bool {
-    let targets = HashMap::new();
-    let mut visitor = BodyReferenceVisitor {
-        targets: &targets,
-        shadowed,
-        occurrences: Vec::new(),
-        match_name: Some(name),
-        found: false,
-        unsupported: false,
-    };
-    source_order::walk_body(&mut visitor, body);
-    visitor.found
+pub(super) fn body_contains_name(
+    analysis: &SourceAnalysis,
+    function: &StmtFunctionDef,
+    name: &str,
+) -> bool {
+    analysis.semantics.contains_name(
+        analysis.module.path.path(),
+        function.range(),
+        body_range(&function.body),
+        name,
+    )
 }
 
 pub(super) fn expression_contains_name_in_scope(
+    analysis: &SourceAnalysis,
     expression: &Expr,
     name: &str,
-    shadowed: HashSet<String>,
 ) -> bool {
-    let targets = HashMap::new();
-    let mut visitor = BodyReferenceVisitor {
-        targets: &targets,
-        shadowed,
-        occurrences: Vec::new(),
-        match_name: Some(name),
-        found: false,
-        unsupported: false,
-    };
-    visitor.visit_expr(expression);
-    visitor.found
+    analysis.semantics.contains_name(
+        analysis.module.path.path(),
+        TextRange::default(),
+        expression.range(),
+        name,
+    )
 }
 
 pub(super) fn body_has_nested_binding_conflict(
+    analysis: &SourceAnalysis,
     function: &StmtFunctionDef,
     target_name: &str,
     new_name: &str,
 ) -> bool {
-    let mut visitor = BindingConflictVisitor {
+    analysis.semantics.nested_conflict(
+        analysis.module.path.path(),
+        function.range(),
+        body_range(&function.body),
         target_name,
         new_name,
-        shadowed: HashSet::new(),
-        conflict: false,
-    };
-    source_order::walk_body(&mut visitor, &function.body);
-    visitor.conflict
+    )
 }
 
-pub(super) fn body_contains_name_in_body(body: &[Stmt], name: &str) -> bool {
-    body_contains_name_in_scope(body, name, HashSet::new())
-}
-
-struct BindingConflictVisitor<'a> {
-    target_name: &'a str,
-    new_name: &'a str,
-    shadowed: HashSet<String>,
-    conflict: bool,
-}
-
-impl BindingConflictVisitor<'_> {
-    fn visit_nested_scope(&mut self, body: &[Stmt], bindings: HashSet<String>) {
-        if bindings.contains(self.new_name) {
-            let mut shadowed = self.shadowed.clone();
-            shadowed.extend(bindings.iter().cloned());
-            if body_contains_name_in_scope(body, self.target_name, shadowed) {
-                self.conflict = true;
-            }
-        }
-
-        let mut child = Self {
-            target_name: self.target_name,
-            new_name: self.new_name,
-            shadowed: self.shadowed.clone(),
-            conflict: false,
-        };
-        child.shadowed.extend(bindings);
-        source_order::walk_body(&mut child, body);
-        self.conflict |= child.conflict;
-    }
-}
-
-impl SourceOrderVisitor<'_> for BindingConflictVisitor<'_> {
-    fn visit_stmt(&mut self, statement: &'_ Stmt) {
-        match statement {
-            Stmt::FunctionDef(function) => {
-                self.visit_nested_scope(&function.body, local_bindings(function));
-            }
-            Stmt::ClassDef(class) => {
-                self.visit_nested_scope(&class.body, class_bindings(class));
-            }
-            _ => source_order::walk_stmt(self, statement),
-        }
-    }
-
-    fn visit_expr(&mut self, expression: &'_ Expr) {
-        if let Expr::Lambda(lambda) = expression {
-            let mut bindings = HashSet::new();
-            if let Some(parameters) = &lambda.parameters {
-                bindings.extend(parameter_names(parameters));
-            }
-            bindings.extend(expression_bindings(&lambda.body));
-            if bindings.contains(self.new_name) {
-                let mut shadowed = self.shadowed.clone();
-                shadowed.extend(bindings.iter().cloned());
-                if expression_contains_name_in_scope(&lambda.body, self.target_name, shadowed) {
-                    self.conflict = true;
-                }
-            }
-            let mut child = Self {
-                target_name: self.target_name,
-                new_name: self.new_name,
-                shadowed: self.shadowed.clone(),
-                conflict: false,
-            };
-            child.shadowed.extend(bindings);
-            child.visit_expr(&lambda.body);
-            self.conflict |= child.conflict;
-        } else {
-            source_order::walk_expr(self, expression);
-        }
-    }
+pub(super) fn body_contains_name_in_body(
+    analysis: &SourceAnalysis,
+    class: &ruff_python_ast::StmtClassDef,
+    name: &str,
+) -> bool {
+    analysis.semantics.contains_name(
+        analysis.module.path.path(),
+        class.range(),
+        body_range(&class.body),
+        name,
+    )
 }
 
 pub(super) fn body_has_unsupported_bindings(
+    analysis: &SourceAnalysis,
     function: &StmtFunctionDef,
     target_names: &HashSet<String>,
 ) -> bool {
-    let targets = target_names
-        .iter()
-        .map(|name| {
-            (
-                name.clone(),
-                FixtureId {
-                    path: "".into(),
-                    range: TextRange::default(),
-                },
-            )
-        })
-        .collect::<HashMap<_, _>>();
-    let mut visitor = BodyReferenceVisitor {
-        targets: &targets,
-        shadowed: HashSet::new(),
-        occurrences: Vec::new(),
-        match_name: None,
-        found: false,
-        unsupported: false,
-    };
-    source_order::walk_body(&mut visitor, &function.body);
-    visitor.unsupported
+    analysis.semantics.unsupported_bindings(
+        analysis.module.path.path(),
+        function.range(),
+        target_names,
+    )
 }
 
-fn parameter_names(parameters: &ruff_python_ast::Parameters) -> impl Iterator<Item = String> + '_ {
-    parameters
-        .iter()
-        .map(|parameter| parameter.name().as_str().to_owned())
-}
-
-fn expression_bindings(expression: &Expr) -> HashSet<String> {
-    let mut visitor = BindingVisitor {
-        bindings: HashSet::new(),
-    };
-    source_order::walk_expr(&mut visitor, expression);
-    visitor.bindings
-}
-
-fn comprehension_target_names(expression: &Expr) -> HashSet<String> {
-    let mut visitor = NameCollector {
-        names: HashSet::new(),
-    };
-    if let Expr::Name(name) = expression {
-        if matches!(name.ctx, ExprContext::Store | ExprContext::Del) {
-            visitor.names.insert(name.id.to_string());
-        }
-    } else {
-        source_order::walk_expr(&mut visitor, expression);
-    }
-    visitor.names
-}
-
-struct NameCollector {
-    names: HashSet<String>,
-}
-
-impl SourceOrderVisitor<'_> for NameCollector {
-    fn visit_expr(&mut self, expression: &'_ Expr) {
-        if let Expr::Name(name) = expression
-            && matches!(name.ctx, ExprContext::Store | ExprContext::Del)
-        {
-            self.names.insert(name.id.to_string());
-        } else {
-            source_order::walk_expr(self, expression);
-        }
-    }
-}
-
-pub(super) fn local_bindings(function: &StmtFunctionDef) -> HashSet<String> {
-    let mut visitor = BindingVisitor {
-        bindings: parameter_names(&function.parameters).collect(),
-    };
-    source_order::walk_body(&mut visitor, &function.body);
-    visitor.bindings
-}
-
-fn class_bindings(class: &ruff_python_ast::StmtClassDef) -> HashSet<String> {
-    let mut visitor = BindingVisitor {
-        bindings: HashSet::new(),
-    };
-    source_order::walk_body(&mut visitor, &class.body);
-    visitor.bindings
-}
-
-fn scope_directives(body: &[Stmt]) -> (HashSet<String>, HashSet<String>) {
-    let mut visitor = ScopeDirectiveVisitor {
-        global: HashSet::new(),
-        nonlocal: HashSet::new(),
-    };
-    source_order::walk_body(&mut visitor, body);
-    (visitor.global, visitor.nonlocal)
-}
-
-struct ScopeDirectiveVisitor {
-    global: HashSet<String>,
-    nonlocal: HashSet<String>,
-}
-
-impl SourceOrderVisitor<'_> for ScopeDirectiveVisitor {
-    fn visit_stmt(&mut self, statement: &'_ Stmt) {
-        match statement {
-            Stmt::FunctionDef(_) | Stmt::ClassDef(_) => {}
-            Stmt::Global(global) => self
-                .global
-                .extend(global.names.iter().map(ToString::to_string)),
-            Stmt::Nonlocal(nonlocal) => self
-                .nonlocal
-                .extend(nonlocal.names.iter().map(ToString::to_string)),
-            _ => source_order::walk_stmt(self, statement),
-        }
-    }
-
-    fn visit_expr(&mut self, expression: &'_ Expr) {
-        if !matches!(expression, Expr::Lambda(_)) {
-            source_order::walk_expr(self, expression);
-        }
-    }
-}
-
-struct BindingVisitor {
-    bindings: HashSet<String>,
-}
-
-impl SourceOrderVisitor<'_> for BindingVisitor {
-    fn visit_stmt(&mut self, statement: &'_ Stmt) {
-        match statement {
-            Stmt::FunctionDef(function) => {
-                self.bindings.insert(function.name.to_string());
-            }
-            Stmt::ClassDef(class) => {
-                self.bindings.insert(class.name.to_string());
-            }
-            Stmt::Global(_) | Stmt::Nonlocal(_) => {}
-            _ => source_order::walk_stmt(self, statement),
-        }
-    }
-
-    fn visit_expr(&mut self, expression: &'_ Expr) {
-        if let Expr::Name(name) = expression
-            && matches!(name.ctx, ExprContext::Store | ExprContext::Del)
-        {
-            self.bindings.insert(name.id.to_string());
-        }
-        if !matches!(
-            expression,
-            Expr::Lambda(_)
-                | Expr::ListComp(_)
-                | Expr::SetComp(_)
-                | Expr::DictComp(_)
-                | Expr::Generator(_)
-        ) {
-            source_order::walk_expr(self, expression);
-        }
-    }
-
-    fn visit_alias(&mut self, alias: &'_ ruff_python_ast::Alias) {
-        self.bindings.insert(
-            alias
-                .asname
-                .as_ref()
-                .map_or_else(
-                    || alias.name.as_str().split('.').next().unwrap_or_default(),
-                    |name| name.as_str(),
-                )
-                .to_owned(),
-        );
-    }
-
-    fn visit_except_handler(&mut self, handler: &'_ ruff_python_ast::ExceptHandler) {
-        if let ruff_python_ast::ExceptHandler::ExceptHandler(handler) = handler
-            && let Some(name) = &handler.name
-        {
-            self.bindings.insert(name.to_string());
-        }
-        source_order::walk_except_handler(self, handler);
-    }
+pub(super) fn local_bindings(
+    analysis: &SourceAnalysis,
+    function: &StmtFunctionDef,
+) -> HashSet<String> {
+    analysis
+        .semantics
+        .local_bindings(analysis.module.path.path(), function.range())
 }
 
 /// Returns the resolved fixture occurrence containing `offset`, if any.

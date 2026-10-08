@@ -20,27 +20,6 @@ pub enum KnownBinding {
     /// The `pytest.mark` namespace.
     PytestMark,
 
-    /// The `typing` module.
-    Typing,
-
-    /// The `collections` module.
-    Collections,
-
-    /// The `collections.abc` module.
-    CollectionsAbc,
-
-    /// The `Iterator` type from `typing` or `collections.abc`.
-    Iterator,
-
-    /// The `Generator` type from `typing` or `collections.abc`.
-    Generator,
-
-    /// The `AsyncIterator` type from `typing` or `collections.abc`.
-    AsyncIterator,
-
-    /// The `AsyncGenerator` type from `typing` or `collections.abc`.
-    AsyncGenerator,
-
     /// The `fixture` decorator.
     Fixture,
 
@@ -273,19 +252,6 @@ impl DecoratorBindings {
                 match (namespace, attribute.attr.as_str()) {
                     (KnownBinding::Karva, "tags") => Some(KnownBinding::KarvaTags),
                     (KnownBinding::Pytest, "mark") => Some(KnownBinding::PytestMark),
-                    (KnownBinding::Collections, "abc") => Some(KnownBinding::CollectionsAbc),
-                    (KnownBinding::Typing, "Iterator") => Some(KnownBinding::Iterator),
-                    (KnownBinding::Typing, "Generator") => Some(KnownBinding::Generator),
-                    (KnownBinding::Typing, "AsyncIterator") => Some(KnownBinding::AsyncIterator),
-                    (KnownBinding::Typing, "AsyncGenerator") => Some(KnownBinding::AsyncGenerator),
-                    (KnownBinding::CollectionsAbc, "Iterator") => Some(KnownBinding::Iterator),
-                    (KnownBinding::CollectionsAbc, "Generator") => Some(KnownBinding::Generator),
-                    (KnownBinding::CollectionsAbc, "AsyncIterator") => {
-                        Some(KnownBinding::AsyncIterator)
-                    }
-                    (KnownBinding::CollectionsAbc, "AsyncGenerator") => {
-                        Some(KnownBinding::AsyncGenerator)
-                    }
                     _ => None,
                 }
             }
@@ -422,9 +388,6 @@ fn known_module(module: &str) -> Option<KnownBinding> {
         "pytest" => Some(KnownBinding::Pytest),
         "karva.tags" => Some(KnownBinding::KarvaTags),
         "pytest.mark" => Some(KnownBinding::PytestMark),
-        "typing" => Some(KnownBinding::Typing),
-        "collections" => Some(KnownBinding::Collections),
-        "collections.abc" => Some(KnownBinding::CollectionsAbc),
         _ => None,
     }
 }
@@ -438,10 +401,6 @@ fn known_from_import(module: &str, name: &str) -> Option<KnownBinding> {
         }
         ("karva", "tags") => Some(KnownBinding::KarvaTags),
         ("pytest", "mark") => Some(KnownBinding::PytestMark),
-        ("typing" | "collections.abc", "Iterator") => Some(KnownBinding::Iterator),
-        ("typing" | "collections.abc", "Generator") => Some(KnownBinding::Generator),
-        ("typing" | "collections.abc", "AsyncIterator") => Some(KnownBinding::AsyncIterator),
-        ("typing" | "collections.abc", "AsyncGenerator") => Some(KnownBinding::AsyncGenerator),
         _ => None,
     }
 }
@@ -469,6 +428,8 @@ mod tests {
             .try_into_module()
             .expect("source should parse")
             .into_suite()
+            .into_iter()
+            .collect()
     }
 
     fn function(statements: &[Stmt], index: usize) -> &StmtFunctionDef {

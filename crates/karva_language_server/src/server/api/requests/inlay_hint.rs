@@ -1,7 +1,7 @@
 //! Range-limited framework annotations for fixture injection sites.
 
 use karva_ide::fixture_reference_hovers;
-use lsp_types::{InlayHint, InlayHintParams, InlayHintRequest};
+use lsp_types::{InlayHint, InlayHintKind, InlayHintParams, InlayHintRequest};
 use ruff_source_file::LineIndex;
 
 use super::super::traits::{BackgroundRequestHandler, RequestHandler};
@@ -67,17 +67,14 @@ impl BackgroundRequestHandler for InlayHints {
             let scope = hover
                 .scope
                 .map_or("dynamic", karva_ide::FixtureScope::as_str);
-            let provider = hover.provider.as_ref().map_or("built-in", |id| {
-                id.path.file_name().unwrap_or(id.path.as_str())
-            });
             let provider_path = hover
                 .provider
                 .as_ref()
                 .map_or("Karva built-in", |id| id.path.as_str());
             hints.push(InlayHint {
                 position,
-                label: format!("fixture: {scope} ({provider})").into(),
-                kind: None,
+                label: format!(": {}", hover.value_type.as_deref().unwrap_or("unknown")).into(),
+                kind: Some(InlayHintKind::Type),
                 text_edits: None,
                 tooltip: Some(
                     format!(
@@ -86,7 +83,7 @@ impl BackgroundRequestHandler for InlayHints {
                     )
                     .into(),
                 ),
-                padding_left: Some(true),
+                padding_left: None,
                 padding_right: None,
                 data: None,
             });

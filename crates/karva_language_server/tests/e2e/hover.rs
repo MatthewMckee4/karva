@@ -56,6 +56,7 @@ fn hovers_explicit_fixture_value_type() {
     let uri = workspace.uri("test_example.py");
     let source = concat!(
         "from typing import Iterator\n",
+        "class Client: pass\n",
         "from karva import fixture\n\n",
         "@fixture\n",
         "def client() -> Iterator[Client]:\n",
@@ -65,7 +66,7 @@ fn hovers_explicit_fixture_value_type() {
     open(&mut server, uri.clone(), source);
 
     let response = server
-        .request::<HoverRequest>(hover_params(uri, Position::new(7, 20)))
+        .request::<HoverRequest>(hover_params(uri, Position::new(8, 20)))
         .expect("fixture hover");
 
     insta::assert_json_snapshot!(workspace.normalize(response), @r#"
@@ -77,11 +78,11 @@ fn hovers_explicit_fixture_value_type() {
       "range": {
         "end": {
           "character": 23,
-          "line": 7
+          "line": 8
         },
         "start": {
           "character": 17,
-          "line": 7
+          "line": 8
         }
       }
     }

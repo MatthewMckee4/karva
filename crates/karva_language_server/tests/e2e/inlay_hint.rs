@@ -68,8 +68,8 @@ fn hints_resolved_injection_sites_without_python_type_annotations() {
     insta::assert_json_snapshot!(workspace.normalize(result), @r#"
     [
       {
-        "label": "fixture: module (test_hints.py)",
-        "paddingLeft": true,
+        "kind": 1,
+        "label": ": unknown",
         "position": {
           "character": 20,
           "line": 5
@@ -77,8 +77,8 @@ fn hints_resolved_injection_sites_without_python_type_annotations() {
         "tooltip": "Karva fixture `database`\nScope: module\nProvider: /project/test_hints.py"
       },
       {
-        "label": "fixture: module (test_hints.py)",
-        "paddingLeft": true,
+        "kind": 1,
+        "label": ": unknown",
         "position": {
           "character": 35,
           "line": 6
@@ -86,8 +86,8 @@ fn hints_resolved_injection_sites_without_python_type_annotations() {
         "tooltip": "Karva fixture `database`\nScope: module\nProvider: /project/test_hints.py"
       },
       {
-        "label": "fixture: function (built-in)",
-        "paddingLeft": true,
+        "kind": 1,
+        "label": ": unknown",
         "position": {
           "character": 47,
           "line": 6
@@ -95,8 +95,8 @@ fn hints_resolved_injection_sites_without_python_type_annotations() {
         "tooltip": "Karva fixture `tmp_path`\nScope: function\nProvider: Karva built-in"
       },
       {
-        "label": "fixture: module (test_hints.py)",
-        "paddingLeft": true,
+        "kind": 1,
+        "label": ": unknown",
         "position": {
           "character": 25,
           "line": 7
@@ -104,8 +104,8 @@ fn hints_resolved_injection_sites_without_python_type_annotations() {
         "tooltip": "Karva fixture `database`\nScope: module\nProvider: /project/test_hints.py"
       },
       {
-        "label": "fixture: function (built-in)",
-        "paddingLeft": true,
+        "kind": 1,
+        "label": ": unknown",
         "position": {
           "character": 35,
           "line": 7
@@ -192,7 +192,7 @@ fn nearest_provider_and_unsaved_overlays_determine_scope() {
     let source = "def test_example(database): pass\n";
     open(&mut server, uri.clone(), source);
     let before = hints(&mut server, uri.clone(), source);
-    assert_eq!(before[0].label, "fixture: module (conftest.py)".into());
+    assert_eq!(before[0].label, ": unknown".into());
     let provider = workspace.uri("pkg/conftest.py");
     open(
         &mut server,
@@ -201,12 +201,12 @@ fn nearest_provider_and_unsaved_overlays_determine_scope() {
     );
     let after = hints(&mut server, uri, source);
     server.receive_notification::<PublishDiagnosticsNotification>();
-    assert_eq!(after[0].label, "fixture: function (conftest.py)".into());
+    assert_eq!(after[0].label, ": unknown".into());
     insta::assert_json_snapshot!(workspace.normalize(after), @r#"
     [
       {
-        "label": "fixture: function (conftest.py)",
-        "paddingLeft": true,
+        "kind": 1,
+        "label": ": unknown",
         "position": {
           "character": 25,
           "line": 0
@@ -326,6 +326,25 @@ fn refreshes_consumers_after_unsaved_provider_changes() {
     server.respond::<InlayHintRefreshRequest>(first_id, ());
     assert_eq!(
         hints(&mut server, consumer, source)[0].label,
-        "fixture: session (conftest.py)".into()
+        ": unknown".into()
     );
+}
+
+#[rstest::rstest]
+#[case("return True", ": bool")]
+#[case("value = len('hello')\n    return value", ": int")]
+#[case("yield 'hello'", ": str")]
+#[case("return missing()", ": unknown")]
+fn hints_inferred_fixture_values(#[case] body: &str, #[case] expected: &str) {
+    let workspace = Workspace::new();
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_hints.py");
+    let source = format!(
+        "from karva import fixture\n@fixture\ndef sample():\n    {body}\ndef test_example(sample): pass\n"
+    );
+    open(&mut server, uri.clone(), &source);
+    let result = hints(&mut server, uri, &source);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].label, expected.into());
+    assert_eq!(result[0].kind, Some(lsp_types::InlayHintKind::Type));
 }

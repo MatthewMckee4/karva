@@ -252,6 +252,7 @@ fn has_unsafe_import_scope(
     }
 
     let mut lambda_visitor = ImportedLambdaVisitor {
+        analysis,
         old_names: &old_names,
         found: false,
     };
@@ -266,25 +267,26 @@ fn has_unsafe_import_scope(
         .iter()
         .any(|statement| match statement {
             Stmt::FunctionDef(function) => old_names.iter().any(|old_name| {
-                if !body_contains_name(function, old_name) {
+                if !body_contains_name(analysis, function, old_name) {
                     return false;
                 }
-                let bindings = local_bindings(function);
+                let bindings = local_bindings(analysis, function);
                 bindings.contains(old_name)
                     || new_name.is_some_and(|new_name| bindings.contains(new_name))
-                    || body_has_unsupported_bindings(function, &old_names)
+                    || body_has_unsupported_bindings(analysis, function, &old_names)
                     || new_name.is_some_and(|new_name| {
-                        body_has_nested_binding_conflict(function, old_name, new_name)
+                        body_has_nested_binding_conflict(analysis, function, old_name, new_name)
                     })
             }),
             Stmt::ClassDef(class) => old_names
                 .iter()
-                .any(|old_name| body_contains_name_in_body(&class.body, old_name)),
+                .any(|old_name| body_contains_name_in_body(analysis, class, old_name)),
             _ => false,
         })
 }
 
 struct ImportedLambdaVisitor<'a> {
+    analysis: &'a SourceAnalysis,
     old_names: &'a HashSet<String>,
     found: bool,
 }
@@ -295,7 +297,7 @@ impl SourceOrderVisitor<'_> for ImportedLambdaVisitor<'_> {
             self.found |= self
                 .old_names
                 .iter()
-                .any(|name| expression_contains_name_in_scope(&lambda.body, name, HashSet::new()));
+                .any(|name| expression_contains_name_in_scope(self.analysis, &lambda.body, name));
         } else {
             source_order::walk_expr(self, expression);
         }
@@ -442,7 +444,8 @@ fn has_unsupported_parameter_bindings(
                 })
                 .map(|parameter| parameter.parameter.name.as_str().to_owned())
                 .collect::<std::collections::HashSet<_>>();
-            !target_names.is_empty() && body_has_unsupported_bindings(function, &target_names)
+            !target_names.is_empty()
+                && body_has_unsupported_bindings(analysis, function, &target_names)
         })
 }
 
@@ -518,9 +521,10 @@ fn fixture_name_conflicts(
                                         != parameter.parameter.name.range
                                 })
                         })
-                        || body_contains_name(function, new_name)
+                        || body_contains_name(analysis, function, new_name)
                         || target_parameters.iter().any(|parameter| {
                             body_has_nested_binding_conflict(
+                                analysis,
                                 function,
                                 parameter.parameter.name.as_str(),
                                 new_name,
