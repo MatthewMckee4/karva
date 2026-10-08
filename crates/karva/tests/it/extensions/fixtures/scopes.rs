@@ -304,7 +304,13 @@ def test_resource(resource):
         ----- stderr -----
         ");
     }
-    assert_eq!(context.read_file("lifecycle.log"), "setup\nteardown\n");
+    assert_eq!(
+        context
+            .read_file("lifecycle.log")
+            .lines()
+            .collect::<Vec<_>>(),
+        ["setup", "teardown"]
+    );
 }
 
 #[rstest]
@@ -366,7 +372,10 @@ def test_resource(resource):
         ");
     }
     assert_eq!(
-        context.read_file("lifecycle.log"),
-        "setup\nteardown\nsetup\nteardown\n"
+        context
+            .read_file("lifecycle.log")
+            .lines()
+            .collect::<Vec<_>>(),
+        ["setup", "teardown", "setup", "teardown"]
     );
 }

@@ -375,7 +375,13 @@ def test_shared(left, right, shared):
         ----- stderr -----
         ");
     }
-    assert_eq!(context.read_file("lifecycle.log"), "setup\nteardown\n");
+    assert_eq!(
+        context
+            .read_file("lifecycle.log")
+            .lines()
+            .collect::<Vec<_>>(),
+        ["setup", "teardown"]
+    );
 }
 
 #[rstest]
