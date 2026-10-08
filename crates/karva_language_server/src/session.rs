@@ -11,6 +11,7 @@ mod request_queue;
 mod source_index;
 mod workspace_symbols;
 pub(super) use workspace_symbols::PreparedWorkspaceSymbols;
+use workspace_symbols::WorkspaceSymbolCache;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -98,6 +99,7 @@ pub(super) struct PreparedDiagnostics {
     documents: Vec<PreparedDiagnosticDocument>,
     open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
     open_python_paths: HashSet<Utf8PathBuf>,
+    source_indexes: SharedSourceIndexes,
     source_index_revision: SourceIndexRevision,
     cancellation: RequestCancellationToken,
 }
@@ -115,6 +117,7 @@ impl PreparedDiagnostics {
             documents,
             open_sources,
             open_python_paths,
+            source_indexes,
             source_index_revision,
             cancellation,
         } = self;
@@ -149,6 +152,21 @@ impl PreparedDiagnostics {
                 .filter(|(path, _)| path.starts_with(&project_root))
                 .map(|(path, source)| (path.clone(), source.clone()))
                 .collect();
+            let cache = match source_index_cache(
+                &source_indexes,
+                project_root.clone(),
+                SourceIndexScope::OpenDocuments,
+                false,
+            ) {
+                Ok(cache) => cache,
+                Err(error) => {
+                    errors_by_path
+                        .entry(document.path)
+                        .or_default()
+                        .push(error.to_string());
+                    continue;
+                }
+            };
             let prepared_index = PreparedSourceIndex::with_cache(
                 project_root.clone(),
                 Vec::new(),
@@ -160,7 +178,7 @@ impl PreparedDiagnostics {
                 },
                 project.settings().src().respect_ignore_files,
                 SourceIndexScope::OpenDocuments,
-                SourceIndexCache::default(),
+                cache,
             );
             projects
                 .entry(project_root)
@@ -261,7 +279,8 @@ pub(super) struct PreparedSourceAnalysis {
     project: Arc<OnceCell<Arc<Project>>>,
     open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
     scope: SourceIndexScope,
-    source_indexes: Option<SharedSourceIndexes>,
+    source_indexes: SharedSourceIndexes,
+    retain_source_snapshot: bool,
     document_uri: Uri,
     document_version: i32,
     source_index_revision: SourceIndexRevision,
@@ -294,16 +313,12 @@ impl PreparedSourceAnalysis {
             return Err(SourceIndexError::Cancelled.into());
         }
         let project_root = project.cwd().clone();
-        let cache = if let Some(caches) = self.source_indexes {
-            caches
-                .lock()
-                .map_err(|_| SessionError::CachePoisoned)?
-                .entry((project_root.clone(), self.scope))
-                .or_default()
-                .clone()
-        } else {
-            SourceIndexCache::default()
-        };
+        let cache = source_index_cache(
+            &self.source_indexes,
+            project_root.clone(),
+            self.scope,
+            self.retain_source_snapshot,
+        )?;
         let index = PreparedSourceIndex::with_cache(
             project_root,
             project.settings().src().include_paths.clone(),
@@ -343,6 +358,22 @@ impl PreparedSourceAnalysis {
 /// Discovery happens before locking; no filesystem or analysis work holds the lock.
 type SharedSourceIndexes = Arc<Mutex<HashMap<(Utf8PathBuf, SourceIndexScope), SourceIndexCache>>>;
 
+/// Selects a generation cache; unwatched clients still rebuild from disk for every request.
+fn source_index_cache(
+    caches: &SharedSourceIndexes,
+    root: Utf8PathBuf,
+    scope: SourceIndexScope,
+    retain_snapshot: bool,
+) -> Result<SourceIndexCache, SessionError> {
+    let mut caches = caches.lock().map_err(|_| SessionError::CachePoisoned)?;
+    let cache = caches.entry((root, scope)).or_default();
+    Ok(if retain_snapshot {
+        Arc::clone(cache)
+    } else {
+        Arc::new(cache.invalidated())
+    })
+}
+
 /// Mutable state owned by the language-server event loop.
 #[derive(Debug)]
 pub struct Session {
@@ -359,6 +390,7 @@ pub struct Session {
     published_diagnostic_paths: HashSet<Utf8PathBuf>,
     cache_source_indexes: bool,
     source_indexes: SharedSourceIndexes,
+    workspace_symbol_cache: WorkspaceSymbolCache,
     source_index_revision: SourceIndexRevision,
     diagnostic_cancellation: RequestCancellationToken,
 }
@@ -390,6 +422,7 @@ impl Session {
             published_diagnostic_paths: HashSet::new(),
             cache_source_indexes: false,
             source_indexes: Arc::default(),
+            workspace_symbol_cache: Arc::default(),
             source_index_revision: SourceIndexRevision::default(),
             diagnostic_cancellation: RequestCancellationToken::default(),
         }
@@ -491,6 +524,7 @@ impl Session {
             }
         }
         PreparedDiagnostics {
+            source_indexes: Arc::clone(&self.source_indexes),
             documents,
             open_sources,
             open_python_paths,
@@ -541,6 +575,11 @@ impl Session {
                         .map(|path| (path, document.shared_contents()))
                 })
                 .collect(),
+            if self.cache_source_indexes {
+                Arc::clone(&self.workspace_symbol_cache)
+            } else {
+                Arc::default()
+            },
         )
     }
 
@@ -586,9 +625,8 @@ impl Session {
             project: Arc::default(),
             open_sources,
             scope,
-            source_indexes: self
-                .cache_source_indexes
-                .then(|| Arc::clone(&self.source_indexes)),
+            source_indexes: Arc::clone(&self.source_indexes),
+            retain_source_snapshot: self.cache_source_indexes,
             document_uri: uri.clone(),
             document_version: document.version(),
             source_index_revision: self.source_index_revision.clone(),
@@ -632,6 +670,11 @@ impl Session {
     pub(super) fn close_workspace_folder(&mut self, uri: &Uri) -> Result<(), SessionError> {
         self.workspaces.close_folder(uri)?;
         self.index.close_workspace_folder(uri)?;
+        let folder = uri_to_path(uri)?;
+        self.source_indexes
+            .lock()
+            .map_err(|_| SessionError::CachePoisoned)?
+            .retain(|(root, _), _| !root.starts_with(&folder));
         self.invalidate_source_indexes();
         Ok(())
     }
@@ -662,7 +705,18 @@ impl Session {
     }
 
     fn invalidate_source_indexes(&mut self) {
-        self.source_indexes = Arc::default();
+        self.workspace_symbol_cache = Arc::default();
+        let next = self
+            .source_indexes
+            .lock()
+            .map(|caches| {
+                caches
+                    .iter()
+                    .map(|(key, cache)| (key.clone(), Arc::new(cache.invalidated())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.source_indexes = Arc::new(Mutex::new(next));
         self.source_index_revision = SourceIndexRevision::default();
     }
 }

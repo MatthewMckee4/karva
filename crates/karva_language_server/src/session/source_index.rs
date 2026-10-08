@@ -12,13 +12,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use ignore::WalkBuilder;
 use ignore::types::Types;
-use karva_collector::{CollectionSettings, collect_source, collect_source_with_module_name};
+use karva_collector::{
+    CollectedModule, CollectionSettings, collect_source, collect_source_with_module_name,
+};
 use karva_ide::{SourceAnalysisSettings, WorkspaceSourceIndex};
 use karva_project::path::{TestPath, TestPathError, TestPathFunction, absolute};
 use once_cell::sync::OnceCell;
@@ -26,7 +28,37 @@ use thiserror::Error;
 
 use super::RequestCancellationToken;
 
-pub(super) type SourceIndexCache = Arc<OnceCell<Arc<WorkspaceSourceIndex>>>;
+pub(super) type SourceIndexCache = Arc<SourceIndexState>;
+
+/// One source generation, sharing parsed modules with later generations.
+#[derive(Debug, Default)]
+pub(super) struct SourceIndexState {
+    /// Immutable index for this notification generation only.
+    snapshot: OnceCell<Arc<WorkspaceSourceIndex>>,
+
+    /// Syntax shared with later generations; every reuse checks source and settings.
+    parsed: Arc<Mutex<ParsedModules>>,
+}
+
+impl SourceIndexState {
+    /// Drops the immutable snapshot while retaining syntax for unchanged sources.
+    pub(super) fn invalidated(&self) -> Self {
+        Self {
+            snapshot: OnceCell::new(),
+            parsed: Arc::clone(&self.parsed),
+        }
+    }
+}
+
+/// Syntax is reusable only when the complete source and collection settings match.
+#[derive(Debug, Default)]
+struct ParsedModules {
+    settings: Option<SourceAnalysisSettings>,
+    respect_ignore_files: bool,
+    modules: BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
+    /// Bundled fixtures use a fixed module name, even outside the project namespace.
+    builtin: Option<Arc<CollectedModule>>,
+}
 
 /// Files included in one immutable source snapshot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -101,6 +133,7 @@ impl PreparedSourceIndex {
     ) -> Result<Arc<WorkspaceSourceIndex>, SourceIndexError> {
         let cache = Arc::clone(&self.cache);
         cache
+            .snapshot
             .get_or_try_init(|| self.build_uncached(cancellation).map(Arc::new))
             .map(Arc::clone)
     }
@@ -117,7 +150,7 @@ impl PreparedSourceIndex {
             settings,
             respect_ignore_files,
             scope,
-            cache: _,
+            cache,
         } = self;
 
         let mut paths = BTreeSet::new();
@@ -197,7 +230,21 @@ impl PreparedSourceIndex {
             collect_fixtures: true,
             collect_doctests: false,
         };
+        let mut parsed = cache
+            .parsed
+            .lock()
+            .map_err(|_| SourceIndexError::CachePoisoned)?;
+        if parsed.settings.as_ref() != Some(&settings)
+            || parsed.respect_ignore_files != respect_ignore_files
+        {
+            parsed.modules.clear();
+            parsed.builtin = None;
+            parsed.settings = Some(settings.clone());
+            parsed.respect_ignore_files = respect_ignore_files;
+        }
+        parsed.modules.retain(|path, _| paths.contains(path));
         let mut modules = Vec::with_capacity(paths.len());
+        let mut collect_count = 0_usize;
         let mut read_count = 0_usize;
         let mut source_bytes = 0_usize;
         for path in paths {
@@ -213,35 +260,61 @@ impl PreparedSourceIndex {
             };
             source_bytes += source_text.len();
             check_cancelled(cancellation)?;
-            let Some(module) =
-                collect_source(&path, &project_root, source_text, &collection_settings, &[])
-            else {
-                return Err(SourceIndexError::CollectSource { path });
+            let module = if let Some(module) = parsed
+                .modules
+                .get(&path)
+                .filter(|module| module.source_text == source_text)
+            {
+                Arc::clone(module)
+            } else {
+                let Some(module) =
+                    collect_source(&path, &project_root, source_text, &collection_settings, &[])
+                else {
+                    return Err(SourceIndexError::CollectSource { path });
+                };
+                collect_count += 1;
+                let module = Arc::new(module);
+                parsed.modules.insert(path, Arc::clone(&module));
+                module
             };
             modules.push(module);
         }
-        if let Some(path) = find_builtin_source(&project_root) {
-            if let Ok(source_text) = fs::read_to_string(&path)
-                && let Some(module) = collect_source_with_module_name(
-                    &path,
-                    "karva._builtins",
-                    source_text,
-                    &collection_settings,
-                    &[],
-                )
-            {
-                modules.push(module);
-            }
+        if let Some(path) = find_builtin_source(&project_root)
+            && let Ok(source_text) = fs::read_to_string(&path)
+        {
+            let builtin =
+                if let Some(module) = parsed.builtin.as_ref().filter(|module| {
+                    module.path.path() == &path && module.source_text == source_text
+                }) {
+                    Some(Arc::clone(module))
+                } else {
+                    collect_source_with_module_name(
+                        &path,
+                        "karva._builtins",
+                        source_text,
+                        &collection_settings,
+                        &[],
+                    )
+                    .map(|module| {
+                        collect_count += 1;
+                        Arc::new(module)
+                    })
+                };
+            parsed.builtin.clone_from(&builtin);
+            modules.extend(builtin);
+        } else {
+            parsed.builtin = None;
         }
         check_cancelled(cancellation)?;
 
-        let index = WorkspaceSourceIndex::from_modules(project_root, settings, modules);
+        let index = WorkspaceSourceIndex::from_shared_modules(project_root, settings, modules);
         check_cancelled(cancellation)?;
 
         tracing::debug!(
             source_count = index.paths().count(),
             source_bytes,
             read_count,
+            collect_count,
             duration_ms = started.elapsed().as_secs_f64() * 1_000.0,
             "built workspace source index"
         );
@@ -252,6 +325,10 @@ impl PreparedSourceIndex {
 /// Errors that prevent a complete source index from being built.
 #[derive(Debug, Error)]
 pub(crate) enum SourceIndexError {
+    /// A prior worker panic poisoned shared parsed source state.
+    #[error("language-server parsed source cache lock poisoned")]
+    CachePoisoned,
+
     /// A configured test path failed to resolve.
     #[error("invalid configured test path: {0}")]
     InvalidTestPath(#[source] TestPathError),
@@ -969,6 +1046,174 @@ mod tests {
                 .map(|module| module.source_text.as_str()),
             Some("def test_after(): pass\n")
         );
+    }
+
+    #[test]
+    fn reuses_unchanged_syntax_across_generations_and_evicts_deleted_files() {
+        let fixture = Fixture::new();
+        let first_path = fixture.write("tests/test_first.py", "def test_first(): pass\n");
+        let second_path = fixture.write("tests/test_second.py", "def test_second(): pass\n");
+        let cache = SourceIndexCache::default();
+        let prepare = |cache| {
+            PreparedSourceIndex::with_cache(
+                fixture.root.clone(),
+                Vec::new(),
+                BTreeMap::new(),
+                Fixture::settings(),
+                true,
+                SourceIndexScope::TestSelection,
+                cache,
+            )
+        };
+        prepare(Arc::clone(&cache))
+            .build(&RequestCancellationToken::default())
+            .expect("first generation");
+        let first = Arc::clone(&cache.parsed.lock().expect("parsed state").modules[&first_path]);
+        let second = Arc::clone(&cache.parsed.lock().expect("parsed state").modules[&second_path]);
+        fs::write(&second_path, "def test_changed(): pass\n").expect("edit source");
+        let next = Arc::new(cache.invalidated());
+        let index = prepare(Arc::clone(&next))
+            .build(&RequestCancellationToken::default())
+            .expect("next generation");
+        let parsed = next.parsed.lock().expect("parsed state");
+        assert!(Arc::ptr_eq(&first, &parsed.modules[&first_path]));
+        assert!(std::ptr::eq(
+            index.module(&first_path).expect("shared module"),
+            parsed.modules[&first_path].as_ref()
+        ));
+        assert!(!Arc::ptr_eq(&second, &parsed.modules[&second_path]));
+        assert_eq!(
+            index
+                .module(&second_path)
+                .expect("updated module")
+                .test_function_defs[0]
+                .name
+                .as_str(),
+            "test_changed"
+        );
+        drop(parsed);
+        fs::remove_file(&second_path).expect("delete disposable source");
+        prepare(Arc::new(next.invalidated()))
+            .build(&RequestCancellationToken::default())
+            .expect("deleted file generation");
+        assert!(
+            !next
+                .parsed
+                .lock()
+                .expect("parsed state")
+                .modules
+                .contains_key(&second_path)
+        );
+    }
+
+    #[test]
+    fn reuses_bundled_fixture_syntax_until_its_source_changes() {
+        let fixture = Fixture::new();
+        fixture.write("tests/test_sample.py", "def test_sample(tmp_path): pass\n");
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../python/karva/_builtins.py"
+        ));
+        let path = fixture.write(
+            ".venv/lib/python3.12/site-packages/karva/_builtins.py",
+            source,
+        );
+        let cache = SourceIndexCache::default();
+        let prepare = |cache| {
+            PreparedSourceIndex::with_cache(
+                fixture.root.clone(),
+                Vec::new(),
+                BTreeMap::new(),
+                Fixture::settings(),
+                true,
+                SourceIndexScope::TestSelection,
+                cache,
+            )
+        };
+        prepare(Arc::clone(&cache))
+            .build(&RequestCancellationToken::default())
+            .expect("first generation");
+        let first = cache
+            .parsed
+            .lock()
+            .expect("parsed state")
+            .builtin
+            .clone()
+            .expect("bundled module");
+        let next = Arc::new(cache.invalidated());
+        let index = prepare(Arc::clone(&next))
+            .build(&RequestCancellationToken::default())
+            .expect("next generation");
+        let parsed = next.parsed.lock().expect("parsed state");
+        assert!(Arc::ptr_eq(
+            &first,
+            parsed.builtin.as_ref().expect("bundled module")
+        ));
+        assert!(std::ptr::eq(
+            index.module(&path).expect("shared bundled module"),
+            first.as_ref()
+        ));
+        drop(parsed);
+        fs::write(&path, format!("{source}\n")).expect("edit bundled source");
+        prepare(Arc::new(next.invalidated()))
+            .build(&RequestCancellationToken::default())
+            .expect("changed source generation");
+        assert!(!Arc::ptr_eq(
+            &first,
+            next.parsed
+                .lock()
+                .expect("parsed state")
+                .builtin
+                .as_ref()
+                .expect("updated bundled module")
+        ));
+    }
+
+    #[test]
+    fn changed_collection_settings_recollect_identical_source() {
+        let fixture = Fixture::new();
+        let path = fixture.write("tests/test_sample.py", "def check_example(): pass\n");
+        let cache = SourceIndexCache::default();
+        let prepare = |cache, settings| {
+            PreparedSourceIndex::with_cache(
+                fixture.root.clone(),
+                Vec::new(),
+                BTreeMap::new(),
+                settings,
+                true,
+                SourceIndexScope::TestSelection,
+                cache,
+            )
+        };
+        let first = prepare(Arc::clone(&cache), Fixture::settings())
+            .build(&RequestCancellationToken::default())
+            .expect("first generation");
+        assert!(
+            first
+                .module(&path)
+                .expect("module")
+                .test_function_defs
+                .is_empty()
+        );
+        let syntax = Arc::clone(&cache.parsed.lock().expect("parsed state").modules[&path]);
+        let mut settings = Fixture::settings();
+        settings.test_function_prefix = "check".to_owned();
+        let next = Arc::new(cache.invalidated());
+        let updated = prepare(Arc::clone(&next), settings)
+            .build(&RequestCancellationToken::default())
+            .expect("new settings");
+        assert_eq!(
+            updated
+                .module(&path)
+                .expect("module")
+                .test_function_defs
+                .len(),
+            1
+        );
+        assert!(!Arc::ptr_eq(
+            &syntax,
+            &next.parsed.lock().expect("parsed state").modules[&path]
+        ));
     }
 
     #[test]

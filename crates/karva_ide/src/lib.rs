@@ -65,7 +65,7 @@ impl SourceDocument {
 }
 
 /// Settings required to analyze one Python source document.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceAnalysisSettings {
     /// Python grammar version used by the project.
     pub python_version: PythonVersion,
@@ -251,11 +251,11 @@ pub(crate) fn analyze_sources(
     settings: &SourceAnalysisSettings,
 ) -> SourceAnalysis {
     let parent_modules = parents.iter().collect::<Vec<_>>();
-    analyze_collected_source(current, &parent_modules, None, settings)
+    analyze_collected_source(Arc::new(current), &parent_modules, None, settings)
 }
 
 pub(crate) fn analyze_collected_source(
-    current: CollectedModule,
+    current: Arc<CollectedModule>,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
     settings: &SourceAnalysisSettings,
@@ -267,7 +267,7 @@ pub(crate) fn analyze_collected_source(
         settings.try_import_fixtures,
     );
     SourceAnalysis {
-        module: Arc::new(current),
+        module: current,
         fixture_model: Arc::new(fixture_model),
         diagnostics,
     }

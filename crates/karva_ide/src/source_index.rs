@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_collector::CollectedModule;
@@ -23,7 +23,7 @@ use crate::SourceDocument;
 #[derive(Debug)]
 pub struct WorkspaceSourceIndex {
     project_root: Utf8PathBuf,
-    modules: BTreeMap<Utf8PathBuf, CollectedModule>,
+    modules: BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
     settings: SourceAnalysisSettings,
 
     /// Lazily computed analyses; the map is fixed with the module snapshot.
@@ -42,7 +42,19 @@ impl WorkspaceSourceIndex {
         settings: SourceAnalysisSettings,
         modules: impl IntoIterator<Item = CollectedModule>,
     ) -> Self {
-        let modules: BTreeMap<Utf8PathBuf, CollectedModule> = modules
+        Self::from_shared_modules(project_root, settings, modules.into_iter().map(Arc::new))
+    }
+
+    /// Builds an immutable index without copying syntax retained by a project cache.
+    ///
+    /// Shared modules must have been collected with these settings and project root.
+    /// As with `from_modules`, the last module for each path wins.
+    pub fn from_shared_modules(
+        project_root: Utf8PathBuf,
+        settings: SourceAnalysisSettings,
+        modules: impl IntoIterator<Item = Arc<CollectedModule>>,
+    ) -> Self {
+        let modules: BTreeMap<Utf8PathBuf, Arc<CollectedModule>> = modules
             .into_iter()
             .map(|module| (module.path.path().clone(), module))
             .collect();
@@ -102,7 +114,7 @@ impl WorkspaceSourceIndex {
 
     /// Returns the collected module for `path`, if the snapshot contains it.
     pub fn module(&self, path: &Utf8Path) -> Option<&CollectedModule> {
-        self.modules.get(path)
+        self.modules.get(path).map(AsRef::as_ref)
     }
 
     /// Returns source paths in deterministic lexical order.
@@ -131,7 +143,8 @@ impl WorkspaceSourceIndex {
         let builtin = self
             .builtin_module
             .as_ref()
-            .and_then(|path| self.modules.get(path));
+            .and_then(|path| self.modules.get(path))
+            .map(AsRef::as_ref);
         Some(
             cached
                 .get_or_init(|| {
@@ -152,7 +165,7 @@ impl WorkspaceSourceIndex {
             if conftest != path
                 && let Some(module) = self.modules.get(&conftest)
             {
-                parents.push(module);
+                parents.push(module.as_ref());
             }
             if current == self.project_root {
                 break;
@@ -321,6 +334,7 @@ mod tests {
         .expect("sources should index");
         let mut first = index.analyze(path).expect("first analysis");
         let second = index.analyze(path).expect("cache hit");
+        assert!(Arc::ptr_eq(&first.module, &index.modules[path]));
         assert!(Arc::ptr_eq(&first.module, &second.module));
         assert!(Arc::ptr_eq(&first.fixture_model, &second.fixture_model));
         assert!(!first.diagnostics.is_empty());
