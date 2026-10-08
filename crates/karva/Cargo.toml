@@ -30,6 +30,7 @@ karva_runner = { workspace = true }
 karva_snapshot = { workspace = true }
 karva_static = { workspace = true }
 karva_version = { workspace = true }
+karva_worker = { workspace = true }
 
 anyhow = { workspace = true }
 argfile = { workspace = true }

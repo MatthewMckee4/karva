@@ -39,11 +39,12 @@ under `crates/`.
 
 ## Architecture
 
-Karva runs tests through a main `karva` process and `karva-worker`
-subprocesses. The binaries do not link against each other. They communicate
-through process bootstrap environment variables and loopback IPC. Worker configuration, test
+Karva runs tests through a main `karva` process and worker subprocesses of the
+same executable, launched with the hidden `__worker` subcommand. Controller
+and worker runtimes remain separate crates. They communicate through process
+bootstrap environment variables and loopback IPC. Worker configuration, test
 selections, and runtime events use IPC; only coverage data uses run-scoped
-files, and only the worker embeds Python. A controller-side dispatcher
+files. Both runtimes currently use Python. A controller-side dispatcher
 linearizes worker events into run state.
 
 ## Code Review Rules

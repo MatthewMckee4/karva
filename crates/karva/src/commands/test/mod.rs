@@ -7,6 +7,7 @@ mod watch;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::Write;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
@@ -24,7 +25,7 @@ use karva_python_semantic::{TestCacheKey, current_python_version};
 use crate::ExitStatus;
 use crate::utils::cwd;
 
-pub fn test(args: TestCommand) -> Result<ExitStatus> {
+pub fn test(args: TestCommand, worker_binary: Option<PathBuf>) -> Result<ExitStatus> {
     let verbosity = args.verbosity().level();
 
     set_colored_override(args.sub_command.color);
@@ -131,7 +132,14 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         writeln!(stdout, "Random seed: {seed}")?;
     }
 
+    let worker_binary = match worker_binary {
+        Some(path) => std::path::absolute(path),
+        None => std::env::current_exe(),
+    }
+    .context("Failed to resolve the Karva executable for worker subprocesses")?;
+
     let config = karva_runner::ParallelTestConfig {
+        worker_binary,
         num_workers,
         no_cache,
         create_ctrlc_handler: true,

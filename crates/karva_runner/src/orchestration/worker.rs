@@ -78,7 +78,7 @@ struct WorkerAssignment {
 /// Child process and start timestamp.
 #[derive(Debug)]
 struct WorkerProcess {
-    /// Spawned karva-worker process.
+    /// Spawned Karva worker process.
     child: WorkerChild,
 
     /// Timestamp used for worker and crash durations.

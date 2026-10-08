@@ -66,7 +66,7 @@ def test_abort():
 ",
     );
 
-    assert_cmd_snapshot!(context.command(), @r###"
+    assert_cmd_snapshot!(context.command(), @r#"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -84,7 +84,7 @@ def test_abort():
 
     Current thread [THREAD] (most recent call first):
       File "<temp_dir>/test.py", line 6 in test_abort
-      File "<venv>/bin/karva-worker", line 10 in <module>
+      File "<venv>/bin/karva", line 10 in <module>
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
@@ -94,9 +94,9 @@ def test_abort():
 
     Current thread [THREAD] (most recent call first):
       File "<temp_dir>/test.py", line 6 in test_abort
-      File "<venv>/bin/karva-worker", line 10 in <module>
+      File "<venv>/bin/karva", line 10 in <module>
     ERROR Worker 0 failed with SIGABRT (6) in [TIME]
-    "###);
+    "#);
 }
 
 #[test]

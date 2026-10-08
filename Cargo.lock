@@ -1013,6 +1013,7 @@ dependencies = [
  "karva_snapshot",
  "karva_static",
  "karva_version",
+ "karva_worker",
  "lsp-server",
  "notify-debouncer-mini",
  "regex",
@@ -1302,7 +1303,6 @@ version = "0.0.1-alpha.12"
 dependencies = [
  "karva",
  "karva_test_semantic",
- "karva_worker",
  "pyo3",
 ]
 

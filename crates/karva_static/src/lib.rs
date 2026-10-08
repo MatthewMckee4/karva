@@ -99,7 +99,7 @@ env_vars! {
         pub const KARVA_LOG_PROFILE: &'static str = "KARVA_LOG_PROFILE";
 
         /// Path to the active Python virtual environment. Used as a fallback
-        /// when resolving the `karva-worker` binary.
+        /// when resolving the `karva` launcher in benchmark tooling.
         pub const VIRTUAL_ENV: &'static str = "VIRTUAL_ENV";
     }
 }

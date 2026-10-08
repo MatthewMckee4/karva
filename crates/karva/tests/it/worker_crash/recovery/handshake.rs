@@ -1,5 +1,5 @@
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
@@ -194,22 +194,42 @@ fn kill_escaped_descendant(context: &TestContext) -> Option<bool> {
 }
 
 fn handshake_failure_command(context: &TestContext, failure: &str) -> Command {
-    let worker = context.root().join(".venv/bin/karva-worker");
-    std::fs::create_dir_all(worker.parent().expect("worker binary parent"))
-        .expect("create project virtualenv bin directory");
-    std::fs::write(&worker, FAKE_WORKER).expect("write fake worker binary");
-    std::fs::set_permissions(&worker, std::fs::Permissions::from_mode(0o755))
-        .expect("make fake worker executable");
+    let base = context.command();
+    let venv = base
+        .get_envs()
+        .find_map(|(key, value)| (key == "VIRTUAL_ENV").then_some(value))
+        .flatten()
+        .expect("shared virtualenv");
+    let python = Path::new(venv).join("bin/python");
+    let launcher = context.root().join("karva");
+    let worker = context.root().join("fake-worker");
+    std::fs::write(&worker, FAKE_WORKER).expect("write fake worker script");
+    std::fs::write(
+        &launcher,
+        format!(
+            "#!{}\n{}",
+            python.display(),
+            r#"import os
+from pathlib import Path
+import sys
 
-    let path = std::env::join_paths(
-        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
-            .filter(|directory| !directory.join("karva-worker").is_file())
-            .chain([PathBuf::from("/usr/bin"), PathBuf::from("/bin")]),
+if sys.argv[1] == "__worker":
+    os.execv("/bin/sh", ["sh", str(Path(__file__).with_name("fake-worker")), *sys.argv[2:]])
+
+from karva._karva import karva_run
+sys.exit(karva_run())
+"#,
+        ),
     )
-    .expect("worker-free executable path");
-    let mut command = context.command();
+    .expect("write controller and worker launcher");
+    std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755))
+        .expect("make launcher executable");
+
+    let mut command = Command::new(launcher);
     command
-        .env("PATH", path)
+        .args(base.get_args())
+        .current_dir(context.root())
+        .env("VIRTUAL_ENV", venv)
         .env("KARVA_HANDSHAKE_FAILURE", failure);
     command
 }
@@ -222,7 +242,7 @@ controller_address=$KARVA_CONTROLLER_ENDPOINT
 run_id=$KARVA_RUN_ID
 
 if [ "$worker_id" != "0" ]; then
-    exec "$VIRTUAL_ENV/bin/karva-worker" "$@"
+    exec "$VIRTUAL_ENV/bin/karva" __worker "$@"
 fi
 
 if [ "$KARVA_HANDSHAKE_FAILURE" = "before-connect" ]; then

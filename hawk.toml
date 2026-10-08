@@ -4,11 +4,6 @@ bin = "karva"
 reason = "shipped controller binary"
 
 [[production]]
-package = "karva_worker"
-bin = "karva-worker"
-reason = "shipped worker binary"
-
-[[production]]
 package = "karva_benchmark"
 bin = "karva-benchmark"
 reason = "benchmark runner"

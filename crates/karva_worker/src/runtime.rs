@@ -1,11 +1,10 @@
 //! Worker startup from process bootstrap identity and authenticated IPC configuration.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::{env, io};
+use std::env;
 
 use anyhow::Context as _;
 use camino::Utf8PathBuf;
-use colored::Colorize;
 use karva_cli::ExitStatus;
 use karva_diagnostic::{
     DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
@@ -20,49 +19,17 @@ use karva_static::WorkerEnvVars;
 
 use crate::reporter::WorkerReporter;
 
-/// Runs one worker invocation, translating broken pipes into successful exits.
-pub fn karva_worker_main() -> ExitStatus {
-    run().unwrap_or_else(|error| {
-        use io::Write;
-
-        // Exit "gracefully" on broken pipe errors.
-        //
-        // See: https://github.com/BurntSushi/ripgrep/blob/bf63fe8f258afc09bae6caa48f0ae35eaf115005/crates/core/main.rs#L47C1-L61C14
-        if error.chain().any(|cause| {
-            cause
-                .downcast_ref::<io::Error>()
-                .is_some_and(|ioerr| ioerr.kind() == io::ErrorKind::BrokenPipe)
-        }) {
-            return ExitStatus::Success;
-        }
-
-        // Use `writeln` instead of `eprintln` to avoid panicking when the stderr pipe is broken.
-        let mut stderr = io::stderr().lock();
-
-        // This communicates that this isn't a linter error but karva itself hard-errored for
-        // some reason (e.g. failed to resolve the configuration)
-        writeln!(stderr, "{}", "karva failed".red().bold()).ok();
-        // Currently we generally only see one error, but e.g. with io errors when resolving
-        // the configuration it is help to chain errors ("resolving configuration failed" ->
-        // "failed to read file: subdir/pyproject.toml")
-        for cause in error.chain() {
-            writeln!(stderr, "  {} {cause}", "Cause:".bold()).ok();
-        }
-
-        ExitStatus::Error
-    })
-}
-
-fn run() -> anyhow::Result<ExitStatus> {
+/// Executes one partition using controller bootstrap identity and authenticated IPC.
+pub fn run() -> anyhow::Result<ExitStatus> {
     let endpoint = env::var_os(WorkerEnvVars::KARVA_CONTROLLER_ENDPOINT)
-        .context("karva-worker requires KARVA_CONTROLLER_ENDPOINT from its controller")?;
+        .context("worker mode requires KARVA_CONTROLLER_ENDPOINT from its controller")?;
     let controller_endpoint = ControllerEndpoint::decode(&endpoint).map_err(anyhow::Error::msg)?;
     let run_id = env::var(WorkerEnvVars::KARVA_RUN_ID)
-        .context("karva-worker requires a Unicode KARVA_RUN_ID from its controller")?;
+        .context("worker mode requires a Unicode KARVA_RUN_ID from its controller")?;
     let worker_id = env::var(WorkerEnvVars::KARVA_WORKER_ID)
-        .context("karva-worker requires KARVA_WORKER_ID from its controller")?
+        .context("worker mode requires KARVA_WORKER_ID from its controller")?
         .parse()
-        .context("karva-worker requires KARVA_WORKER_ID to be an unsigned integer")?;
+        .context("worker mode requires KARVA_WORKER_ID to be an unsigned integer")?;
     let (client, selection) = WorkerClient::connect(&controller_endpoint, &run_id, worker_id)?;
     let configuration = selection.configuration;
     let verbosity = configuration.verbosity;

@@ -1665,6 +1665,9 @@ fn canonical_filename(path: &std::path::Path) -> PathBuf {
 
 /// Installs the first-party assertion finder for a project root.
 pub fn install(py: Python<'_>, root: &Utf8Path) -> PyResult<()> {
+    // Import the finder's dependency before installing it to avoid recursive
+    // finder calls when an embedded interpreter has not loaded importlib yet.
+    py.import("importlib.machinery")?;
     let roots = if let Some(existing) = py
         .import("sys")?
         .getattr("meta_path")?

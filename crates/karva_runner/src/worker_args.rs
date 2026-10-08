@@ -1,7 +1,6 @@
+use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
-
-use camino::Utf8PathBuf;
 
 use karva_cache::{RunArtifacts, RunHash};
 use karva_cli::SubTestCommand;
@@ -38,7 +37,7 @@ pub struct WorkerSpawn<'a> {
     pub profile: &'a str,
 
     /// Executable selected for the worker subprocess.
-    pub worker_binary: &'a Utf8PathBuf,
+    pub worker_binary: &'a Path,
 
     /// Whether each worker must write a coverage artifact.
     pub coverage_enabled: bool,
@@ -47,7 +46,8 @@ pub struct WorkerSpawn<'a> {
 /// Builds one worker command with its bootstrap identity and test environment.
 pub fn worker_command(spawn: &WorkerSpawn, worker_id: usize) -> Command {
     let mut cmd = Command::new(spawn.worker_binary);
-    cmd.current_dir(spawn.project.cwd())
+    cmd.arg("__worker")
+        .current_dir(spawn.project.cwd())
         // Ensure python does not buffer output
         .env(PythonEnvVars::PYTHONUNBUFFERED, "1")
         .env(WorkerEnvVars::KARVA, "1")

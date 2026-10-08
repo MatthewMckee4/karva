@@ -68,7 +68,7 @@ to `tracing.folded`.
 ### `VIRTUAL_ENV`
 
 Path to the active Python virtual environment. Used as a fallback
-when resolving the `karva-worker` binary.
+when resolving the `karva` launcher in benchmark tooling.
 
 ## Set by the worker on tests
 
