@@ -202,3 +202,91 @@ fn imported_fixtures_disable_rename_instead_of_leaving_broken_imports() {
     let target = crate::fixture_rename_target(&analysis, offset(test, "database")).expect("target");
     assert!(crate::prepare_fixture_rename(&index, &target.occurrence).is_none());
 }
+
+#[rstest::rstest]
+fn literal_module_values_do_not_hide_missing_fixtures(
+    #[values(
+        "30",
+        "-30",
+        "True",
+        "None",
+        "...",
+        "'hello'",
+        "b'hello'",
+        "f'hello {30}'",
+        "[]",
+        "{}",
+        "()",
+        "{30}",
+        "[factory()]"
+    )]
+    value: &str,
+    #[values("setting", "setting: object", "first = second")] target: &str,
+) {
+    let conftest = format!("{target} = {value}\n");
+    let index = index(
+        &[
+            ("/project/conftest.py", &conftest),
+            ("/project/test_query.py", "def test_query(missing): pass\n"),
+        ],
+        false,
+    );
+    let analysis = index
+        .analyze(Utf8Path::new("/project/test_query.py"))
+        .expect("analysis");
+    assert!(
+        analysis
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagnosticCode::MissingFixture)
+    );
+}
+
+#[rstest::rstest]
+fn potentially_callable_module_values_remain_visibility_barriers(
+    #[values(
+        "setting = factory()",
+        "setting = provider",
+        "setting = lambda: None",
+        "first, second = (provider, 30)",
+        "if enabled:\n    setting = 30",
+        "setting = [captured := provider]"
+    )]
+    statement: &str,
+) {
+    let index = index(
+        &[
+            ("/project/conftest.py", statement),
+            ("/project/test_query.py", "def test_query(missing): pass\n"),
+        ],
+        false,
+    );
+    let analysis = index
+        .analyze(Utf8Path::new("/project/test_query.py"))
+        .expect("analysis");
+    assert!(analysis.diagnostics.is_empty());
+}
+
+#[rstest::rstest]
+fn imported_nonfixture_assignment_does_not_hide_missing_fixtures(
+    #[values("30", "[provider]", "'text'")] value: &str,
+) {
+    let source = format!("setting = {value}\n");
+    let index = index(
+        &[
+            ("/project/support.py", &source),
+            ("/project/conftest.py", "from support import setting\n"),
+            ("/project/test_query.py", "def test_query(missing): pass\n"),
+        ],
+        false,
+    );
+    let analysis = index
+        .analyze(Utf8Path::new("/project/test_query.py"))
+        .expect("analysis");
+    assert!(
+        analysis
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagnosticCode::MissingFixture)
+    );
+}
