@@ -65,3 +65,25 @@ gh run download "$RUN_ID" \
 
 Open `benchmark-reports/diagnostic-report.html` in a browser. The wall-time and
 memory reports are beside it.
+
+## Integration Tests
+
+Put tests that cross Python, worker, or CLI boundaries in
+`crates/karva/tests/it/`. Name each test after the observable behavior it proves
+and keep its Python project small. Separate unrelated success, validation,
+and cleanup scenarios so a failure identifies the broken contract.
+
+Use parameterization when the same contract holds for each input. Keep paired
+API names or keyword spellings visible in the test's values instead of hiding
+those choices behind string matching. Different fixture lifetimes and failure
+phases deserve separate named tests.
+
+A passing command alone does not prove fixture reuse or cleanup. Check setup
+counts or object identity for caching, and inspect a file after the worker
+exits for final teardown. For skipped or rejected tests, use a marker to prove
+that the body did not run. Keep multiple Python tests together when their
+relationship is the behavior under test, such as sharing a scoped fixture.
+
+Snapshot exit code, stdout, and stderr for setup commands as well as the
+command being exercised. Generate snapshots with Insta, review the changed
+expectations, and rerun without snapshot updates before requesting review.

@@ -7,6 +7,6 @@ pub mod fixture_support;
 pub mod generators;
 pub mod invalid;
 pub mod more_builtins;
-pub mod parametrized;
 pub mod pytest_monkeypatch;
 pub mod retries;
+pub mod scopes;

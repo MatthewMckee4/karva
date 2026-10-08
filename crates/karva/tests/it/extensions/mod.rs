@@ -1,3 +1,4 @@
+mod approx;
 pub mod fixtures;
 pub mod functions;
 pub mod snapshot;

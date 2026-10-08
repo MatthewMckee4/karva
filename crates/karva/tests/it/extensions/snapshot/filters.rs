@@ -300,10 +300,19 @@ def test_update_filtered():
         "#,
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_update_filtered
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_update_filtered.snap");
     insta::assert_snapshot!(content, @r"

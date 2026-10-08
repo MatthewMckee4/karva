@@ -14,10 +14,19 @@ def test_lines():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_lines
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_lines.snap");
     insta::assert_snapshot!(content, @r"
@@ -42,10 +51,19 @@ def test_spaces():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_spaces
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_spaces.snap");
     insta::assert_snapshot!(content, @r"
@@ -68,10 +86,19 @@ def test_tabs():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_tabs
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_tabs.snap");
     insta::assert_snapshot!(content, @r"
@@ -96,10 +123,19 @@ def test_empty():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_empty
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_empty.snap");
     insta::assert_snapshot!(content, @r"
@@ -122,10 +158,19 @@ def test_unicode():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_unicode
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_unicode.snap");
     insta::assert_snapshot!(content, @r"
@@ -148,10 +193,19 @@ def test_special():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_special
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_special.snap");
     insta::assert_snapshot!(content, @r#"
@@ -176,10 +230,19 @@ def test_dashes():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_dashes
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_dashes.snap");
     insta::assert_snapshot!(content, @r"
@@ -204,10 +267,19 @@ def test_poem():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_poem
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -267,10 +339,19 @@ def test_blanks():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_blanks
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_blanks.snap");
     insta::assert_snapshot!(content, @r"
@@ -296,7 +377,35 @@ def test_roundtrip():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_roundtrip
+
+    failures:
+
+    test::test_roundtrip:
+
+    error[test-failure]: Test `test_roundtrip` failed
+     --> test.py:4:5
+      |
+    4 | def test_roundtrip():
+      |     ^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_roundtrip' in snapshots/test__test_roundtrip.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("accept"), @r"
     success: true
@@ -334,10 +443,19 @@ def test_long():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_long
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let content = context.read_file("snapshots/test__test_long.snap");
     assert!(content.contains(&"A".repeat(500)));

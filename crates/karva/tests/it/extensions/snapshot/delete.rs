@@ -14,10 +14,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -28,7 +37,40 @@ def test_hello():
     karva.assert_snapshot('changed')
         ",
     );
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('changed')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Snapshot mismatch for 'test_hello'.
+     --> snapshots/test__test_hello.snap:4:1
+      |
+    4 - hello world
+    4 + changed
+      |
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert!(
         context
@@ -82,10 +124,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("delete").arg("--dry-run"), @r"
     success: true
@@ -149,10 +200,20 @@ def test_from_two():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_one::test_from_one
+            PASS [TIME] test_two::test_from_two
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("delete").arg("snapshots/test_one"), @r"
     success: true
@@ -203,10 +264,20 @@ def test_from_extra():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_one::test_from_one
+            PASS [TIME] test_one_extra::test_from_extra
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("delete").arg("test_one.py"), @r"
     success: true
@@ -247,7 +318,35 @@ def test_hello():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_hello' in snapshots/test__test_hello.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert!(
         context

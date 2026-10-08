@@ -261,20 +261,30 @@ def test_value(value):
 "#,
     );
 
-    let first = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--status-level=none")
-        .output()
-        .expect("seed duration cache");
-    assert!(first.status.success(), "{first:?}");
+        .arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 10 tests run: 10 passed, 0 skipped
 
-    let second = context
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context
         .command()
         .args(["--num-workers=2", "--status-level=none"])
-        .env("RECORD_WORKERS", "1")
-        .output()
-        .expect("partition cached cases");
-    assert!(second.status.success(), "{second:?}");
+        .env("RECORD_WORKERS", "1"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 10 tests run: 10 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     let mut first_worker = context
         .read_file("worker-0.txt")
@@ -340,20 +350,48 @@ def test_value(value):
 "#,
     );
 
-    let first = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--status-level=none")
-        .output()
-        .expect("record failed case");
-    assert!(!first.status.success());
+        .arg("--status-level=none"), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_mod::test_value(value=1):
+
+    error[test-failure]: Test `test_value` failed
+     --> test_mod.py:6:5
+      |
+    6 | def test_value(value):
+      |     ^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `value`: `1`
+    info: Test failed here
+     --> test_mod.py:9:5
+      |
+    9 |     assert value != 1 or Path("fixed").exists()
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 
     context.write_file("fixed", "");
-    let second = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .args(["--last-failed", "--status-level=none"])
-        .output()
-        .expect("rerun failed case");
-    assert!(second.status.success(), "{second:?}");
+        .args(["--last-failed", "--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     assert_eq!(context.read_file("executed"), "1");
 }
 

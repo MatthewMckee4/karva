@@ -83,6 +83,8 @@ impl TestContext {
         settings.add_filter(r"karva \d+\.\d+\.\d+[a-zA-Z0-9._-]*", "karva [VERSION]");
         settings.add_filter(r"karva\.exe", "karva");
         settings.add_filter(r"Random seed: \d+", "Random seed: [SEED]");
+        // Review prompts leave a trailing space when piped input is not echoed.
+        settings.add_filter(r"(?m)^> +$", ">");
         // asyncio numbers tasks per event loop, so the counter depends on how
         // much of the suite ran first and on the interpreter version.
         settings.add_filter(r"Task-\d+", "Task-[N]");

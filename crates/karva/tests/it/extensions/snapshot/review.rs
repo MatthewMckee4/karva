@@ -1,6 +1,3 @@
-use std::io::Write;
-use std::process::Stdio;
-
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -17,7 +14,35 @@ def test_hello():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_hello' in snapshots/test__test_hello.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
     success: true
@@ -39,7 +64,7 @@ def test_hello():
       d hide diff  toggle snapshot diff
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
-    > 
+    >
     review finished
     accepted:
       <temp_dir>/snapshots/test__test_hello.snap.new
@@ -68,7 +93,35 @@ def test_hello():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_hello' in snapshots/test__test_hello.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("review").pass_stdin("r\n"), @"
     success: true
@@ -90,7 +143,7 @@ def test_hello():
       d hide diff  toggle snapshot diff
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
-    > 
+    >
     review finished
     rejected:
       <temp_dir>/snapshots/test__test_hello.snap.new
@@ -119,7 +172,35 @@ def test_hello():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('hello world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_hello' in snapshots/test__test_hello.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("review").pass_stdin("s\n"), @"
     success: true
@@ -141,7 +222,7 @@ def test_hello():
       d hide diff  toggle snapshot diff
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
-    > 
+    >
     review finished
     skipped:
       <temp_dir>/snapshots/test__test_hello.snap.new
@@ -171,7 +252,51 @@ def test_two():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_one
+            FAIL [TIME] test::test_two
+
+    failures:
+
+    test::test_one:
+
+    error[test-failure]: Test `test_one` failed
+     --> test.py:4:5
+      |
+    4 | def test_one():
+      |     ^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('first')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_one' in snapshots/test__test_one.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_two:
+
+    error[test-failure]: Test `test_two` failed
+     --> test.py:7:5
+      |
+    7 | def test_two():
+      |     ^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot('second')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_two' in snapshots/test__test_two.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("review").pass_stdin("S\n"), @"
     success: true
@@ -193,7 +318,7 @@ def test_two():
       d hide diff  toggle snapshot diff
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
-    > 
+    >
     review finished
     skipped:
       <temp_dir>/snapshots/test__test_one.snap.new
@@ -258,7 +383,51 @@ def test_from_extra():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test_one::test_from_one
+            FAIL [TIME] test_one_extra::test_from_extra
+
+    failures:
+
+    test_one::test_from_one:
+
+    error[test-failure]: Test `test_from_one` failed
+     --> test_one.py:4:5
+      |
+    4 | def test_from_one():
+      |     ^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_one.py:5:5
+      |
+    5 |     karva.assert_snapshot('from file one')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_from_one' in snapshots/test_one__test_from_one.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test_one_extra::test_from_extra:
+
+    error[test-failure]: Test `test_from_extra` failed
+     --> test_one_extra.py:4:5
+      |
+    4 | def test_from_extra():
+      |     ^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_one_extra.py:5:5
+      |
+    5 |     karva.assert_snapshot('from extra file')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_from_extra' in snapshots/test_one_extra__test_from_extra.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("review").arg("test_one.py").pass_stdin("a\n"), @"
     success: true
@@ -280,7 +449,7 @@ def test_from_extra():
       d hide diff  toggle snapshot diff
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
-    > 
+    >
     review finished
     accepted:
       <temp_dir>/snapshots/test_one__test_from_one.snap.new
@@ -319,21 +488,80 @@ def test_beta():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_alpha
+            FAIL [TIME] test::test_beta
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"A\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_alpha:
+
+    error[test-failure]: Test `test_alpha` failed
+     --> test.py:4:5
+      |
+    4 | def test_alpha():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('alpha')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_alpha' in snapshots/test__test_alpha.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_beta:
+
+    error[test-failure]: Test `test_beta` failed
+     --> test.py:7:5
+      |
+    7 | def test_beta():
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot('beta')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_beta' in snapshots/test__test_beta.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("A\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_alpha.snap.new
+    Source: test.py:5::test_alpha
+
+    ────────────┬[LONG-LINE]
+              1 │ +alpha
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_alpha.snap.new
+      <temp_dir>/snapshots/test__test_beta.snap.new
+
+    ----- stderr -----
+    ");
 
     let snap_alpha = context.root().join("snapshots/test__test_alpha.snap");
     let snap_beta = context.root().join("snapshots/test__test_beta.snap");
@@ -367,21 +595,80 @@ def test_beta():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_alpha
+            FAIL [TIME] test::test_beta
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"R\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_alpha:
+
+    error[test-failure]: Test `test_alpha` failed
+     --> test.py:4:5
+      |
+    4 | def test_alpha():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('alpha')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_alpha' in snapshots/test__test_alpha.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_beta:
+
+    error[test-failure]: Test `test_beta` failed
+     --> test.py:7:5
+      |
+    7 | def test_beta():
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot('beta')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_beta' in snapshots/test__test_beta.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("R\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_alpha.snap.new
+    Source: test.py:5::test_alpha
+
+    ────────────┬[LONG-LINE]
+              1 │ +alpha
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    rejected:
+      <temp_dir>/snapshots/test__test_alpha.snap.new
+      <temp_dir>/snapshots/test__test_beta.snap.new
+
+    ----- stderr -----
+    ");
 
     let snap_alpha = context.root().join("snapshots/test__test_alpha.snap");
     let snap_beta = context.root().join("snapshots/test__test_beta.snap");
@@ -421,21 +708,97 @@ def test_beta():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            FAIL [TIME] test::test_alpha
+            FAIL [TIME] test::test_beta
 
-    let mut child = context
-        .snapshot("review")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn");
-    child
-        .stdin
-        .take()
-        .expect("no stdin")
-        .write_all(b"a\nr\n")
-        .expect("write failed");
-    let _ = child.wait_with_output();
+    failures:
+
+    test::test_alpha:
+
+    error[test-failure]: Test `test_alpha` failed
+     --> test.py:4:5
+      |
+    4 | def test_alpha():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('alpha')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_alpha' in snapshots/test__test_alpha.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    test::test_beta:
+
+    error[test-failure]: Test `test_beta` failed
+     --> test.py:7:5
+      |
+    7 | def test_beta():
+      |     ^^^^^^^^^
+    info: Test failed here
+     --> test.py:8:5
+      |
+    8 |     karva.assert_snapshot('beta')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: New snapshot for 'test_beta' in snapshots/test__test_beta.snap.new.
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\nr\n"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    Snapshot 1/2
+    File: <temp_dir>/snapshots/test__test_alpha.snap.new
+    Source: test.py:5::test_alpha
+
+    ────────────┬[LONG-LINE]
+              1 │ +alpha
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    Snapshot 2/2
+    File: <temp_dir>/snapshots/test__test_beta.snap.new
+    Source: test.py:8::test_beta
+
+    ────────────┬[LONG-LINE]
+              1 │ +beta
+    ────────────┴[LONG-LINE]
+
+      a accept     keep the new snapshot
+      r reject     retain the old snapshot
+      s skip       keep both for now
+      i hide info  toggles extended snapshot info
+      d hide diff  toggle snapshot diff
+
+      Tip: Use uppercase A/R/S to apply to all remaining snapshots
+    >
+    review finished
+    accepted:
+      <temp_dir>/snapshots/test__test_alpha.snap.new
+    rejected:
+      <temp_dir>/snapshots/test__test_beta.snap.new
+
+    ----- stderr -----
+    ");
 
     let snap_alpha = context.root().join("snapshots/test__test_alpha.snap");
     let snap_beta = context.root().join("snapshots/test__test_beta.snap");
@@ -460,10 +823,19 @@ def test_hello():
         ",
     );
 
-    let _ = context
+    assert_cmd_snapshot!(context
         .command_no_parallel()
-        .arg("--snapshot-update")
-        .output();
+        .arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_hello
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     context.write_file(
         "test.py",
@@ -475,7 +847,40 @@ def test_hello():
         ",
     );
 
-    let _ = context.command_no_parallel().output();
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_hello
+
+    failures:
+
+    test::test_hello:
+
+    error[test-failure]: Test `test_hello` failed
+     --> test.py:4:5
+      |
+    4 | def test_hello():
+      |     ^^^^^^^^^^
+    info: Test failed here
+     --> test.py:5:5
+      |
+    5 |     karva.assert_snapshot('goodbye world')
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Snapshot mismatch for 'test_hello'.
+     --> snapshots/test__test_hello.snap:4:1
+      |
+    4 - hello world
+    4 + goodbye world
+      |
+    info: Run `karva snapshot accept` to accept, or re-run with `--snapshot-update`.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
 
     assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\n"), @"
     success: true
@@ -498,7 +903,7 @@ def test_hello():
       d hide diff  toggle snapshot diff
 
       Tip: Use uppercase A/R/S to apply to all remaining snapshots
-    > 
+    >
     review finished
     accepted:
       <temp_dir>/snapshots/test__test_hello.snap.new

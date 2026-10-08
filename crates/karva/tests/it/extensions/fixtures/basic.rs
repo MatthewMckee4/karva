@@ -4,53 +4,53 @@ use rstest::rstest;
 
 use crate::common::TestContext;
 
-fn get_auto_use_kw(framework: &str) -> &str {
-    match framework {
-        "pytest" => "autouse",
-        "karva" => "auto_use",
-        _ => panic!("Invalid framework"),
+#[rstest]
+fn test_shared_dependency_is_initialized_once(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import {framework}
+
+calls = []
+
+@{framework}.fixture
+def shared():
+    calls.append("setup")
+    return []
+
+@{framework}.fixture
+def left(shared):
+    return shared
+
+@{framework}.fixture
+def right(shared):
+    return shared
+
+def test_diamond(left, right, shared):
+    assert left is right is shared
+    assert calls == ["setup"]
+"#
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_diamond(left=[], right=[], shared=[])
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
     }
 }
 
 #[test]
-fn test_fixture_manager_add_fixtures_impl_three_dependencies_different_scopes_with_fixture_in_function()
- {
-    let context = TestContext::with_files([
-        (
-            "conftest.py",
-            r"
-import karva
-@karva.fixture(scope='function')
-def x():
-    return 1
-
-@karva.fixture(scope='function')
-def y(x):
-    return 1
-
-@karva.fixture(scope='function')
-def z(x, y):
-    return 1
-            ",
-        ),
-        ("test.py", "def test_1(z): pass"),
-    ]);
-
-    assert_cmd_snapshot!(context.command(), @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-        Starting 1 test across 1 worker
-            PASS [TIME] test::test_1(z=1)
-    ────────────
-         Summary [TIME] 1 test run: 1 passed, 0 skipped
-
-    ----- stderr -----
-    ");
-}
-
-#[test]
-fn test_runner_given_nested_path() {
+fn test_module_fixture_from_root_conftest() {
     let context = TestContext::with_files([
         (
             "conftest.py",
@@ -387,9 +387,9 @@ fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framewo
 from {framework} import fixture
 
 def dynamic_scope(fixture_name, config):
-    if fixture_name.endswith("_session"):
-        return "session"
-    return "function"
+    assert fixture_name == "x_session"
+    assert config is None
+    return "session"
 
 @fixture(scope=dynamic_scope)
 def x_session():
@@ -431,8 +431,8 @@ fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framew
 from {framework} import fixture
 
 def dynamic_scope(fixture_name, config):
-    if fixture_name.endswith("_function"):
-        return "function"
+    assert fixture_name == "x_function"
+    assert config is None
     return "function"
 
 @fixture(scope=dynamic_scope)
@@ -678,37 +678,118 @@ def test_value(value):
 }
 
 #[test]
-fn test_defaulted_parameters_are_not_fixture_requests() {
+fn test_test_keyword_default_is_not_a_fixture_request() {
     let context = TestContext::with_file(
         "test.py",
         r#"
 import karva
 
 @karva.fixture
-def positional():
-    return "injected positional"
+def value():
+    raise AssertionError("defaulted parameter was resolved as a fixture")
 
-@karva.fixture
-def dependency():
-    return "injected dependency"
-
-@karva.fixture
-def configured(positional="fixture positional", /, dependency="fixture default"):
-    return positional, dependency
-
-def test_defaults(positional="test positional", /, *, configured, dependency="test default"):
-    assert configured == ("fixture positional", "fixture default")
-    assert positional == "test positional"
-    assert dependency == "test default"
+def test_default(value="default"):
+    assert value == "default"
 "#,
     );
-
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
-            PASS [TIME] test::test_defaults(configured=('fixture positional', 'fix...)
+            PASS [TIME] test::test_default
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_test_positional_only_default_is_not_a_fixture_request() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def value():
+    raise AssertionError("defaulted parameter was resolved as a fixture")
+
+def test_default(value="default", /):
+    assert value == "default"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_default
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_fixture_keyword_default_is_not_a_fixture_request() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def value():
+    raise AssertionError("defaulted parameter was resolved as a fixture")
+
+@karva.fixture
+def configured(value="default"):
+    return value
+
+def test_default(configured):
+    assert configured == "default"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_default(configured='default')
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_fixture_positional_only_default_is_not_a_fixture_request() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def value():
+    raise AssertionError("defaulted parameter was resolved as a fixture")
+
+@karva.fixture
+def configured(value="default", /):
+    return value
+
+def test_default(configured):
+    assert configured == "default"
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_default(configured='default')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
@@ -820,7 +901,9 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
+fn test_fixture_order_respects_scope(
+    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
+) {
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -839,8 +922,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
 
                 def test_value(clean_data):
                     assert data.get('value')
-                ",
-            auto_use_kw = get_auto_use_kw(framework)
+                "
         ),
     );
 
@@ -1100,4 +1182,191 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
 
     ----- stderr -----
     ");
+}
+
+#[rstest]
+fn test_fixture_basic(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def my_fixture():
+                    return 'value'
+
+                def test_with_fixture(my_fixture):
+                    assert my_fixture == 'value'
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_with_fixture(my_fixture='value')
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            format!(
+                r"
+                    import {framework}
+
+                    @{framework}.fixture
+                    def number_fixture():
+                        return 42
+                "
+            )
+            .as_str(),
+        ),
+        (
+            "test.py",
+            r"
+                    def test_with_number(number_fixture):
+                        assert number_fixture == 42
+                ",
+        ),
+    ]);
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_with_number(number_fixture=42)
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def number():
+                    return 100
+
+                @{framework}.fixture
+                def letter():
+                    return 'X'
+
+                def test_combination(number, letter):
+                    assert number == 100
+                    assert letter == 'X'
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_combination(number=100, letter='X')
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_with_test_parametrize(
+    #[values(("pytest", "pytest.mark.parametrize"), ("karva", "karva.tags.parametrize"))]
+    (framework, parametrize): (&str, &str),
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def fixture_value():
+                    return 'fixture_value'
+
+                @{parametrize}('test_param', [10, 20])
+                def test_both(fixture_value, test_param):
+                    assert fixture_value == 'fixture_value'
+                    assert test_param in [10, 20]
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_both(fixture_value='fixture_value', test_param=10)
+                PASS [TIME] test::test_both(fixture_value='fixture_value', test_param=20)
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn test_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r"
+                import {framework}
+
+                @{framework}.fixture
+                def base_fixture():
+                    return 10
+
+                @{framework}.fixture
+                def dependent_fixture(base_fixture):
+                    return base_fixture * 100
+
+                def test_dependent(dependent_fixture):
+                    assert dependent_fixture == 1000
+"
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_dependent(dependent_fixture=1000)
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
 }
