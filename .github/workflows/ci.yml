@@ -179,6 +179,13 @@ jobs:
           cargo clippy --manifest-path editors/zed/Cargo.toml --all-targets --locked -- -D warnings
           cargo build --manifest-path editors/zed/Cargo.toml --locked --target wasm32-wasip2
 
+      - name: "Smoke clean Zed package and server protocol"
+        run: |
+          cargo build --locked -p karva
+          python3 scripts/zed_smoke.py --server target/debug/karva --server-arg server \
+            --wasm editors/zed/target/wasm32-wasip2/debug/karva_zed.wasm \
+            --output "$RUNNER_TEMP/karva-zed-smoke"
+
   cargo-hawk:
     name: "cargo hawk"
 
