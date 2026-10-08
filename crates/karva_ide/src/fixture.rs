@@ -128,7 +128,7 @@ pub(super) struct FixtureDefinition {
     pub(super) name: String,
 
     /// Python function name.
-    defining_name: String,
+    pub(super) defining_name: String,
 
     /// Function-name source range.
     pub(super) name_range: TextRange,
@@ -220,10 +220,8 @@ pub(super) struct FixtureModel {
 }
 
 impl FixtureModel {
-    pub(super) fn imports(&self) -> impl Iterator<Item = (TextRange, &FixtureId)> {
-        self.imports
-            .iter()
-            .map(|import| (import.range, &import.fixture))
+    pub(super) fn imports(&self) -> impl Iterator<Item = &FixtureImport> {
+        self.imports.iter()
     }
 
     /// Returns declarations defined by the current source document.

@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
-use ruff_python_ast::Expr;
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
-use ruff_text_size::TextRange;
+use ruff_python_ast::{Expr, ExprContext, Stmt};
+use ruff_text_size::{Ranged, TextRange};
 
 use crate::occurrences::{
-    body_contains_name, body_has_nested_binding_conflict, body_has_unsupported_bindings,
+    body_contains_name, body_contains_name_in_body, body_has_nested_binding_conflict,
+    body_has_unsupported_bindings, expression_contains_name_in_scope, local_bindings,
 };
 use crate::{
     FixtureId, FixtureOccurrence, FixtureOccurrenceKind, LocatedFixtureOccurrence, SourceAnalysis,
@@ -33,6 +34,12 @@ pub fn prepare_fixture_rename(
     current: &FixtureOccurrence,
 ) -> Option<TextRange> {
     current.edit_range?;
+    if has_unsafe_project_imports(index, &current.fixture) {
+        return None;
+    }
+    if has_unsafe_all_bindings(index, &current.fixture) {
+        return None;
+    }
     editable_fixture_occurrences(index, current, None).map(|_| current.range)
 }
 
@@ -48,7 +55,124 @@ pub fn rename_fixture(
     if !is_valid_fixture_name(new_name) {
         return None;
     }
+    if has_unsafe_project_imports(index, &current.fixture) {
+        return None;
+    }
+    if has_unsafe_all_bindings(index, &current.fixture) {
+        return None;
+    }
     editable_fixture_occurrences(index, current, Some(new_name))
+}
+
+/// Rejects renames whose default Python binding is exposed through `__all__`.
+fn has_unsafe_all_bindings(index: &WorkspaceSourceIndex, target: &FixtureId) -> bool {
+    index.paths().any(|path| {
+        let Some(analysis) = index.analyze(path) else {
+            return true;
+        };
+        let local_default = analysis.fixture_model.local().iter().any(|definition| {
+            definition.id == *target
+                && definition.name == definition.defining_name
+                && definition.name_range == definition.public_name_range
+        });
+        let imported_default =
+            analysis.fixture_model.imports().any(|import| {
+                import.fixture == *target && !import.has_alias && import.rename_source
+            }) && analysis
+                .fixture_model
+                .definition(target)
+                .is_some_and(|definition| {
+                    definition.name == definition.defining_name
+                        && definition.name_range == definition.public_name_range
+                });
+        if !local_default && !imported_default {
+            return false;
+        }
+
+        let mut visitor = AllBindingVisitor { found: false };
+        source_order::walk_body(&mut visitor, &analysis.module.module_body);
+        visitor.found
+    })
+}
+
+struct AllBindingVisitor {
+    found: bool,
+}
+
+impl SourceOrderVisitor<'_> for AllBindingVisitor {
+    fn visit_stmt(&mut self, statement: &'_ Stmt) {
+        match statement {
+            Stmt::FunctionDef(function) if function.name.as_str() == "__all__" => self.found = true,
+            Stmt::ClassDef(class) if class.name.as_str() == "__all__" => self.found = true,
+            _ => source_order::walk_stmt(self, statement),
+        }
+    }
+
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if let Expr::Name(name) = expression
+            && name.id == "__all__"
+        {
+            self.found = true;
+        } else {
+            source_order::walk_expr(self, expression);
+        }
+    }
+
+    fn visit_alias(&mut self, alias: &'_ ruff_python_ast::Alias) {
+        self.found = alias.name.as_str() == "__all__"
+            || alias
+                .asname
+                .as_ref()
+                .is_some_and(|name| name.as_str() == "__all__");
+    }
+}
+
+/// Rejects wildcard and unresolved imports that could expose an unindexed fixture binding.
+fn has_unsafe_project_imports(index: &WorkspaceSourceIndex, target: &FixtureId) -> bool {
+    let Some((public_name, defining_name)) = index.paths().find_map(|path| {
+        index
+            .analyze(path)?
+            .fixture_model
+            .definition(target)
+            .map(|definition| (definition.name.clone(), definition.defining_name.clone()))
+    }) else {
+        return false;
+    };
+
+    index.paths().any(|path| {
+        let Some(analysis) = index.analyze(path) else {
+            return true;
+        };
+        let known_imports = fixture_occurrences(&analysis)
+            .into_iter()
+            .filter(|occurrence| {
+                occurrence.fixture == *target && occurrence.kind == FixtureOccurrenceKind::Import
+            })
+            .filter_map(|occurrence| occurrence.edit_range)
+            .collect::<HashSet<_>>();
+        analysis.module.module_body.iter().any(|statement| {
+            let Stmt::ImportFrom(import) = statement else {
+                return false;
+            };
+            import.names.iter().any(|alias| {
+                let imported_name = alias.name.as_str();
+                if imported_name == "*" {
+                    return true;
+                }
+                let source_name_matches =
+                    imported_name == public_name || imported_name == defining_name;
+                let alias_name_matches = alias.asname.as_ref().is_some_and(|name| {
+                    name.as_str() == public_name || name.as_str() == defining_name
+                });
+                (source_name_matches && !known_imports.contains(&alias.name.range()))
+                    || (alias_name_matches
+                        && alias
+                            .asname
+                            .as_ref()
+                            .is_some_and(|name| !known_imports.contains(&name.range())))
+            })
+        })
+    })
 }
 
 fn editable_fixture_occurrences(
@@ -59,9 +183,24 @@ fn editable_fixture_occurrences(
     let mut occurrences = Vec::new();
     for path in index.paths() {
         let analysis = index.analyze(path)?;
+        let custom_name = analysis
+            .fixture_model
+            .definition(&current.fixture)
+            .is_some_and(|definition| definition.name_range != definition.public_name_range);
+        let preserved_imports = analysis
+            .fixture_model
+            .imports()
+            .filter(|import| import.fixture == current.fixture && !import.rename_source)
+            .map(|import| import.range)
+            .collect::<HashSet<_>>();
         let matching = fixture_occurrences(&analysis)
             .into_iter()
-            .filter(|occurrence| occurrence.fixture == current.fixture)
+            .filter(|occurrence| {
+                occurrence.fixture == current.fixture
+                    && !(custom_name && occurrence.kind == FixtureOccurrenceKind::Import)
+                    && !(occurrence.kind == FixtureOccurrenceKind::Import
+                        && preserved_imports.contains(&occurrence.range))
+            })
             .collect::<Vec<_>>();
         if matching.is_empty() {
             continue;
@@ -70,9 +209,11 @@ fn editable_fixture_occurrences(
             .iter()
             .any(|occurrence| occurrence.edit_range.is_none())
             || has_unsupported_parameter_bindings(&analysis, &matching)
-            || has_unindexed_provider_references(&analysis, &matching, &current.fixture)
+            || has_unindexed_provider_references(&analysis, &current.fixture)
+            || has_unsafe_import_scope(&analysis, &current.fixture, new_name)
             || new_name.is_some_and(|new_name| {
                 fixture_name_conflicts(&analysis, &matching, &current.fixture, new_name)
+                    || has_imported_binding_conflict(&analysis, &current.fixture, new_name)
             })
         {
             return None;
@@ -89,34 +230,160 @@ fn editable_fixture_occurrences(
     (!occurrences.is_empty()).then_some(occurrences)
 }
 
-fn has_unindexed_provider_references(
+fn has_unsafe_import_scope(
     analysis: &SourceAnalysis,
-    occurrences: &[FixtureOccurrence],
     target: &FixtureId,
+    new_name: Option<&str>,
 ) -> bool {
+    let old_names = analysis
+        .fixture_model
+        .imports()
+        .filter(|import| import.fixture == *target && !import.has_alias && import.rename_source)
+        .filter_map(|import| {
+            analysis
+                .fixture_model
+                .definition(&import.fixture)
+                .filter(|definition| definition.name == definition.defining_name)
+                .map(|definition| definition.name.clone())
+        })
+        .collect::<HashSet<_>>();
+    if old_names.is_empty() {
+        return false;
+    }
+
+    let mut lambda_visitor = ImportedLambdaVisitor {
+        old_names: &old_names,
+        found: false,
+    };
+    source_order::walk_body(&mut lambda_visitor, &analysis.module.module_body);
+    if lambda_visitor.found {
+        return true;
+    }
+
+    analysis
+        .module
+        .module_body
+        .iter()
+        .any(|statement| match statement {
+            Stmt::FunctionDef(function) => old_names.iter().any(|old_name| {
+                if !body_contains_name(function, old_name) {
+                    return false;
+                }
+                let bindings = local_bindings(function);
+                bindings.contains(old_name)
+                    || new_name.is_some_and(|new_name| bindings.contains(new_name))
+                    || body_has_unsupported_bindings(function, &old_names)
+                    || new_name.is_some_and(|new_name| {
+                        body_has_nested_binding_conflict(function, old_name, new_name)
+                    })
+            }),
+            Stmt::ClassDef(class) => old_names
+                .iter()
+                .any(|old_name| body_contains_name_in_body(&class.body, old_name)),
+            _ => false,
+        })
+}
+
+struct ImportedLambdaVisitor<'a> {
+    old_names: &'a HashSet<String>,
+    found: bool,
+}
+
+impl SourceOrderVisitor<'_> for ImportedLambdaVisitor<'_> {
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if let Expr::Lambda(lambda) = expression {
+            self.found |= self
+                .old_names
+                .iter()
+                .any(|name| expression_contains_name_in_scope(&lambda.body, name, HashSet::new()));
+        } else {
+            source_order::walk_expr(self, expression);
+        }
+    }
+}
+
+fn has_imported_binding_conflict(
+    analysis: &SourceAnalysis,
+    target: &FixtureId,
+    new_name: &str,
+) -> bool {
+    let has_unaliased_import = analysis.fixture_model.imports().any(|import| {
+        if import.fixture != *target || import.has_alias || !import.rename_source {
+            return false;
+        }
+        analysis
+            .fixture_model
+            .definition(&import.fixture)
+            .is_some_and(|definition| definition.name == definition.defining_name)
+    });
+    if !has_unaliased_import {
+        return false;
+    }
+
+    let mut visitor = ImportedBindingConflictVisitor {
+        name: new_name,
+        found: false,
+    };
+    source_order::walk_body(&mut visitor, &analysis.module.module_body);
+    visitor.found
+}
+
+struct ImportedBindingConflictVisitor<'a> {
+    name: &'a str,
+    found: bool,
+}
+
+impl SourceOrderVisitor<'_> for ImportedBindingConflictVisitor<'_> {
+    fn visit_expr(&mut self, expression: &'_ Expr) {
+        if let Expr::Name(name) = expression
+            && name.id == self.name
+        {
+            self.found = true;
+        } else {
+            source_order::walk_expr(self, expression);
+        }
+    }
+
+    fn visit_alias(&mut self, alias: &'_ ruff_python_ast::Alias) {
+        self.found |= alias.name.as_str() == self.name
+            || alias
+                .asname
+                .as_ref()
+                .is_some_and(|name| name.as_str() == self.name);
+    }
+}
+
+fn has_unindexed_provider_references(analysis: &SourceAnalysis, target: &FixtureId) -> bool {
     let Some(definition) = analysis.fixture_model.definition(target) else {
         return false;
     };
-    if definition.name_range == definition.public_name_range {
-        let known_ranges = occurrences
-            .iter()
-            .map(|occurrence| occurrence.range)
-            .collect::<HashSet<_>>();
-        let mut visitor = ProviderReferenceVisitor {
-            name: &definition.name,
-            known_ranges: &known_ranges,
-            found: false,
-        };
-        source_order::walk_body(&mut visitor, &analysis.module.module_body);
-        visitor.found
-    } else {
-        false
-    }
+    let occurrences = fixture_occurrences(analysis)
+        .into_iter()
+        .filter(|occurrence| occurrence.fixture == *target)
+        .collect::<Vec<_>>();
+    let known_ranges = occurrences
+        .iter()
+        .flat_map(|occurrence| std::iter::once(occurrence.range).chain(occurrence.edit_range))
+        .collect::<HashSet<_>>();
+    let known_import_ranges = occurrences
+        .iter()
+        .filter(|occurrence| occurrence.kind == FixtureOccurrenceKind::Import)
+        .map(|occurrence| occurrence.range)
+        .collect::<HashSet<_>>();
+    let mut visitor = ProviderReferenceVisitor {
+        name: &definition.name,
+        known_ranges: &known_ranges,
+        known_import_ranges: &known_import_ranges,
+        found: false,
+    };
+    source_order::walk_body(&mut visitor, &analysis.module.module_body);
+    visitor.found
 }
 
 struct ProviderReferenceVisitor<'a> {
     name: &'a str,
     known_ranges: &'a HashSet<ruff_text_size::TextRange>,
+    known_import_ranges: &'a HashSet<ruff_text_size::TextRange>,
     found: bool,
 }
 
@@ -124,7 +391,11 @@ impl SourceOrderVisitor<'_> for ProviderReferenceVisitor<'_> {
     fn visit_expr(&mut self, expression: &'_ Expr) {
         if let Expr::Name(name) = expression
             && name.id == self.name
-            && !self.known_ranges.contains(&name.range)
+            && if matches!(name.ctx, ExprContext::Store | ExprContext::Del) {
+                !self.known_import_ranges.contains(&name.range)
+            } else {
+                !self.known_ranges.contains(&name.range)
+            }
         {
             self.found = true;
         } else {
@@ -134,12 +405,13 @@ impl SourceOrderVisitor<'_> for ProviderReferenceVisitor<'_> {
 
     fn visit_alias(&mut self, alias: &'_ ruff_python_ast::Alias) {
         let imported_name = alias.name.as_str().rsplit('.').next().unwrap_or_default();
-        if imported_name == self.name
-            || alias
-                .asname
-                .as_ref()
-                .is_some_and(|name| name.as_str() == self.name)
-            || imported_name == "*"
+        if imported_name == "*"
+            || (imported_name == self.name && !self.known_ranges.contains(&alias.name.range()))
+        {
+            self.found = true;
+        } else if let Some(asname) = &alias.asname
+            && asname.as_str() == self.name
+            && !self.known_ranges.contains(&asname.range())
         {
             self.found = true;
         }
@@ -408,6 +680,269 @@ mod tests {
         )
         .expect("source should index");
         let analysis = index.analyze(&path).expect("source should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(source, "database\""))
+            .expect("public name should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_some());
+    }
+
+    #[test]
+    fn renames_default_fixture_import_source_but_preserves_alias() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let reexport = "from support import database as db\n";
+        let test = "def test_example(database): pass\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+                SourceDocument::new("/project/test_example.py".into(), test.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/test_example.py"))
+            .expect("test should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(test, "database")).expect("target");
+
+        let edits = rename_fixture(&index, &occurrence, "renamed_database")
+            .expect("default fixture should rename through imports");
+        assert_eq!(edits.len(), 3);
+        let import = edits
+            .iter()
+            .find(|edit| edit.path == Utf8Path::new("/project/conftest.py"))
+            .expect("reexport should be edited");
+        assert_eq!(
+            &reexport[import
+                .occurrence
+                .edit_range
+                .expect("import should edit")
+                .to_std_range()],
+            "database"
+        );
+        assert_eq!(&reexport[import.occurrence.range.to_std_range()], "db");
+    }
+
+    #[test]
+    fn custom_fixture_import_does_not_disable_public_name_rename() {
+        let provider =
+            "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n";
+        let reexport = "from support import provider as db\n";
+        let test = "def test_example(database): pass\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+                SourceDocument::new("/project/test_example.py".into(), test.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/test_example.py"))
+            .expect("test should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(test, "database")).expect("target");
+
+        let edits = rename_fixture(&index, &occurrence, "renamed_database")
+            .expect("custom fixture should rename through imports");
+        assert_eq!(edits.len(), 2);
+        assert!(
+            edits
+                .iter()
+                .all(|edit| { edit.path != Utf8Path::new("/project/conftest.py") })
+        );
+    }
+
+    #[test]
+    fn preserves_aliases_across_reexport_chains() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let first = "from support import database as db\n";
+        let second = "from conftest import db\n";
+        let test = "def test_example(database): pass\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), first.to_owned()),
+                SourceDocument::new("/project/pkg/conftest.py".into(), second.to_owned()),
+                SourceDocument::new("/project/pkg/test_example.py".into(), test.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/pkg/test_example.py"))
+            .expect("test should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(test, "database")).expect("target");
+
+        let edits = rename_fixture(&index, &occurrence, "renamed_database")
+            .expect("fixture should rename through reexports");
+        assert_eq!(edits.len(), 3);
+        assert!(
+            edits
+                .iter()
+                .all(|edit| { edit.path != Utf8Path::new("/project/pkg/conftest.py") })
+        );
+    }
+
+    #[test]
+    fn renames_unaliased_import_binding_uses() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let reexport = "from support import database\nvalue = database()\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/support.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(provider, "database():"))
+            .expect("provider should resolve");
+
+        let edits = rename_fixture(&index, &occurrence, "renamed_database")
+            .expect("fixture should rename binding uses");
+        assert_eq!(edits.len(), 3);
+        assert_eq!(
+            edits
+                .iter()
+                .filter(|edit| edit.path == Utf8Path::new("/project/conftest.py"))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn rejects_import_rename_with_unrelated_local_binding() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let reexport = "from support import database\ndef helper(database):\n    return database\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/support.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(provider, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn rejects_wildcard_fixture_reexports() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let reexport = "from support import *\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/support.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(provider, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn rejects_unresolved_fixture_name_imports() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let unresolved = "from missing import database\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), unresolved.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/support.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(provider, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn rejects_default_provider_exported_through_all() {
+        let source =
+            "from karva import fixture\n@fixture\ndef database(): pass\n__all__ = [\"database\"]\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [SourceDocument::new(
+                "/project/conftest.py".into(),
+                source.to_owned(),
+            )],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/conftest.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(source, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn rejects_unaliased_import_exported_through_all() {
+        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let reexport = "from support import database\n__all__ = [\"database\"]\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [
+                SourceDocument::new("/project/support.py".into(), provider.to_owned()),
+                SourceDocument::new("/project/conftest.py".into(), reexport.to_owned()),
+            ],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/support.py"))
+            .expect("provider should analyze");
+        let occurrence = fixture_occurrence(&analysis, offset(provider, "database():"))
+            .expect("provider should resolve");
+
+        assert!(rename_fixture(&index, &occurrence, "renamed_database").is_none());
+    }
+
+    #[test]
+    fn custom_public_name_ignores_python_exports() {
+        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n__all__ = [\"provider\"]\n";
+        let index = WorkspaceSourceIndex::from_documents(
+            "/project".into(),
+            [SourceDocument::new(
+                "/project/conftest.py".into(),
+                source.to_owned(),
+            )],
+            settings(),
+        )
+        .expect("sources should index");
+        let analysis = index
+            .analyze(Utf8Path::new("/project/conftest.py"))
+            .expect("provider should analyze");
         let occurrence = fixture_occurrence(&analysis, offset(source, "database\""))
             .expect("public name should resolve");
 
