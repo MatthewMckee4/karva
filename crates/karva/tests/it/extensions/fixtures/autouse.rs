@@ -3,11 +3,11 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
 use crate::common::TestContext;
+use crate::extensions::get_auto_use_kw;
 
 #[rstest]
-fn test_function_scope_auto_use_fixture(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
-) {
+fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         format!(
@@ -50,8 +50,9 @@ def test_something_else():
 
 #[rstest]
 fn test_module_auto_use_fixture_is_shared_and_finalized(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
+    #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -96,8 +97,9 @@ def test_second():
 
 #[rstest]
 fn test_package_auto_use_fixture_is_shared_and_finalized(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
+    #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -142,8 +144,9 @@ def test_second():
 
 #[rstest]
 fn test_session_auto_use_fixture_is_shared_and_finalized(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
+    #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -187,9 +190,8 @@ def test_second():
 }
 
 #[rstest]
-fn test_auto_use_fixture(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
-) {
+fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -539,8 +541,9 @@ def test_second():
 
 #[rstest]
 fn test_nearest_conftest_auto_use_fixture_shadows_outer_fixture(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
+    #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::new();
     context.write_file(
         "conftest.py",
@@ -597,8 +600,9 @@ def test_selected_fixture(selected_fixture):
 /// never run, and `fake_pkg` (which depends on a parent fixture) would also be missed.
 #[rstest]
 fn test_multiple_autouse_fixtures_in_subdirectory_conftest(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
+    #[values("pytest", "karva")] framework: &str,
 ) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let parent_conftest = format!(
         r#"
 import {framework}
@@ -653,9 +657,8 @@ def test_both_autouse_ran():
 
 /// All autouse fixtures in a module must be applied, not just the first one.
 #[rstest]
-fn test_multiple_auto_use_fixtures(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
-) {
+fn test_multiple_auto_use_fixtures(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(

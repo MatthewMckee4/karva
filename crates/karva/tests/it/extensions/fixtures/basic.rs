@@ -3,6 +3,7 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
 use crate::common::TestContext;
+use crate::extensions::{get_auto_use_kw, get_parametrize_function};
 
 #[rstest]
 fn test_shared_dependency_is_initialized_once(#[values("pytest", "karva")] framework: &str) {
@@ -901,9 +902,8 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-fn test_fixture_order_respects_scope(
-    #[values(("pytest", "autouse"), ("karva", "auto_use"))] (framework, auto_use_kw): (&str, &str),
-) {
+fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -1296,10 +1296,8 @@ fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &
 }
 
 #[rstest]
-fn test_fixture_with_test_parametrize(
-    #[values(("pytest", "pytest.mark.parametrize"), ("karva", "karva.tags.parametrize"))]
-    (framework, parametrize): (&str, &str),
-) {
+fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(

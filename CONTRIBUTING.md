@@ -73,10 +73,10 @@ Put tests that cross Python, worker, or CLI boundaries in
 and keep its Python project small. Separate unrelated success, validation,
 and cleanup scenarios so a failure identifies the broken contract.
 
-Use parameterization when the same contract holds for each input. Keep paired
-API names or keyword spellings visible in the test's values instead of hiding
-those choices behind string matching. Different fixture lifetimes and failure
-phases deserve separate named tests.
+Use parameterization when the same contract holds for each input. Use small
+helpers to centralize repeated framework API or keyword spelling differences
+so tests focus on behavior. Different fixture lifetimes and failure phases
+deserve separate named tests.
 
 A passing command alone does not prove fixture reuse or cleanup. Check setup
 counts or object identity for caching, and inspect a file after the worker

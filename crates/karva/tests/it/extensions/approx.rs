@@ -475,4 +475,3 @@ def test_representation():
     ----- stderr -----
     ");
 }
-

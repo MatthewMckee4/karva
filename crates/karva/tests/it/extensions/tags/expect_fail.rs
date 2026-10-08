@@ -3,12 +3,19 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
 use crate::common::TestContext;
+use crate::extensions::get_parametrize_function;
+
+fn get_expect_fail_decorator(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.xfail",
+        "karva" => "karva.tags.expect_fail",
+        _ => panic!("Invalid framework"),
+    }
+}
 
 #[rstest]
-fn test_expect_fail_that_fails(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_that_fails(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -118,10 +125,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_no_reason(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_no_reason(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -151,10 +156,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_with_call(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_with_call(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -184,10 +187,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_with_true_condition(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_with_true_condition(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -217,10 +218,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_with_false_condition(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_with_false_condition(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -276,10 +275,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_with_expression(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_with_expression(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -310,10 +307,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_with_multiple_conditions(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_with_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -343,10 +338,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_expect_fail_with_all_false_conditions(
-    #[values(("pytest", "pytest.mark.xfail"), ("karva", "karva.tags.expect_fail"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_expect_fail_with_all_false_conditions(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -707,13 +700,9 @@ def test_should_fail():
 }
 
 #[rstest]
-fn test_expect_fail_with_parametrize(
-    #[values(
-        ("pytest", "pytest.mark.xfail", "pytest.mark.parametrize"),
-        ("karva", "karva.tags.expect_fail", "karva.tags.parametrize")
-    )]
-    (framework, expect_fail, parametrize): (&str, &str, &str),
-) {
+fn test_expect_fail_with_parametrize(#[values("pytest", "karva")] framework: &str) {
+    let expect_fail = get_expect_fail_decorator(framework);
+    let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(

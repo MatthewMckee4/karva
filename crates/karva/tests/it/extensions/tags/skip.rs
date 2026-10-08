@@ -4,11 +4,25 @@ use rstest::rstest;
 
 use crate::common::TestContext;
 
+fn get_skip_decorator(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.skipif",
+        "karva" => "karva.tags.skip",
+        _ => panic!("Invalid framework"),
+    }
+}
+
+fn get_skip_function(framework: &str) -> &str {
+    match framework {
+        "pytest" => "pytest.mark.skip",
+        "karva" => "karva.tags.skip",
+        _ => panic!("Invalid framework"),
+    }
+}
+
 #[rstest]
-fn test_skip(
-    #[values(("pytest", "pytest.mark.skip"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -38,10 +52,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_keyword(
-    #[values(("pytest", "pytest.mark.skip"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_keyword(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -70,10 +82,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_functionality_no_reason(
-    #[values(("pytest", "pytest.mark.skip"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_functionality_no_reason(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -102,10 +112,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_reason_function_call(
-    #[values(("pytest", "pytest.mark.skip"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_reason_function_call(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -134,10 +142,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_with_true_condition(
-    #[values(("pytest", "pytest.mark.skipif"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_with_true_condition(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -167,10 +173,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_with_false_condition(
-    #[values(("pytest", "pytest.mark.skipif"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_with_false_condition(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -200,10 +204,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_with_expression(
-    #[values(("pytest", "pytest.mark.skipif"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_with_expression(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -233,10 +235,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_with_multiple_conditions(
-    #[values(("pytest", "pytest.mark.skipif"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_with_multiple_conditions(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -325,10 +325,8 @@ def test_1():
 }
 
 #[rstest]
-fn test_skip_with_multiple_tests(
-    #[values(("pytest", "pytest.mark.skipif"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_with_multiple_tests(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
@@ -366,10 +364,8 @@ def test_normal():
 }
 
 #[rstest]
-fn test_skip_with_all_false_conditions(
-    #[values(("pytest", "pytest.mark.skipif"), ("karva", "karva.tags.skip"))]
-    (framework, decorator): (&str, &str),
-) {
+fn test_skip_with_all_false_conditions(#[values("pytest", "karva")] framework: &str) {
+    let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
         &format!(
