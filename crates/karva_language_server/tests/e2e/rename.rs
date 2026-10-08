@@ -1,7 +1,7 @@
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind,
-    Position, PrepareRenameParams, PrepareRenameRequest, PublishDiagnosticsNotification,
+    Position, PrepareRenameParams, PrepareRenameRequest, PublishDiagnosticsNotification, Range,
     RenameParams, RenameRequest, TextDocumentIdentifier, TextDocumentItem,
     TextDocumentPositionParams, Uri, WorkDoneProgressParams,
 };
@@ -124,6 +124,84 @@ fn rejects_name_that_would_select_a_nested_provider() {
         server.request::<RenameRequest>(rename_params(uri, Position::new(0, 20), "replacement"));
 
     assert_eq!(edit, None);
+}
+
+#[test]
+fn renames_default_fixture_through_import_alias_preserving_alias() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "support.py",
+        "from karva import fixture\n@fixture\ndef database(): pass\n",
+    );
+    workspace.write("conftest.py", "from support import database as db\n");
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_query.py");
+    open(&mut server, uri.clone(), "def test_query(database): pass\n");
+
+    let edit = server
+        .request::<RenameRequest>(rename_params(uri, Position::new(0, 17), "renamed_database"))
+        .expect("imported fixture should rename");
+    let changes = edit.changes.expect("rename should return text changes");
+    assert_eq!(
+        changes[&workspace.uri("support.py")][0].new_text,
+        "renamed_database"
+    );
+    assert_eq!(
+        changes[&workspace.uri("support.py")][0].range,
+        Range::new(Position::new(2, 4), Position::new(2, 12))
+    );
+    assert_eq!(
+        changes[&workspace.uri("conftest.py")][0].new_text,
+        "renamed_database"
+    );
+    assert_eq!(
+        changes[&workspace.uri("conftest.py")][0].range,
+        Range::new(Position::new(0, 20), Position::new(0, 28))
+    );
+    assert_eq!(
+        changes[&workspace.uri("test_query.py")][0].new_text,
+        "renamed_database"
+    );
+    assert_eq!(
+        changes[&workspace.uri("test_query.py")][0].range,
+        Range::new(Position::new(0, 15), Position::new(0, 23))
+    );
+    assert_eq!(changes[&workspace.uri("conftest.py")].len(), 1);
+}
+
+#[test]
+fn renames_custom_fixture_without_changing_provider_imports() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "support.py",
+        "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n",
+    );
+    workspace.write("conftest.py", "from support import provider as db\n");
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_query.py");
+    open(&mut server, uri.clone(), "def test_query(database): pass\n");
+
+    let edit = server
+        .request::<RenameRequest>(rename_params(uri, Position::new(0, 17), "renamed_database"))
+        .expect("custom fixture should rename");
+    let changes = edit.changes.expect("rename should return text changes");
+    assert_eq!(
+        changes[&workspace.uri("support.py")][0].new_text,
+        "renamed_database"
+    );
+    assert_eq!(
+        changes[&workspace.uri("support.py")][0].range,
+        Range::new(Position::new(1, 15), Position::new(1, 23))
+    );
+    assert_eq!(
+        changes[&workspace.uri("test_query.py")][0].new_text,
+        "renamed_database"
+    );
+    assert_eq!(
+        changes[&workspace.uri("test_query.py")][0].range,
+        Range::new(Position::new(0, 15), Position::new(0, 23))
+    );
+    assert!(!changes.contains_key(&workspace.uri("conftest.py")));
 }
 
 #[rstest::rstest]

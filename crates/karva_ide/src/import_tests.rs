@@ -183,7 +183,7 @@ fn imports_in_tests_require_runtime_discovery_setting() {
 }
 
 #[test]
-fn imported_fixtures_disable_rename_instead_of_leaving_broken_imports() {
+fn imported_fixtures_rename_source_bindings_and_reexports() {
     let test = "def test_query(database): pass\n";
     let index = index(
         &[
@@ -200,7 +200,17 @@ fn imported_fixtures_disable_rename_instead_of_leaving_broken_imports() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     let target = crate::fixture_rename_target(&analysis, offset(test, "database")).expect("target");
-    assert!(crate::prepare_fixture_rename(&index, &target.occurrence).is_none());
+    let edits = crate::rename_fixture(&index, &target.occurrence, "renamed_database")
+        .expect("imported fixture should rename");
+    assert_eq!(edits.len(), 3);
+    assert!(edits.iter().any(|edit| {
+        edit.path == Utf8Path::new("/project/support.py")
+            && edit.occurrence.kind == crate::FixtureOccurrenceKind::Definition
+    }));
+    assert!(edits.iter().any(|edit| {
+        edit.path == Utf8Path::new("/project/conftest.py")
+            && edit.occurrence.kind == crate::FixtureOccurrenceKind::Import
+    }));
 }
 
 #[rstest::rstest]

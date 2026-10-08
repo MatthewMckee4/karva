@@ -67,13 +67,11 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
     let mut occurrences = analysis
         .fixture_model
         .imports()
-        .map(|(range, fixture)| FixtureOccurrence {
-            range,
-            // Source imports and public fixture names are different bindings. Until rename can
-            // update both independently, reject rename instead of returning a partial edit.
-            edit_range: None,
+        .map(|import| FixtureOccurrence {
+            range: import.range,
+            edit_range: Some(import.edit_range),
             kind: FixtureOccurrenceKind::Import,
-            fixture: fixture.clone(),
+            fixture: import.fixture.clone(),
         })
         .collect::<Vec<_>>();
 
@@ -152,8 +150,46 @@ pub(crate) fn fixture_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccur
         ));
     }
 
+    occurrences.extend(imported_fixture_body_occurrences(analysis));
+
     occurrences.sort_by_key(|occurrence| occurrence.range.start());
+    occurrences.dedup_by(|left, right| {
+        left.range == right.range && left.kind == right.kind && left.fixture == right.fixture
+    });
     occurrences
+}
+
+fn imported_fixture_body_occurrences(analysis: &SourceAnalysis) -> Vec<FixtureOccurrence> {
+    let mut targets = HashMap::new();
+    for import in analysis.fixture_model.imports() {
+        if import.has_alias || !import.rename_source {
+            continue;
+        }
+        let Some(definition) = analysis.fixture_model.definition(&import.fixture) else {
+            continue;
+        };
+        if definition.name != definition.defining_name {
+            continue;
+        }
+        targets.insert(definition.name.clone(), import.fixture.clone());
+    }
+    if targets.is_empty() {
+        return Vec::new();
+    }
+
+    let (references, unsupported) = body_fixture_references(&analysis.module.module_body, &targets);
+    if unsupported {
+        return Vec::new();
+    }
+    references
+        .into_iter()
+        .map(|(range, fixture)| FixtureOccurrence {
+            range,
+            edit_range: Some(range),
+            kind: FixtureOccurrenceKind::BodyReference,
+            fixture,
+        })
+        .collect()
 }
 
 fn fixture_parameters(
@@ -179,22 +215,9 @@ fn body_fixture_occurrences(
     function: &StmtFunctionDef,
     parameters: impl IntoIterator<Item = (String, FixtureId)>,
 ) -> Vec<FixtureOccurrence> {
-    let targets = parameters.into_iter().collect::<HashMap<_, _>>();
-    if targets.is_empty() {
-        return Vec::new();
-    }
-
-    let mut visitor = BodyReferenceVisitor {
-        targets: &targets,
-        shadowed: HashSet::new(),
-        occurrences: Vec::new(),
-        match_name: None,
-        found: false,
-        unsupported: false,
-    };
-    source_order::walk_body(&mut visitor, &function.body);
-    visitor
-        .occurrences
+    let targets = parameters.into_iter().collect();
+    let (references, _) = body_fixture_references(&function.body, &targets);
+    references
         .into_iter()
         .map(|(range, fixture)| FixtureOccurrence {
             range,
@@ -203,6 +226,26 @@ fn body_fixture_occurrences(
             fixture,
         })
         .collect()
+}
+
+fn body_fixture_references(
+    body: &[Stmt],
+    targets: &HashMap<String, FixtureId>,
+) -> (Vec<(TextRange, FixtureId)>, bool) {
+    if targets.is_empty() {
+        return (Vec::new(), false);
+    }
+
+    let mut visitor = BodyReferenceVisitor {
+        targets,
+        shadowed: HashSet::new(),
+        occurrences: Vec::new(),
+        match_name: None,
+        found: false,
+        unsupported: false,
+    };
+    source_order::walk_body(&mut visitor, body);
+    (visitor.occurrences, visitor.unsupported)
 }
 
 struct BodyReferenceVisitor<'a> {
@@ -417,7 +460,7 @@ fn body_contains_name_in_scope(body: &[Stmt], name: &str, shadowed: HashSet<Stri
     visitor.found
 }
 
-fn expression_contains_name_in_scope(
+pub(super) fn expression_contains_name_in_scope(
     expression: &Expr,
     name: &str,
     shadowed: HashSet<String>,
@@ -448,6 +491,10 @@ pub(super) fn body_has_nested_binding_conflict(
     };
     source_order::walk_body(&mut visitor, &function.body);
     visitor.conflict
+}
+
+pub(super) fn body_contains_name_in_body(body: &[Stmt], name: &str) -> bool {
+    body_contains_name_in_scope(body, name, HashSet::new())
 }
 
 struct BindingConflictVisitor<'a> {
@@ -593,7 +640,7 @@ impl SourceOrderVisitor<'_> for NameCollector {
     }
 }
 
-fn local_bindings(function: &StmtFunctionDef) -> HashSet<String> {
+pub(super) fn local_bindings(function: &StmtFunctionDef) -> HashSet<String> {
     let mut visitor = BindingVisitor {
         bindings: parameter_names(&function.parameters).collect(),
     };

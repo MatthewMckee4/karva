@@ -17,12 +17,21 @@ use super::{FixtureDefinition, FixtureId, FixtureProvider, parse_provider};
 
 /// An import binding connected to its canonical source provider.
 #[derive(Clone, Debug)]
-pub(super) struct FixtureImport {
+pub(crate) struct FixtureImport {
     /// Local Python binding introduced by the import.
-    pub(super) range: TextRange,
+    pub(crate) range: TextRange,
+
+    /// Source binding selected by the import.
+    pub(crate) edit_range: TextRange,
+
+    /// Whether the import keeps a distinct local alias.
+    pub(crate) has_alias: bool,
+
+    /// Whether the source token is the canonical public fixture name.
+    pub(crate) rename_source: bool,
 
     /// Canonical provider, independent of the import alias.
-    pub(super) fixture: FixtureId,
+    pub(crate) fixture: FixtureId,
 }
 
 /// Provider parsing with access to the source snapshot used by editor requests.
@@ -85,6 +94,9 @@ pub(super) fn provider_with_imports(
                         .asname
                         .as_ref()
                         .map_or_else(|| alias.name.range(), Ranged::range),
+                    edit_range: alias.name.range(),
+                    has_alias: alias.asname.is_some(),
+                    rename_source: alias.name.as_str() == definition.name,
                     fixture: definition.id.clone(),
                 });
                 if !expose_imports {
