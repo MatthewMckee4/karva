@@ -73,7 +73,8 @@ impl BackgroundRequestHandler for DocumentHighlight {
                     FixtureOccurrenceKind::Definition => DocumentHighlightKind::Write,
                     FixtureOccurrenceKind::Dependency
                     | FixtureOccurrenceKind::TestParameter
-                    | FixtureOccurrenceKind::UseFixtures => DocumentHighlightKind::Read,
+                    | FixtureOccurrenceKind::UseFixtures
+                    | FixtureOccurrenceKind::BodyReference => DocumentHighlightKind::Read,
                 };
                 Some(lsp_types::DocumentHighlight {
                     range,

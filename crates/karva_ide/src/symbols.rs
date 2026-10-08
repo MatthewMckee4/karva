@@ -1,4 +1,5 @@
-use karva_collector::count_parametrize_cases;
+use karva_collector::count_parametrize_cases_with_bindings;
+use karva_python_semantic::DecoratorBindings;
 use ruff_text_size::{Ranged, TextRange};
 
 use crate::SourceAnalysis;
@@ -43,7 +44,11 @@ pub fn source_symbols(analysis: &SourceAnalysis) -> Vec<SourceSymbol> {
             name: function.name.to_string(),
             range: function.range(),
             selection_range: function.name.range,
-            detail: count_parametrize_cases(function).map(|count| {
+            detail: count_parametrize_cases_with_bindings(
+                function,
+                &DecoratorBindings::before(&analysis.module.module_body, function.range.start()),
+            )
+            .map(|count| {
                 if count == 1 {
                     "1 case".to_owned()
                 } else {
