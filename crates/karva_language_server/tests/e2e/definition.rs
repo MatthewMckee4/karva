@@ -341,3 +341,27 @@ fn definition_params(uri: Uri, position: Position) -> DefinitionParams {
         TextDocumentPositionParams::new(TextDocumentIdentifier::new(uri), position),
     )
 }
+
+#[test]
+fn follows_project_fixture_imports_outside_open_document_selection() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "support/providers.py",
+        "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+    );
+    workspace.write(
+        "support/__init__.py",
+        "from .providers import provider as shared\n",
+    );
+    workspace.write("conftest.py", "from support import shared\n");
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_example.py");
+    open(
+        &mut server,
+        uri.clone(),
+        "def test_example(database): pass\n",
+    );
+    let response =
+        server.request::<DefinitionRequest>(definition_params(uri, Position::new(0, 20)));
+    assert_json_snapshot!(workspace.normalize(response));
+}

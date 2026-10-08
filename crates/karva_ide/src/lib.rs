@@ -254,7 +254,7 @@ pub(crate) fn analyze_sources(
     analyze_collected_source(Arc::new(current), &parent_modules, None, settings)
 }
 
-pub(crate) fn analyze_collected_source(
+fn analyze_collected_source(
     current: Arc<CollectedModule>,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
@@ -272,3 +272,6 @@ pub(crate) fn analyze_collected_source(
         diagnostics,
     }
 }
+
+#[cfg(test)]
+mod import_tests;

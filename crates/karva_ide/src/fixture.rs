@@ -12,7 +12,12 @@
     reason = "the crate root re-exports fixture analysis across this private module"
 )]
 
-use std::collections::{HashMap, HashSet};
+mod imports;
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
+
+use imports::{FixtureImport, provider_with_imports};
 
 use camino::Utf8PathBuf;
 use karva_collector::{CollectedModule, ModuleType};
@@ -182,6 +187,7 @@ struct FixtureProvider {
     rejected: HashMap<String, Vec<FixtureId>>,
     bindings: DecoratorBindings,
     bindings_at: HashMap<TextSize, DecoratorBindings>,
+    imports: Vec<FixtureImport>,
     unknown: bool,
     diagnostics: Vec<SourceDiagnostic>,
 }
@@ -198,9 +204,16 @@ pub(super) struct FixtureModel {
 
     /// Built-in providers parsed from Karva's installed Python package.
     builtins: Vec<FixtureDefinition>,
+    imports: Vec<FixtureImport>,
 }
 
 impl FixtureModel {
+    pub(super) fn imports(&self) -> impl Iterator<Item = (TextRange, &FixtureId)> {
+        self.imports
+            .iter()
+            .map(|import| (import.range, &import.fixture))
+    }
+
     /// Returns declarations defined by the current source document.
     pub(super) fn local(&self) -> &[FixtureDefinition] {
         &self.local
@@ -395,12 +408,32 @@ pub(super) fn analyze_modules(
     builtin_module: Option<&CollectedModule>,
     try_import_fixtures: bool,
 ) -> (FixtureModel, Vec<SourceDiagnostic>) {
+    analyze_modules_with_sources(current, parents, builtin_module, try_import_fixtures, None)
+}
+
+pub(super) fn analyze_modules_with_sources(
+    current: &CollectedModule,
+    parents: &[&CollectedModule],
+    builtin_module: Option<&CollectedModule>,
+    try_import_fixtures: bool,
+    sources: Option<(
+        &camino::Utf8Path,
+        &BTreeMap<Utf8PathBuf, Arc<CollectedModule>>,
+    )>,
+) -> (FixtureModel, Vec<SourceDiagnostic>) {
+    let parse = |module: &CollectedModule| {
+        if let Some((root, modules)) = sources {
+            provider_with_imports(module, root, modules, try_import_fixtures)
+        } else {
+            parse_provider(module, try_import_fixtures)
+        }
+    };
     let mut providers = parents
         .iter()
         .rev()
-        .map(|module| parse_provider(module, try_import_fixtures))
+        .map(|module| parse(module))
         .collect::<Vec<_>>();
-    let current_provider = parse_provider(current, try_import_fixtures);
+    let current_provider = parse(current);
     providers.insert(0, current_provider);
     let builtin_provider = builtin_module.map(|module| parse_provider(module, false));
     if let Some(provider) = &builtin_provider {
@@ -465,7 +498,11 @@ pub(super) fn analyze_modules(
             ))
     });
     (
-        FixtureModel::from_providers(&providers, builtin_module.and_then(|_| providers.last())),
+        FixtureModel::from_providers(
+            &providers,
+            current.path.path(),
+            builtin_module.and_then(|_| providers.last()),
+        ),
         diagnostics,
     )
 }
@@ -473,6 +510,7 @@ pub(super) fn analyze_modules(
 impl FixtureModel {
     fn from_providers(
         providers: &[FixtureProvider],
+        path: &Utf8PathBuf,
         builtin_provider: Option<&FixtureProvider>,
     ) -> Self {
         let builtin_ids = builtin_provider
@@ -484,9 +522,14 @@ impl FixtureModel {
                     .map(|definition| definition.id.clone())
             })
             .collect::<HashSet<_>>();
-        let local = providers
-            .first()
-            .map_or_else(Vec::new, |provider| provider.definitions.clone());
+        let local = providers.first().map_or_else(Vec::new, |provider| {
+            provider
+                .definitions
+                .iter()
+                .filter(|definition| &definition.id.path == path)
+                .cloned()
+                .collect()
+        });
         let bindings = providers
             .first()
             .map_or_else(DecoratorBindings::default, |provider| {
@@ -528,6 +571,9 @@ impl FixtureModel {
             builtins: builtin_provider
                 .map(|provider| provider.definitions.clone())
                 .unwrap_or_default(),
+            imports: providers
+                .first()
+                .map_or_else(Vec::new, |provider| provider.imports.clone()),
         }
     }
 }
@@ -593,6 +639,7 @@ impl FixtureProvider {
             rejected,
             bindings,
             bindings_at,
+            imports: Vec::new(),
             unknown: imported_fixtures_unknown
                 || parsed.iter().any(|fixture| !fixture.public_name_known),
             diagnostics,

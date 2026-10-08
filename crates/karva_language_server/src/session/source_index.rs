@@ -9,7 +9,7 @@
     reason = "SessionError exposes source-index failures across the private session boundary"
 )]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -20,10 +20,12 @@ use ignore::WalkBuilder;
 use ignore::types::Types;
 use karva_collector::{
     CollectedModule, CollectionSettings, collect_source, collect_source_with_module_name,
+    project_import_paths,
 };
 use karva_ide::{SourceAnalysisSettings, WorkspaceSourceIndex};
 use karva_project::path::{TestPath, TestPathError, TestPathFunction, absolute};
 use once_cell::sync::OnceCell;
+use ruff_python_ast::Stmt;
 use thiserror::Error;
 
 use super::RequestCancellationToken;
@@ -242,12 +244,12 @@ impl PreparedSourceIndex {
             parsed.settings = Some(settings.clone());
             parsed.respect_ignore_files = respect_ignore_files;
         }
-        parsed.modules.retain(|path, _| paths.contains(path));
         let mut modules = Vec::with_capacity(paths.len());
         let mut collect_count = 0_usize;
         let mut read_count = 0_usize;
         let mut source_bytes = 0_usize;
-        for path in paths {
+        let mut pending = paths.iter().cloned().collect::<VecDeque<_>>();
+        while let Some(path) = pending.pop_front() {
             check_cancelled(cancellation)?;
             let source_text = if let Some(source_text) = open_sources.get(&path) {
                 source_text.to_string()
@@ -274,11 +276,35 @@ impl PreparedSourceIndex {
                 };
                 collect_count += 1;
                 let module = Arc::new(module);
-                parsed.modules.insert(path, Arc::clone(&module));
+                parsed.modules.insert(path.clone(), Arc::clone(&module));
                 module
             };
+            for statement in &module.module_body {
+                if let Stmt::ImportFrom(import) = statement {
+                    check_cancelled(cancellation)?;
+                    if let Some(imported) = project_import_paths(&project_root, &path, import)
+                        .into_iter()
+                        .find(|candidate| {
+                            open_sources.contains_key(candidate)
+                                || candidate.is_file()
+                                    && candidate
+                                        .ancestors()
+                                        .take_while(|ancestor| ancestor.starts_with(&project_root))
+                                        .all(|ancestor| {
+                                            fs::symlink_metadata(ancestor).is_ok_and(|metadata| {
+                                                !metadata.file_type().is_symlink()
+                                            })
+                                        })
+                        })
+                        && paths.insert(imported.clone())
+                    {
+                        pending.push_back(imported);
+                    }
+                }
+            }
             modules.push(module);
         }
+        parsed.modules.retain(|path, _| paths.contains(path));
         if let Some(path) = find_builtin_source(&project_root)
             && let Ok(source_text) = fs::read_to_string(&path)
         {
@@ -1103,6 +1129,54 @@ mod tests {
                 .expect("parsed state")
                 .modules
                 .contains_key(&second_path)
+        );
+    }
+
+    #[test]
+    fn reuses_reachable_imported_syntax_and_evicts_disconnected_sources() {
+        let fixture = Fixture::new();
+        fixture.write("tests/test_sample.py", "def test_sample(database): pass\n");
+        let conftest = fixture.write("conftest.py", "from support import database\n");
+        let provider_path = fixture.write(
+            "support.py",
+            "from karva import fixture\n@fixture\ndef database(): pass\n",
+        );
+        let cache = SourceIndexCache::default();
+        let prepare = |cache| {
+            PreparedSourceIndex::with_cache(
+                fixture.root.clone(),
+                Vec::new(),
+                BTreeMap::new(),
+                Fixture::settings(),
+                true,
+                SourceIndexScope::TestSelection,
+                cache,
+            )
+        };
+        prepare(Arc::clone(&cache))
+            .build(&RequestCancellationToken::default())
+            .expect("first generation");
+        let provider =
+            Arc::clone(&cache.parsed.lock().expect("parsed state").modules[&provider_path]);
+        let next = Arc::new(cache.invalidated());
+        prepare(Arc::clone(&next))
+            .build(&RequestCancellationToken::default())
+            .expect("next generation");
+        assert!(Arc::ptr_eq(
+            &provider,
+            &next.parsed.lock().expect("parsed state").modules[&provider_path],
+        ));
+        fs::write(conftest, "").expect("remove import");
+        prepare(Arc::new(next.invalidated()))
+            .build(&RequestCancellationToken::default())
+            .expect("disconnected generation");
+        assert!(
+            !next
+                .parsed
+                .lock()
+                .expect("parsed state")
+                .modules
+                .contains_key(&provider_path)
         );
     }
 

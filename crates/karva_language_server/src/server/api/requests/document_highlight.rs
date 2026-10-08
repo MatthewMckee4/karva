@@ -71,7 +71,8 @@ impl BackgroundRequestHandler for DocumentHighlight {
                 )?;
                 let kind = match occurrence.kind {
                     FixtureOccurrenceKind::Definition => DocumentHighlightKind::Write,
-                    FixtureOccurrenceKind::Dependency
+                    FixtureOccurrenceKind::Import
+                    | FixtureOccurrenceKind::Dependency
                     | FixtureOccurrenceKind::TestParameter
                     | FixtureOccurrenceKind::UseFixtures
                     | FixtureOccurrenceKind::BodyReference => DocumentHighlightKind::Read,
