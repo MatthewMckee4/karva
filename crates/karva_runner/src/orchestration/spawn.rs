@@ -81,7 +81,7 @@ pub(super) fn spawn_worker(
     });
 
     let mut child =
-        process_control::spawn(command).context("Failed to spawn karva-worker process")?;
+        process_control::spawn(command).context("Failed to spawn Karva worker process")?;
     let output = if forward_stdout {
         process_control::take_stdout(&mut child).map(WorkerOutputForwarder::spawn)
     } else {
@@ -89,7 +89,7 @@ pub(super) fn spawn_worker(
     };
     let stderr = process_control::take_stderr(&mut child)
         .map(|stderr| WorkerStderrForwarder::spawn(stderr, stderr_file))
-        .context("Failed to capture karva-worker stderr")?;
+        .context("Failed to capture Karva worker stderr")?;
 
     tracing::info!(target: "karva_runner::orchestration", "Worker {} spawned with {} tests", worker_id, test_count);
     supervisor.spawn(

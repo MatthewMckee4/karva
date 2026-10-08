@@ -18,7 +18,6 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 karva = { workspace = true }
 karva_test_semantic = { workspace = true }
-karva_worker = { workspace = true }
 
 pyo3 = { workspace = true }
 

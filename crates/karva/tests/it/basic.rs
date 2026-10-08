@@ -1,5 +1,10 @@
 use insta_cmd::assert_cmd_snapshot;
 use karva_static::EnvVars;
+use rstest::rstest;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::process::Command;
 
 use crate::common::TestContext;
 
@@ -3880,5 +3885,85 @@ fn rejects_unsupported_class_method_selector_with_case_index() {
     ----- stderr -----
     karva failed
       Cause: test selector `<temp_dir>/test.py::TestCheckout::test_total[0]` is unsupported: Karva only runs top-level test functions; use `path.py::test_function` instead of a class or nested selector
+    ");
+}
+
+/// Workers use the controller launcher even when another installation is discoverable.
+#[rstest]
+fn workers_use_the_controller_launcher(#[values(false, true)] native: bool) {
+    // Native builds use the build-time interpreter, which may lack the wheel's
+    // framework fixtures. This check exercises launching an ordinary test.
+    let mut settings = insta::Settings::clone_current();
+    settings.add_filter(
+        r"(?m)^WARN Failed to import `karva\._builtins`: ModuleNotFoundError: No module named 'karva'\n?",
+        "",
+    );
+    let _settings = settings.bind_to_scope();
+    let context = TestContext::with_file("test.py", "def test_pass(): pass");
+    let decoy = context.root().join(".venv");
+    let scripts = decoy.join(if cfg!(windows) { "Scripts" } else { "bin" });
+    std::fs::create_dir_all(&scripts).expect("create decoy scripts directory");
+    let binary = scripts.join(if cfg!(windows) { "karva.exe" } else { "karva" });
+    std::fs::write(&binary, "invalid executable").expect("write decoy executable");
+    #[cfg(unix)]
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
+        .expect("make decoy executable");
+    let path = std::env::join_paths(std::iter::once(scripts.into_std_path_buf()).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .expect("prepend decoy to executable search path");
+
+    let mut command = if native {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_karva"));
+        command.arg("test").current_dir(context.root());
+        command
+    } else {
+        context.command()
+    };
+    command.env("PATH", path).env(EnvVars::VIRTUAL_ENV, decoy);
+
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(command, @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_pass
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+/// A relative wheel launcher is resolved before workers change to the project directory.
+#[test]
+fn workers_use_a_relative_controller_launcher() {
+    let context =
+        TestContext::with_files([("karva.toml", ""), ("test.py", "def test_pass(): pass")]);
+    let original = context.command();
+    let launcher = Path::new(original.get_program());
+    let launchers = context.root().join("launchers");
+    std::fs::create_dir_all(&launchers).expect("create launcher directory");
+    let filename = launcher.file_name().expect("launcher filename");
+    std::fs::copy(
+        launcher,
+        launchers.join(filename.to_string_lossy().as_ref()),
+    )
+    .expect("copy wheel launcher");
+    let mut command = Command::new(Path::new(".").join(filename));
+    command.current_dir(launchers).args(["test", "test.py"]);
+
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_pass
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
     ");
 }

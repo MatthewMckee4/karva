@@ -4,16 +4,12 @@ version = "0.0.0"
 
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "The Karva worker subprocess binary."
+description = "The Karva worker subprocess runtime."
 homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
-
-[[bin]]
-name = "karva-worker"
-path = "src/bin/main.rs"
 
 [dependencies]
 karva_cli = { workspace = true }

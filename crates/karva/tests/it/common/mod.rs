@@ -17,9 +17,9 @@ use tempfile::TempDir;
 
 /// Lazily initialized shared venv path for test reuse (within a single test process).
 ///
-/// All tests use one venv: the karva and karva-worker binaries live there, and
-/// each command we spawn sets `VIRTUAL_ENV` to point at it so karva can locate
-/// the worker. No per-test `.venv` is created in the project temp dir, which
+/// All tests use one venv containing the shared karva launcher. Each command
+/// sets `VIRTUAL_ENV` to point at it. No per-test `.venv` is created in the
+/// project temp dir, which
 /// matters on Windows where copying a venv tree per test is expensive.
 static SHARED_VENV: OnceLock<Utf8PathBuf> = OnceLock::new();
 
@@ -87,7 +87,7 @@ impl TestContext {
         // much of the suite ran first and on the interpreter version.
         settings.add_filter(r"Task-\d+", "Task-[N]");
         settings.add_filter(
-            r"Current thread 0x[0-9a-f]+(?: \[karva-worker\])?",
+            r"Current thread 0x[0-9a-f]+(?: \[karva\])?",
             "Current thread [THREAD]",
         );
         settings.add_filter(
@@ -95,8 +95,8 @@ impl TestContext {
             "",
         );
         settings.add_filter(
-            r#"File "[^"]+/shared-venv-[^/]+/bin/karva-worker""#,
-            r#"File "<venv>/bin/karva-worker""#,
+            r#"File "[^"]+/shared-venv-[^/]+/bin/karva""#,
+            r#"File "<venv>/bin/karva""#,
         );
         settings.add_filter(
             r"(?:File exists \(os error 17\)|Cannot create a file when that file already exists\. \(os error 183\))",

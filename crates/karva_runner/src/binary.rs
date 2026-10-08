@@ -1,17 +1,19 @@
+//! Launcher discovery for tooling that invokes the runner without the shared CLI.
+
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_static::EnvVars;
 
-const KARVA_WORKER_BINARY_NAME: &str = "karva-worker";
+const KARVA_BINARY_NAME: &str = "karva";
 
-/// Find the `karva-worker` binary by checking PATH, the project venv, and the active venv.
-pub fn find_karva_worker_binary(current_dir: &Utf8Path) -> Result<Utf8PathBuf> {
-    binary_from_path(KARVA_WORKER_BINARY_NAME)
-        .or_else(|| venv_binary(KARVA_WORKER_BINARY_NAME, current_dir))
-        .or_else(|| venv_binary_from_active_env(KARVA_WORKER_BINARY_NAME))
+/// Find the `karva` binary by checking PATH, the project venv, and the active venv.
+pub fn find_karva_binary(current_dir: &Utf8Path) -> Result<Utf8PathBuf> {
+    binary_from_path(KARVA_BINARY_NAME)
+        .or_else(|| venv_binary(KARVA_BINARY_NAME, current_dir))
+        .or_else(|| venv_binary_from_active_env(KARVA_BINARY_NAME))
         .with_context(|| {
             format!(
-                "Could not find {KARVA_WORKER_BINARY_NAME} binary in PATH, project .venv, or VIRTUAL_ENV"
+                "Could not find {KARVA_BINARY_NAME} binary in PATH, project .venv, or VIRTUAL_ENV"
             )
         })
 }
@@ -88,12 +90,12 @@ mod tests {
     fn virtualenv_binary_uses_platform_script_directory() {
         let venv = Utf8Path::new("/tmp/project/.venv");
 
-        let binary = construct_binary_path(venv, "karva-worker");
+        let binary = construct_binary_path(venv, "karva");
 
         if cfg!(target_os = "windows") {
-            assert_eq!(binary, venv.join("Scripts").join("karva-worker.exe"));
+            assert_eq!(binary, venv.join("Scripts").join("karva.exe"));
         } else {
-            assert_eq!(binary, venv.join("bin").join("karva-worker"));
+            assert_eq!(binary, venv.join("bin").join("karva"));
         }
     }
 
@@ -102,22 +104,22 @@ mod tests {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let venv = Utf8Path::from_path(tempdir.path()).expect("utf8 tempdir");
 
-        assert_eq!(venv_binary_at(venv, "karva-worker"), None);
+        assert_eq!(venv_binary_at(venv, "karva"), None);
 
-        let binary = construct_binary_path(venv, "karva-worker");
+        let binary = construct_binary_path(venv, "karva");
         std::fs::create_dir_all(binary.parent().expect("binary parent")).expect("mkdir");
         std::fs::write(&binary, "").expect("write binary");
 
-        assert_eq!(venv_binary_at(venv, "karva-worker"), Some(binary));
+        assert_eq!(venv_binary_at(venv, "karva"), Some(binary));
     }
 
     #[test]
     fn virtualenv_binary_ignores_directory_candidate() {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let venv = Utf8Path::from_path(tempdir.path()).expect("utf8 tempdir");
-        let binary = construct_binary_path(venv, "karva-worker");
+        let binary = construct_binary_path(venv, "karva");
         std::fs::create_dir_all(&binary).expect("create directory candidate");
 
-        assert_eq!(venv_binary_at(venv, "karva-worker"), None);
+        assert_eq!(venv_binary_at(venv, "karva"), None);
     }
 }

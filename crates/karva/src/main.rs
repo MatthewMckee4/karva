@@ -3,5 +3,5 @@
 use karva::{ExitStatus, karva_main};
 
 fn main() -> ExitStatus {
-    karva_main(|args| args)
+    karva_main(|args| args, None)
 }

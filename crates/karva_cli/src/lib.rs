@@ -1,4 +1,4 @@
-//! Command-line syntax shared by the controller and worker binaries.
+//! Command-line syntax shared by controller and worker invocations.
 
 use clap::Parser;
 use clap::builder::Styles;
@@ -54,6 +54,10 @@ pub struct Args {
 pub enum Command {
     /// Run tests.
     Test(Box<TestCommand>),
+
+    /// Execute an internal worker subprocess.
+    #[command(name = "__worker", hide = true)]
+    Worker,
 
     /// Manage snapshots created by `karva.assert_snapshot()`.
     Snapshot(SnapshotCommand),

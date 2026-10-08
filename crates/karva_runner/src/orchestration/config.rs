@@ -1,5 +1,7 @@
 //! Public controller configuration and completed-run output.
 
+use std::path::PathBuf;
+
 use camino::Utf8PathBuf;
 use karva_cli::PartitionSelection;
 use karva_diagnostic::AggregatedResults;
@@ -8,6 +10,9 @@ use crate::partition::TestOrdering;
 
 /// Controller settings that affect worker count, selection, and lifecycle.
 pub struct ParallelTestConfig {
+    /// Absolute shared executable path used to launch worker subprocesses.
+    pub worker_binary: PathBuf,
+
     /// Maximum worker processes before capping against collected test count.
     pub num_workers: usize,
 

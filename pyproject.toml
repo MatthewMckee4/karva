@@ -32,7 +32,6 @@ classifiers = [
 
 [project.scripts]
 karva = "karva._karva:karva_run"
-karva-worker = "karva._karva:karva_worker_run"
 
 [dependency-groups]
 dev = [

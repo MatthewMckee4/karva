@@ -17,7 +17,6 @@ use super::planning::{collect_tests, last_failed_set, previous_durations, write_
 use super::recovery::recover_crashed_workers;
 use super::spawn::{spawn_worker, spawn_workers};
 use super::supervision::WaitOutcome;
-use crate::binary::find_karva_worker_binary;
 use crate::partition::{Partition, partition_collected_tests, scheduled_test_count};
 use crate::shutdown::shutdown_receiver;
 use crate::worker_args::{WorkerSpawn, worker_configuration};
@@ -139,7 +138,6 @@ pub fn run_parallel_tests(
 
     tracing::info!(target: "karva_runner::orchestration", "Spawning {} workers", scheduled_workers);
 
-    let worker_binary = find_karva_worker_binary(project.cwd())?;
     let spawn = WorkerSpawn {
         configuration: worker_configuration(project, args, failed_first_active),
         project,
@@ -149,7 +147,7 @@ pub fn run_parallel_tests(
         args,
         num_workers,
         profile: config.profile.as_deref().unwrap_or("default"),
-        worker_binary: &worker_binary,
+        worker_binary: &config.worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
     let forward_stdout = printer.stream_for_test_result().is_enabled();

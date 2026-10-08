@@ -3,6 +3,7 @@
 use std::ffi::OsString;
 use std::io;
 use std::io::stdout;
+use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::{CommandFactory, Parser};
@@ -14,8 +15,14 @@ pub use karva_cli::ExitStatus;
 mod commands;
 mod utils;
 
-pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus {
-    run(f).unwrap_or_else(|error| {
+/// Runs the shared CLI, using the installed launcher for Python-hosted invocations.
+///
+/// Native invocations pass `None` to spawn the current executable as their worker.
+pub fn karva_main(
+    f: impl FnOnce(Vec<OsString>) -> Vec<OsString>,
+    worker_binary: Option<PathBuf>,
+) -> ExitStatus {
+    run(f, worker_binary).unwrap_or_else(|error| {
         use io::Write;
 
         // Exit "gracefully" on broken pipe errors.
@@ -46,7 +53,10 @@ pub fn karva_main(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> ExitStatus 
     })
 }
 
-fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitStatus> {
+fn run(
+    f: impl FnOnce(Vec<OsString>) -> Vec<OsString>,
+    worker_binary: Option<PathBuf>,
+) -> anyhow::Result<ExitStatus> {
     let args = wild::args_os();
 
     let args = f(
@@ -57,7 +67,8 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let args = Args::parse_from(args);
 
     match args.command {
-        Command::Test(test_args) => commands::test::test(*test_args),
+        Command::Test(test_args) => commands::test::test(*test_args, worker_binary),
+        Command::Worker => karva_worker::runtime::run(),
         Command::Snapshot(snapshot_args) => commands::snapshot::snapshot(snapshot_args),
         Command::Coverage(coverage_args) => commands::coverage::coverage(&coverage_args),
         Command::Cache(cache_args) => commands::cache::cache(&cache_args),
