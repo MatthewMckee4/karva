@@ -503,7 +503,7 @@ impl Tags {
     }
 
     /// First source tag wins within a scope, matching other tag defaults.
-    pub(super) fn source(&self) -> Option<&SourceLocation> {
+    fn source(&self) -> Option<&SourceLocation> {
         self.inner.iter().find_map(|tag| match tag {
             Tag::Source(location) => Some(location),
             _ => None,
