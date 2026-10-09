@@ -5,4 +5,3 @@ pub use self::snapshot::{Command, SnapshotMismatchError, SnapshotSettings};
 pub mod python;
 pub mod raises;
 pub mod snapshot;
-pub mod source;

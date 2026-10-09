@@ -1,7 +1,7 @@
 from collections.abc import Callable, Sequence
 from typing import ParamSpec, TypeVar, overload
 
-from karva._karva import Tags, TestFunction
+from karva._karva import SourceLocation, Tags, TestFunction
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
@@ -45,6 +45,10 @@ def expect_fail(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
 @overload
 def expect_fail(*conditions: bool, reason: str | None = ...) -> Tags:  # noqa: D418
     """Expect the current test to fail given the conditions."""
+
+
+def source(location: SourceLocation) -> Tags:
+    """Use an original document position in diagnostics and case reports."""
 
 
 def timeout(seconds: float) -> Tags:

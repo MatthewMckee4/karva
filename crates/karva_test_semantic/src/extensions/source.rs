@@ -1,4 +1,4 @@
-//! Original document metadata attached to externally generated parameter cases.
+//! Shared document text and validated positions for test-case source metadata.
 
 use karva_diagnostic::TestCaseSource;
 use pyo3::exceptions::PyValueError;
@@ -14,7 +14,7 @@ pub struct SourceDocument {
     source_file: SourceFile,
 }
 
-/// Validated original position of one externally generated test case.
+/// Validated original position of one test case.
 #[derive(Debug, Clone)]
 #[pyclass(from_py_object)]
 pub struct SourceLocation {

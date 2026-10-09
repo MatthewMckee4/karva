@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{FixtureId, FixturePlan};
-use crate::extensions::functions::source::SourceLocation;
+use crate::extensions::source::SourceLocation;
 use crate::extensions::tags::parametrize::{ParameterPlan, ParameterPlanIterator};
 use crate::extensions::tags::{CompiledTags, RuntimeTags};
 use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResult};
@@ -35,7 +35,7 @@ pub(super) struct TestVariant<'a> {
 
     pub id: Option<String>,
 
-    /// Original source of an externally generated parameter case.
+    /// Original position resolved from parameter, function, or inherited tags.
     pub(super) source: Option<SourceLocation>,
 
     /// Arena shared by all fixture root groups for this test.
@@ -209,14 +209,14 @@ impl<'a> TestVariantIterator<'a> {
         case_index: Option<usize>,
         param_args: crate::extensions::tags::parametrize::ParametrizationArgs,
     ) -> TestVariant<'a> {
-        let mut tags = self.runtime_tags.clone();
-        tags.extend(&param_args.tags);
+        let tags = self.runtime_tags.clone().with_case_tags(&param_args.tags);
+        let source = tags.source().cloned();
 
         TestVariant {
             test: self.test,
             id: param_args.id().map(str::to_string),
             params: param_args.values,
-            source: param_args.source,
+            source,
             fixture_plan: Rc::clone(&self.fixture_plan),
             fixture_dependencies: Rc::clone(&self.fixture_dependencies),
             use_fixture_dependencies: Rc::clone(&self.use_fixture_dependencies),

@@ -11,7 +11,6 @@ use ruff_text_size::{Ranged, TextRange};
 use thiserror::Error;
 
 use crate::extensions::functions::Param;
-use crate::extensions::functions::source::SourceLocation;
 use crate::extensions::tags::Tags;
 use crate::utils::display_value;
 
@@ -378,9 +377,6 @@ pub struct Parametrization {
 
     /// Value-derived display ID for partially explicit stacked parametrization.
     pub(crate) default_id: String,
-
-    /// Original source supplied by an external adapter.
-    pub(crate) source: Option<SourceLocation>,
 }
 
 impl Parametrization {
@@ -396,7 +392,6 @@ impl From<PyRef<'_, Param>> for Parametrization {
             tags: param.tags.clone(),
             id: param.id.clone(),
             default_id: param.default_id.clone(),
-            source: param.source.clone(),
         }
     }
 }
@@ -415,15 +410,11 @@ pub struct ParametrizationArgs {
 
     id: String,
     has_explicit_id: bool,
-
-    /// One original location per expanded parameter case.
-    pub(crate) source: Option<SourceLocation>,
 }
 
 impl ParametrizationArgs {
     fn extend(&mut self, other: Self) {
         self.values.extend(other.values);
-        self.source = self.source.take().or(other.source);
         self.tags.extend(&other.tags);
         if !self.id.is_empty() && !other.id.is_empty() {
             self.id.push('-');
@@ -799,13 +790,11 @@ impl ParametrizeTag {
                          tags,
                          id,
                          default_id,
-                         source,
                      }| Parametrization {
                         values: param_values,
                         tags,
                         id,
                         default_id,
-                        source,
                     },
                 )
                 .collect(),
@@ -872,7 +861,9 @@ impl ParametrizeTag {
 
     /// Whether this dimension supplies original source positions.
     pub(super) fn has_source(&self) -> bool {
-        self.parametrizations.iter().any(|row| row.source.is_some())
+        self.parametrizations
+            .iter()
+            .any(|row| row.tags.source().is_some())
     }
 
     /// Returns each parameterize case.
@@ -895,7 +886,6 @@ impl ParametrizeTag {
                     .clone()
                     .unwrap_or_else(|| parametrization.default_id.clone()),
                 has_explicit_id: parametrization.id.is_some(),
-                source: parametrization.source.clone(),
             };
             param_args.push(current_param_args);
         }
@@ -918,7 +908,6 @@ fn handle_custom_parametrize_param(
         tags: Tags::default(),
         id: None,
         default_id: default_param_id(py, &[Arc::clone(&param_arc)]),
-        source: None,
     };
 
     if let Ok(param_bound) = param_arc.cast_bound::<Param>(py) {
@@ -975,7 +964,6 @@ fn handle_custom_parametrize_param(
             tags,
             id,
             default_id,
-            source: None,
         })
     } else if expect_multiple && let Ok(params) = bound_param.extract::<Vec<Py<PyAny>>>() {
         let values = params.into_iter().map(Arc::new).collect::<Vec<_>>();
@@ -984,7 +972,6 @@ fn handle_custom_parametrize_param(
             values,
             tags: Tags::default(),
             id: None,
-            source: None,
         })
     } else {
         Ok(default_parametrization())

@@ -12,6 +12,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use ruff_python_ast::StmtFunctionDef;
 
+use crate::extensions::source::SourceLocation;
 use crate::extensions::tags::python::{PyTag, PyTags, PyTestFunction};
 
 pub mod custom;
@@ -122,6 +123,10 @@ pub enum Tag {
     ExpectFail(ExpectFailTag),
     Timeout(TimeoutTag),
     FailSlow(FailSlowTag),
+
+    /// Original source position used by diagnostics and reports.
+    Source(SourceLocation),
+
     Custom(CustomTag),
 }
 
@@ -131,6 +136,7 @@ impl Tag {
     const SKIP_NAME: &'static str = "skip";
     const EXPECT_FAIL_NAME: &'static str = "expect_fail";
     const TIMEOUT_NAME: &'static str = "timeout";
+    const SOURCE_NAME: &'static str = "source";
     const FAIL_SLOW_NAME: &'static str = "fail_slow";
 
     const PYTEST_PARAMETRIZE_NAME: &'static str = "parametrize";
@@ -147,6 +153,7 @@ impl Tag {
         Self::EXPECT_FAIL_NAME,
         Self::TIMEOUT_NAME,
         Self::FAIL_SLOW_NAME,
+        Self::SOURCE_NAME,
     ];
 
     const PYTEST_BUILTIN_NAMES: &'static [&'static str] = &[
@@ -166,6 +173,7 @@ impl Tag {
             Self::ExpectFail(_) => Self::EXPECT_FAIL_NAME,
             Self::Timeout(_) => Self::TIMEOUT_NAME,
             Self::FailSlow(_) => Self::FAIL_SLOW_NAME,
+            Self::Source(_) => Self::SOURCE_NAME,
             Self::Custom(custom) => custom.name(),
         }
     }
@@ -318,6 +326,7 @@ impl Tag {
             }
             PyTag::Timeout { seconds } => Self::Timeout(TimeoutTag::new(*seconds)),
             PyTag::FailSlow { seconds } => Self::FailSlow(FailSlowTag::new(*seconds)),
+            PyTag::Source { location } => Self::Source(location.clone()),
             PyTag::Custom {
                 tag_name,
                 tag_args,
@@ -344,13 +353,17 @@ pub struct Tags {
     inner: Vec<Tag>,
 }
 
-/// Runtime tag policy compiled from decorators and parameter-specific marks.
+/// Runtime policy and reporting metadata compiled from test and parameter tags.
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeTags {
     skip: SkipPolicy,
     expect_fail: Option<ExpectFailTag>,
     timeout: Option<TimeoutTag>,
     fail_slow: Option<FailSlowTag>,
+
+    /// Original position after defaults and parameter-specific overrides are resolved.
+    source: Option<SourceLocation>,
+
     names: Vec<String>,
 }
 
@@ -368,7 +381,7 @@ impl RuntimeTags {
         runtime
     }
 
-    pub(crate) fn extend(&mut self, tags: &Tags) {
+    fn extend(&mut self, tags: &Tags) {
         for tag in &tags.inner {
             self.names.push(tag.name().to_string());
             match tag {
@@ -382,9 +395,24 @@ impl RuntimeTags {
                 Tag::FailSlow(fail_slow) if self.fail_slow.is_none() => {
                     self.fail_slow = Some(*fail_slow);
                 }
+                Tag::Source(location) if self.source.is_none() => {
+                    self.source = Some(location.clone());
+                }
                 _ => {}
             }
         }
+    }
+
+    /// Applies parameter tags, whose source overrides function and inherited defaults.
+    pub(crate) fn with_case_tags(mut self, tags: &Tags) -> Self {
+        self.source = tags.source().cloned().or(self.source);
+        self.extend(tags);
+        self
+    }
+
+    /// Original position resolved for this test case.
+    pub(crate) fn source(&self) -> Option<&SourceLocation> {
+        self.source.as_ref()
     }
 
     pub(crate) fn should_skip(&self) -> (bool, Option<String>) {
@@ -472,6 +500,14 @@ impl Tags {
             .map(|tag| Tag::from_karva_tag(py, tag))
             .collect();
         Self::new(tags)
+    }
+
+    /// First source tag wins within a scope, matching other tag defaults.
+    pub(super) fn source(&self) -> Option<&SourceLocation> {
+        self.inner.iter().find_map(|tag| match tag {
+            Tag::Source(location) => Some(location),
+            _ => None,
+        })
     }
 
     pub(crate) fn extend(&mut self, other: &Self) {

@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
 use crate::extensions::functions::python::Param;
+use crate::extensions::source::SourceLocation;
 
 /// Python-facing tag payload retained until discovery converts it into [`crate::extensions::tags::Tag`].
 #[derive(Debug)]
@@ -36,6 +37,9 @@ pub enum PyTag {
     #[pyo3(name = "fail_slow")]
     FailSlow { seconds: f64 },
 
+    #[pyo3(name = "source")]
+    Source { location: SourceLocation },
+
     #[pyo3(name = "custom")]
     Custom {
         tag_name: String,
@@ -67,6 +71,9 @@ impl PyTag {
             },
             Self::Timeout { seconds } => Self::Timeout { seconds: *seconds },
             Self::FailSlow { seconds } => Self::FailSlow { seconds: *seconds },
+            Self::Source { location } => Self::Source {
+                location: location.clone(),
+            },
             Self::Custom {
                 tag_name,
                 tag_args,
@@ -131,6 +138,7 @@ pub mod tags {
 
     use super::{CustomTagBuilder, PyTag, PyTags};
     use crate::extensions::functions::python::Param;
+    use crate::extensions::source::SourceLocation;
     use crate::extensions::tags::parametrize::{apply_parametrize_ids, parse_parametrize_args};
     use crate::extensions::tags::python::PyTestFunction;
 
@@ -256,6 +264,14 @@ pub mod tags {
         parse_conditional_tag(py, conditions, reason, |conditions, reason| {
             PyTag::ExpectFail { conditions, reason }
         })
+    }
+
+    /// Attaches original document metadata without changing collected identity.
+    #[pyfunction]
+    fn source(location: SourceLocation) -> PyTags {
+        PyTags {
+            inner: vec![PyTag::Source { location }],
+        }
     }
 
     #[pyfunction]

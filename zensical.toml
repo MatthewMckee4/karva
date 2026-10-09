@@ -50,6 +50,7 @@ nav = [
         ]},
         { "Tags" = [
             { "Parametrize" = "usage/tags/parametrize.md"},
+            { "Original Source" = "usage/tags/source.md"},
             { "Skip" = "usage/tags/skip.md"},
             { "Expect Fail" = "usage/tags/expect_fail.md"},
             { "Timeout" = "usage/tags/timeout.md"},

@@ -2,4 +2,5 @@
 
 pub mod fixtures;
 pub mod functions;
+pub mod source;
 pub mod tags;

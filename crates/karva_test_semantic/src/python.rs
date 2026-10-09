@@ -8,11 +8,11 @@ use crate::extensions::functions::raises::raises;
 use crate::extensions::functions::snapshot::{
     assert_cmd_snapshot, assert_json_snapshot, assert_snapshot, snapshot_settings,
 };
-use crate::extensions::functions::source::{SourceDocument, SourceLocation};
 use crate::extensions::functions::{
     Command, ExceptionInfo, FailError, RaisesContext, SkipError, SnapshotMismatchError,
     SnapshotSettings, fail, param, skip,
 };
+use crate::extensions::source::{SourceDocument, SourceLocation};
 use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
 
 /// Populates the native `karva` Python module with its functions, classes, and exceptions.

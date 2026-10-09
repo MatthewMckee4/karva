@@ -15,9 +15,9 @@ import karva
 source = karva.SourceDocument("docs/guide.rst", "Title\r\né 42\r\n>>> next\r\n")
 
 @karva.tags.parametrize("value", [
-    karva.param(1, id="pass", source=source.location(3, 1)),
-    karva.param(2, id="fail", source=source.location(2, 3)),
-    karva.param(3, id="skip", source=source.location(3, 1)),
+    karva.param(1, id="pass", tags=[karva.tags.source(source.location(3, 1))]),
+    karva.param(2, id="fail", tags=[karva.tags.source(source.location(2, 3))]),
+    karva.param(3, id="skip", tags=[karva.tags.source(source.location(3, 1))]),
 ])
 def test_generated(value):
     if value == 3:
@@ -192,8 +192,8 @@ fn external_source_rejects_ambiguous_stacked_origins() {
 import karva
 source = karva.SourceDocument("guide.rst", "example\n")
 
-@karva.tags.parametrize("first", [karva.param(1, source=source.location(1, 1))])
-@karva.tags.parametrize("second", [karva.param(2, source=source.location(1, 2))])
+@karva.tags.parametrize("first", [karva.param(1, tags=[karva.tags.source(source.location(1, 1))])])
+@karva.tags.parametrize("second", [karva.param(2, tags=[karva.tags.source(source.location(1, 2))])])
 def test_generated(first, second):
     pass
 "#,
@@ -237,14 +237,14 @@ source = karva.SourceDocument("guide.rst", "retry\nfixture\n")
 def broken():
     raise ValueError("fixture failed")
 
-@karva.tags.parametrize("value", [karva.param(1, id="retry", source=source.location(1, 1))])
-def test_retry(value):
+@karva.tags.source(source.location(1, 1))
+def test_retry():
     attempt = Path("attempt.txt")
     retried = attempt.exists()
     attempt.write_text("attempted")
     assert retried
 
-@karva.tags.parametrize("value", [karva.param(1, id="fixture", source=source.location(2, 1))])
+@karva.tags.parametrize("value", [karva.param(1, id="fixture", tags=[karva.tags.source(source.location(2, 1))])])
 def test_fixture(value, broken):
     pass
 "#,
@@ -277,7 +277,7 @@ def test_fixture(value, broken):
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed (1 flaky), 1 error, 0 skipped
-       FLAKY 2/2 [TIME] test_generated::test_retry(retry)
+       FLAKY 2/2 [TIME] test_generated::test_retry
 
     ----- stderr -----
     "#);
@@ -296,12 +296,12 @@ fn external_source_optional_metadata_and_stacked_params() {
 import karva
 source = karva.SourceDocument("guide.rst", "éx\n")
 
-@karva.tags.parametrize("first", [karva.param(1, source=source.location(1, 3))])
+@karva.tags.parametrize("first", [karva.param(1, tags=[karva.tags.source(source.location(1, 3))])])
 @karva.tags.parametrize("second", [2, 3])
 def test_generated(first, second):
     assert first + second == second + 1
 
-@karva.tags.parametrize("value", [karva.param(1, tags=(karva.tags.skip,), source=source.location(2, 1))])
+@karva.tags.parametrize("value", [karva.param(1, tags=(karva.tags.skip, karva.tags.source(source.location(2, 1))))])
 def test_skipped(value):
     raise AssertionError("must not run")
 
@@ -354,6 +354,187 @@ fn external_source_rejects_empty_path() {
     diagnostics:
 
     error[failed-to-import-module]: Failed to import python module `test_generated`: Source document path cannot be empty
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn source_tags_resolve_function_defaults_and_parameter_overrides() {
+    let context = TestContext::with_files([
+        ("karva.toml", "[profile.ci.junit]\npath = 'results.xml'\n"),
+        (
+            "test_generated.py",
+            r#"
+import karva
+source = karva.SourceDocument("guide.rst", "module\nfunction\nparameter\nskipped\n")
+karva_tag = karva.tags.source(source.location(1, 1))
+
+@karva.tags.source(source.location(1, 1))
+@karva.tags.source(source.location(2, 1))
+def test_function():
+    assert False
+
+@karva.tags.source(source.location(2, 1))
+@karva.tags.parametrize("value", [
+    karva.param(1, id="default"),
+    karva.param(2, id="override", tags=[karva.tags.source(source.location(3, 1)), karva.tags.source(source.location(1, 1))]),
+])
+def test_cases(value):
+    assert False
+
+@karva.tags.parametrize("value", [
+    karva.param(1, id="default"),
+    karva.param(2, id="override", tags=[karva.tags.source(source.location(3, 1)), karva.tags.source(source.location(1, 1))]),
+])
+@karva.tags.source(source.location(2, 1))
+def test_reversed(value):
+    assert False
+
+def test_module():
+    pass
+
+@karva.tags.source(source.location(4, 1))
+@karva.tags.skip
+def test_skipped():
+    raise AssertionError("must not run")
+"#,
+        ),
+    ]);
+    assert_cmd_snapshot!(context.command().args([
+        "--profile=ci",
+        "--num-workers=2",
+        "--strict-tags=true",
+        "--status-level=none"
+    ]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_generated::test_cases(default):
+
+    error[test-failure]: Test `test_cases` failed
+     --> guide.rst:2:1
+      |
+    2 | function
+      | ^
+    info: Test ran with arguments:
+    info:   `value`: `1`
+    info: Test failed here
+      --> test_generated.py:17:5
+       |
+    17 |     assert False
+       |     ^^^^^^^^^^^^
+
+    test_generated::test_cases(override):
+
+    error[test-failure]: Test `test_cases` failed
+     --> guide.rst:3:1
+      |
+    3 | parameter
+      | ^
+    info: Test ran with arguments:
+    info:   `value`: `2`
+    info: Test failed here
+      --> test_generated.py:17:5
+       |
+    17 |     assert False
+       |     ^^^^^^^^^^^^
+
+    test_generated::test_function:
+
+    error[test-failure]: Test `test_function` failed
+     --> guide.rst:2:1
+      |
+    2 | function
+      | ^
+    info: Test failed here
+     --> test_generated.py:9:5
+      |
+    9 |     assert False
+      |     ^^^^^^^^^^^^
+
+    test_generated::test_reversed(default):
+
+    error[test-failure]: Test `test_reversed` failed
+     --> guide.rst:2:1
+      |
+    2 | function
+      | ^
+    info: Test ran with arguments:
+    info:   `value`: `1`
+    info: Test failed here
+      --> test_generated.py:25:5
+       |
+    25 |     assert False
+       |     ^^^^^^^^^^^^
+
+    test_generated::test_reversed(override):
+
+    error[test-failure]: Test `test_reversed` failed
+     --> guide.rst:3:1
+      |
+    3 | parameter
+      | ^
+    info: Test ran with arguments:
+    info:   `value`: `2`
+    info: Test failed here
+      --> test_generated.py:25:5
+       |
+    25 |     assert False
+       |     ^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 7 tests run: 1 passed, 5 failed, 1 skipped
+
+    ----- stderr -----
+    ");
+    let report = context.read_file("results.xml");
+    for (name, line) in [
+        ("test_function", 2),
+        ("test_cases(default)", 2),
+        ("test_cases(override)", 3),
+        ("test_reversed(default)", 2),
+        ("test_reversed(override)", 3),
+        ("test_module", 1),
+        ("test_skipped", 4),
+    ] {
+        let case = report
+            .lines()
+            .find(|case| case.contains(&format!("name=\"{name}\"")))
+            .expect("test case must appear in the JUnit report");
+        assert!(
+            case.contains(&format!("file=\"guide.rst\" line=\"{line}\" column=\"1\"")),
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn source_tag_rejects_unvalidated_positions() {
+    let context = TestContext::with_file(
+        "test_generated.py",
+        r#"
+import karva
+
+@karva.tags.source(("guide.rst", 1, 1))
+def test_generated():
+    pass
+"#,
+    );
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test_generated`: 'tuple' object is not an instance of 'SourceLocation'
 
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
