@@ -165,14 +165,26 @@ impl BranchCollector<'_> {
             Stmt::If(stmt) => self.visit_if(stmt, next),
             Stmt::For(stmt) => {
                 let line = self.line(stmt.range().start());
-                self.add_branch(line, [self.first_executable_i32(&stmt.body), next]);
+                self.add_branch(
+                    line,
+                    [
+                        self.first_executable_i32(&stmt.body),
+                        self.first_executable_i32(&stmt.orelse).or(next),
+                    ],
+                );
                 self.visit_body(&stmt.body, line.map(line_to_i32));
                 self.visit_body(&stmt.orelse, next);
             }
             Stmt::While(stmt) => {
                 let line = self.line(stmt.range().start());
                 if !is_constant_true_while(stmt) {
-                    self.add_branch(line, [self.first_executable_i32(&stmt.body), next]);
+                    self.add_branch(
+                        line,
+                        [
+                            self.first_executable_i32(&stmt.body),
+                            self.first_executable_i32(&stmt.orelse).or(next),
+                        ],
+                    );
                 }
                 self.visit_body(&stmt.body, line.map(line_to_i32));
                 self.visit_body(&stmt.orelse, next);
@@ -190,16 +202,30 @@ impl BranchCollector<'_> {
         }
     }
 
+    /// Uses the first decorator for the exit sentinel, matching CPython `co_firstlineno`.
     fn visit_function_def(&mut self, stmt: &StmtFunctionDef) {
         let exit = self
-            .line(stmt.name.range().start())
+            .line(
+                stmt.decorator_list
+                    .first()
+                    .map_or(stmt.name.range().start(), |decorator| {
+                        decorator.range().start()
+                    }),
+            )
             .map(|line| -line_to_i32(line));
         self.visit_body(&stmt.body, exit);
     }
 
+    /// Class body code also starts at its first decorator in CPython.
     fn visit_class_def(&mut self, stmt: &StmtClassDef) {
         let exit = self
-            .line(stmt.name.range().start())
+            .line(
+                stmt.decorator_list
+                    .first()
+                    .map_or(stmt.name.range().start(), |decorator| {
+                        decorator.range().start()
+                    }),
+            )
             .map(|line| -line_to_i32(line));
         self.visit_body(&stmt.body, exit);
     }
@@ -403,6 +429,26 @@ def f(items):
 ";
 
         assert_eq!(arcs(source), vec![(2, 3), (2, 4)]);
+    }
+
+    #[rstest::rstest]
+    fn loop_else_arcs_point_to_else_suite(
+        #[values("for item in items", "while items")] header: &str,
+    ) {
+        let source = format!(
+            "def f(items):\n    {header}:\n        break\n    else:\n        return []\n    return [1]\n"
+        );
+
+        assert_eq!(arcs(&source), vec![(2, 3), (2, 5)]);
+    }
+
+    #[rstest::rstest]
+    fn decorated_body_uses_first_decorator_exit(
+        #[values("def f():", "class C:")] definition: &str,
+    ) {
+        let source = format!("@first\n@second\n{definition}\n    if flag:\n        pass\n");
+
+        assert_eq!(arcs(&source), vec![(4, -1), (4, 5)]);
     }
 
     #[test]
