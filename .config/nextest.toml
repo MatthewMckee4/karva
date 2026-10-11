@@ -1,3 +1,14 @@
+experimental = ["setup-scripts"]
+
+# uv's relocatable Python needs its stdlib prefix when embedded. Apply this only
+# to embedding crates: integration tests launch workers with other Python versions.
+[scripts.setup.python-home]
+command = ['uv', 'run', '--no-project', 'python', '-c', 'import os, sys; open(os.environ["NEXTEST_ENV"], "a").write("PYTHONHOME=" + sys.base_prefix + "\n")']
+
+[[profile.ci.scripts]]
+filter = 'package(karva_coverage) | package(karva_python_semantic) | package(karva_test_semantic)'
+setup = 'python-home'
+
 [profile.ci]
 retries = 2
 fail-fast = false
