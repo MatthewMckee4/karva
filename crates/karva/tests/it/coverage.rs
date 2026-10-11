@@ -2894,30 +2894,97 @@ fn test_cov_decorated_implicit_returns_and_loop_else(#[values(false, true)] comp
     let report: serde_json::Value =
         serde_json::from_str(&context.read_file("coverage.json")).expect("coverage JSON");
     let file = &report["files"]["example.py"];
-    let (executed, missing) = if complete {
-        (
-            vec![
-                [6, -3],
-                [6, 7],
-                [12, -9],
-                [12, 13],
-                [16, 17],
-                [16, 20],
-                [17, 16],
-                [17, 18],
-            ],
-            vec![],
-        )
-    } else {
-        (
-            vec![[6, -3], [6, 7], [12, 13], [16, 17], [17, 18]],
-            vec![[12, -9], [16, 20], [17, 16]],
-        )
-    };
-    assert_eq!(file["executed_branches"], serde_json::json!(executed));
-    assert_eq!(file["missing_branches"], serde_json::json!(missing));
-    assert_eq!(file["summary"]["num_branches"], 8);
+    let branches = serde_json::json!({
+        "executed_branches": file["executed_branches"],
+        "missing_branches": file["missing_branches"],
+        "num_branches": file["summary"]["num_branches"],
+        "percent_covered": file["summary"]["percent_covered"],
+    });
+    let branches = serde_json::to_string_pretty(&branches).expect("branch coverage JSON");
     if complete {
-        assert_eq!(file["summary"]["percent_covered"], 100.0);
+        insta::assert_snapshot!(branches, @r#"
+        {
+          "executed_branches": [
+            [
+              6,
+              -3
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              12,
+              -9
+            ],
+            [
+              12,
+              13
+            ],
+            [
+              16,
+              17
+            ],
+            [
+              16,
+              20
+            ],
+            [
+              17,
+              16
+            ],
+            [
+              17,
+              18
+            ]
+          ],
+          "missing_branches": [],
+          "num_branches": 8,
+          "percent_covered": 100.0
+        }
+        "#);
+    } else {
+        insta::assert_snapshot!(branches, @r#"
+        {
+          "executed_branches": [
+            [
+              6,
+              -3
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              12,
+              13
+            ],
+            [
+              16,
+              17
+            ],
+            [
+              17,
+              18
+            ]
+          ],
+          "missing_branches": [
+            [
+              12,
+              -9
+            ],
+            [
+              16,
+              20
+            ],
+            [
+              17,
+              16
+            ]
+          ],
+          "num_branches": 8,
+          "percent_covered": 84.0
+        }
+        "#);
     }
 }
