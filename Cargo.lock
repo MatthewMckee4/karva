@@ -1046,6 +1046,7 @@ dependencies = [
  "karva_static",
  "markdown",
  "regex",
+ "rstest",
  "ruff_python_ast",
  "serde",
  "serde_json",
