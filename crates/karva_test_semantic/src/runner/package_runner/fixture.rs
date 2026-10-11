@@ -14,6 +14,7 @@ use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{
     Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
 };
+use crate::extensions::tags::RuntimeTags;
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::runner::scoped_storage::ScopeKey;
@@ -21,6 +22,7 @@ use crate::utils::run_coroutine;
 
 use super::PackageRunner;
 use super::failure::TestError;
+use super::variant::input::VariantFixtures;
 
 impl PackageRunner<'_, '_> {
     /// Resolves and runs auto-use fixtures at the start of one scope.
@@ -53,8 +55,13 @@ impl PackageRunner<'_, '_> {
         if !auto_use_fixtures.is_empty() {
             self.context.flush_test_results();
         }
-        let failures =
-            self.run_fixtures(py, &fixture_plan, &auto_use_fixtures, FixtureUsage::AutoUse);
+        let failures = self.run_fixtures(
+            py,
+            &fixture_plan,
+            &auto_use_fixtures,
+            FixtureUsage::AutoUse,
+            None,
+        );
         let Some(failures) = FixtureSetupError::from_vec(failures) else {
             return Ok(());
         };
@@ -103,28 +110,29 @@ impl PackageRunner<'_, '_> {
     /// Builds test-call arguments and runs every function-scoped fixture group.
     ///
     /// Returned finalizers belong directly to the test attempt. Broader-scoped
-    /// finalizers are retained in the runner cache until their scope ends.
+    /// finalizers are retained in the runner cache until their scope ends. Case
+    /// tags are passed explicitly so cached values never read ambient test state.
     pub(super) fn prepare_test_fixtures(
         &mut self,
         py: Python<'_>,
-        fixture_plan: &FixturePlan,
-        fixture_dependencies: &[FixtureId],
-        use_fixture_dependencies: &[FixtureId],
-        auto_use_fixtures: &[FixtureId],
+        fixtures: &VariantFixtures,
+        tags: &RuntimeTags,
         params: HashMap<String, Arc<Py<PyAny>>>,
     ) -> PreparedFixtures {
+        let fixture_plan = &fixtures.plan;
         let mut test_finalizers = Vec::new();
         let mut fixture_call_errors = self.run_fixtures(
             py,
             fixture_plan,
-            use_fixture_dependencies,
+            &fixtures.use_dependencies,
             FixtureUsage::UseFixtures,
+            Some(tags),
         );
         let mut function_arguments = FixtureArguments::default();
 
-        for fixture_id in fixture_dependencies {
+        for fixture_id in fixtures.dependencies.iter() {
             let fixture = fixture_plan.fixture(*fixture_id);
-            match self.run_fixture(py, fixture_plan, *fixture_id) {
+            match self.run_fixture(py, fixture_plan, *fixture_id, Some(tags)) {
                 Ok((value, finalizer)) => {
                     function_arguments
                         .insert(fixture.function_name().to_string(), value.clone_ref(py));
@@ -144,8 +152,9 @@ impl PackageRunner<'_, '_> {
         fixture_call_errors.extend(self.run_fixtures(
             py,
             fixture_plan,
-            auto_use_fixtures,
+            &fixtures.auto_use,
             FixtureUsage::AutoUse,
+            Some(tags),
         ));
 
         for (key, value) in params {
@@ -169,6 +178,7 @@ impl PackageRunner<'_, '_> {
         py: Python<'_>,
         fixture_plan: &FixturePlan,
         fixture_id: FixtureId,
+        tags: Option<&RuntimeTags>,
     ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
         let fixture = fixture_plan.fixture(fixture_id);
         let scope = scope_key(fixture.scope(), fixture.package_owner());
@@ -180,7 +190,7 @@ impl PackageRunner<'_, '_> {
 
         for dependency_id in fixture.dependencies() {
             let dependency = fixture_plan.fixture(*dependency_id);
-            match self.run_fixture(py, fixture_plan, *dependency_id) {
+            match self.run_fixture(py, fixture_plan, *dependency_id, tags) {
                 Ok((value, finalizer)) => {
                     if function_arguments.is_empty() {
                         // Delay allocation until recursion unwinds so deep chains do not
@@ -195,6 +205,18 @@ impl PackageRunner<'_, '_> {
                 }
                 Err(error) => return Err(error.with_dependent(fixture)),
             }
+        }
+
+        // Framework fixtures still use normal lookup, scope validation, and caching.
+        // Supply case metadata only to the built-in, leaving user overrides untouched.
+        if fixture.name().module_path().module_name() == "karva._builtins"
+            && fixture.function_name() == "test_info"
+            && let Some(tags) = tags
+        {
+            let tag_names = tags.tag_names().into_pyobject(py).map_err(|error| {
+                FixtureCallError::new(fixture, error, FixtureArguments::default())
+            })?;
+            function_arguments.push(("_tags", tag_names.unbind().into_any()));
         }
 
         let fixture_call_result = match fixture.call(py, &function_arguments) {
@@ -239,11 +261,12 @@ impl PackageRunner<'_, '_> {
         fixture_plan: &FixturePlan,
         fixture_ids: &[FixtureId],
         usage: FixtureUsage,
+        tags: Option<&RuntimeTags>,
     ) -> Vec<PreparedFixtureFailure> {
         let mut errors = Vec::new();
         for fixture_id in fixture_ids {
             let fixture = fixture_plan.fixture(*fixture_id);
-            match self.run_fixture(py, fixture_plan, *fixture_id) {
+            match self.run_fixture(py, fixture_plan, *fixture_id, tags) {
                 Ok((_, Some(finalizer))) => self.finalizer_cache.add_finalizer(finalizer),
                 Ok((_, None)) => {}
                 Err(error) => errors.push(PreparedFixtureFailure::new(

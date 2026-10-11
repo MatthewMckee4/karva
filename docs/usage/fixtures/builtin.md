@@ -1,6 +1,32 @@
-Karva provides a set of built-in fixtures that can be used in your tests without any setup. They are all compatible with their pytest counterparts, so existing pytest tests can use them unchanged.
+Karva provides a set of built-in fixtures that can be used in your tests without any setup. Fixtures with pytest counterparts are compatible with them, so existing pytest tests can use those unchanged.
 
 We will try to add more built-in fixtures from pytest in the future.
+
+## Test Information
+
+The function-scoped `test_info` fixture returns a read-only `karva.TestInfo` object for the current test case. Its `tags` field is a `frozenset[str]`; `has_tag(name)` checks membership. It includes tags from the test, module-level `pytestmark`, and the current parametrized case. Repeated names appear only once. Tag names remain present even when a built-in marker's condition is false. Built-in pytest markers use Karva's corresponding names, such as `expect_fail` for `xfail` and `use_fixtures` for `usefixtures`.
+
+Use it in tests or function-scoped fixtures, including auto-use fixtures:
+
+```py title="test.py"
+import karva
+
+
+@karva.fixture(auto_use=True)
+def enforce_invariant(test_info: karva.TestInfo):
+    if not test_info.has_tag("skip_invariant"):
+        # Perform the usual invariant checks or setup here.
+        assert application_is_ready()
+
+
+@karva.tags.skip_invariant
+def test_special_case():
+    pass
+```
+
+The object remains available to fixture teardown, and each retry receives a fresh object. Module-, package-, and session-scoped fixtures cannot depend on `test_info`, because their cached values serve multiple test cases. User fixtures can override `test_info` through normal fixture lookup.
+
+Only tag names are exposed; tag arguments and keyword arguments are not part of this API. Pytest's `request` fixture remains unsupported.
 
 ## Temporary Directory
 

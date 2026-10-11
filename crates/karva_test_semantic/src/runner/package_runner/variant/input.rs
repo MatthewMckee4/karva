@@ -21,15 +21,15 @@ pub(super) struct VariantIdentity {
 }
 
 /// Fixture graph selected for one variant.
-pub(super) struct VariantFixtures {
+pub(in crate::runner::package_runner) struct VariantFixtures {
     /// Compiled fixture arena shared by all attempts.
-    pub(super) plan: Rc<FixturePlan>,
+    pub(in crate::runner::package_runner) plan: Rc<FixturePlan>,
     /// Fixtures passed as Python keyword arguments.
-    pub(super) dependencies: Rc<[FixtureId]>,
+    pub(in crate::runner::package_runner) dependencies: Rc<[FixtureId]>,
     /// Fixtures run for side effects but omitted from test arguments.
-    pub(super) use_dependencies: Rc<[FixtureId]>,
+    pub(in crate::runner::package_runner) use_dependencies: Rc<[FixtureId]>,
     /// Function-scoped auto-use fixtures.
-    pub(super) auto_use: Rc<[FixtureId]>,
+    pub(in crate::runner::package_runner) auto_use: Rc<[FixtureId]>,
 }
 
 /// Inputs that remain stable across all attempts for one test variant.

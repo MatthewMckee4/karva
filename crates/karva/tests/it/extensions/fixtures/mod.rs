@@ -10,3 +10,4 @@ pub mod more_builtins;
 pub mod parametrized;
 pub mod pytest_monkeypatch;
 pub mod retries;
+pub mod test_info;

@@ -19,7 +19,7 @@ use super::PackageRunner;
 
 mod attempt;
 mod identity;
-mod input;
+pub(super) mod input;
 mod reporting;
 mod settings;
 
@@ -159,10 +159,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
-            &self.input.fixtures.plan,
-            &self.input.fixtures.dependencies,
-            &self.input.fixtures.use_dependencies,
-            &self.input.fixtures.auto_use,
+            &self.input.fixtures,
+            &self.input.tags,
             params,
         );
         PreparedTestAttempt {

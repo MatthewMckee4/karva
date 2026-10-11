@@ -19,7 +19,7 @@ import os
 import sys
 import tempfile
 import warnings
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple, TextIO, cast
 
 if TYPE_CHECKING:
@@ -30,6 +30,7 @@ from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
 from karva._fixtures.tmpdir import LegacyPath, TempPathFactory
 from karva._karva import fixture
+from karva._test_info import TestInfo
 
 __all__ = [
     "CaptureResult",
@@ -527,3 +528,11 @@ def recwarn() -> Generator[WarningsRecorder, None, None]:
     with wrec:
         warnings.simplefilter("default")
         yield wrec
+
+
+@fixture(name="test_info")
+def current_test_info(*, _tags: Sequence[str] | None = None) -> TestInfo:
+    """Inspect the current test case's tags during setup, the test, and teardown."""
+    if _tags is None:
+        raise RuntimeError("test_info is only available during a test attempt")
+    return TestInfo(frozenset(_tags))

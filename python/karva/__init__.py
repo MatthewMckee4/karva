@@ -23,6 +23,7 @@ from karva._karva import (
     snapshot_settings,
     tags,
 )
+from karva._test_info import TestInfo
 
 __version__ = "0.0.1-alpha.12"
 
@@ -35,6 +36,7 @@ __all__: list[str] = [
     "SkipError",
     "SnapshotMismatchError",
     "SnapshotSettings",
+    "TestInfo",
     "approx",
     "assert_cmd_snapshot",
     "assert_json_snapshot",

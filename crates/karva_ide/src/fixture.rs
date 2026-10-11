@@ -268,6 +268,12 @@ pub(super) struct BuiltinFixture {
 
 const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     BuiltinFixture {
+        name: "test_info",
+        scope: FixtureScope::Function,
+        signature: "test_info() -> TestInfo",
+        docstring: "Inspect the current test case's tags during setup, the test, and teardown.",
+    },
+    BuiltinFixture {
         name: "monkeypatch",
         scope: FixtureScope::Function,
         signature: "monkeypatch() -> Generator[MockEnv, None, None]",
@@ -1419,7 +1425,7 @@ mod tests {
     fn resolves_local_and_builtin_fixtures() {
         assert!(
             analyze(
-                "from karva import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database, tmp_path): pass\n"
+                "from karva import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database, tmp_path, test_info): pass\n"
             )
             .diagnostics
             .is_empty()
