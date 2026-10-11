@@ -202,30 +202,24 @@ impl BranchCollector<'_> {
         }
     }
 
-    /// Uses the first decorator for the exit sentinel, matching CPython `co_firstlineno`.
+    /// Uses the first decorator for the exit sentinel, matching `CPython` `co_firstlineno`.
     fn visit_function_def(&mut self, stmt: &StmtFunctionDef) {
         let exit = self
-            .line(
-                stmt.decorator_list
-                    .first()
-                    .map_or(stmt.name.range().start(), |decorator| {
-                        decorator.range().start()
-                    }),
-            )
+            .line(stmt.decorator_list.first().map_or_else(
+                || stmt.name.range().start(),
+                |decorator| decorator.range().start(),
+            ))
             .map(|line| -line_to_i32(line));
         self.visit_body(&stmt.body, exit);
     }
 
-    /// Class body code also starts at its first decorator in CPython.
+    /// Class body code also starts at its first decorator in `CPython`.
     fn visit_class_def(&mut self, stmt: &StmtClassDef) {
         let exit = self
-            .line(
-                stmt.decorator_list
-                    .first()
-                    .map_or(stmt.name.range().start(), |decorator| {
-                        decorator.range().start()
-                    }),
-            )
+            .line(stmt.decorator_list.first().map_or_else(
+                || stmt.name.range().start(),
+                |decorator| decorator.range().start(),
+            ))
             .map(|line| -line_to_i32(line));
         self.visit_body(&stmt.body, exit);
     }
