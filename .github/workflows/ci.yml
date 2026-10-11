@@ -24,7 +24,7 @@ env:
   # Keep this exact version preinstalled before nextest starts.
   PYTHON_VERSION: "3.14.4"
   # Pin uv so CI does not depend on the mutable latest release manifest.
-  UV_VERSION: "0.12.5"
+  UV_VERSION: "0.13.0"
   RUSTUP_MAX_RETRIES: 10
   NEXTEST_PROFILE: ci
 
@@ -237,8 +237,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # uv 0.12.5 provides 3.15.0rc1; pin it until its catalog has the final release.
-        python: ["3.14.4", "3.15.0rc1"]
+        python: ["3.14.4", "3.15.0"]
 
     env:
       PYTHON_VERSION: ${{ matrix.python }}
@@ -296,7 +295,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.15.0rc1"]
+        python: ["3.10", "3.15.0"]
 
     env:
       PYTHON_VERSION: ${{ matrix.python }}
@@ -382,7 +381,7 @@ jobs:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5]
-        python: ["3.14.4", "3.15.0rc1"]
+        python: ["3.14.4", "3.15.0"]
 
     env:
       PYTHON_VERSION: ${{ matrix.python }}
