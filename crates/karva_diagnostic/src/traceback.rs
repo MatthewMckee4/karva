@@ -1,12 +1,14 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyTraceback;
 use ruff_source_file::{OneIndexed, SourceFile, SourceFileBuilder};
 use ruff_text_size::{TextRange, TextSize};
 
-/// Parsed representation of a Python traceback from a `PyErr` object.
+/// Frames extracted directly from a Python exception traceback.
 #[derive(Debug, Clone)]
 pub struct Traceback {
-    /// Frames ordered as reported by Python's traceback formatter.
+    /// Frames ordered from the outermost call to the point where the exception was raised.
     pub frames: Vec<TracebackFrame>,
 }
 
@@ -59,17 +61,14 @@ impl Traceback {
         source_file: Option<&SourceFile>,
     ) -> Option<Self> {
         if let Some(traceback) = error.traceback(py) {
-            let traceback_str = match traceback.format() {
-                Ok(traceback_str) => traceback_str,
+            let locations = match get_traceback_locations(&traceback) {
+                Ok(locations) => locations,
                 Err(err) => {
-                    tracing::warn!("failed to format Python traceback: {err}");
+                    tracing::warn!("failed to extract Python traceback: {err}");
                     return None;
                 }
             };
-            if traceback_str.is_empty() {
-                return None;
-            }
-            let frames = get_traceback_locations(&traceback_str)
+            let frames = locations
                 .into_iter()
                 .map(|frame| {
                     let source = get_source_file_and_range(&frame, source_file).map(
@@ -124,25 +123,23 @@ fn source_file_matches_path(source_file: &SourceFile, traceback_path: &Utf8Path)
         || traceback_path.ends_with(source_path)
 }
 
-fn get_traceback_locations(traceback: &str) -> Vec<TracebackLocation> {
-    traceback.lines().filter_map(parse_traceback_line).collect()
-}
-
-/// Parse a traceback line like: `  File "/path/to/file.py", line 42, in function_name`
-fn parse_traceback_line(line: &str) -> Option<TracebackLocation> {
-    let trimmed = line.trim_start();
-    let after_file = trimmed.strip_prefix("File \"")?;
-
-    let (filename, rest) = after_file.split_once('"')?;
-
-    let (line_str, function_name) = rest.strip_prefix(", line ")?.split_once(", in ")?;
-    let line_number = line_str.parse::<OneIndexed>().ok()?;
-
-    Some(TracebackLocation {
-        file_path: Utf8PathBuf::from(filename),
-        line_number,
-        function_name: function_name.to_string(),
-    })
+/// Reads the traceback chain without losing filename characters or repeated frames.
+fn get_traceback_locations(traceback: &Bound<'_, PyTraceback>) -> PyResult<Vec<TracebackLocation>> {
+    let mut traceback = traceback.clone().into_any();
+    let mut locations = Vec::new();
+    while !traceback.is_none() {
+        let code = traceback.getattr("tb_frame")?.getattr("f_code")?;
+        let line_number = traceback.getattr("tb_lineno")?.extract()?;
+        let line_number = OneIndexed::new(line_number)
+            .ok_or_else(|| PyValueError::new_err("traceback line number must be positive"))?;
+        locations.push(TracebackLocation {
+            file_path: Utf8PathBuf::from(code.getattr("co_filename")?.extract::<String>()?),
+            line_number,
+            function_name: code.getattr("co_name")?.extract()?,
+        });
+        traceback = traceback.getattr("tb_next")?;
+    }
+    Ok(locations)
 }
 
 /// Calculate the `TextRange` for a specific line in the source text
@@ -183,136 +180,91 @@ fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<Te
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::CString;
+
+    use rstest::rstest;
+
     use super::*;
 
-    mod parse_traceback_line_tests {
-        use super::*;
+    #[rstest]
+    fn extracts_frames_and_source(
+        #[values("test.py", "test_\"quoted\".py", "test_\nnewline.py")] filename: &str,
+    ) -> PyResult<()> {
+        Python::initialize();
+        Python::attach(|py| {
+            let code = c"def outer():\n    inner()\ndef inner():\n    raise ValueError('boom')\n";
+            let filename_cstr = CString::new(filename)?;
+            let module = PyModule::from_code(py, code, &filename_cstr, c"test_traceback")?;
+            let error = module
+                .getattr("outer")?
+                .call0()
+                .expect_err("test must raise");
+            let source_file =
+                SourceFileBuilder::new(filename, code.to_str().expect("Python source is UTF-8"))
+                    .finish();
+            let traceback = Traceback::from_error_with_source(py, &error, &source_file)
+                .expect("exception must retain its traceback");
 
-        #[test]
-        fn test_parse_traceback_line_valid() {
-            let line = r#"  File "test.py", line 10, in <module>"#;
-            insta::assert_debug_snapshot!(parse_traceback_line(line), @r#"
-            Some(
-                TracebackLocation {
-                    file_path: "test.py",
-                    line_number: OneIndexed(
-                        10,
-                    ),
-                    function_name: "<module>",
-                },
-            )
-            "#);
-        }
-
-        #[test]
-        fn test_parse_traceback_line_with_path() {
-            let line = r#"  File "/path/to/script.py", line 42, in function_name"#;
-            insta::assert_debug_snapshot!(parse_traceback_line(line), @r#"
-            Some(
-                TracebackLocation {
-                    file_path: "/path/to/script.py",
-                    line_number: OneIndexed(
-                        42,
-                    ),
-                    function_name: "function_name",
-                },
-            )
-            "#);
-        }
-
-        #[test]
-        fn test_parse_traceback_line_no_file_prefix() {
-            insta::assert_debug_snapshot!(parse_traceback_line("Some random line"), @"None");
-        }
-
-        #[test]
-        fn test_parse_traceback_line_missing_line_number() {
-            let line = r#"  File "test.py", in <module>"#;
-            insta::assert_debug_snapshot!(parse_traceback_line(line), @"None");
-        }
-
-        #[test]
-        fn test_parse_traceback_line_malformed_quote() {
-            let line = r#"  File "test.py, line 10, in <module>"#;
-            insta::assert_debug_snapshot!(parse_traceback_line(line), @"None");
-        }
-
-        #[test]
-        fn test_parse_traceback_line_large_line_number() {
-            let line = r#"  File "test.py", line 99999, in <module>"#;
-            insta::assert_debug_snapshot!(parse_traceback_line(line), @r#"
-            Some(
-                TracebackLocation {
-                    file_path: "test.py",
-                    line_number: OneIndexed(
-                        99999,
-                    ),
-                    function_name: "<module>",
-                },
-            )
-            "#);
-        }
+            assert_eq!(traceback.frames.len(), 2);
+            let outer = &traceback.frames[0];
+            let inner = &traceback.frames[1];
+            assert_eq!(outer.file_path.as_str(), filename);
+            assert_eq!(outer.function_name, "outer");
+            assert_eq!(outer.line_number.get(), 2);
+            assert_eq!(inner.file_path.as_str(), filename);
+            assert_eq!(inner.function_name, "inner");
+            assert_eq!(inner.line_number.get(), 4);
+            let source = inner
+                .source
+                .as_ref()
+                .expect("source context must be retained");
+            assert_eq!(source.source_file, source_file);
+            assert_eq!(
+                source.source_file.slice(source.location),
+                "raise ValueError('boom')"
+            );
+            Ok(())
+        })
     }
 
-    mod get_traceback_locations_tests {
-        use super::*;
+    #[test]
+    fn retains_repeated_recursive_frames() -> PyResult<()> {
+        Python::initialize();
+        Python::attach(|py| {
+            let code = c"def recurse(depth):\n    if depth:\n        recurse(depth - 1)\n    else:\n        raise ValueError('boom')\n";
+            let module = PyModule::from_code(py, code, c"recursive.py", c"test_traceback")?;
+            let error = module
+                .getattr("recurse")?
+                .call1((5,))
+                .expect_err("test must raise");
+            let source_file = SourceFileBuilder::new(
+                "recursive.py",
+                code.to_str().expect("Python source is UTF-8"),
+            )
+            .finish();
+            let traceback = Traceback::from_error_with_source(py, &error, &source_file)
+                .expect("exception must retain its traceback");
 
-        #[test]
-        fn test_get_traceback_location_valid() {
-            let traceback = r#"Traceback (most recent call last):
-  File "test.py", line 10, in <module>
-    raise Exception('Test error')
-Exception: Test error"#;
-            insta::assert_debug_snapshot!(get_traceback_locations(traceback), @r#"
-            [
-                TracebackLocation {
-                    file_path: "test.py",
-                    line_number: OneIndexed(
-                        10,
-                    ),
-                    function_name: "<module>",
-                },
-            ]
-            "#);
-        }
+            assert_eq!(traceback.frames.len(), 6);
+            assert!(
+                traceback
+                    .frames
+                    .iter()
+                    .all(|frame| frame.function_name == "recurse")
+            );
+            assert_eq!(traceback.frames[0].line_number.get(), 3);
+            assert_eq!(traceback.frames[5].line_number.get(), 5);
+            Ok(())
+        })
+    }
 
-        #[test]
-        fn test_get_traceback_location_multi_frame() {
-            let traceback = r#"Traceback (most recent call last):
-  File "main.py", line 5, in <module>
-    foo()
-  File "helper.py", line 15, in foo
-    bar()
-ValueError: Invalid value"#;
-            insta::assert_debug_snapshot!(get_traceback_locations(traceback), @r#"
-            [
-                TracebackLocation {
-                    file_path: "main.py",
-                    line_number: OneIndexed(
-                        5,
-                    ),
-                    function_name: "<module>",
-                },
-                TracebackLocation {
-                    file_path: "helper.py",
-                    line_number: OneIndexed(
-                        15,
-                    ),
-                    function_name: "foo",
-                },
-            ]
-            "#);
-        }
-
-        #[test]
-        fn test_get_traceback_location_empty() {
-            insta::assert_debug_snapshot!(get_traceback_locations(""), @"[]");
-        }
-
-        #[test]
-        fn test_get_traceback_location_no_file_lines() {
-            insta::assert_debug_snapshot!(get_traceback_locations("Exception: Test error"), @"[]");
-        }
+    #[test]
+    fn exception_without_traceback_has_no_frames() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = PyValueError::new_err("not raised");
+            assert!(Traceback::from_error_with_fallback(py, &error, None).is_none());
+        });
     }
 
     mod calculate_line_range_tests {
@@ -381,22 +333,18 @@ ValueError: Invalid value"#;
 
         #[test]
         fn uses_matching_fallback_source_file() {
-            let traceback = r#"Traceback (most recent call last):
-  File "/tmp/project/tests/test_example.py", line 2, in test_example
-    assert False
-AssertionError"#;
+            let location = TracebackLocation {
+                file_path: Utf8PathBuf::from("/tmp/project/tests/test_example.py"),
+                line_number: OneIndexed::from_zero_indexed(1),
+                function_name: "test_example".to_string(),
+            };
             let source_file = SourceFileBuilder::new(
                 "tests/test_example.py",
                 "def test_example():\n    assert False\n",
             )
             .finish();
 
-            let locations = get_traceback_locations(traceback);
-            assert_eq!(locations.len(), 1);
-            let Some(location) = locations.first() else {
-                return;
-            };
-            let resolved = get_source_file_and_range(location, Some(&source_file));
+            let resolved = get_source_file_and_range(&location, Some(&source_file));
             assert!(resolved.is_some());
             let Some((resolved_source_file, range)) = resolved else {
                 return;
@@ -408,22 +356,18 @@ AssertionError"#;
 
         #[test]
         fn ignores_fallback_source_file_for_different_path() {
-            let traceback = r#"Traceback (most recent call last):
-  File "/tmp/project/tests/test_example.py", line 2, in test_example
-    assert False
-AssertionError"#;
+            let location = TracebackLocation {
+                file_path: Utf8PathBuf::from("/tmp/project/tests/test_example.py"),
+                line_number: OneIndexed::from_zero_indexed(1),
+                function_name: "test_example".to_string(),
+            };
             let source_file = SourceFileBuilder::new(
                 "tests/test_other.py",
                 "def test_other():\n    assert False\n",
             )
             .finish();
 
-            let locations = get_traceback_locations(traceback);
-            assert_eq!(locations.len(), 1);
-            let Some(location) = locations.first() else {
-                return;
-            };
-            assert!(get_source_file_and_range(location, Some(&source_file)).is_none());
+            assert!(get_source_file_and_range(&location, Some(&source_file)).is_none());
         }
     }
 }

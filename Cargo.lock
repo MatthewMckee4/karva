@@ -1159,6 +1159,7 @@ dependencies = [
  "karva_logging",
  "karva_python_semantic",
  "pyo3",
+ "rstest",
  "ruff_source_file",
  "ruff_text_size",
  "serde",
