@@ -104,6 +104,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
+          # Both revisions reuse dependencies in the target directory restored above.
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
           set -euo pipefail
 
