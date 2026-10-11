@@ -7,7 +7,7 @@ use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOu
 use pyo3::prelude::*;
 
 use crate::warnings::{WarningCapture, warning_capture_error};
-
+use crate::diagnostic::unhandled_exception_diagnostic;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_async_test_with_timeout, run_coroutine};
 
@@ -111,8 +111,10 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             settings.retry.fail_slow_budget,
             self.input.test.definition(),
         );
-        let retryable = body.retryable || teardown_failed || (budget_exceeded && !skipped);
 
+        // Argument references can keep fixture values alive after cache cleanup.
+        // Drop them while teardown still belongs to this attempt.
+        drop(function_arguments);
         if let Some(capture) = warning_capture
             && let Err(error) = capture.finish(
                 self.py,
@@ -126,6 +128,22 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 .add_run_diagnostic(warning_capture_error(&error));
         }
         let captured_output = finish_output_capture(self.py, output_capture);
+        let events = self.package_runner.exception_capture.finish_attempt();
+        // A retry must not hide an unhandled exception behind a later pass.
+        let retryable = events.is_empty()
+            && (body.retryable || teardown_failed || (budget_exceeded && !skipped));
+        let diagnostics = events
+            .iter()
+            .map(|event| {
+                unhandled_exception_diagnostic(
+                    self.py,
+                    event,
+                    Some(self.input.test.definition()),
+                    self.package_runner.context.is_verbose(),
+                )
+            })
+            .collect();
+        let outcome = attach_related_diagnostics(outcome, diagnostics);
 
         AttemptResult {
             lifecycle: TestLifecycleAttempt {

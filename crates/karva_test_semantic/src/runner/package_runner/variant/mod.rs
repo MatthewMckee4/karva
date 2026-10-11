@@ -91,6 +91,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         self.package_runner
             .context
             .report_test_started(&initial_test_name);
+        self.package_runner.exception_capture.begin_attempt();
         let retry_params = self.input.params.clone();
         let first_params = std::mem::take(&mut self.input.params);
         self.begin_pending_coverage_setup();
@@ -205,6 +206,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         params: HashMap<String, Arc<Py<PyAny>>>,
         settings: &VariantSettings,
     ) -> PreparedTestAttempt {
+        self.package_runner.exception_capture.begin_attempt();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Setup);
         let output_capture = self.start_output_capture();
         self.prepare_attempt(params, output_capture)

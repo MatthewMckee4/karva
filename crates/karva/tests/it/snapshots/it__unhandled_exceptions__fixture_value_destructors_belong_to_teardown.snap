@@ -1,0 +1,38 @@
+---
+source: crates/karva/tests/it/unhandled_exceptions.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-159e26bc99a3fb2b-py3.13-e8731cbbba46541b
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 1 test across 1 worker
+       ERROR [TIME] test_background::test_background(resource=resource)
+
+failures:
+
+test_background::test_background(resource=resource):
+
+error[unraisable-exception]: Unraisable exception `RuntimeError`
+  --> test_background.py:34:5
+   |
+34 | def test_background(resource):
+   |     ^^^^^^^^^^^^^^^
+info: Object: `BrokenCleanup.__del__`
+info: Exception raised here
+  --> test_background.py:12:9
+   |
+12 |         raise RuntimeError("cleanup failed")
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: cleanup failed
+
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+----- stderr -----

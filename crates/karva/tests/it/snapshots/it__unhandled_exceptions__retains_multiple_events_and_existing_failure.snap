@@ -1,0 +1,87 @@
+---
+source: crates/karva/tests/it/unhandled_exceptions.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-159e26bc99a3fb2b-py3.13-5cf9d892ab82e97e
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 1 test across 1 worker
+        FAIL [TIME] test_background::test_background
+
+failures:
+
+test_background::test_background:
+
+error[test-failure]: Test `test_background` failed
+  --> test_background.py:24:5
+   |
+24 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Test failed here
+  --> test_background.py:29:5
+   |
+29 |     raise ValueError("test body failed too")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: test body failed too
+
+error[unhandled-thread-exception]: Unhandled exception `RuntimeError` in thread `background`
+  --> test_background.py:24:5
+   |
+24 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Exception raised here
+ --> test_background.py:7:5
+  |
+7 |     raise RuntimeError("background failed")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: background failed
+
+error[unraisable-exception]: Unraisable exception `RuntimeError`
+  --> test_background.py:24:5
+   |
+24 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Object: `BrokenCleanup.__del__`
+info: Exception raised here
+  --> test_background.py:12:9
+   |
+12 |         raise RuntimeError("cleanup failed")
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: cleanup failed
+
+error[unhandled-thread-exception]: Unhandled exception `RuntimeError` in thread `background`
+  --> test_background.py:24:5
+   |
+24 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Exception raised here
+ --> test_background.py:7:5
+  |
+7 |     raise RuntimeError("background failed")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: background failed
+
+error[unraisable-exception]: Unraisable exception `RuntimeError`
+  --> test_background.py:24:5
+   |
+24 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Object: `BrokenCleanup.__del__`
+info: Exception raised here
+  --> test_background.py:12:9
+   |
+12 |         raise RuntimeError("cleanup failed")
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: cleanup failed
+
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+----- stderr -----

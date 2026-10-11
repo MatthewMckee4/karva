@@ -13,6 +13,7 @@ mod output_capture;
 mod py_attach;
 mod python;
 mod runner;
+mod unhandled_exceptions;
 mod utils;
 mod warnings;
 
@@ -28,10 +29,13 @@ use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::TestCacheKey;
 use ruff_python_ast::PythonVersion;
 
-use crate::diagnostic::failed_to_start_coverage_diagnostic;
+use crate::diagnostic::{
+    exception_hook_diagnostic, failed_to_start_coverage_diagnostic, unhandled_exception_diagnostic,
+};
 use crate::discovery::{DiscoveryIssue, StandardDiscoverer};
 use crate::py_attach::attach_with_output;
 use crate::runner::PackageRunner;
+use crate::unhandled_exceptions::UnhandledExceptionCapture;
 
 /// Inputs needed to discover and execute one worker's test selection.
 ///
@@ -87,6 +91,16 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
                 return state.into_result();
             }
         };
+        let exception_capture = match UnhandledExceptionCapture::start(py) {
+            Ok(capture) => capture,
+            Err(error) => {
+                state.add_run_diagnostic(exception_hook_diagnostic("install", &error.to_string()));
+                if let Err(error) = warnings.finish(py, &context, None, None) {
+                    state.add_run_diagnostic(warnings::warning_capture_error(&error));
+                }
+                return state.into_result();
+            }
+        };
         if let Err(error) = assertions::install(py, context.cwd()) {
             tracing::warn!("failed to install assertion instrumentation: {error}");
         }
@@ -116,8 +130,13 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
             }
         }
 
-        PackageRunner::new(&context, &mut state, cov_session.as_ref())
-            .execute(py, &discovery.package);
+        PackageRunner::new(
+            &context,
+            &mut state,
+            cov_session.as_ref(),
+            &exception_capture,
+        )
+        .execute(py, &discovery.package);
 
         if let Some(cov_session) = cov_session
             && let Err(err) = cov_session.stop_and_save(py)
@@ -125,9 +144,24 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
             tracing::error!("Failed to save coverage data: {err}");
         }
 
+        // Releasing imported modules and cached Python values can invoke __del__.
+        drop(discovery.package);
         if let Err(error) = warnings.finish(py, &context, None, None) {
             state.add_run_diagnostic(warnings::warning_capture_error(&error));
         }
+        let (events, errors) = exception_capture.finish(py);
+        for event in events {
+            state.add_run_diagnostic(unhandled_exception_diagnostic(
+                py,
+                &event,
+                None,
+                context.is_verbose(),
+            ));
+        }
+        for error in errors {
+            state.add_run_diagnostic(exception_hook_diagnostic("restore", &error.to_string()));
+        }
+
         state.into_result()
     })
 }

@@ -1,0 +1,31 @@
+---
+source: crates/karva/tests/it/unhandled_exceptions.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-159e26bc99a3fb2b-py3.13-5cf9d892ab82e97e
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 1 test across 1 worker
+        PASS [TIME] test_background::test_passes
+
+diagnostics:
+
+error[unhandled-thread-exception]: Unhandled exception `RuntimeError` in thread `background`
+info: Exception raised here
+ --> test_background.py:7:5
+  |
+7 |     raise RuntimeError("background failed")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: background failed
+
+────────────
+     Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+----- stderr -----

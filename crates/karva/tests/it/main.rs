@@ -25,6 +25,7 @@ mod run_timeout;
 mod server;
 mod show_config;
 mod shuffle;
+mod unhandled_exceptions;
 mod version;
 mod warnings;
 mod watch;
