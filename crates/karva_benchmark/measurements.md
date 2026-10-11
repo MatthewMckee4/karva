@@ -40,14 +40,13 @@ Each project was warmed with one worker. Its cache was restored before every
 four-worker measurement, as in the comparison harness. Both A/A subjects used
 the same wheel, with alternating first/second roles. Twenty-one pairs were
 recorded for each workload; async sampling was extended to thirty-one pairs.
-All samples, including timing spikes, are retained in the
-[raw receipt](measurements/2026-10-11-generated-workloads.json), with the wheel
-hash and environment. Reported wall time and RSS are medians of those samples.
+All samples, including timing spikes, were included. Reported wall time and RSS
+are medians of those samples.
 
 For each proposed repetition count, resample whole A/A pairs with replacement,
 calculate the percentage change between the two subject medians, and take the
-central 99% interval. The receipt records the bounds for seven, fifteen,
-twenty-one, and thirty-one repetitions. It uses Python's `random.Random(0)`,
+central 99% interval. Calibration evaluated seven, fifteen,
+twenty-one, and thirty-one repetitions using Python's `random.Random(0)`,
 10,000 resamples, and sorted indices `50` and `-51`. Pairing retains the shared
 runner conditions instead of treating adjacent measurements as independent.
 This is a noise estimate from the measured sample, not a guarantee for every
