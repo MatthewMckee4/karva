@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/pr-benchmarks.yml"
-      - ".github/actions/setup-uv-python/**"
       - "Cargo.lock"
       - "Cargo.toml"
       - "crates/**"
@@ -43,11 +42,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - uses: ./.github/actions/setup-uv-python
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: setup-python
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
       - name: Build benchmark runner
+        env:
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: cargo build -p karva_benchmark --bin karva-benchmark --release
 
       - name: Generate project matrix
@@ -85,7 +88,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - uses: ./.github/actions/setup-uv-python
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: setup-python
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
 
@@ -94,6 +103,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           # Both revisions reuse dependencies in the target directory restored above.
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
@@ -153,6 +163,12 @@ jobs:
       matrix: ${{ fromJson(needs.benchmark-tools.outputs.matrix) }}
 
     steps:
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: setup-python
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           cache-dependency-glob: ""
@@ -227,6 +243,11 @@ jobs:
     if: ${{ needs.compare-benchmarks.result == 'success' }}
 
     steps:
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.BENCHMARK_PYTHON_VERSION }}
+
       - name: Download benchmark runner
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -302,6 +323,7 @@ jobs:
             local truncation_notice
 
             truncation_notice=$(cat <<EOF
+
 
           > [!NOTE]
           > Report truncated to fit GitHub's comment limit. [View the complete summary online](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) or [download the full report artifact](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}#artifacts).

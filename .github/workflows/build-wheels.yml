@@ -16,7 +16,6 @@ on:
       - pyproject.toml
       # And when we change this workflow itself...
       - .github/workflows/build-wheels.yml
-      - .github/actions/setup-uv-python/**
 
 concurrency:
   group: build-wheels-${{ github.ref }}
@@ -51,6 +50,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -58,21 +62,14 @@ jobs:
           args: --release --locked --out dist --compatibility pypi
           manylinux: auto
 
-      - uses: ./.github/actions/setup-uv-python
-        if: ${{ matrix.platform.target == 'x86_64' }}
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Test wheel
         if: ${{ matrix.platform.target == 'x86_64' }}
         run: |
-          uv venv
-          export VIRTUAL_ENV="$PWD/.venv"
-          uv pip install dist/"${PACKAGE_NAME}"-*.whl
-          uv run --no-project --active "${MODULE_NAME}" --help
-          uv run --no-project --active python -m "${MODULE_NAME}" --help
+          python -m pip install dist/"${PACKAGE_NAME}"-*.whl --force-reinstall
+          "${MODULE_NAME}" --help
+          python -m "${MODULE_NAME}" --help
           cd crates/karva/tests/projects/wheel-smoke
-          uv run --no-project --active python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
+          python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
 
       - name: Upload wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -95,6 +92,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -123,9 +125,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-uv-python
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: cpython-${{ env.PYTHON_VERSION }}-windows-${{ matrix.platform.target == 'x64' && 'x86_64' || 'x86' }}-none
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.platform.target }}
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -136,13 +140,11 @@ jobs:
       - name: Test wheel
         shell: bash
         run: |
-          uv venv
-          export VIRTUAL_ENV="$PWD/.venv"
-          uv pip install dist/"${PACKAGE_NAME}"-*.whl
-          uv run --no-project --active "${MODULE_NAME}" --help
-          uv run --no-project --active python -m "${MODULE_NAME}" --help
+          python -m pip install dist/"${PACKAGE_NAME}"-*.whl --force-reinstall
+          "${MODULE_NAME}" --help
+          python -m "${MODULE_NAME}" --help
           cd crates/karva/tests/projects/wheel-smoke
-          uv run --no-project --active python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
+          python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
 
       - name: Upload wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -166,7 +168,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-uv-python
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -178,13 +181,11 @@ jobs:
 
       - name: Test wheel
         run: |
-          uv venv
-          export VIRTUAL_ENV="$PWD/.venv"
-          uv pip install dist/"${PACKAGE_NAME}"-*.whl
-          uv run --no-project --active "${MODULE_NAME}" --help
-          uv run --no-project --active python -m "${MODULE_NAME}" --help
+          python -m pip install dist/"${PACKAGE_NAME}"-*.whl --force-reinstall
+          "${MODULE_NAME}" --help
+          python -m "${MODULE_NAME}" --help
           cd crates/karva/tests/projects/wheel-smoke
-          uv run --no-project --active python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
+          python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
 
       - name: Upload wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -200,7 +201,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-uv-python
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -212,13 +214,11 @@ jobs:
 
       - name: Test sdist
         run: |
-          uv venv
-          export VIRTUAL_ENV="$PWD/.venv"
-          uv pip install dist/"${PACKAGE_NAME}"-*.tar.gz
-          uv run --no-project --active "${MODULE_NAME}" --help
-          uv run --no-project --active python -m "${MODULE_NAME}" --help
+          python -m pip install dist/"${PACKAGE_NAME}"-*.tar.gz --force-reinstall
+          "${MODULE_NAME}" --help
+          python -m "${MODULE_NAME}" --help
           cd crates/karva/tests/projects/wheel-smoke
-          uv run --no-project --active python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
+          python -m "${MODULE_NAME}" test --no-parallel --status-level=skip --final-status-level=skip
 
       - name: Upload sdist
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
