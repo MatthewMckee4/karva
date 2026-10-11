@@ -1,3 +1,4 @@
+use indoc::{formatdoc, indoc};
 use lsp_types::{
     ClientCapabilities, DiagnosticsCapabilities, DidChangeTextDocumentNotification,
     DidChangeTextDocumentParams, DidChangeWatchedFilesNotification, DidChangeWatchedFilesParams,
@@ -55,7 +56,12 @@ fn publishes_cross_file_related_information() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(capabilities(), workspace.folder());
     let uri = workspace.uri("test_example.py");
@@ -65,11 +71,12 @@ fn publishes_cross_file_related_information() {
             uri,
             language_id: LanguageKind::Python,
             version: 1,
-            text: concat!(
-                "from karva import fixture\n\n",
-                "@fixture(scope=\"session\")\n",
-                "def shared(database): pass\n",
-            )
+            text: indoc! {r#"
+                from karva import fixture
+
+                @fixture(scope="session")
+                def shared(database): pass
+            "#}
             .to_owned(),
         },
     });
@@ -83,11 +90,21 @@ fn publishes_related_information_for_the_nearest_nested_fixture() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "package/conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(capabilities(), workspace.folder());
     let uri = workspace.uri("package/test_example.py");
@@ -97,11 +114,12 @@ fn publishes_related_information_for_the_nearest_nested_fixture() {
             uri,
             language_id: LanguageKind::Python,
             version: 1,
-            text: concat!(
-                "from karva import fixture\n\n",
-                "@fixture(scope=\"session\")\n",
-                "def shared(database): pass\n",
-            )
+            text: indoc! {r#"
+                from karva import fixture
+
+                @fixture(scope="session")
+                def shared(database): pass
+            "#}
             .to_owned(),
         },
     });
@@ -133,7 +151,13 @@ fn does_not_analyze_an_open_conftest_as_its_own_parent() {
             uri,
             language_id: LanguageKind::Python,
             version: 1,
-            text: "from karva import fixture\n\n@fixture\ndef database(): pass\n".to_owned(),
+            text: indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+            "}
+            .to_owned(),
         },
     });
     let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
@@ -154,7 +178,12 @@ fn reports_configuration_parse_cause_and_recovers(
     };
     workspace.write(
         config,
-        &format!("[{section}]\ntest-function-prefix = 123\n"),
+        &formatdoc!(
+            r"
+            [{section}]
+            test-function-prefix = 123
+        "
+        ),
     );
     let uri = workspace.uri("test_example.py");
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
@@ -181,7 +210,12 @@ fn reports_configuration_parse_cause_and_recovers(
 
     workspace.write(
         config,
-        &format!("[{section}]\ntest-function-prefix = 'test'\n"),
+        &formatdoc!(
+            r"
+            [{section}]
+            test-function-prefix = 'test'
+        "
+        ),
     );
     server.notify::<DidChangeWatchedFilesNotification>(DidChangeWatchedFilesParams {
         changes: vec![FileEvent {

@@ -191,6 +191,8 @@ fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<Te
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use std::ffi::CString;
 
     use rstest::rstest;
@@ -200,11 +202,19 @@ mod tests {
 
     #[rstest]
     fn extracts_frames_and_source(
-        #[values("test.py", "test_\"quoted\".py", "test_\nnewline.py")] filename: &str,
+        #[values("test.py", "test_\"quoted\".py", indoc! {r"
+            test_
+            newline.py"})]
+        filename: &str,
     ) -> PyResult<()> {
         Python::initialize();
         Python::attach(|py| {
-            let code = c"def outer():\n    inner()\ndef inner():\n    raise ValueError('boom')\n";
+            let code = indoc! {cr"
+                def outer():
+                    inner()
+                def inner():
+                    raise ValueError('boom')
+            "};
             let filename_cstr = CString::new(filename)?;
             let module = PyModule::from_code(py, code, &filename_cstr, c"test_traceback")?;
             let error = module
@@ -243,7 +253,13 @@ mod tests {
     fn retains_repeated_recursive_frames() -> PyResult<()> {
         Python::initialize();
         Python::attach(|py| {
-            let code = c"def recurse(depth):\n    if depth:\n        recurse(depth - 1)\n    else:\n        raise ValueError('boom')\n";
+            let code = indoc! {cr"
+                def recurse(depth):
+                    if depth:
+                        recurse(depth - 1)
+                    else:
+                        raise ValueError('boom')
+            "};
             let module = PyModule::from_code(py, code, c"recursive.py", c"test_traceback")?;
             let error = module
                 .getattr("recurse")?
@@ -326,7 +342,10 @@ mod tests {
 
         #[test]
         fn test_calculate_line_range_first_line() {
-            let source = "line 1\nline 2\nline 3";
+            let source = indoc! {r"
+                line 1
+                line 2
+                line 3"};
             insta::assert_debug_snapshot!(calculate_line_range(source, OneIndexed::new(1).unwrap()), @"
             Some(
                 0..6,
@@ -336,7 +355,10 @@ mod tests {
 
         #[test]
         fn test_calculate_line_range_middle_line() {
-            let source = "line 1\nline 2\nline 3";
+            let source = indoc! {r"
+                line 1
+                line 2
+                line 3"};
             insta::assert_debug_snapshot!(calculate_line_range(source, OneIndexed::new(2).unwrap()), @"
             Some(
                 7..13,
@@ -346,7 +368,10 @@ mod tests {
 
         #[test]
         fn test_calculate_line_range_last_line() {
-            let source = "line 1\nline 2\nline 3";
+            let source = indoc! {r"
+                line 1
+                line 2
+                line 3"};
             insta::assert_debug_snapshot!(calculate_line_range(source, OneIndexed::new(3).unwrap()), @"
             Some(
                 14..20,
@@ -358,7 +383,10 @@ mod tests {
         /// and leading/trailing whitespace should be trimmed from the range.
         #[test]
         fn test_calculate_line_range_with_whitespace() {
-            let source = "line 1\n    indented line\nline 3";
+            let source = indoc! {r"
+                line 1
+                    indented line
+                line 3"};
             insta::assert_debug_snapshot!(calculate_line_range(source, OneIndexed::new(2).unwrap()), @"
             Some(
                 11..24,
@@ -368,7 +396,9 @@ mod tests {
 
         #[test]
         fn test_calculate_line_range_out_of_bounds() {
-            let source = "line 1\nline 2";
+            let source = indoc! {r"
+                line 1
+                line 2"};
             insta::assert_debug_snapshot!(calculate_line_range(source, OneIndexed::new(10).unwrap()), @"None");
         }
 
@@ -394,7 +424,10 @@ mod tests {
             };
             let source_file = SourceFileBuilder::new(
                 "tests/test_example.py",
-                "def test_example():\n    assert False\n",
+                indoc! {r"
+                    def test_example():
+                        assert False
+                "},
             )
             .finish();
 
@@ -418,7 +451,10 @@ mod tests {
             };
             let source_file = SourceFileBuilder::new(
                 "tests/test_other.py",
-                "def test_other():\n    assert False\n",
+                indoc! {r"
+                    def test_other():
+                        assert False
+                "},
             )
             .finish();
 
@@ -434,7 +470,14 @@ mod tests {
             let path = Utf8Path::from_path(temp.path())
                 .expect("UTF-8 path")
                 .join("helpers.py");
-            std::fs::write(&path, "first line\n    second line\n").expect("write original source");
+            std::fs::write(
+                &path,
+                indoc! {r"
+                first line
+                    second line
+            "},
+            )
+            .expect("write original source");
             let mut location = TracebackLocation {
                 file_path: path.clone(),
                 line_number: OneIndexed::from_zero_indexed(0),
@@ -445,8 +488,14 @@ mod tests {
                 .expect("first frame source");
             assert_eq!(first.slice(first_range), "first line");
 
-            std::fs::write(&path, "updated first\n    updated second\n")
-                .expect("replace source on disk");
+            std::fs::write(
+                &path,
+                indoc! {r"
+                updated first
+                    updated second
+            "},
+            )
+            .expect("replace source on disk");
             location.line_number = OneIndexed::from_zero_indexed(1);
             let (second, second_range) = get_source_file_and_range(&location, None, &mut sources)
                 .expect("second frame source");

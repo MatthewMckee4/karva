@@ -47,6 +47,7 @@ wild = { workspace = true }
 [dev-dependencies]
 directories = { workspace = true }
 dunce = { workspace = true }
+indoc = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
 insta-cmd = { workspace = true }
 lsp-server = { workspace = true }

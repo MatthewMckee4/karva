@@ -137,7 +137,11 @@ mod tests {
                     .expect("isolated panic boundary test");
             assert!(
                 output.status.success(),
-                "status: {}\nstdout:\n{}\nstderr:\n{}",
+                r"status: {}
+stdout:
+{}
+stderr:
+{}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)

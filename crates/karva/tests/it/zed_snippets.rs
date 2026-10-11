@@ -1,5 +1,6 @@
 //! Execute the exact default bodies shipped by the editor extension.
 
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use regex::Regex;
 use serde_json::Value;
@@ -26,13 +27,28 @@ fn zed_snippets_expand_to_runnable_karva_examples() {
         assert!(!source.contains("${"), "unexpanded placeholder in {prefix}");
         match prefix {
             "karva_fixture" | "karva_async_fixture" => {
-                source.push_str("\n\nasync def test_fixture(example_fixture):\n    assert example_fixture == 1\n");
+                source.push_str(indoc! {r"
+
+
+                    async def test_fixture(example_fixture):
+                        assert example_fixture == 1
+                "});
             }
             "karva_teardown" => {
-                source.push_str("\n\ndef test_fixture(example_fixture):\n    assert example_fixture is not None\n");
+                source.push_str(indoc! {r"
+
+
+                    def test_fixture(example_fixture):
+                        assert example_fixture is not None
+                "});
             }
             "karva_auto_use" => {
-                source.push_str("\n\ndef test_fixture():\n    pass\n");
+                source.push_str(indoc! {r"
+
+
+                    def test_fixture():
+                        pass
+                "});
             }
             _ => {}
         }

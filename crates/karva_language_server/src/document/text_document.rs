@@ -119,6 +119,8 @@ impl TextDocument {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use lsp_types::{
         Position, Range, TextDocumentContentChangeEvent, TextDocumentContentChangePartial,
         TextDocumentContentChangeWholeDocument, Uri,
@@ -193,7 +195,10 @@ mod tests {
 
     #[test]
     fn applies_changes_sequentially() {
-        let mut document = document("def test():\n    pas\n");
+        let mut document = document(indoc! {r"
+            def test():
+                pas
+        "});
         document
             .apply_changes(
                 vec![
@@ -206,7 +211,12 @@ mod tests {
             )
             .expect("sequential changes should apply");
 
-        assert_eq!(document.contents(), "def test():\n    pass\n");
+        assert_eq!(
+            document.contents(),
+            r"def test():
+    pass
+"
+        );
     }
 
     #[rstest]

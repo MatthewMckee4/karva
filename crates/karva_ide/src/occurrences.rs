@@ -895,6 +895,8 @@ fn use_fixtures_occurrences(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::TextSize;
@@ -928,7 +930,16 @@ mod tests {
 
     #[test]
     fn enumerates_declarations_dependencies_parameters_and_metadata() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture(name='database')\ndef provider(): pass\n@fixture\ndef wrapper(database): pass\n@pytest.mark.usefixtures('database')\ndef test_example(wrapper): pass\n";
+        let source = indoc! {r"
+            import pytest
+            from karva import fixture
+            @fixture(name='database')
+            def provider(): pass
+            @fixture
+            def wrapper(database): pass
+            @pytest.mark.usefixtures('database')
+            def test_example(wrapper): pass
+        "};
         let occurrences = fixture_occurrences(&analysis(source));
         assert_eq!(
             occurrences
@@ -957,7 +968,14 @@ mod tests {
 
     #[test]
     fn excludes_builtins_missing_rejected_and_parametrized_parameters() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.parametrize('value', [1])\ndef test_example(value, database, tmp_path, missing): pass\n";
+        let source = indoc! {r"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.parametrize('value', [1])
+            def test_example(value, database, tmp_path, missing): pass
+        "};
         let occurrences = fixture_occurrences(&analysis(source));
         assert_eq!(
             occurrences
@@ -971,7 +989,18 @@ mod tests {
 
     #[test]
     fn enumerates_body_references_and_respects_nested_bindings() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    direct = database\n    def closure():\n        return database\n    def shadowed(database):\n        return database\n    return direct, closure\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                direct = database
+                def closure():
+                    return database
+                def shadowed(database):
+                    return database
+                return direct, closure
+        "#};
         let occurrences = fixture_occurrences(&analysis(source));
         let body_references = occurrences
             .iter()
@@ -995,7 +1024,14 @@ mod tests {
 
     #[test]
     fn enumerates_fixture_provider_body_references() {
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\n@fixture\ndef wrapper(database):\n    return database\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @fixture
+            def wrapper(database):
+                return database
+        "};
         let occurrences = fixture_occurrences(&analysis(source));
         assert_eq!(
             occurrences
@@ -1008,7 +1044,14 @@ mod tests {
 
     #[test]
     fn respects_comprehension_bindings() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    values = [database for database in [database]]\n    return database, values\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                values = [database for database in [database]]
+                return database, values
+        "#};
         let occurrences = fixture_occurrences(&analysis(source));
         let body_references = occurrences
             .iter()
@@ -1025,7 +1068,14 @@ mod tests {
 
     #[test]
     fn respects_lambda_bindings() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    local = lambda: (database := object())\n    return database, local\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                local = lambda: (database := object())
+                return database, local
+        "#};
         let occurrences = fixture_occurrences(&analysis(source));
         assert_eq!(
             occurrences
@@ -1038,7 +1088,11 @@ mod tests {
 
     #[test]
     fn custom_name_declaration_targets_string_not_python_name() {
-        let source = "from karva import fixture\n@fixture(name=\"данные\")\ndef provider(): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="данные")
+            def provider(): pass
+        "#};
         let occurrence = fixture_occurrences(&analysis(source))
             .into_iter()
             .find(|occurrence| occurrence.kind == FixtureOccurrenceKind::Definition)
@@ -1068,7 +1122,12 @@ mod tests {
 
     #[test]
     fn highlights_custom_provider_anchor_and_consumers() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database): pass
+        "#};
         let highlights = fixture_document_highlights(&analysis(source), at(source, "provider"))
             .expect("custom fixture should highlight");
 
@@ -1095,8 +1154,16 @@ mod tests {
 
     #[test]
     fn highlights_only_the_selected_nested_provider() {
-        let root_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let nested_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let root_source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let nested_source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
         let test_source = "def test_example(database): pass\n";
         let root = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),
@@ -1129,7 +1196,12 @@ mod tests {
     fn highlights_inherited_fixture_consumers_without_local_definition() {
         let root = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),
-            "from karva import fixture\n@fixture\ndef database(): pass\n".to_owned(),
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "}
+            .to_owned(),
         );
         let test = SourceDocument::new(
             Utf8PathBuf::from("/project/test_example.py"),
@@ -1152,7 +1224,14 @@ mod tests {
 
     #[test]
     fn resolves_escaped_karva_use_fixtures_name() {
-        let source = "import karva\nfrom karva import fixture\n@fixture\ndef database(): pass\n@karva.tags.use_fixtures(\"data\\x62ase\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import karva
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @karva.tags.use_fixtures("data\x62ase")
+            def test_example(): pass
+        "#};
         let occurrence = fixture_occurrence(&analysis(source), at(source, "x62"))
             .expect("escaped use-fixtures occurrence");
 
@@ -1169,7 +1248,14 @@ mod tests {
 
     #[test]
     fn marks_implicitly_concatenated_names_uneditable() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture(name='data' 'base')\ndef provider(): pass\n@pytest.mark.usefixtures('data' 'base')\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            import pytest
+            from karva import fixture
+            @fixture(name='data' 'base')
+            def provider(): pass
+            @pytest.mark.usefixtures('data' 'base')
+            def test_example(database): pass
+        "};
         let occurrences = fixture_occurrences(&analysis(source));
         let definition = occurrences
             .iter()
@@ -1189,8 +1275,16 @@ mod tests {
 
     #[test]
     fn keeps_overridden_fixture_identities_separate() {
-        let root_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let nested_source = "from karva import fixture\n@fixture\ndef database(database): pass\n";
+        let root_source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let nested_source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(database): pass
+        "};
         let test_source = "def test_example(database): pass\n";
         let root = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),

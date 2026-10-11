@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     CallHierarchyIncomingCallsParams, CallHierarchyIncomingCallsRequest, CallHierarchyItem,
     CallHierarchyOutgoingCallsParams, CallHierarchyOutgoingCallsRequest,
@@ -53,14 +54,27 @@ fn outgoing(item: CallHierarchyItem) -> CallHierarchyOutgoingCallsParams {
 #[test]
 fn navigates_unopened_providers_and_unsaved_consumers() {
     let workspace = Workspace::new();
-    workspace.write("conftest.py", "from karva import fixture\n@fixture\ndef database(): pass\n@fixture\ndef wrapper(database): pass\n");
+    workspace.write(
+        "conftest.py",
+        indoc! {r"
+        from karva import fixture
+        @fixture
+        def database(): pass
+        @fixture
+        def wrapper(database): pass
+    "},
+    );
     workspace.write("test_saved.py", "def test_saved(wrapper): pass\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/test_unsaved.py");
     open(
         &mut server,
         uri.clone(),
-        "import pytest\n@pytest.mark.usefixtures('wrapper')\ndef test_unsaved(wrapper): pass\n",
+        indoc! {r"
+            import pytest
+            @pytest.mark.usefixtures('wrapper')
+            def test_unsaved(wrapper): pass
+        "},
     );
     let item = prepare(&mut server, uri, Position::new(2, 20))
         .expect("fixture item")
@@ -151,11 +165,19 @@ fn nested_overrides_resolve_to_the_correct_provider() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "pkg/conftest.py",
-        "from karva import fixture\n@fixture\ndef database(database): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(database): pass
+        "},
     );
     workspace.write("test_root.py", "def test_root(database): pass\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -195,7 +217,14 @@ fn unicode_ranges_and_custom_names_use_current_overlays() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_unicode.py");
-    let source = "from karva import fixture\n@fixture(name='данные')\ndef provider(): pass\n@fixture\ndef wrapper(данные, tmp_path): pass\ndef test_example(wrapper): pass\n";
+    let source = indoc! {r"
+        from karva import fixture
+        @fixture(name='данные')
+        def provider(): pass
+        @fixture
+        def wrapper(данные, tmp_path): pass
+        def test_example(wrapper): pass
+    "};
     open(&mut server, uri.clone(), source);
     let provider = prepare(&mut server, uri.clone(), Position::new(4, 15))
         .expect("provider")
@@ -253,8 +282,17 @@ fn unsupported_selections_have_no_hierarchy(
     #[values(
         "def test_example(tmp_path): pass\n",
         "def test_example(missing): pass\n",
-        "from karva import fixture\n@fixture(scope='invalid')\ndef rejected(): pass\ndef test_example(rejected): pass\n",
-        "def helper(): pass\ndef test_example():\n    helper()\n"
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='invalid')
+            def rejected(): pass
+            def test_example(rejected): pass
+        "},
+        indoc! {r"
+            def helper(): pass
+            def test_example():
+                helper()
+        "}
     )]
     source: &str,
 ) {

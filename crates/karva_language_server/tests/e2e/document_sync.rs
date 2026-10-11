@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
     DidCloseTextDocumentNotification, DidCloseTextDocumentParams, DidOpenTextDocumentNotification,
@@ -19,7 +20,11 @@ fn accepts_incremental_unsaved_document_changes() {
             uri: uri.clone(),
             language_id: LanguageKind::Python,
             version: 1,
-            text: "def test_😀():\n    pas\n".to_owned(),
+            text: indoc! {r"
+                def test_😀():
+                    pas
+            "}
+            .to_owned(),
         },
     });
     server.receive_notification::<lsp_types::PublishDiagnosticsNotification>();

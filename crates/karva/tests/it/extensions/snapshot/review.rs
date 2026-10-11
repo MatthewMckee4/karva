@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -754,7 +755,10 @@ def test_beta():
     ----- stderr -----
     ");
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\nr\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        r
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----

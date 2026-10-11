@@ -135,11 +135,17 @@ impl SnapshotFile {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     #[test]
     fn parse_snapshot_file() {
-        let input = "---\nsource: tests/test_example.py:5::test_example\n---\n{'key': 'value'}";
+        let input = indoc! {r"
+            ---
+            source: tests/test_example.py:5::test_example
+            ---
+            {'key': 'value'}"};
         let snapshot = SnapshotFile::parse(input).expect("should parse");
         insta::assert_debug_snapshot!(snapshot, @r#"
         SnapshotFile {
@@ -245,7 +251,12 @@ mod tests {
                 source: Some("test.py:5::test_dashes".to_string()),
                 ..Default::default()
             },
-            content: "---\nthis looks like yaml\n---\n".to_string(),
+            content: indoc! {r"
+                ---
+                this looks like yaml
+                ---
+            "}
+            .to_string(),
         };
         insta::assert_snapshot!(snapshot.serialize(), @r"
         ---
@@ -264,7 +275,12 @@ mod tests {
                 source: Some("test.py:5::test_dashes".to_string()),
                 ..Default::default()
             },
-            content: "---\nthis looks like yaml\n---\n".to_string(),
+            content: indoc! {r"
+                ---
+                this looks like yaml
+                ---
+            "}
+            .to_string(),
         };
         let serialized = snapshot.serialize();
         let reparsed = SnapshotFile::parse(&serialized).expect("should reparse");
@@ -284,8 +300,11 @@ mod tests {
 
     #[test]
     fn parse_malformed_no_closing_separator() {
-        let err = SnapshotFile::parse("---\nsource: test.py::test\nno closing")
-            .expect_err("missing closing separator");
+        let err = SnapshotFile::parse(indoc! {r"
+            ---
+            source: test.py::test
+            no closing"})
+        .expect_err("missing closing separator");
 
         assert_eq!(err, ParseSnapshotError::MissingClosingSeparator);
     }
@@ -299,7 +318,12 @@ mod tests {
 
     #[test]
     fn parse_no_metadata() {
-        let input = "---\n\n---\nsome content\n";
+        let input = indoc! {r"
+            ---
+
+            ---
+            some content
+        "};
         let snapshot = SnapshotFile::parse(input).expect("should parse");
         assert!(snapshot.metadata.source.is_none());
         insta::assert_snapshot!(snapshot.content, @r"
@@ -309,7 +333,14 @@ mod tests {
 
     #[test]
     fn parse_inline_metadata() {
-        let input = "---\nsource: test.py:5::test_hello\ninline_source: /abs/path/to/test.py\ninline_line: 5\n---\nhello world\n";
+        let input = indoc! {r"
+            ---
+            source: test.py:5::test_hello
+            inline_source: /abs/path/to/test.py
+            inline_line: 5
+            ---
+            hello world
+        "};
         let snapshot = SnapshotFile::parse(input).expect("should parse");
         assert_eq!(
             snapshot.metadata.source.as_deref(),
@@ -325,7 +356,14 @@ mod tests {
 
     #[test]
     fn parse_invalid_inline_line_fails() {
-        let input = "---\nsource: test.py:5::test_hello\ninline_source: /abs/path/to/test.py\ninline_line: nope\n---\nhello world\n";
+        let input = indoc! {r"
+            ---
+            source: test.py:5::test_hello
+            inline_source: /abs/path/to/test.py
+            inline_line: nope
+            ---
+            hello world
+        "};
 
         let err = SnapshotFile::parse(input).expect_err("invalid inline line");
 

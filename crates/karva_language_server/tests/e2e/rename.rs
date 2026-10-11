@@ -1,3 +1,4 @@
+use indoc::{formatdoc, indoc};
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind,
@@ -11,8 +12,11 @@ use super::{TestServer, Workspace};
 #[test]
 fn prepares_and_renames_fixture_occurrences_across_files() {
     let workspace = Workspace::new();
-    let provider_source =
-        "from karva import fixture\n@fixture(name=\"data\\x62ase\")\ndef provider(): pass\n";
+    let provider_source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="data\x62ase")
+            def provider(): pass
+        "#};
     workspace.write("conftest.py", provider_source);
     workspace.write("tests/test_other.py", "def test_other(database): pass\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -22,7 +26,12 @@ fn prepares_and_renames_fixture_occurrences_across_files() {
     open(
         &mut server,
         uri.clone(),
-        "import pytest\n\n@pytest.mark.usefixtures(\"data\\x62ase\")\ndef test_example(database): pass\n",
+        indoc! {r#"
+            import pytest
+
+            @pytest.mark.usefixtures("data\x62ase")
+            def test_example(database): pass
+        "#},
     );
 
     let position = Position::new(3, 20);
@@ -43,12 +52,20 @@ fn renames_only_the_selected_nested_provider() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write("tests/test_root.py", "def test_root(database): pass\n");
     workspace.write(
         "tests/pkg/conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/pkg/test_nested.py");
@@ -72,7 +89,11 @@ fn rejects_partial_and_invalid_fixture_renames() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture(name='data' 'base')\ndef provider(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(name='data' 'base')
+            def provider(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
@@ -106,11 +127,19 @@ fn rejects_name_that_would_select_a_nested_provider() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "tests/pkg/conftest.py",
-        "from karva import fixture\n@fixture\ndef replacement(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def replacement(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/pkg/test_nested.py");
@@ -131,7 +160,11 @@ fn renames_default_fixture_through_import_alias_preserving_alias() {
     let workspace = Workspace::new();
     workspace.write(
         "support.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write("conftest.py", "from support import database as db\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -174,7 +207,11 @@ fn renames_custom_fixture_without_changing_provider_imports() {
     let workspace = Workspace::new();
     workspace.write(
         "support.py",
-        "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n",
+        indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+        "#},
     );
     workspace.write("conftest.py", "from support import provider as db\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -213,21 +250,37 @@ fn renames_parameter_body_references(
         "    assert (lambda: database)()\n"
     )]
     body: &str,
-    #[values("def test_example", "@fixture\ndef wrapper")] declaration: &str,
+    #[values("def test_example", indoc! {r"
+        @fixture
+        def wrapper"})]
+    declaration: &str,
 ) {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): return 'hello'\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): return 'hello'
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     open(
         &mut server,
         workspace.uri("conftest.py"),
-        "from karva import fixture\n@fixture\ndef database(): return 'hello'\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): return 'hello'
+        "},
     );
     let uri = workspace.uri("test_example.py");
-    let source = format!("from karva import fixture\n{declaration}(database):\n{body}");
+    let source = formatdoc!(
+        r"
+        from karva import fixture
+        {declaration}(database):
+        {body}"
+    );
     open(&mut server, uri.clone(), &source);
     let line = if declaration.starts_with('@') { 2 } else { 1 };
     let position = Position::new(line, if line == 2 { 12 } else { 17 });

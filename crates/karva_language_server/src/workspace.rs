@@ -258,6 +258,8 @@ pub(crate) fn uri_to_path(uri: &Uri) -> Result<Utf8PathBuf, WorkspaceError> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use std::cell::Cell;
     use std::fs;
 
@@ -295,7 +297,10 @@ mod tests {
         fs::create_dir_all(&nested).expect("create nested source directory");
         fs::write(
             root.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"spec_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "spec_"
+            "#},
         )
         .expect("write Karva configuration");
         let mut workspaces =
@@ -316,7 +321,10 @@ mod tests {
         let root = root(&temp_dir);
         fs::write(
             root.join("pyproject.toml"),
-            "[tool.karva.profile.default.test]\ntest-function-prefix = \"check_\"\n",
+            indoc! {r#"
+                [tool.karva.profile.default.test]
+                test-function-prefix = "check_"
+            "#},
         )
         .expect("write Python project configuration");
         let mut workspaces =
@@ -336,7 +344,13 @@ mod tests {
         let root = root(&temp_dir);
         fs::write(
             root.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"test_\"\n\n[profile.ci.test]\ntest-function-prefix = \"ci_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "test_"
+
+                [profile.ci.test]
+                test-function-prefix = "ci_"
+            "#},
         )
         .expect("write profiled configuration");
         let mut workspaces = Workspaces::new(
@@ -361,12 +375,18 @@ mod tests {
         fs::create_dir_all(&nested).expect("create nested project");
         fs::write(
             root.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"root_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "root_"
+            "#},
         )
         .expect("write root configuration");
         fs::write(
             nested.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"child_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "child_"
+            "#},
         )
         .expect("write nested configuration");
         let mut workspaces =
@@ -441,7 +461,10 @@ mod tests {
         let root = root(&temp_dir);
         fs::write(
             root.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"workspace_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "workspace_"
+            "#},
         )
         .expect("write Karva configuration");
         let nested = root.join("src/package");
@@ -516,7 +539,11 @@ mod tests {
         let root = root(&temp_dir);
         fs::write(
             root.join("karva.toml"),
-            "[[profile.default.overrides]]\nfilter = \"tag(network)\"\nretries = 1\n",
+            indoc! {r#"
+                [[profile.default.overrides]]
+                filter = "tag(network)"
+                retries = 1
+            "#},
         )
         .expect("write override configuration");
         let mut workspaces =
@@ -539,12 +566,18 @@ mod tests {
         let second = root(&second_dir);
         fs::write(
             first.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"first_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "first_"
+            "#},
         )
         .expect("write first configuration");
         fs::write(
             second.join("karva.toml"),
-            "[profile.default.test]\ntest-function-prefix = \"second_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "second_"
+            "#},
         )
         .expect("write second configuration");
         let mut workspaces = Workspaces::new(
@@ -573,7 +606,10 @@ mod tests {
         let config = root.join("karva.toml");
         fs::write(
             &config,
-            "[profile.default.test]\ntest-function-prefix = \"before_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "before_"
+            "#},
         )
         .expect("write initial configuration");
         let mut workspaces =
@@ -585,7 +621,10 @@ mod tests {
             .expect("discover initial project");
         fs::write(
             &config,
-            "[profile.default.test]\ntest-function-prefix = \"after_\"\n",
+            indoc! {r#"
+                [profile.default.test]
+                test-function-prefix = "after_"
+            "#},
         )
         .expect("write updated configuration");
 

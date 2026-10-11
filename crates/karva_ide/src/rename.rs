@@ -535,6 +535,8 @@ fn fixture_name_conflicts(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::TextSize;
@@ -558,7 +560,14 @@ mod tests {
 
     #[test]
     fn prepares_custom_fixture_name() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n@pytest.mark.usefixtures(\"database\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import pytest
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            @pytest.mark.usefixtures("database")
+            def test_example(): pass
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -567,8 +576,16 @@ mod tests {
         )
         .expect("source should index");
         let analysis = index.analyze(&path).expect("source should analyze");
-        let occurrence = fixture_occurrence(&analysis, offset(source, "database\")\ndef test"))
-            .expect("metadata should resolve");
+        let occurrence = fixture_occurrence(
+            &analysis,
+            offset(
+                source,
+                indoc! {r#"
+            database")
+            def test"#},
+            ),
+        )
+        .expect("metadata should resolve");
 
         let range = prepare_fixture_rename(&index, &occurrence).expect("fixture should rename");
 
@@ -577,8 +594,11 @@ mod tests {
 
     #[test]
     fn rejects_rename_when_any_occurrence_is_not_editable() {
-        let provider =
-            "from karva import fixture\n@fixture(name='data' 'base')\ndef provider(): pass\n";
+        let provider = indoc! {r"
+                from karva import fixture
+                @fixture(name='data' 'base')
+                def provider(): pass
+            "};
         let test = "def test_example(database): pass\n";
         let path = Utf8Path::new("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
@@ -600,7 +620,12 @@ mod tests {
 
     #[test]
     fn returns_every_edit_for_a_valid_name() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database): pass
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -627,7 +652,13 @@ mod tests {
 
     #[test]
     fn renames_fixture_body_references() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    return database\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                return database
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -654,7 +685,13 @@ mod tests {
 
     #[test]
     fn rejects_rename_when_default_provider_has_ordinary_uses() {
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\ndef helper():\n    return database()\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+            def helper():
+                return database()
+        "};
         let path = Utf8PathBuf::from("/project/conftest.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -671,7 +708,12 @@ mod tests {
 
     #[test]
     fn custom_provider_name_keeps_ordinary_provider_uses() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider():\n    return provider()\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider():
+                return provider()
+        "#};
         let path = Utf8PathBuf::from("/project/conftest.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -688,7 +730,11 @@ mod tests {
 
     #[test]
     fn renames_default_fixture_import_source_but_preserves_alias() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
         let reexport = "from support import database as db\n";
         let test = "def test_example(database): pass\n";
         let index = WorkspaceSourceIndex::from_documents(
@@ -726,8 +772,11 @@ mod tests {
 
     #[test]
     fn custom_fixture_import_does_not_disable_public_name_rename() {
-        let provider =
-            "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n";
+        let provider = indoc! {r#"
+                from karva import fixture
+                @fixture(name="database")
+                def provider(): pass
+            "#};
         let reexport = "from support import provider as db\n";
         let test = "def test_example(database): pass\n";
         let index = WorkspaceSourceIndex::from_documents(
@@ -757,7 +806,11 @@ mod tests {
 
     #[test]
     fn preserves_aliases_across_reexport_chains() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
         let first = "from support import database as db\n";
         let second = "from conftest import db\n";
         let test = "def test_example(database): pass\n";
@@ -789,8 +842,15 @@ mod tests {
 
     #[test]
     fn renames_unaliased_import_binding_uses() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let reexport = "from support import database\nvalue = database()\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let reexport = indoc! {r"
+            from support import database
+            value = database()
+        "};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [
@@ -820,8 +880,16 @@ mod tests {
 
     #[test]
     fn rejects_import_rename_with_unrelated_local_binding() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let reexport = "from support import database\ndef helper(database):\n    return database\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let reexport = indoc! {r"
+            from support import database
+            def helper(database):
+                return database
+        "};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [
@@ -842,7 +910,11 @@ mod tests {
 
     #[test]
     fn rejects_wildcard_fixture_reexports() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
         let reexport = "from support import *\n";
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -864,7 +936,11 @@ mod tests {
 
     #[test]
     fn rejects_unresolved_fixture_name_imports() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
         let unresolved = "from missing import database\n";
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -886,8 +962,12 @@ mod tests {
 
     #[test]
     fn rejects_default_provider_exported_through_all() {
-        let source =
-            "from karva import fixture\n@fixture\ndef database(): pass\n__all__ = [\"database\"]\n";
+        let source = indoc! {r#"
+                from karva import fixture
+                @fixture
+                def database(): pass
+                __all__ = ["database"]
+            "#};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [SourceDocument::new(
@@ -908,8 +988,15 @@ mod tests {
 
     #[test]
     fn rejects_unaliased_import_exported_through_all() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let reexport = "from support import database\n__all__ = [\"database\"]\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let reexport = indoc! {r#"
+            from support import database
+            __all__ = ["database"]
+        "#};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [
@@ -930,7 +1017,12 @@ mod tests {
 
     #[test]
     fn custom_public_name_ignores_python_exports() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n__all__ = [\"provider\"]\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            __all__ = ["provider"]
+        "#};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [SourceDocument::new(
@@ -951,7 +1043,13 @@ mod tests {
 
     #[test]
     fn rejects_rename_that_would_capture_a_body_name() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    return replacement\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                return replacement
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -968,7 +1066,15 @@ mod tests {
 
     #[test]
     fn rejects_rename_that_would_capture_a_nested_parameter() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    def inner(replacement):\n        return database\n    return inner\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                def inner(replacement):
+                    return database
+                return inner
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -985,7 +1091,14 @@ mod tests {
 
     #[test]
     fn rejects_rename_with_unsupported_scope_bindings() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    global database\n    return database\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                global database
+                return database
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1002,7 +1115,16 @@ mod tests {
 
     #[test]
     fn rejects_rename_with_class_namespace_bindings() {
-        let source = "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\ndef test_example(database):\n    class Inner:\n        database = object()\n        value = database\n    return database\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            def test_example(database):
+                class Inner:
+                    database = object()
+                    value = database
+                return database
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1028,7 +1150,14 @@ mod tests {
 
     #[test]
     fn rejects_existing_fixture_and_builtin_names() {
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\n@fixture\ndef replacement(): pass\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @fixture
+            def replacement(): pass
+            def test_example(database): pass
+        "};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1046,7 +1175,14 @@ mod tests {
 
     #[test]
     fn rejects_parametrized_argument_name() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.parametrize('replacement', [1])\ndef test_example(database, replacement): pass\n";
+        let source = indoc! {r"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.parametrize('replacement', [1])
+            def test_example(database, replacement): pass
+        "};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1063,7 +1199,14 @@ mod tests {
 
     #[test]
     fn rejects_dynamic_parametrization_for_the_visible_provider() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.parametrize(names, [1])\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.parametrize(names, [1])
+            def test_example(database): pass
+        "};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1080,7 +1223,15 @@ mod tests {
 
     #[test]
     fn allows_an_unrelated_known_parametrized_name() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.parametrize('database', [1])\ndef test_unrelated(database): pass\ndef test_fixture(database): pass\n";
+        let source = indoc! {r"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.parametrize('database', [1])
+            def test_unrelated(database): pass
+            def test_fixture(database): pass
+        "};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1099,7 +1250,12 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_test_parameters() {
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\ndef test_example(database, replacement): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+            def test_example(database, replacement): pass
+        "};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -1116,7 +1272,13 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_fixture_parameters() {
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\n@fixture\ndef wrapper(database, replacement): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @fixture
+            def wrapper(database, replacement): pass
+        "};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),

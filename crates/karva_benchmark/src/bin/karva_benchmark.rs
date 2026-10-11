@@ -1573,6 +1573,8 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use std::num::NonZeroUsize;
     #[cfg(unix)]
     use std::os::unix::process::ExitStatusExt;
@@ -1673,7 +1675,14 @@ mod tests {
     fn standalone_html_is_complete_and_escapes_report_content() {
         let html = standalone_html(
             "Report <title>",
-            "## Results\n\n| Name |\n| --- |\n| value |\n\ndiff & <script>alert(1)</script>",
+            indoc! {r"
+                ## Results
+
+                | Name |
+                | --- |
+                | value |
+
+                diff & <script>alert(1)</script>"},
         )
         .expect("report should render");
 
@@ -1832,15 +1841,15 @@ mod tests {
 
     #[test]
     fn diagnostics_report_renders_changes() {
-        let baseline = normalize_diagnostic_text(
-            "    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)\n\
-             Summary [   0.100s] 3 tests run: 2 passed, 1 skipped\n",
-        );
-        let candidate = normalize_diagnostic_text(
-            "    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)\n\
-             new diagnostic\n\
-             Summary [   1.000s] 3 tests run: 1 passed, 1 error, 1 skipped\n",
-        );
+        let baseline = normalize_diagnostic_text(indoc! {r"
+                    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)
+                Summary [   0.100s] 3 tests run: 2 passed, 1 skipped
+            "});
+        let candidate = normalize_diagnostic_text(indoc! {r"
+                    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)
+                new diagnostic
+                Summary [   1.000s] 3 tests run: 1 passed, 1 error, 1 skipped
+            "});
         insta::assert_snapshot!(baseline, @"
             PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
         Summary [TIME] 3 tests run: 2 passed, 1 skipped
@@ -1917,8 +1926,18 @@ mod tests {
 
     #[test]
     fn full_diagnostics_keep_failure_context_attached_to_its_test() {
-        let baseline = "test_first:\ninfo: first failure\ntest_second:\ninfo: second failure\n";
-        let candidate = "test_first:\ninfo: second failure\ntest_second:\ninfo: first failure\n";
+        let baseline = indoc! {r"
+            test_first:
+            info: first failure
+            test_second:
+            info: second failure
+        "};
+        let candidate = indoc! {r"
+            test_first:
+            info: second failure
+            test_second:
+            info: first failure
+        "};
         let comparison = diagnostic_comparison(
             Some(baseline),
             Some(candidate),
@@ -1933,10 +1952,14 @@ mod tests {
 
     #[test]
     fn diagnostic_comparison_detects_equal_sized_workload_changes() {
-        let baseline =
-            "    PASS [TIME] test_first\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
-        let candidate =
-            "    PASS [TIME] test_second\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
+        let baseline = indoc! {r"
+                    PASS [TIME] test_first
+                Summary [TIME] 1 test run: 1 passed, 0 skipped
+            "};
+        let candidate = indoc! {r"
+                    PASS [TIME] test_second
+                Summary [TIME] 1 test run: 1 passed, 0 skipped
+            "};
 
         let comparison = diagnostic_comparison(
             Some(baseline),
@@ -1953,8 +1976,14 @@ mod tests {
 
     #[test]
     fn diagnostic_comparison_detects_equal_sized_skipped_workload_changes() {
-        let baseline = "    SKIP [TIME] test_first: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
-        let candidate = "    SKIP [TIME] test_second: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
+        let baseline = indoc! {r"
+                SKIP [TIME] test_first: unavailable
+            Summary [TIME] 1 test run: 0 passed, 1 skipped
+        "};
+        let candidate = indoc! {r"
+                SKIP [TIME] test_second: unavailable
+            Summary [TIME] 1 test run: 0 passed, 1 skipped
+        "};
 
         let comparison = diagnostic_comparison(
             Some(baseline),
@@ -1971,8 +2000,16 @@ mod tests {
 
     #[test]
     fn diagnostic_comparison_ignores_parallel_line_order() {
-        let baseline = "    PASS [TIME] test_second\n    PASS [TIME] test_first\nSummary [TIME] 2 tests run: 2 passed, 0 skipped\n";
-        let candidate = "    PASS [TIME] test_first\n    PASS [TIME] test_second\nSummary [TIME] 2 tests run: 2 passed, 0 skipped\n";
+        let baseline = indoc! {r"
+                PASS [TIME] test_second
+                PASS [TIME] test_first
+            Summary [TIME] 2 tests run: 2 passed, 0 skipped
+        "};
+        let candidate = indoc! {r"
+                PASS [TIME] test_first
+                PASS [TIME] test_second
+            Summary [TIME] 2 tests run: 2 passed, 0 skipped
+        "};
 
         let comparison = diagnostic_comparison(
             Some(baseline),
@@ -1991,18 +2028,34 @@ mod tests {
     fn diagnostic_code_blocks_expand_around_embedded_fences() {
         let mut markdown = String::new();
 
-        write_code_block(&mut markdown, "text", "before\n```\nafter\n")
-            .expect("code block should render");
+        write_code_block(
+            &mut markdown,
+            "text",
+            indoc! {r"
+            before
+            ```
+            after
+        "},
+        )
+        .expect("code block should render");
 
-        assert_eq!(markdown, "````text\nbefore\n```\nafter\n````\n");
+        assert_eq!(
+            markdown,
+            r"````text
+before
+```
+after
+````
+"
+        );
     }
 
     #[test]
     fn diagnostics_report_omits_unchanged_diffs() {
-        let output = normalize_diagnostic_text(
-            "    PASS [   0.001s] test_pass\n\
-             Summary [   0.100s] 1 test run: 1 passed, 0 skipped\n",
-        );
+        let output = normalize_diagnostic_text(indoc! {r"
+                    PASS [   0.001s] test_pass
+                Summary [   0.100s] 1 test run: 1 passed, 0 skipped
+            "});
         let mut comparison = project("requests", 21, 1.0, 1.0);
         comparison.diagnostics = diagnostic_comparison(
             Some(&output),

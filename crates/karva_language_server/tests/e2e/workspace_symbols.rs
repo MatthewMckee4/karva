@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind,
     PublishDiagnosticsNotification, TextDocumentItem, WorkspaceSymbolParams,
@@ -11,7 +12,11 @@ fn searches_saved_and_unsaved_symbols_with_relaxed_queries() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture(name='данные')\ndef provider(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(name='данные')
+            def provider(): pass
+        "},
     );
     workspace.write("test_saved.py", "def test_saved(): pass\n");
     workspace.write("test_overlay.py", "def test_replaced(): pass\n");
@@ -25,8 +30,16 @@ fn searches_saved_and_unsaved_symbols_with_relaxed_queries() {
     );
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
-            uri: workspace.uri("test_overlay.py"), language_id: LanguageKind::Python, version: 1,
-            text: "from karva import fixture\n@fixture(name='😀данные')\ndef provider(): pass\ndef test_unsaved(): pass\n".to_owned(),
+            uri: workspace.uri("test_overlay.py"),
+            language_id: LanguageKind::Python,
+            version: 1,
+            text: indoc! {r"
+                from karva import fixture
+                @fixture(name='😀данные')
+                def provider(): pass
+                def test_unsaved(): pass
+            "}
+            .to_owned(),
         },
     });
     server.receive_notification::<PublishDiagnosticsNotification>();
@@ -144,11 +157,17 @@ fn nested_workspaces_use_nearest_configuration_without_duplicates() {
     workspace.write("test_root.py", "def test_same(): pass\n");
     workspace.write(
         "nested/karva.toml",
-        "[profile.default.test]\ntest-function-prefix = 'check'\n",
+        indoc! {r"
+            [profile.default.test]
+            test-function-prefix = 'check'
+        "},
     );
     workspace.write(
         "nested/test_nested.py",
-        "def test_hidden(): pass\ndef check_same(): pass\n",
+        indoc! {r"
+            def test_hidden(): pass
+            def check_same(): pass
+        "},
     );
     let mut nested = workspace.folder();
     nested.uri = workspace.uri("nested");

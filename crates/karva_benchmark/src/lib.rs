@@ -781,7 +781,14 @@ mod tests {
                 b"resolved\n",
                 b"denied\n"
             ),
-            "uv sync failed\nstatus: exit status: 1\n\n[stdout]\nresolved\n\n[stderr]\ndenied"
+            r"uv sync failed
+status: exit status: 1
+
+[stdout]
+resolved
+
+[stderr]
+denied"
         );
     }
 
@@ -794,7 +801,11 @@ mod tests {
                 b"fatal details\n",
                 b""
             ),
-            "git fetch failed\nstatus: exit status: 128\n\n[stdout]\nfatal details"
+            r"git fetch failed
+status: exit status: 128
+
+[stdout]
+fatal details"
         );
     }
 
@@ -802,7 +813,8 @@ mod tests {
     fn command_failure_keeps_empty_output_compact() {
         assert_eq!(
             format_command_failure("git clean failed", "exit status: 1", b"", b""),
-            "git clean failed\nstatus: exit status: 1"
+            r"git clean failed
+status: exit status: 1"
         );
     }
 }

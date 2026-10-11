@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
@@ -34,11 +35,21 @@ fn test_cov_annotation_only_local_declaration(#[values(false, true)] branch: boo
     let context = TestContext::with_files([
         (
             "example.py",
-            "def make_value():\n    value: str\n    value = \"hello\"\n    return value\n",
+            indoc! {r#"
+                def make_value():
+                    value: str
+                    value = "hello"
+                    return value
+            "#},
         ),
         (
             "tests/test_example.py",
-            "from example import make_value\n\ndef test_value():\n    assert make_value() == \"hello\"\n",
+            indoc! {r#"
+                from example import make_value
+
+                def test_value():
+                    assert make_value() == "hello"
+            "#},
         ),
     ]);
 
@@ -474,7 +485,13 @@ sources = [""]
 exclude_lines = ["("]
 "#,
         ),
-        ("test_example.py", "def test_example():\n    assert True\n"),
+        (
+            "test_example.py",
+            indoc! {r"
+            def test_example():
+                assert True
+        "},
+        ),
     ]);
 
     assert_cmd_snapshot!(
@@ -575,11 +592,29 @@ def test_fail():
 fn test_cov_multiple_sources() {
     let context = TestContext::with_files([
         ("pkg_a/__init__.py", ""),
-        ("pkg_a/code.py", "def a():\n    return 1\n"),
+        (
+            "pkg_a/code.py",
+            indoc! {r"
+            def a():
+                return 1
+        "},
+        ),
         ("pkg_b/__init__.py", ""),
-        ("pkg_b/code.py", "def b():\n    return 2\n"),
+        (
+            "pkg_b/code.py",
+            indoc! {r"
+            def b():
+                return 2
+        "},
+        ),
         ("pkg_c/__init__.py", ""),
-        ("pkg_c/code.py", "def c():\n    return 3\n"),
+        (
+            "pkg_c/code.py",
+            indoc! {r"
+            def c():
+                return 3
+        "},
+        ),
         (
             "test_multi.py",
             r"
@@ -683,8 +718,13 @@ def test_values():
 
 #[test]
 fn test_cov_reports_unresolved_importable_source() {
-    let context =
-        TestContext::with_file("test_example.py", "def test_example():\n    assert True\n");
+    let context = TestContext::with_file(
+        "test_example.py",
+        indoc! {r"
+            def test_example():
+                assert True
+        "},
+    );
 
     assert_cmd_snapshot!(
         context.command_no_parallel()
@@ -876,17 +916,22 @@ def test_only_covered():
             .read_file("build/coverage.json")
             .contains(r#""covered_lines": 5"#)
     );
-    assert!(
-        context
-            .read_file("build/coverage.lcov")
-            .contains("LF:6\nLH:5")
-    );
+    assert!(context.read_file("build/coverage.lcov").contains(
+        r"LF:6
+LH:5"
+    ));
 }
 
 #[test]
 fn test_cov_report_failure_does_not_block_other_reports() {
     let context = TestContext::with_files([
-        ("test_covered.py", "def test_pass():\n    assert True\n"),
+        (
+            "test_covered.py",
+            indoc! {r"
+            def test_pass():
+                assert True
+        "},
+        ),
         ("blocked", "not a directory"),
     ]);
 
@@ -1208,7 +1253,17 @@ fn test_cov_context_test_records_json_contexts() {
     let context = TestContext::with_files([
         (
             "src/app.py",
-            "def shared():\n    value = 1\n    return value\n\ndef only_one():\n    return shared() + 1\n\ndef only_two():\n    return shared() + 2\n",
+            indoc! {r"
+                def shared():
+                    value = 1
+                    return value
+
+                def only_one():
+                    return shared() + 1
+
+                def only_two():
+                    return shared() + 2
+            "},
         ),
         (
             "test_context.py",
@@ -1454,7 +1509,13 @@ fn test_cov_context_keeps_failed_retry_lines() {
     let context = TestContext::with_files([
         (
             "src/app.py",
-            "def first_path():\n    return 1\n\ndef second_path():\n    return 2\n",
+            indoc! {r"
+                def first_path():
+                    return 1
+
+                def second_path():
+                    return 2
+            "},
         ),
         (
             "test_retry.py",
@@ -2791,20 +2852,42 @@ fn test_cov_multiline_condition(
     #[values("all", "first", "neither")] outcome: &str,
     #[values(false, true)] branches: bool,
 ) {
-    let calls = match outcome {
-        "first" => "assert choose(True, False) == 1",
-        "neither" => "assert choose(False, False) == 0",
-        _ => {
-            "assert choose(True, False) == 1\n    assert choose(False, True) == 1\n    assert choose(False, False) == 0"
-        }
+    let test = match outcome {
+        "first" => indoc! {r"
+            from example import choose
+
+            def test_choose():
+                assert choose(True, False) == 1
+        "},
+        "neither" => indoc! {r"
+            from example import choose
+
+            def test_choose():
+                assert choose(False, False) == 0
+        "},
+        _ => indoc! {r"
+            from example import choose
+
+            def test_choose():
+                assert choose(True, False) == 1
+                assert choose(False, True) == 1
+                assert choose(False, False) == 0
+        "},
     };
-    let test = format!("from example import choose\n\ndef test_choose():\n    {calls}\n");
     let context = TestContext::with_files([
         (
             "example.py",
-            "def choose(first, second):\n    if (\n        first\n        or second\n    ):\n        return 1\n    return 0\n",
+            indoc! {r"
+                def choose(first, second):
+                    if (
+                        first
+                        or second
+                    ):
+                        return 1
+                    return 0
+            "},
         ),
-        ("test_example.py", test.as_str()),
+        ("test_example.py", test),
     ]);
     let mut command = context.command_no_parallel();
     command.args([
@@ -2851,24 +2934,66 @@ fn test_cov_multiline_condition(
 
 #[rstest]
 fn test_cov_decorated_implicit_returns_and_loop_else(#[values(false, true)] complete: bool) {
-    let calls = if complete {
-        "final_loop([])\n    final_loop([1, 2])\n    final_condition(False)\n    final_condition(True)\n    assert loop_else([]) == []\n    assert loop_else([0]) == []\n    assert loop_else([1]) == [1]"
+    let test = if complete {
+        indoc! {r"
+            from example import final_loop, final_condition, loop_else
+
+            def test_branches():
+                final_loop([])
+                final_loop([1, 2])
+                final_condition(False)
+                final_condition(True)
+                assert loop_else([]) == []
+                assert loop_else([0]) == []
+                assert loop_else([1]) == [1]
+        "}
     } else {
-        "final_loop([1, 2])\n    final_condition(True)\n    assert loop_else([1]) == [1]"
+        indoc! {r"
+            from example import final_loop, final_condition, loop_else
+
+            def test_branches():
+                final_loop([1, 2])
+                final_condition(True)
+                assert loop_else([1]) == [1]
+        "}
     };
-    let test = format!(
-        "from example import final_loop, final_condition, loop_else\n\ndef test_branches():\n    {calls}\n"
-    );
     let context = TestContext::with_files([
         (
             "decorators.py",
-            "def wrap(function):\n    def wrapper(*args, **kwargs):\n        return function(*args, **kwargs)\n    return wrapper\n",
+            indoc! {r"
+                def wrap(function):
+                    def wrapper(*args, **kwargs):
+                        return function(*args, **kwargs)
+                    return wrapper
+            "},
         ),
         (
             "example.py",
-            "from decorators import wrap\n\n@wrap\n@wrap\ndef final_loop(values):\n    for value in values:\n        assert value > 0\n\n@wrap\n@wrap\ndef final_condition(enabled):\n    if enabled:\n        pass\n\ndef loop_else(values):\n    for value in values:\n        if value:\n            break\n    else:\n        return []\n    return [1]\n",
+            indoc! {r"
+                from decorators import wrap
+
+                @wrap
+                @wrap
+                def final_loop(values):
+                    for value in values:
+                        assert value > 0
+
+                @wrap
+                @wrap
+                def final_condition(enabled):
+                    if enabled:
+                        pass
+
+                def loop_else(values):
+                    for value in values:
+                        if value:
+                            break
+                    else:
+                        return []
+                    return [1]
+            "},
         ),
-        ("test_example.py", test.as_str()),
+        ("test_example.py", test),
     ]);
     let mut command = context.command_no_parallel();
     command.args([

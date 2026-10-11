@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -250,7 +251,12 @@ fn test_snapshot_prune_reports_invalid_source_metadata() {
     let context = TestContext::default();
     context.write_file(
         "snapshots/test__test_hello.snap",
-        "---\nsource: not-a-source-reference\n---\nhello\n",
+        indoc! {r"
+            ---
+            source: not-a-source-reference
+            ---
+            hello
+        "},
     );
 
     assert_cmd_snapshot!(context.snapshot("prune").arg("--dry-run"), @r"
@@ -278,7 +284,12 @@ fn test_snapshot_prune_reports_source_read_errors() {
     std::fs::create_dir(context.root().join("test.py")).expect("create source directory");
     context.write_file(
         "snapshots/test__test_hello.snap",
-        "---\nsource: test.py:5::test_hello\n---\nhello\n",
+        indoc! {r"
+            ---
+            source: test.py:5::test_hello
+            ---
+            hello
+        "},
     );
 
     #[cfg(unix)]
@@ -400,8 +411,20 @@ def test_from_two():
     ----- stderr -----
     ");
 
-    context.write_file("test_one.py", "def test_other():\n    pass\n");
-    context.write_file("test_two.py", "def test_other():\n    pass\n");
+    context.write_file(
+        "test_one.py",
+        indoc! {r"
+        def test_other():
+            pass
+    "},
+    );
+    context.write_file(
+        "test_two.py",
+        indoc! {r"
+        def test_other():
+            pass
+    "},
+    );
 
     assert_cmd_snapshot!(context.snapshot("prune").arg("snapshots/test_one"), @r"
     success: true

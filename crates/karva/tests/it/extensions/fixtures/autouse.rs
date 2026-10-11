@@ -1,3 +1,4 @@
+use indoc::formatdoc;
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
@@ -748,7 +749,14 @@ def test_inherited_autouse_again():
         context.write_file("nested/test_example.py", tests);
     } else {
         let source = context.read_file(override_path);
-        context.write_file(override_path, &format!("{source}\n{tests}"));
+        context.write_file(
+            override_path,
+            &formatdoc!(
+                r"
+            {source}
+            {tests}"
+            ),
+        );
     }
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"

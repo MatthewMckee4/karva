@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams, LanguageKind,
@@ -13,7 +14,12 @@ fn finds_disk_and_unsaved_fixture_references() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write("test_other.py", "def test_other(database): pass\n");
     workspace.write("tests/unrelated.py", "def helper(): pass\n");
@@ -22,7 +28,12 @@ fn finds_disk_and_unsaved_fixture_references() {
     open(
         &mut server,
         uri.clone(),
-        "import pytest\n\n@pytest.mark.usefixtures(\"database\")\ndef test_example(database): pass\n",
+        indoc! {r#"
+            import pytest
+
+            @pytest.mark.usefixtures("database")
+            def test_example(database): pass
+        "#},
     );
 
     let with_declaration = server.request::<ReferencesRequest>(reference_params(
@@ -139,12 +150,20 @@ fn keeps_nested_fixture_references_separate() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write("tests/test_root.py", "def test_root(database): pass\n");
     workspace.write(
         "tests/pkg/conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("tests/pkg/test_nested.py");
@@ -192,8 +211,11 @@ fn keeps_nested_fixture_references_separate() {
 #[test]
 fn uses_custom_public_name_and_utf16_ranges() {
     let workspace = Workspace::new();
-    let provider_source =
-        "from karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n";
+    let provider_source = indoc! {r#"
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+        "#};
     workspace.write("conftest.py", provider_source);
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let provider_uri = workspace.uri("conftest.py");

@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use karva_static::EnvVars;
 
@@ -91,7 +92,10 @@ fn failed_first_runs_cached_failure_before_other_tests() {
 
 #[test]
 fn failed_first_uses_profile_configuration() {
-    let context = priority_context(Some("[profile.ci.test]\nfailed-first = true\n"));
+    let context = priority_context(Some(indoc! {r"
+        [profile.ci.test]
+        failed-first = true
+    "}));
     seed_failed_test(&context);
 
     assert_cmd_snapshot!(context.command_no_parallel().args(["--profile=ci", "--status-level=none"]), @"

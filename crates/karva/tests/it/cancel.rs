@@ -39,7 +39,11 @@ def test_slow():
             .wait_with_output()
             .expect("Failed to wait on karva process");
         panic!(
-            "{message}\nstdout:\n{}\nstderr:\n{}",
+            r"{message}
+stdout:
+{}
+stderr:
+{}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );

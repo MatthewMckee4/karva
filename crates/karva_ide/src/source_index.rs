@@ -191,6 +191,8 @@ impl WorkspaceSourceIndex {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use ruff_text_size::{TextRange, TextSize};
     use std::hint::black_box;
     use std::io::Write;
@@ -263,15 +265,30 @@ mod tests {
             [
                 document(
                     "/project/conftest.py",
-                    "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+                    indoc! {r"
+                        from karva import fixture
+
+                        @fixture
+                        def database(): pass
+                    "},
                 ),
                 document(
                     "/project/pkg/conftest.py",
-                    "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+                    indoc! {r"
+                        from karva import fixture
+
+                        @fixture
+                        def database(): pass
+                    "},
                 ),
                 document(
                     "/project/pkg/test_example.py",
-                    "from karva import fixture\n\n@fixture\ndef local(database): pass\n",
+                    indoc! {r"
+                        from karva import fixture
+
+                        @fixture
+                        def local(database): pass
+                    "},
                 ),
             ],
             settings(),
@@ -294,7 +311,12 @@ mod tests {
             [
                 document(
                     "/project/other/conftest.py",
-                    "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+                    indoc! {r"
+                        from karva import fixture
+
+                        @fixture
+                        def database(): pass
+                    "},
                 ),
                 document(
                     "/project/pkg/test_example.py",
@@ -321,7 +343,12 @@ mod tests {
             "/project".into(),
             [document(
                 path.as_str(),
-                "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+
+                    @fixture
+                    def database(): pass
+                "},
             )],
             settings(),
         )
@@ -381,7 +408,13 @@ mod tests {
             "/project".into(),
             [document(
                 path.as_str(),
-                "from karva import fixture\n@fixture\ndef database(): pass\n\ndef test_example(database): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+
+                    def test_example(database): pass
+                "},
             )],
             settings(),
         )
@@ -401,7 +434,11 @@ mod tests {
         let path = Utf8Path::new("/project/test_example.py");
         let provider = document(
             "/project/conftest.py",
-            "from karva import fixture\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "},
         );
         let source = document(path.as_str(), "def spec_example(database): pass\n");
 
@@ -433,7 +470,11 @@ mod tests {
 
         let changed_provider = document(
             "/project/conftest.py",
-            "from karva import fixture\n@fixture\ndef other(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def other(): pass
+            "},
         );
         let changed_provider_index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -464,11 +505,19 @@ mod tests {
         let mut documents = vec![
             document(
                 "/project/conftest.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             document(
                 "/project/pkg/conftest.py",
-                "from karva import fixture\n@fixture\ndef package_fixture(database): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def package_fixture(database): pass
+                "},
             ),
         ];
         for number in 0..64 {
@@ -530,8 +579,13 @@ mod tests {
             collect_doctests: false,
         };
         let builtin_path = Utf8Path::new("/venv/lib/python3.12/site-packages/karva/_builtins.py");
-        let builtin_source =
-            "from karva._karva import fixture\n\n@fixture\ndef tmp_path():\n    yield path\n";
+        let builtin_source = indoc! {r"
+                from karva._karva import fixture
+
+                @fixture
+                def tmp_path():
+                    yield path
+            "};
         let builtin = collect_source_with_module_name(
             &builtin_path.to_path_buf(),
             "karva._builtins",
@@ -596,7 +650,11 @@ mod tests {
             collect_doctests: false,
         };
         let builtin_path = Utf8Path::new("/venv/lib/python3.12/site-packages/karva/_builtins.py");
-        let builtin_source = "from karva._karva import fixture\n@fixture\ndef tmp_path(): pass\n";
+        let builtin_source = indoc! {r"
+            from karva._karva import fixture
+            @fixture
+            def tmp_path(): pass
+        "};
         let builtin = collect_source_with_module_name(
             &builtin_path.to_path_buf(),
             "karva._builtins",
@@ -606,7 +664,12 @@ mod tests {
         )
         .expect("built-in source should collect");
         let test_path = Utf8Path::new("/project/test_example.py").to_path_buf();
-        let test_source = "from karva import fixture\n@fixture\ndef tmp_path(): pass\ndef test_example(tmp_path): pass\n";
+        let test_source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def tmp_path(): pass
+            def test_example(tmp_path): pass
+        "};
         let test = collect_source(
             &test_path,
             Utf8Path::new("/project"),

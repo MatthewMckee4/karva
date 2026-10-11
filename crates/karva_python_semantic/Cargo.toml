@@ -22,6 +22,7 @@ ruff_text_size = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+indoc = { workspace = true }
 ruff_python_parser = { workspace = true }
 
 [lints]

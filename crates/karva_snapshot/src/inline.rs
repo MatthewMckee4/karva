@@ -410,6 +410,8 @@ pub(super) fn apply_inline_snapshot_update(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     #[test]
@@ -470,7 +472,10 @@ mod tests {
 
     #[test]
     fn generate_literal_multi_line() {
-        insta::assert_snapshot!(generate_inline_literal("line 1\nline 2\n", 4), @r#"
+        insta::assert_snapshot!(generate_inline_literal(indoc! {r"
+            line 1
+            line 2
+        "}, 4), @r#"
         """\
                 line 1
                 line 2
@@ -480,7 +485,9 @@ mod tests {
 
     #[test]
     fn generate_literal_multi_line_no_trailing_newline() {
-        insta::assert_snapshot!(generate_inline_literal("line 1\nline 2", 4), @r#"
+        insta::assert_snapshot!(generate_inline_literal(indoc! {r"
+            line 1
+            line 2"}, 4), @r#"
         """\
                 line 1
                 line 2
@@ -533,7 +540,10 @@ mod tests {
 
     #[test]
     fn find_inline_line_2() {
-        let source = "import karva\n    karva.assert_snapshot('hello', inline=\"\")\n";
+        let source = indoc! {r#"
+            import karva
+                karva.assert_snapshot('hello', inline="")
+        "#};
         let loc = find_inline_argument(source, 2, None).expect("should find");
         insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
@@ -607,14 +617,18 @@ def test_right():
 
     #[test]
     fn containing_function_name_simple() {
-        let source = "def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
+        let source = indoc! {r#"
+            def test_hello():
+                karva.assert_snapshot('hello', inline="")"#};
         let name = containing_function_name(source, source.len());
         insta::assert_snapshot!(name.unwrap(), @"test_hello");
     }
 
     #[test]
     fn containing_function_name_async() {
-        let source = "async def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
+        let source = indoc! {r#"
+            async def test_hello():
+                karva.assert_snapshot('hello', inline="")"#};
         let name = containing_function_name(source, source.len());
         insta::assert_snapshot!(name.unwrap(), @"test_hello");
     }

@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     ClientCapabilities, DefinitionParams, DefinitionRequest,
     DidChangeWatchedFilesClientCapabilities, DidChangeWatchedFilesNotification,
@@ -54,7 +55,11 @@ fn disk_refresh_is_explicit_for_watched_clients_and_automatic_otherwise(
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     let mut capabilities = ClientCapabilities::default();
     if watched {
@@ -100,7 +105,13 @@ fn disk_refresh_is_explicit_for_watched_clients_and_automatic_otherwise(
     assert_eq!(first_symbols[0]["location"]["range"]["start"]["line"], 2);
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+
+            @fixture
+            def database(): pass
+        "},
     );
     let before_notification =
         serde_json::to_value(server.request::<DefinitionRequest>(params.clone()))

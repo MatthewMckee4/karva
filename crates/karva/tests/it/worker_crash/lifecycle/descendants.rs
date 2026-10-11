@@ -1,3 +1,4 @@
+use indoc::formatdoc;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
@@ -200,7 +201,11 @@ fn run_with_descendant(context: &TestContext) -> Output {
             let descendant_cleanup = kill_descendant_if_started(context);
             let output = karva.wait_with_output().expect("collect Karva output");
             panic!(
-                "Karva stalled while cleaning up a worker descendant (descendant cleanup: {descendant_cleanup:?})\nstdout:\n{}\nstderr:\n{}",
+                r"Karva stalled while cleaning up a worker descendant (descendant cleanup: {descendant_cleanup:?})
+stdout:
+{}
+stderr:
+{}",
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
@@ -210,8 +215,14 @@ fn run_with_descendant(context: &TestContext) -> Output {
 }
 
 fn snapshot_output(output: &Output) -> String {
-    format!(
-        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+    formatdoc!(
+        r"
+            success: {}
+            exit_code: {}
+            ----- stdout -----
+            {}
+            ----- stderr -----
+            {}",
         output.status.success(),
         output
             .status

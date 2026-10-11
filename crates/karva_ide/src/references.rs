@@ -49,6 +49,8 @@ pub fn fixture_references(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::TextSize;
@@ -75,10 +77,17 @@ mod tests {
 
     #[test]
     fn finds_cross_file_references_with_optional_declaration() {
-        let provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
+        let provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
         let parameter = "def test_parameter(database): pass\n";
-        let metadata =
-            "import pytest\n@pytest.mark.usefixtures(\"database\")\ndef test_metadata(): pass\n";
+        let metadata = indoc! {r#"
+                import pytest
+                @pytest.mark.usefixtures("database")
+                def test_metadata(): pass
+            "#};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [
@@ -126,8 +135,16 @@ mod tests {
 
     #[test]
     fn keeps_shadowed_provider_references_separate() {
-        let root_provider = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let nested_provider = "from karva import fixture\n@fixture\ndef database(database): pass\n";
+        let root_provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let nested_provider = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(database): pass
+        "};
         let root_test = "def test_root(database): pass\n";
         let nested_test = "def test_nested(database): pass\n";
         let index = WorkspaceSourceIndex::from_documents(
@@ -184,7 +201,14 @@ mod tests {
 
     #[test]
     fn reports_custom_public_name_ranges() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n@pytest.mark.usefixtures(\"database\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import pytest
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            @pytest.mark.usefixtures("database")
+            def test_example(): pass
+        "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
@@ -196,7 +220,12 @@ mod tests {
         let analysis = index.analyze(&path).expect("source should analyze");
         let target = crate::occurrences::fixture_occurrence(
             &analysis,
-            offset(source, "database\")\ndef test"),
+            offset(
+                source,
+                indoc! {r#"
+                database")
+                def test"#},
+            ),
         )
         .expect("custom fixture should resolve")
         .fixture;

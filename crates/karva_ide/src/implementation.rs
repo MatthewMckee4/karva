@@ -37,6 +37,8 @@ pub fn fixture_implementation(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::{TextRange, TextSize};
@@ -90,7 +92,12 @@ mod tests {
     #[test]
     fn resolves_regular_fixture_to_function_name() {
         assert_target(
-            "from karva import fixture\n@fixture\ndef database(): pass\ndef test_example(database): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+                def test_example(database): pass
+            "},
             "database):",
             "database",
         );
@@ -99,7 +106,13 @@ mod tests {
     #[test]
     fn resolves_return_fixture_to_function_name() {
         assert_target(
-            "from karva import fixture\n@fixture\ndef database():\n    return object()\ndef test_example(database): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database():
+                    return object()
+                def test_example(database): pass
+            "},
             "database):",
             "database",
         );
@@ -107,25 +120,61 @@ mod tests {
 
     #[test]
     fn resolves_first_yield_in_source_order() {
-        let source = "from karva import fixture\n@fixture\ndef database():\n    if ready:\n        yield first\n    yield second\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database():
+                if ready:
+                    yield first
+                yield second
+            def test_example(database): pass
+        "};
         assert_target(source, "database):", "yield first");
     }
 
     #[test]
     fn resolves_yield_from() {
-        let source = "from karva import fixture\n@fixture\ndef database():\n    yield from values\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database():
+                yield from values
+            def test_example(database): pass
+        "};
         assert_target(source, "database):", "yield from values");
     }
 
     #[test]
     fn ignores_nested_functions_and_classes() {
-        let source = "from karva import fixture\n@fixture\ndef database():\n    def nested():\n        yield hidden\n    class Nested:\n        def method(self):\n            yield hidden\n    nested_lambda = lambda: (yield hidden)\n    return value\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database():
+                def nested():
+                    yield hidden
+                class Nested:
+                    def method(self):
+                        yield hidden
+                nested_lambda = lambda: (yield hidden)
+                return value
+            def test_example(database): pass
+        "};
         assert_target(source, "database):", "database");
     }
 
     #[test]
     fn resolves_dependency_and_usefixtures_references() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database():\n    yield value\n@fixture\ndef wrapper(database): pass\n@pytest.mark.usefixtures(\"database\")\ndef test_example(wrapper): pass\n";
+        let source = indoc! {r#"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database():
+                yield value
+            @fixture
+            def wrapper(database): pass
+            @pytest.mark.usefixtures("database")
+            def test_example(wrapper): pass
+        "#};
         let result = analysis(source);
         assert_eq!(
             fixture_implementation(&result, offset(source, "database):"))
@@ -143,8 +192,12 @@ mod tests {
 
     #[test]
     fn resolves_inherited_provider() {
-        let parent_source =
-            "from karva import fixture\n@fixture\ndef database():\n    yield value\n";
+        let parent_source = indoc! {r"
+                from karva import fixture
+                @fixture
+                def database():
+                    yield value
+            "};
         let source = "def test_example(database): pass\n";
         let analysis = analyze_source_with_parents(
             SourceDocument::new(
@@ -167,9 +220,19 @@ mod tests {
 
     #[test]
     fn resolves_nearest_override() {
-        let parent_source =
-            "from karva import fixture\n@fixture\ndef database():\n    yield parent\n";
-        let source = "from karva import fixture\n@fixture\ndef database():\n    yield child\ndef test_example(database): pass\n";
+        let parent_source = indoc! {r"
+                from karva import fixture
+                @fixture
+                def database():
+                    yield parent
+            "};
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database():
+                yield child
+            def test_example(database): pass
+        "};
         let analysis = analyze_source_with_parents(
             SourceDocument::new(
                 Utf8PathBuf::from("/project/test_example.py"),
@@ -203,9 +266,14 @@ mod tests {
                 .is_none()
         );
 
-        let rejected = analysis(
-            "from karva import fixture\n@fixture\ndef duplicate(): pass\n@fixture\ndef duplicate(): pass\ndef test_example(duplicate): pass\n",
-        );
+        let rejected = analysis(indoc! {r"
+                from karva import fixture
+                @fixture
+                def duplicate(): pass
+                @fixture
+                def duplicate(): pass
+                def test_example(duplicate): pass
+            "});
         assert!(
             fixture_implementation(
                 &rejected,

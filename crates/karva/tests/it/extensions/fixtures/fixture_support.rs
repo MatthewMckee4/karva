@@ -21,6 +21,7 @@
 //! See the pytest license block in the repository `LICENSE` file for the
 //! applicable copyright notice.
 
+use indoc::indoc;
 use insta::Settings;
 use insta_cmd::assert_cmd_snapshot;
 
@@ -413,11 +414,17 @@ def test_callable_wrong_warning():
     );
     settings.add_filter(
         r"(?s)info: Test failed here\n\s+--> <karva>/python/karva/_fixtures/recwarn\.py:168:17\n.*?info: DID NOT WARN",
-        "info: Test failed here\n       --> <warning assertion>\ninfo: DID NOT WARN",
+        indoc! {r"
+            info: Test failed here
+                   --> <warning assertion>
+            info: DID NOT WARN"},
     );
     settings.add_filter(
         r"(?s)info: Test failed here\n\s+--> test\.py:\d+:\d+\n.*?info: DID NOT WARN",
-        "info: Test failed here\n       --> <warning assertion>\ninfo: DID NOT WARN",
+        indoc! {r"
+            info: Test failed here
+                   --> <warning assertion>
+            info: DID NOT WARN"},
     );
     let _settings_scope = settings.bind_to_scope();
 

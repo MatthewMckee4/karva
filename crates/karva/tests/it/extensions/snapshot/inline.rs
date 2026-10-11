@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -180,11 +181,16 @@ def test_lines():
 fn test_inline_snapshot_multiline_matches() {
     let context = TestContext::with_file(
         "test.py",
-        "
-import karva
+        indoc! {r#"
 
-def test_lines():
-    karva.assert_snapshot(\"line 1\\nline 2\", inline=\"\"\"\\\n        line 1\n        line 2\n        \"\"\")\n",
+            import karva
+
+            def test_lines():
+                karva.assert_snapshot("line 1\nline 2", inline="""\
+                    line 1
+                    line 2
+                    """)
+        "#},
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @"
@@ -227,11 +233,13 @@ def test_closing():
     let source = context.read_file("test.py");
     assert!(
         source.contains("        \"\"\""),
-        "Expected closing triple-quote at 8-space indent (content level), got:\n{source}"
+        r"Expected closing triple-quote at 8-space indent (content level), got:
+{source}"
     );
     assert!(
         !source.contains("\n    \"\"\""),
-        "Closing triple-quote should NOT be at 4-space indent (call level), got:\n{source}"
+        r"Closing triple-quote should NOT be at 4-space indent (call level), got:
+{source}"
     );
 }
 
@@ -582,7 +590,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -631,11 +642,13 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        "Expected first inline rewritten to 'hello', got:\n{source}"
+        r"Expected first inline rewritten to 'hello', got:
+{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("world", inline="")"#),
-        "Expected second inline still empty, got:\n{source}"
+        r"Expected second inline still empty, got:
+{source}"
     );
 
     let pending = context
@@ -674,11 +687,13 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        "Expected first inline still 'hello', got:\n{source}"
+        r"Expected first inline still 'hello', got:
+{source}"
     );
     assert!(
         source.contains(r#"inline="world""#),
-        "Expected second inline rewritten to 'world', got:\n{source}"
+        r"Expected second inline rewritten to 'world', got:
+{source}"
     );
     assert!(
         !context
@@ -757,7 +772,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -806,7 +824,8 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        "Expected first inline rewritten, got:\n{source}"
+        r"Expected first inline rewritten, got:
+{source}"
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @r#"
@@ -854,11 +873,13 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        "Expected first inline still correct, got:\n{source}"
+        r"Expected first inline still correct, got:
+{source}"
     );
     assert!(
         source.contains(r#"inline="world""#),
-        "Expected second inline rewritten to 'world', got:\n{source}"
+        r"Expected second inline rewritten to 'world', got:
+{source}"
     );
     assert!(
         !context
@@ -930,7 +951,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -981,11 +1005,13 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains("inline=\"\"\""),
-        "Expected first inline rewritten to triple-quoted, got:\n{source}"
+        r"Expected first inline rewritten to triple-quoted, got:
+{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("world", inline="")"#),
-        "Expected second inline still empty, got:\n{source}"
+        r"Expected second inline still empty, got:
+{source}"
     );
 
     let pending = context
@@ -1024,7 +1050,8 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="world""#),
-        "Expected second inline rewritten to 'world', got:\n{source}"
+        r"Expected second inline rewritten to 'world', got:
+{source}"
     );
     assert!(!pending.exists(), "Expected no pending second snapshot");
 }
@@ -1090,7 +1117,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1202,7 +1232,8 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="world""#),
-        "Expected second inline rewritten to 'world', got:\n{source}"
+        r"Expected second inline rewritten to 'world', got:
+{source}"
     );
     assert!(!old_pending.exists(), "Expected old .snap.new removed");
     assert!(!new_pending.exists(), "Expected new .snap.new removed");
@@ -1291,11 +1322,13 @@ def test_third():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"karva.assert_snapshot("fixed", inline="fixed")"#),
-        "Middle inline was corrupted! Got:\n{source}"
+        r"Middle inline was corrupted! Got:
+{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("hello", inline="hello")"#),
-        "Third inline not rewritten correctly! Got:\n{source}"
+        r"Third inline not rewritten correctly! Got:
+{source}"
     );
 }
 
@@ -1366,7 +1399,10 @@ def test_third():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1445,11 +1481,13 @@ def test_third():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"karva.assert_snapshot("fixed", inline="fixed")"#),
-        "Middle inline was corrupted by review! Got:\n{source}"
+        r"Middle inline was corrupted by review! Got:
+{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("hello", inline="hello")"#),
-        "Third inline not rewritten by review! Got:\n{source}"
+        r"Third inline not rewritten by review! Got:
+{source}"
     );
 }
 
@@ -1769,7 +1807,8 @@ def test_single_quote():
     let source = context.read_file("test.py");
     assert!(
         source.contains("inline='hello'") || source.contains(r#"inline="hello""#),
-        "Expected inline value rewritten, got:\n{source}"
+        r"Expected inline value rewritten, got:
+{source}"
     );
 }
 

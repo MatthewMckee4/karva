@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     ClientCapabilities, CodeLensParams, CodeLensRequest, DidCloseTextDocumentNotification,
     DidCloseTextDocumentParams, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
@@ -33,7 +34,10 @@ fn test_commands_use_project_root_profile_and_runtime_identity() {
     let workspace = Workspace::new();
     workspace.write(
         "nested/karva.toml",
-        "[profile.ci.test]\ntest-function-prefix = 'check'\n",
+        indoc! {r"
+            [profile.ci.test]
+            test-function-prefix = 'check'
+        "},
     );
     let mut builder = TestServerBuilder::new().with_workspace(workspace.folder());
     builder.initialize_params.initialization_options = Some(json!({"profile": "ci"}));
@@ -42,7 +46,15 @@ fn test_commands_use_project_root_profile_and_runtime_identity() {
     open(
         &mut server,
         uri.clone(),
-        "raise RuntimeError('must never import')\nfrom karva import fixture\n@fixture\ndef provider(): pass\ndef helper(): pass\ndef test_ignored(): pass\ndef check_𐐀case(): pass\n",
+        indoc! {r"
+            raise RuntimeError('must never import')
+            from karva import fixture
+            @fixture
+            def provider(): pass
+            def helper(): pass
+            def test_ignored(): pass
+            def check_𐐀case(): pass
+        "},
     );
     assert!(
         server
@@ -164,7 +176,11 @@ fn file_moves_and_unsaved_names_update_selectors() {
 fn helpers_and_fixtures_have_no_test_lenses(
     #[values(
         "def helper(): pass\n",
-        "from karva import fixture\n@fixture\ndef provider(): pass\n"
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def provider(): pass
+        "}
     )]
     source: &str,
 ) {

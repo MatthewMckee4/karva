@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, CompletionList, CompletionParams, CompletionRequest, CompletionResponse,
@@ -15,7 +16,12 @@ fn completes_disk_and_builtin_fixtures_in_unsaved_test_parameters() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture(scope=\"session\")\ndef tmp_data(): pass\n",
+        indoc! {r#"
+            from karva import fixture
+
+            @fixture(scope="session")
+            def tmp_data(): pass
+        "#},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
@@ -138,11 +144,21 @@ fn completes_use_fixtures_strings() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = "import karva\n\n@karva.tags.use_fixtures(\"dat\")\ndef test_example(): pass\n";
+    let source = indoc! {r#"
+        import karva
+
+        @karva.tags.use_fixtures("dat")
+        def test_example(): pass
+    "#};
 
     server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
         text_document: TextDocumentItem {
@@ -212,7 +228,11 @@ fn refreshes_disk_sources_without_dynamic_file_watching() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef provider_before(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def provider_before(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
@@ -226,7 +246,11 @@ fn refreshes_disk_sources_without_dynamic_file_watching() {
         server.request::<CompletionRequest>(completion_params(uri.clone(), Position::new(0, 26)));
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef provider_after(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def provider_after(): pass
+        "},
     );
     let second = server.request::<CompletionRequest>(completion_params(uri, Position::new(0, 26)));
 

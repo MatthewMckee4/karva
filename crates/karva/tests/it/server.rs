@@ -1,3 +1,4 @@
+use indoc::indoc;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::Stdio;
 
@@ -95,7 +96,13 @@ fn server_subcommand_completes_lsp_lifecycle() -> anyhow::Result<()> {
         },
     });
     insta::assert_snapshot!(format!(
-        "success: {}\nexit_code: {:?}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        indoc! {r"
+            success: {}
+            exit_code: {:?}
+            ----- stdout -----
+            {}
+            ----- stderr -----
+            {}"},
         output.status.success(),
         output.status.code(),
         serde_json::to_string_pretty(&observed)?,
@@ -150,7 +157,13 @@ fn server_reports_initialization_failure_with_stdin_open() -> anyhow::Result<()>
     let stderr = String::from_utf8(output.stderr)?;
     insta::with_settings!({filters => [(r"\d{4}-\d{2}-\d{2}T\S+", "[TIME]")]}, {
         insta::assert_snapshot!(format!(
-            "success: {}\nexit_code: {:?}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+            indoc! {r"
+                success: {}
+                exit_code: {:?}
+                ----- stdout -----
+                {}
+                ----- stderr -----
+                {}"},
             output.status.success(), output.status.code(),
             stdout, stderr,
         ), @"
@@ -213,7 +226,14 @@ fn server_reports_main_loop_failure_with_stdin_open() -> anyhow::Result<()> {
     let stderr = String::from_utf8(output.stderr)?;
     insta::with_settings!({filters => [(r"\d{4}-\d{2}-\d{2}T\S+", "[TIME]")]}, {
         insta::assert_snapshot!(format!(
-            "success: {}\nexit_code: {:?}\n----- stdout -----\ninitialize_id: {}\n{}\n----- stderr -----\n{}",
+            indoc! {r"
+                success: {}
+                exit_code: {:?}
+                ----- stdout -----
+                initialize_id: {}
+                {}
+                ----- stderr -----
+                {}"},
             output.status.success(), output.status.code(), initialize.id, remaining, stderr,
         ), @"
         success: false

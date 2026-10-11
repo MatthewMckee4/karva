@@ -1,3 +1,4 @@
+use indoc::formatdoc;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
@@ -152,7 +153,11 @@ fn run_with_escaped_connection(context: &TestContext, failure: &str) -> Output {
             let descendant_cleanup = kill_escaped_descendant(context);
             let output = karva.wait_with_output().expect("collect Karva output");
             panic!(
-                "Karva stalled on an escaped worker connection (descendant cleanup: {descendant_cleanup:?})\nstdout:\n{}\nstderr:\n{}",
+                r"Karva stalled on an escaped worker connection (descendant cleanup: {descendant_cleanup:?})
+stdout:
+{}
+stderr:
+{}",
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
@@ -162,8 +167,14 @@ fn run_with_escaped_connection(context: &TestContext, failure: &str) -> Output {
 }
 
 fn snapshot_output(output: &Output) -> String {
-    let output = format!(
-        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+    let output = formatdoc!(
+        r"
+            success: {}
+            exit_code: {}
+            ----- stdout -----
+            {}
+            ----- stderr -----
+            {}",
         output.status.success(),
         output
             .status
