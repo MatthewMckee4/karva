@@ -794,11 +794,11 @@ fn ensure_karva_completed(output: &Output, config: &BenchmarkProject) -> Result<
         String::from_utf8_lossy(&output.stderr),
     );
 
-    if let Some((passed, failed)) = config.expected_results() {
+    if let Some(expected) = config.expected_results() {
         let normalized = normalize_diagnostic_text(&String::from_utf8_lossy(&output.stdout));
         let actual = parse_test_stats(&normalized)
             .with_context(|| format!("Missing test summary for benchmark `{}`", config.name))?;
-        let expected_exit = if failed == 0 {
+        let expected_exit = if expected.failed == 0 {
             ExitStatus::Success
         } else {
             ExitStatus::Failure
@@ -811,8 +811,8 @@ fn ensure_karva_completed(output: &Output, config: &BenchmarkProject) -> Result<
             output.status
         );
         let expected = TestStats {
-            passed,
-            failed,
+            passed: expected.passed,
+            failed: expected.failed,
             errors: 0,
             skipped: 0,
         };

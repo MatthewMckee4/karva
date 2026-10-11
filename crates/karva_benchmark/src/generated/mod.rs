@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
 
+use crate::ExpectedResults;
+
 mod asynchronous;
 mod captured_output;
 mod dense_fixtures;
@@ -67,13 +69,28 @@ pub enum GeneratedBenchmark {
 
 impl GeneratedBenchmark {
     /// Passing and failing totals used to detect missing work or unintended failures.
-    pub(super) const fn expected_results(self) -> Option<(usize, usize)> {
+    pub(super) const fn expected_results(self) -> Option<ExpectedResults> {
         match self {
-            Self::Failures => Some((0, failures::CASES)),
-            Self::FixtureTeardown => Some((fixture_teardown::CASES, 0)),
-            Self::Async => Some((asynchronous::CASES, 0)),
-            Self::SnapshotDiffs => Some((0, snapshot_diffs::CASES)),
-            Self::CapturedOutput => Some((captured_output::CASES / 2, captured_output::CASES / 2)),
+            Self::Failures => Some(ExpectedResults {
+                passed: 0,
+                failed: failures::CASES,
+            }),
+            Self::FixtureTeardown => Some(ExpectedResults {
+                passed: fixture_teardown::CASES,
+                failed: 0,
+            }),
+            Self::Async => Some(ExpectedResults {
+                passed: asynchronous::CASES,
+                failed: 0,
+            }),
+            Self::SnapshotDiffs => Some(ExpectedResults {
+                passed: 0,
+                failed: snapshot_diffs::CASES,
+            }),
+            Self::CapturedOutput => Some(ExpectedResults {
+                passed: captured_output::CASES / 2,
+                failed: captured_output::CASES / 2,
+            }),
             _ => None,
         }
     }
@@ -163,8 +180,11 @@ mod tests {
         let root = Utf8Path::from_path(temp_dir.path()).expect("UTF-8 path");
         generate_project(workload, root).expect("generate workload");
         let source = fs::read_to_string(root.join("tests").join(filename)).expect("read tests");
-        let (passed, failed) = workload.expected_results().expect("deterministic outcomes");
-        assert_eq!(source.matches(definition).count(), passed + failed);
+        let expected = workload.expected_results().expect("deterministic outcomes");
+        assert_eq!(
+            source.matches(definition).count(),
+            expected.passed + expected.failed
+        );
         let metadata = fs::read_to_string(root.join("pyproject.toml")).expect("read metadata");
         assert!(!metadata.contains("retry ="));
         assert!(!metadata.contains("snapshot-update"));

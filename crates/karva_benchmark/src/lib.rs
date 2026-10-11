@@ -62,6 +62,13 @@ enum BenchmarkSource {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Required outcome totals for a generated workload; errors and skips must be zero.
+pub struct ExpectedResults {
+    pub passed: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
 /// Reproducible project and settings used as one benchmark workload.
 pub struct BenchmarkProject {
     /// Stable identifier used in reports and cache paths.
@@ -97,7 +104,7 @@ impl BenchmarkProject {
     }
 
     /// Returns expected passing and failing counts when the generated workload defines them.
-    pub const fn expected_results(&self) -> Option<(usize, usize)> {
+    pub const fn expected_results(&self) -> Option<ExpectedResults> {
         match self.source {
             BenchmarkSource::Generated(workload) => workload.expected_results(),
             BenchmarkSource::Git { .. } => None,
