@@ -275,23 +275,23 @@ jobs:
       - name: "Install integration test Python"
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Resolve build Python
-        id: build-python
-        run: |
-          uv python install 3.10
-          python_path=$(uv python find 3.10)
-          echo "path=$python_path" >> "$GITHUB_OUTPUT"
+      # Embedded PyO3 tests need setup-python's shared library and standard library.
+      - name: Setup build Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: setup-python
+        with:
+          python-version: "3.10"
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         env:
-          PYO3_PYTHON: ${{ steps.build-python.outputs.path }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         with:
           command: build
 
       - name: Run tests
         env:
-          PYO3_PYTHON: ${{ steps.build-python.outputs.path }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           KARVA_MAX_PARALLELISM: 2
         run: |
           cargo nextest run --profile ci
@@ -328,23 +328,23 @@ jobs:
       - name: "Install integration test Python"
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Resolve build Python
-        id: build-python
-        run: |
-          uv python install 3.10
-          python_path=$(uv python find 3.10)
-          echo "path=$python_path" >> "$GITHUB_OUTPUT"
+      # Embedded PyO3 tests need setup-python's shared library and standard library.
+      - name: Setup build Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: setup-python
+        with:
+          python-version: "3.10"
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         env:
-          PYO3_PYTHON: ${{ steps.build-python.outputs.path }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         with:
           command: build
 
       - name: Archive tests
         env:
-          PYO3_PYTHON: ${{ steps.build-python.outputs.path }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
         run: |
           cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
 
@@ -392,12 +392,12 @@ jobs:
       - name: "Install integration test Python"
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Resolve build Python
-        id: build-python
-        run: |
-          uv python install 3.10
-          python_path=$(uv python find 3.10)
-          echo "path=$python_path" >> "$GITHUB_OUTPUT"
+      # Embedded PyO3 tests need setup-python's shared library and standard library.
+      - name: Setup build Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: setup-python
+        with:
+          python-version: "3.10"
 
       - name: "Download test archive"
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -412,7 +412,7 @@ jobs:
 
       - name: Run tests
         env:
-          PYO3_PYTHON: ${{ steps.build-python.outputs.path }}
+          PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
           KARVA_MAX_PARALLELISM: 2
         run: |
           cargo nextest run --profile ci --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/2
