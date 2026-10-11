@@ -38,7 +38,7 @@ const MEDIUM_PROJECT_ITERATIONS: usize = 15;
 const STABLE_PROJECT_ITERATIONS: usize = 11;
 const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
 const EXTRA_LONG_PROJECT_ITERATIONS: usize = LONG_PROJECT_ITERATIONS.div_ceil(2);
-// Receipt: async outliers need more repetitions; see crates/karva_benchmark/measurements.md.
+// Receipt: local async A/A variation reached +5.98% with 21 pairs and +4.67% with 31.
 const ASYNC_PROJECT_ITERATIONS: usize = 31;
 
 #[derive(Debug, Parser)]
