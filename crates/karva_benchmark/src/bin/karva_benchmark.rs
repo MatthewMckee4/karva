@@ -32,6 +32,10 @@ use similar::{Algorithm, TextDiff};
 const MATERIAL_CHANGE_PERCENT: f64 = 5.0;
 const FAST_PROJECT_ITERATIONS: usize = 21;
 const MEDIUM_PROJECT_ITERATIONS: usize = 15;
+/// First 11 samples preserved all six stable workloads' verdicts in CI-only
+/// runs 38163768088, 38171288348, and 38171764073; seven produced false signals
+/// in other fast workloads. Keep the noisier fast workloads at 21.
+const STABLE_PROJECT_ITERATIONS: usize = 11;
 const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
 const EXTRA_LONG_PROJECT_ITERATIONS: usize = LONG_PROJECT_ITERATIONS.div_ceil(2);
 
@@ -242,7 +246,7 @@ fn main() -> Result<()> {
 }
 
 fn list_projects() -> Result<()> {
-    let matrix = Matrix {
+    let mut matrix = Matrix {
         include: BENCHMARK_PROJECTS
             .iter()
             .map(|project| MatrixProject {
@@ -251,6 +255,19 @@ fn list_projects() -> Result<()> {
             })
             .collect(),
     };
+
+    // Median job times across 11 recent runs: requests 114s, werkzeug 95s,
+    // snapshots 93s, httpx 88s, fastapi 82s, dense fixtures 69s. Submit these
+    // first so runner queues do not leave expensive comparisons until last.
+    matrix.include.sort_by_key(|project| match project.project {
+        "requests" => 0,
+        "werkzeug" => 1,
+        "karva-snapshots" => 2,
+        "httpx" => 3,
+        "fastapi" => 4,
+        "karva-dense-fixtures" => 5,
+        _ => 6,
+    });
 
     serde_json::to_writer(io::stdout(), &matrix).context("Failed to write benchmark matrix")?;
     println!();
@@ -277,15 +294,18 @@ fn compare(args: CompareArgs) -> Result<()> {
         eprintln!("Preparing benchmark project `{}`", config.name);
         let project = karva_benchmark::prepare_benchmark_project_environment(config)
             .with_context(|| format!("Failed to prepare benchmark project `{}`", config.name))?;
-        let benchmark = prepare_benchmark(config, project.cwd(), &baseline_wheel, num_workers)?;
+        let (benchmark, baseline_output) =
+            prepare_benchmark(config, project.cwd(), &baseline_wheel, num_workers)?;
         let mut baseline_wall_time_values = Vec::with_capacity(args.iterations);
         let mut baseline_memory_values = Vec::with_capacity(args.iterations);
         let mut candidate_wall_time_values = Vec::with_capacity(args.iterations);
         let mut candidate_memory_values = Vec::with_capacity(args.iterations);
-        let mut baseline_diagnostic_output = None;
+        let mut baseline_diagnostic_output = Some(baseline_output);
         let mut candidate_diagnostic_output = None;
 
-        for iteration in 0..args.iterations {
+        let mut iterations = args.iterations;
+        let mut iteration = 0;
+        while iteration < iterations {
             let mut baseline = Subject {
                 label: &args.baseline_label,
                 wheel: &baseline_wheel,
@@ -307,6 +327,27 @@ fn compare(args: CompareArgs) -> Result<()> {
             } else {
                 run_subject(config, project.cwd(), &benchmark, &mut candidate)?;
                 run_subject(config, project.cwd(), &benchmark, &mut baseline)?;
+            }
+            iteration += 1;
+            if iteration == args.iterations {
+                iterations = comparison_iterations(
+                    config.name,
+                    args.iterations,
+                    percent_change(
+                        median(&baseline_wall_time_values),
+                        median(&candidate_wall_time_values),
+                    ),
+                    percent_change(
+                        median(&baseline_memory_values),
+                        median(&candidate_memory_values),
+                    ),
+                );
+                if iterations > args.iterations {
+                    eprintln!(
+                        "Confirming `{}` with {iterations} samples per revision",
+                        config.name
+                    );
+                }
             }
         }
 
@@ -333,7 +374,7 @@ fn compare(args: CompareArgs) -> Result<()> {
 
         wall_time_comparisons.push(ProjectComparison {
             name: config.name.to_string(),
-            iterations: args.iterations,
+            iterations,
             baseline: baseline_wall_time,
             candidate: candidate_wall_time,
             percent_change: wall_time_percent_change,
@@ -346,7 +387,7 @@ fn compare(args: CompareArgs) -> Result<()> {
 
         memory_comparisons.push(ProjectComparison {
             name: config.name.to_string(),
-            iterations: args.iterations,
+            iterations,
             baseline: baseline_memory,
             candidate: candidate_memory,
             percent_change: memory_percent_change,
@@ -558,21 +599,24 @@ fn prepare_benchmark(
     project_root: &Utf8Path,
     baseline_wheel: &Utf8Path,
     num_workers: NonZeroUsize,
-) -> Result<BenchmarkContext> {
+) -> Result<(BenchmarkContext, String)> {
     let invocation = karva_invocation(config, project_root, num_workers)?;
     let diagnostic_invocation = karva_invocation(config, project_root, NonZeroUsize::MIN)?;
     karva_benchmark::install_benchmark_tools(config, project_root, baseline_wheel)
         .context("Failed to install baseline benchmark wheel")?;
     karva_benchmark::clean_project_cache(project_root)
         .with_context(|| format!("Failed to clean benchmark cache for `{}`", config.name))?;
-    warm_project_cache(config, project_root, &diagnostic_invocation)
+    let baseline_output = warm_project_cache(config, project_root, &diagnostic_invocation)
         .with_context(|| format!("Failed to warm benchmark cache for `{}`", config.name))?;
     let duration_cache_seed = DurationCacheSeed::capture(project_root)?;
-    Ok(BenchmarkContext {
-        invocation,
-        diagnostic_invocation,
-        duration_cache_seed,
-    })
+    Ok((
+        BenchmarkContext {
+            invocation,
+            diagnostic_invocation,
+            duration_cache_seed,
+        },
+        baseline_output,
+    ))
 }
 
 impl DurationCacheSeed {
@@ -675,13 +719,16 @@ fn run_project_cli(
     }
 }
 
+/// Warms the baseline cache and retains its serial output for diagnostics, avoiding
+/// another full baseline run. Timings and process addresses are normalized.
 fn warm_project_cache(
     config: &BenchmarkProject,
     project_root: &Utf8Path,
     invocation: &KarvaInvocation,
-) -> Result<()> {
+) -> Result<String> {
     let output = run_invocation(invocation, project_root)?;
-    ensure_karva_completed(&output, config)
+    ensure_karva_completed(&output, config)?;
+    Ok(normalize_diagnostic_output(&output))
 }
 
 fn run_invocation(invocation: &KarvaInvocation, project_root: &Utf8Path) -> Result<Output> {
@@ -1264,7 +1311,6 @@ fn matrix_iterations(project_name: &str) -> usize {
         "karva-dense-fixtures"
         | "karva-many-modules"
         | "karva-nested-fixtures"
-        | "karva-parametrized-matrix"
         | "karva-retries"
         | "karva-snapshots"
         | "karva-wide-fixtures"
@@ -1272,8 +1318,36 @@ fn matrix_iterations(project_name: &str) -> usize {
         | "httpx"
         | "werkzeug" => LONG_PROJECT_ITERATIONS,
         "requests" => EXTRA_LONG_PROJECT_ITERATIONS,
-        "tomlkit" => MEDIUM_PROJECT_ITERATIONS,
+        // CI-only run 38171764073 reported a false 7.2% change with seven
+        // parametrization samples; use the existing 15-sample tier to confirm it.
+        "karva-parametrized-matrix" => MEDIUM_PROJECT_ITERATIONS,
+        "blinker"
+        | "itsdangerous"
+        | "installer"
+        | "outcome"
+        | "pluggy"
+        | "karva-shared-conftest"
+        | "tomlkit" => STABLE_PROJECT_ITERATIONS,
         _ => FAST_PROJECT_ITERATIONS,
+    }
+}
+
+/// Extends a retries comparison that crosses the report threshold. Most seven-
+/// sample runs were stable, but run 38171288348 produced a false 5.1% regression.
+/// Only the normal seven-sample batch is extended; custom run counts are preserved.
+fn comparison_iterations(
+    project: &str,
+    requested: usize,
+    wall_time_change: f64,
+    memory_change: f64,
+) -> usize {
+    if project == "karva-retries"
+        && requested == LONG_PROJECT_ITERATIONS
+        && (is_material_change(wall_time_change) || is_material_change(memory_change))
+    {
+        MEDIUM_PROJECT_ITERATIONS
+    } else {
+        requested
     }
 }
 
@@ -1461,10 +1535,10 @@ mod tests {
     use super::{
         BenchmarkMetric, CACHE_DIR, ComparisonReport, DiagnosticComparison, DurationCacheSeed,
         EXTRA_LONG_PROJECT_ITERATIONS, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
-        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, TestStats,
-        diagnostic_comparison, diagnostics_markdown_report, is_benchmarkable_exit,
-        karva_invocation, markdown_report, matrix_iterations, normalize_diagnostic_text,
-        standalone_html, trend, write_code_block,
+        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, STABLE_PROJECT_ITERATIONS,
+        TestStats, comparison_iterations, diagnostic_comparison, diagnostics_markdown_report,
+        is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
+        normalize_diagnostic_text, standalone_html, trend, write_code_block,
     };
 
     #[test]
@@ -1863,7 +1937,7 @@ mod tests {
         );
         assert_eq!(
             matrix_iterations("karva-parametrized-matrix"),
-            LONG_PROJECT_ITERATIONS
+            MEDIUM_PROJECT_ITERATIONS
         );
         assert_eq!(matrix_iterations("karva-retries"), LONG_PROJECT_ITERATIONS);
         assert_eq!(
@@ -1876,7 +1950,43 @@ mod tests {
         );
         assert_eq!(matrix_iterations("requests"), EXTRA_LONG_PROJECT_ITERATIONS);
         assert_eq!(matrix_iterations("werkzeug"), LONG_PROJECT_ITERATIONS);
-        assert_eq!(matrix_iterations("tomlkit"), MEDIUM_PROJECT_ITERATIONS);
+        assert_eq!(matrix_iterations("tomlkit"), STABLE_PROJECT_ITERATIONS);
+    }
+
+    #[rstest::rstest]
+    #[case("karva-retries", 7, 5.1, 0.0, 15)]
+    #[case("karva-retries", 7, -5.0, 0.0, 15)]
+    #[case("karva-retries", 7, 0.0, 5.0, 15)]
+    #[case("karva-retries", 7, 4.9, -4.9, 7)]
+    #[case("karva-retries", 21, 5.1, 0.0, 21)]
+    #[case("karva-retries", 1, 5.1, 0.0, 1)]
+    #[case("requests", 4, 5.1, 0.0, 4)]
+    fn retries_confirm_material_changes(
+        #[case] project: &str,
+        #[case] requested: usize,
+        #[case] time: f64,
+        #[case] memory: f64,
+        #[case] expected: usize,
+    ) {
+        assert_eq!(
+            comparison_iterations(project, requested, time, memory),
+            expected
+        );
+    }
+
+    #[rstest::rstest]
+    fn stable_projects_use_fewer_samples(
+        #[values(
+            "blinker",
+            "itsdangerous",
+            "installer",
+            "outcome",
+            "pluggy",
+            "karva-shared-conftest"
+        )]
+        project: &str,
+    ) {
+        assert_eq!(matrix_iterations(project), STABLE_PROJECT_ITERATIONS);
     }
 
     #[test]
