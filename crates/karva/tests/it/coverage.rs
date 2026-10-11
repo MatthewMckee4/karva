@@ -2848,3 +2848,143 @@ fn test_cov_multiline_condition(
         assert_eq!(file["summary"]["percent_covered"], 100.0);
     }
 }
+
+#[rstest]
+fn test_cov_decorated_implicit_returns_and_loop_else(#[values(false, true)] complete: bool) {
+    let calls = if complete {
+        "final_loop([])\n    final_loop([1, 2])\n    final_condition(False)\n    final_condition(True)\n    assert loop_else([]) == []\n    assert loop_else([0]) == []\n    assert loop_else([1]) == [1]"
+    } else {
+        "final_loop([1, 2])\n    final_condition(True)\n    assert loop_else([1]) == [1]"
+    };
+    let test = format!(
+        "from example import final_loop, final_condition, loop_else\n\ndef test_branches():\n    {calls}\n"
+    );
+    let context = TestContext::with_files([
+        (
+            "decorators.py",
+            "def wrap(function):\n    def wrapper(*args, **kwargs):\n        return function(*args, **kwargs)\n    return wrapper\n",
+        ),
+        (
+            "example.py",
+            "from decorators import wrap\n\n@wrap\n@wrap\ndef final_loop(values):\n    for value in values:\n        assert value > 0\n\n@wrap\n@wrap\ndef final_condition(enabled):\n    if enabled:\n        pass\n\ndef loop_else(values):\n    for value in values:\n        if value:\n            break\n    else:\n        return []\n    return [1]\n",
+        ),
+        ("test_example.py", test.as_str()),
+    ]);
+    let mut command = context.command_no_parallel();
+    command.args([
+        "--cov=example.py",
+        "--cov-branch",
+        "--cov-context=test",
+        "--cov-report=json",
+        "--status-level=none",
+        "test_example.py",
+    ]);
+    if complete {
+        command.arg("--cov-fail-under=100");
+    }
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    let report: serde_json::Value =
+        serde_json::from_str(&context.read_file("coverage.json")).expect("coverage JSON");
+    let file = &report["files"]["example.py"];
+    let branches = serde_json::json!({
+        "executed_branches": file["executed_branches"],
+        "missing_branches": file["missing_branches"],
+        "num_branches": file["summary"]["num_branches"],
+        "percent_covered": file["summary"]["percent_covered"],
+    });
+    let branches = serde_json::to_string_pretty(&branches).expect("branch coverage JSON");
+    if complete {
+        insta::assert_snapshot!(branches, @r#"
+        {
+          "executed_branches": [
+            [
+              6,
+              -3
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              12,
+              -9
+            ],
+            [
+              12,
+              13
+            ],
+            [
+              16,
+              17
+            ],
+            [
+              16,
+              20
+            ],
+            [
+              17,
+              16
+            ],
+            [
+              17,
+              18
+            ]
+          ],
+          "missing_branches": [],
+          "num_branches": 8,
+          "percent_covered": 100.0
+        }
+        "#);
+    } else {
+        insta::assert_snapshot!(branches, @r#"
+        {
+          "executed_branches": [
+            [
+              6,
+              -3
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              12,
+              13
+            ],
+            [
+              16,
+              17
+            ],
+            [
+              17,
+              18
+            ]
+          ],
+          "missing_branches": [
+            [
+              12,
+              -9
+            ],
+            [
+              16,
+              20
+            ],
+            [
+              17,
+              16
+            ]
+          ],
+          "num_branches": 8,
+          "percent_covered": 84.0
+        }
+        "#);
+    }
+}
