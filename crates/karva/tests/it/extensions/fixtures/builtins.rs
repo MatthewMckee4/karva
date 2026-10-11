@@ -913,6 +913,10 @@ fn test_mock_env() {
         success: true
         exit_code: 0
         ----- stdout -----
+
+        warnings:
+          test.py:132: UserWarning: Value of environment variable XYZ123 type should be str, but got 2 (type: int); converted to str implicitly (1 emitted)
+
         ────────────
              Summary [TIME] 16 tests run: 13 passed, 3 skipped
 

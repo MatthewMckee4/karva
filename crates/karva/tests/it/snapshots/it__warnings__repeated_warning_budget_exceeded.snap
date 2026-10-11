@@ -1,0 +1,28 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--num-workers=1"
+    - "--status-level=none"
+    - "--max-warnings=9"
+    - "--result-output=results.json"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760527
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+diagnostics:
+
+error[max-warnings]: max-warnings budget exceeded: limit 9, emitted 10
+
+warnings:
+  test.py:4: DeprecationWarning: repeated (10 emitted)
+
+────────────
+     Summary [TIME] 10 tests run: 10 passed, 0 skipped
+
+----- stderr -----

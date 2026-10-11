@@ -136,6 +136,11 @@ impl RunState {
 }
 
 impl Context<'_> {
+    /// Forwards a warning without converting it into a failure diagnostic.
+    pub(crate) fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
+        self.reporter.report_warning(warning);
+    }
+
     /// Reports a final non-retried test outcome.
     ///
     /// Returns whether the outcome counts as successful for failure-budget accounting.

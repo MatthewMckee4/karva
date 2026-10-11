@@ -151,10 +151,15 @@ import os
 from pathlib import Path
 import signal
 import time
+import warnings
 
 
 def test_pass_with_escaped_child():
-    if os.fork() == 0:
+    # This test intentionally forks a worker with IPC threads running.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="This process .* is multi-threaded", category=DeprecationWarning)
+        child = os.fork()
+    if child == 0:
         os.setsid()
         signal.alarm(30)
         Path("descendant_pid").write_text(str(os.getpid()))
@@ -166,7 +171,7 @@ def test_pass_with_escaped_child():
     let output = run_with_descendant(&context);
     terminate_escaped_descendant(&context);
 
-    assert_snapshot!(snapshot_output(&output), @r###"
+    assert_snapshot!(snapshot_output(&output), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -176,7 +181,7 @@ def test_pass_with_escaped_child():
 
     ----- stderr -----
     WARN worker output drain limit reached; final output may be incomplete worker_id=0 limit_ms=50
-    "###);
+    ");
 }
 
 fn run_with_descendant(context: &TestContext) -> Output {

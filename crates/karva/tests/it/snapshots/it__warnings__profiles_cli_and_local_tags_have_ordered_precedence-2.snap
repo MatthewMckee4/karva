@@ -1,0 +1,25 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--profile=ci"
+    - "--status-level=none"
+    - "-W"
+    - default
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760182
+---
+success: true
+exit_code: 0
+----- stdout -----
+
+warnings:
+  test.py:15: DeprecationWarning: visible (1 emitted)
+
+────────────
+     Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+----- stderr -----

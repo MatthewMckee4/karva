@@ -4,7 +4,7 @@ mod junit;
 mod result_report;
 mod watch;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::ErrorKind;
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -440,7 +440,8 @@ pub fn print_test_output(
 
     let has_test_diagnostics = !result.stats.is_success();
     let has_run_diagnostics = !result.run_diagnostics.is_empty();
-    let has_diagnostics = has_test_diagnostics || has_run_diagnostics;
+    let has_diagnostics =
+        has_test_diagnostics || has_run_diagnostics || !result.warnings.is_empty();
     let has_preceding_test_lines = result.stats.total() > 0;
 
     if has_test_diagnostics {
@@ -451,6 +452,31 @@ pub fn print_test_output(
         result,
         has_preceding_test_lines && !has_test_diagnostics,
     )?;
+
+    if !result.warnings.is_empty() {
+        if has_preceding_test_lines && !has_test_diagnostics && !has_run_diagnostics {
+            writeln!(details)?;
+        }
+        writeln!(details, "warnings:")?;
+        let mut groups = BTreeMap::new();
+        for warning in &result.warnings {
+            *groups
+                .entry((
+                    &warning.filename,
+                    warning.lineno,
+                    &warning.category,
+                    &warning.message,
+                ))
+                .or_insert(0usize) += 1;
+        }
+        for ((filename, lineno, category, message), count) in groups {
+            writeln!(
+                details,
+                "  {filename}:{lineno}: {category}: {message} ({count} emitted)"
+            )?;
+        }
+        writeln!(details)?;
+    }
 
     write_durations_block(
         &mut details,

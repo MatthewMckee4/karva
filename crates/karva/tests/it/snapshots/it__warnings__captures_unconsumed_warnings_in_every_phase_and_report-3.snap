@@ -1,0 +1,29 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=none"
+    - "--result-output=results.jsonl"
+    - "--result-format=jsonl"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760235
+---
+success: true
+exit_code: 0
+----- stdout -----
+
+warnings:
+  test.py:5: DeprecationWarning: import warning (1 emitted)
+  test.py:9: ResourceWarning: setup warning (1 emitted)
+  test.py:11: RuntimeWarning: teardown warning (1 emitted)
+  test.py:15: UserWarning: session setup (1 emitted)
+  test.py:17: UserWarning: session teardown (1 emitted)
+  test.py:20: DeprecationWarning: call warning (1 emitted)
+
+────────────
+     Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+----- stderr -----

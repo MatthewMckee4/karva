@@ -26,6 +26,7 @@ mod server;
 mod show_config;
 mod shuffle;
 mod version;
+mod warnings;
 mod watch;
 mod worker_crash;
 mod zed_snippets;

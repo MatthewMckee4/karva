@@ -771,6 +771,13 @@ fn is_false(value: &bool) -> bool {
 )]
 /// Resolved test selection, retry, timeout, and failure settings.
 pub struct TestSettings {
+    /// Ordered warning policy applied before collection and each test attempt.
+    pub warning_filters: Vec<String>,
+
+    /// Run-wide emitted-warning budget; `None` leaves the count unrestricted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_warnings: Option<usize>,
+
     /// Prefix identifying Python test functions during syntax collection.
     pub test_function_prefix: String,
 

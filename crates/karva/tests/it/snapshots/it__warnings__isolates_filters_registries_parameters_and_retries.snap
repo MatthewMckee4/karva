@@ -1,0 +1,26 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--retry=1"
+    - "--status-level=none"
+    - "--result-output=results.json"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760182
+---
+success: true
+exit_code: 0
+----- stdout -----
+
+warnings:
+  test.py:8: DeprecationWarning: case (4 emitted)
+
+────────────
+     Summary [TIME] 2 tests run: 2 passed (2 flaky), 0 skipped
+   FLAKY 2/2 [TIME] test::test_case(value=1)
+   FLAKY 2/2 [TIME] test::test_case(value=2)
+
+----- stderr -----

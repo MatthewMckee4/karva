@@ -1,0 +1,37 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=none"
+    - "-W"
+    - error
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760283
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+failures:
+
+test::test_strict (requires fixture `value`):
+
+error[fixture-failure]: Fixture `value` failed
+ --> test.py:4:5
+  |
+4 | def value():
+  |     ^^^^^
+info: Fixture failed here
+ --> test.py:5:5
+  |
+5 |     warnings.warn('strict', ResourceWarning)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: strict
+
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+----- stderr -----

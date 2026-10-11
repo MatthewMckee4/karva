@@ -6,6 +6,7 @@ mod flaky;
 pub mod kind;
 mod output;
 mod stats;
+mod warnings;
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -23,10 +24,15 @@ pub use flaky::{DisplayFlakyTests, FlakyTest};
 pub use kind::IndividualTestResultKind;
 pub use output::CapturedTestOutput;
 pub use stats::TestResultStats;
+pub use warnings::TestWarning;
 
 /// Results from one or more workers, parameterized by diagnostic representation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunResults<D> {
+    /// Unconsumed warnings with optional test and attempt attribution.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<TestWarning>,
+
     /// Diagnostics that describe the run rather than one test case.
     pub run_diagnostics: Vec<D>,
 
@@ -49,6 +55,7 @@ pub struct RunResults<D> {
 impl<D> Default for RunResults<D> {
     fn default() -> Self {
         Self {
+            warnings: Vec::new(),
             run_diagnostics: Vec::new(),
             stats: TestResultStats::default(),
             durations: HashMap::new(),
@@ -118,6 +125,7 @@ impl<D> RunResults<D> {
     }
 
     fn sort_results(&mut self) {
+        self.warnings.sort();
         self.test_cases.sort_by(|a, b| {
             a.module_name()
                 .cmp(b.module_name())
@@ -128,6 +136,25 @@ impl<D> RunResults<D> {
 }
 
 impl RunResults<RenderedDiagnostic> {
+    /// Fails the completed run if emitted observations exceed the configured budget.
+    /// Counting before display deduplication keeps parallel and sequential runs equal.
+    pub fn enforce_warning_budget(&mut self, limit: Option<usize>) {
+        if let Some(limit) = limit
+            && self.warnings.len() > limit
+        {
+            let message = format!(
+                "max-warnings budget exceeded: limit {limit}, emitted {}",
+                self.warnings.len()
+            );
+            self.add_rendered_run_diagnostic(RenderedDiagnostic::new(
+                "max-warnings",
+                crate::Severity::Error,
+                &message,
+                format!("error[max-warnings]: {message}\n"),
+            ));
+        }
+    }
+
     /// Sorts cases into deterministic display order after event aggregation.
     #[must_use]
     pub fn into_sorted(mut self) -> Self {

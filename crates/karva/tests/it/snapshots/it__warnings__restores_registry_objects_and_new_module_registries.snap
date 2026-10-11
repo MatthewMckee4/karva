@@ -1,0 +1,23 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=none"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760283
+---
+success: true
+exit_code: 0
+----- stdout -----
+
+warnings:
+  imported.py:2: UserWarning: imported during test (1 emitted)
+  test.py:22: UserWarning: registry warning (2 emitted)
+
+────────────
+     Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+----- stderr -----

@@ -6,6 +6,8 @@ use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
+use crate::warnings::{WarningCapture, warning_capture_error};
+
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_async_test_with_timeout, run_coroutine};
 
@@ -39,6 +41,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 },
             setup_duration,
             mut output_capture,
+            warning_capture,
         } = prepared;
         let shared_output =
             if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
@@ -110,6 +113,18 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         );
         let retryable = body.retryable || teardown_failed || (budget_exceeded && !skipped);
 
+        if let Some(capture) = warning_capture
+            && let Err(error) = capture.finish(
+                self.py,
+                self.package_runner.context,
+                Some(&settings.identity.qualified_test_name.to_string()),
+                Some(attempt_number),
+            )
+        {
+            self.package_runner
+                .state
+                .add_run_diagnostic(warning_capture_error(&error));
+        }
         let captured_output = finish_output_capture(self.py, output_capture);
 
         AttemptResult {
@@ -228,6 +243,8 @@ pub(super) struct PreparedTestAttempt {
     pub(super) setup_duration: Duration,
     /// Python stdout and stderr capture spanning setup, call, and teardown.
     pub(super) output_capture: Option<PythonOutputCapture>,
+    /// Warning policy and capture spanning this attempt's complete lifecycle.
+    pub(super) warning_capture: Option<WarningCapture>,
 }
 
 /// Completed call lifecycle plus retry decision.

@@ -76,3 +76,11 @@ def fail_slow(seconds: float) -> Tags:
 
     This is a coarse regression budget, not a benchmarking tool.
     """
+
+
+def filter_warnings(*filters: str) -> Tags:
+    """Apply ordered Python warning filters during setup, call, and teardown.
+
+    Later filters win over earlier filters, including project and CLI policy.
+    Invalid actions, categories, regexes, and line numbers fail collection.
+    """

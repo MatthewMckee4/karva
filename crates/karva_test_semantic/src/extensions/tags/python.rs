@@ -37,6 +37,10 @@ pub enum PyTag {
     #[pyo3(name = "fail_slow")]
     FailSlow { seconds: f64 },
 
+    /// Ordered filters scoped to one test's setup, call, and teardown.
+    #[pyo3(name = "filter_warnings")]
+    FilterWarnings { filters: Vec<String> },
+
     #[pyo3(name = "custom")]
     Custom {
         tag_name: String,
@@ -73,6 +77,9 @@ impl PyTag {
             },
             Self::Timeout { seconds } => Self::Timeout { seconds: *seconds },
             Self::FailSlow { seconds } => Self::FailSlow { seconds: *seconds },
+            Self::FilterWarnings { filters } => Self::FilterWarnings {
+                filters: filters.clone(),
+            },
             Self::Custom {
                 tag_name,
                 tag_args,
@@ -281,6 +288,18 @@ pub mod tags {
         }
         Ok(PyTags {
             inner: vec![PyTag::Timeout { seconds }],
+        })
+    }
+
+    /// Applies warning filters during this test, including fixture execution.
+    #[pyfunction]
+    #[pyo3(signature = (*filters))]
+    fn filter_warnings(py: Python<'_>, filters: Vec<String>) -> PyResult<PyTags> {
+        py.import("karva._warnings")?
+            .getattr("validate_filters")?
+            .call1((filters.clone(),))?;
+        Ok(PyTags {
+            inner: vec![PyTag::FilterWarnings { filters }],
         })
     }
 

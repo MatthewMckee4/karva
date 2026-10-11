@@ -308,6 +308,10 @@ def test_warns_restores_filters_when_block_raises():
     success: true
     exit_code: 0
     ----- stdout -----
+
+    warnings:
+      test.py:17: UserWarning: present (1 emitted)
+
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -376,9 +380,8 @@ def test_warning_message_mismatch():
     info: Regex pattern 'expected message' did not match any emitted warning.
            Emitted warnings: [UserWarning('different message')].
 
-    captured stderr:
-    <temp_dir>/test.py:14: UserWarning: different message
-      warnings.warn("different message", UserWarning)
+    warnings:
+      test.py:14: UserWarning: different message (1 emitted)
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped

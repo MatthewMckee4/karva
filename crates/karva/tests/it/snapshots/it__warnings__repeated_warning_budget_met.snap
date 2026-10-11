@@ -1,0 +1,23 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--num-workers=1"
+    - "--status-level=none"
+    - "--max-warnings=10"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760392
+---
+success: true
+exit_code: 0
+----- stdout -----
+
+warnings:
+  test.py:4: DeprecationWarning: repeated (10 emitted)
+
+────────────
+     Summary [TIME] 10 tests run: 10 passed, 0 skipped
+
+----- stderr -----

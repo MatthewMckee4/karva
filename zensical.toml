@@ -53,6 +53,7 @@ nav = [
             { "Skip" = "usage/tags/skip.md"},
             { "Expect Fail" = "usage/tags/expect_fail.md"},
             { "Timeout" = "usage/tags/timeout.md"},
+            { "Warning Filters" = "usage/tags/filter_warnings.md"},
         ]},
         { "Editor integrations" = [
             { "Language server" = "usage/ide/language-server.md"},

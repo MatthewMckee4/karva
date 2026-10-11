@@ -1,0 +1,23 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=none"
+    - "--max-warnings=1"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760392
+---
+success: true
+exit_code: 0
+----- stdout -----
+
+warnings:
+  test.py:3: UserWarning: budget warning (1 emitted)
+
+────────────
+     Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+----- stderr -----

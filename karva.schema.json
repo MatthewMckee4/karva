@@ -796,6 +796,15 @@
             }
           ]
         },
+        "max-warnings": {
+          "description": "Maximum warnings emitted across all workers, including collection,\nfixture cleanup, and retries. Exceeding it fails the completed run.\nIgnored, exception-converted, and explicitly recorded warnings do not\ncount. Omit to disable the budget; zero requires a warning-free run.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
         "no-tests": {
           "description": "Configures behavior when no tests are found to run.\n\n`auto` (the default) fails when no filter expressions were given, and\npasses silently when filters were given. Use `fail` to always fail,\n`warn` to always warn, or `pass` to always succeed silently.",
           "anyOf": [
@@ -896,6 +905,16 @@
             "boolean",
             "null"
           ]
+        },
+        "warning-filters": {
+          "description": "Ordered Python `action:message:category:module:line` warning filters.\nMessage and module fields are regular expressions. Later entries win.\nNamed profiles replace the default profile's list; CLI filters replace\nthe selected profile's list. Test-local filters take highest precedence.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

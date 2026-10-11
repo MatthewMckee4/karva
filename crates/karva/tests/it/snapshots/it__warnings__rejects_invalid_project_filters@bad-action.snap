@@ -1,0 +1,22 @@
+---
+source: crates/karva/tests/it/warnings.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=none"
+  env:
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-py3.13-1791760182
+---
+success: false
+exit_code: 1
+----- stdout -----
+diagnostics:
+
+error[warning-policy]: ValueError: invalid warning filter 'bad-action': unknown action 'bad-action'
+
+────────────
+     Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+----- stderr -----

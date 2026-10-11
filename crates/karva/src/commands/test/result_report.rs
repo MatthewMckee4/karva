@@ -55,6 +55,9 @@ fn build_jsonl_report(report: &RunReport<'_>) -> Result<String> {
     for test in &report.tests {
         push_jsonl_record(&mut output, "test", test)?;
     }
+    for warning in report.warnings {
+        push_jsonl_record(&mut output, "warning", warning)?;
+    }
     if let Some(diagnostics) = &report.run_diagnostics {
         for diagnostic in diagnostics {
             push_jsonl_record(
@@ -112,6 +115,10 @@ struct JsonlRecord<'a, T> {
 #[derive(Serialize)]
 /// Complete JSON report for one test run.
 struct RunReport<'a> {
+    /// Emitted warnings including test and retry attribution, omitted when empty.
+    #[serde(skip_serializing_if = "<[karva_diagnostic::TestWarning]>::is_empty")]
+    warnings: &'a [karva_diagnostic::TestWarning],
+
     /// Version governing serialized report shape.
     schema_version: u8,
 
@@ -150,6 +157,7 @@ impl<'a> RunReport<'a> {
         });
 
         Self {
+            warnings: &results.warnings,
             schema_version: SCHEMA_VERSION,
             status,
             random_seed,
