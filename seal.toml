@@ -1,5 +1,5 @@
 [release]
-current-version = "0.0.1-alpha.12"
+current-version = "0.0.1-alpha.13"
 
 version-files = [
     "crates/karva/Cargo.toml",
@@ -22,6 +22,9 @@ base = "main"
 draft = false
 
 [changelog.section-labels]
+"Python Support" = ["python-support"]
+"Editor Support" = ["language-server", "ide-extension"]
+"Performance" = ["performance"]
 "Bug Fixes" = ["bug"]
 "Test Running" = ["test-running", "retries", "doctest"]
 "Discovery" = ["discovery"]

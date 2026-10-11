@@ -1,5 +1,127 @@
 # Changelog
 
+## 0.0.1-alpha.13
+
+Karva now supports Python 3.15 ([#1572](https://github.com/MatthewMckee4/karva/pull/1572)).
+
+### Bug Fixes
+
+- Enforce synchronous test deadlines across worker processes ([#1499](https://github.com/MatthewMckee4/karva/pull/1499))
+- Respect expected-failure policies and preserve report metadata ([#1491](https://github.com/MatthewMckee4/karva/pull/1491))
+- Resolve unsaved documents beneath nonexistent directories ([#1548](https://github.com/MatthewMckee4/karva/pull/1548))
+- Recognize standard library SkipTest exceptions ([#1515](https://github.com/MatthewMckee4/karva/pull/1515))
+- Explain unsupported class and nested test selectors ([#1537](https://github.com/MatthewMckee4/karva/pull/1537))
+- Include parse-error causes in language-server diagnostics ([#1536](https://github.com/MatthewMckee4/karva/pull/1536))
+- Save modified files before Zed gutter test runs ([#1534](https://github.com/MatthewMckee4/karva/pull/1534))
+- Reject unsafe fixture parameter renames ([#1533](https://github.com/MatthewMckee4/karva/pull/1533))
+- Contain Windows workers in Job Objects ([#1522](https://github.com/MatthewMckee4/karva/pull/1522))
+- Keep test-body exceptions out of missing-fixture diagnostics ([#1525](https://github.com/MatthewMckee4/karva/pull/1525))
+- Resolve inherited autouse names to their nearest fixture ([#1524](https://github.com/MatthewMckee4/karva/pull/1524))
+- Preserve parameter combinations added by module marks ([#1520](https://github.com/MatthewMckee4/karva/pull/1520))
+- Clamp editor positions before line endings ([#1518](https://github.com/MatthewMckee4/karva/pull/1518))
+- Preserve all parameter cases from unpacked sequences ([#1517](https://github.com/MatthewMckee4/karva/pull/1517))
+- Correct line and branch coverage for multiline conditions ([#1512](https://github.com/MatthewMckee4/karva/pull/1512))
+- Preserve configured fixture decorator types ([#1510](https://github.com/MatthewMckee4/karva/pull/1510))
+- Honor keyword conditions in pytest skipif marks ([#1509](https://github.com/MatthewMckee4/karva/pull/1509))
+- Exclude annotation-only local declarations from coverage ([#1511](https://github.com/MatthewMckee4/karva/pull/1511))
+- Honour requested workers for small test suites ([#1479](https://github.com/MatthewMckee4/karva/pull/1479))
+- Reject stdin reads while output is captured ([#1471](https://github.com/MatthewMckee4/karva/pull/1471))
+- Use process directory as default LSP workspace ([#1455](https://github.com/MatthewMckee4/karva/pull/1455))
+- Resolve nested fixture override chains ([#1459](https://github.com/MatthewMckee4/karva/pull/1459))
+- Recover from crashed test workers ([#1268](https://github.com/MatthewMckee4/karva/pull/1268))
+- Strengthen runtime fixture semantics ([#1353](https://github.com/MatthewMckee4/karva/pull/1353))
+
+### Diagnostics
+
+- Explain failed assertions with captured values ([#1526](https://github.com/MatthewMckee4/karva/pull/1526))
+- Report language-server panics and log fatal errors ([#1544](https://github.com/MatthewMckee4/karva/pull/1544))
+
+### Discovery
+
+- Collect shared conftest files once ([#1481](https://github.com/MatthewMckee4/karva/pull/1481))
+- Speed up selected test collection ([#1480](https://github.com/MatthewMckee4/karva/pull/1480))
+
+### Documentation
+
+- Document the pinned toolchain target for Zed installation ([#1535](https://github.com/MatthewMckee4/karva/pull/1535))
+- Simplify public documentation ([#1519](https://github.com/MatthewMckee4/karva/pull/1519))
+
+### Editor Support
+
+- Smoke clean Zed extension packages and server startup ([#1565](https://github.com/MatthewMckee4/karva/pull/1565))
+- Configure and resolve local Karva servers in Zed ([#1562](https://github.com/MatthewMckee4/karva/pull/1562))
+- Reuse unchanged source syntax across language server edits ([#1556](https://github.com/MatthewMckee4/karva/pull/1556))
+- Add fixture call hierarchy ([#1552](https://github.com/MatthewMckee4/karva/pull/1552))
+- Offer quick fixes for missing fixtures ([#1549](https://github.com/MatthewMckee4/karva/pull/1549))
+- Expose collected test actions through code lenses ([#1546](https://github.com/MatthewMckee4/karva/pull/1546))
+- Add workspace search for Karva tests and fixtures ([#1545](https://github.com/MatthewMckee4/karva/pull/1545))
+- Add Karva Python snippets to the Zed extension ([#1541](https://github.com/MatthewMckee4/karva/pull/1541))
+
+### Fixtures
+
+- Rename fixtures through explicit project imports ([#1561](https://github.com/MatthewMckee4/karva/pull/1561))
+- Resolve fixture wildcard imports with static exports ([#1564](https://github.com/MatthewMckee4/karva/pull/1564))
+- Show annotated fixture value types in hover ([#1563](https://github.com/MatthewMckee4/karva/pull/1563))
+- Preserve fixture diagnostics around literal configuration values ([#1560](https://github.com/MatthewMckee4/karva/pull/1560))
+- Resolve imported fixtures through project source ([#1555](https://github.com/MatthewMckee4/karva/pull/1555))
+- Resolve fixture decorator aliases consistently ([#1554](https://github.com/MatthewMckee4/karva/pull/1554))
+- Track fixture body references for safe rename ([#1557](https://github.com/MatthewMckee4/karva/pull/1557))
+- Navigate to bundled fixture sources ([#1553](https://github.com/MatthewMckee4/karva/pull/1553))
+- Show fixture scope and provider in inlay hints ([#1538](https://github.com/MatthewMckee4/karva/pull/1538))
+
+### Functions
+
+- Match pytest approx for nonnumeric values ([#1476](https://github.com/MatthewMckee4/karva/pull/1476))
+- Add importorskip helper ([#1469](https://github.com/MatthewMckee4/karva/pull/1469))
+- Support callable warning assertions ([#1460](https://github.com/MatthewMckee4/karva/pull/1460))
+- Support check callbacks in karva.raises ([#1457](https://github.com/MatthewMckee4/karva/pull/1457))
+- Borrow snapshot argument strings ([#1428](https://github.com/MatthewMckee4/karva/pull/1428))
+
+### Performance
+
+- Reuse fixture analyses within workspace snapshots ([#1550](https://github.com/MatthewMckee4/karva/pull/1550))
+- Limit HTML branch annotations to arcs on the current line ([#1502](https://github.com/MatthewMckee4/karva/pull/1502))
+- Limit HTML branch context lookups to the current line ([#1500](https://github.com/MatthewMckee4/karva/pull/1500))
+- Skip hidden contexts when rendering HTML coverage ([#1498](https://github.com/MatthewMckee4/karva/pull/1498))
+- Use binary search for HTML coverage line states ([#1497](https://github.com/MatthewMckee4/karva/pull/1497))
+- Reuse parsed modules for branch coverage line analysis ([#1496](https://github.com/MatthewMckee4/karva/pull/1496))
+- Reuse compiled snapshot filters across assertions ([#1495](https://github.com/MatthewMckee4/karva/pull/1495))
+- Move language-server project discovery off the event loop ([#1492](https://github.com/MatthewMckee4/karva/pull/1492))
+- Release test bodies during scheduling collection ([#1490](https://github.com/MatthewMckee4/karva/pull/1490))
+- Share immutable language-server document snapshots ([#1489](https://github.com/MatthewMckee4/karva/pull/1489))
+- Index cached failure functions during scheduling ([#1487](https://github.com/MatthewMckee4/karva/pull/1487))
+- Cache failed-first scheduling sort keys ([#1486](https://github.com/MatthewMckee4/karva/pull/1486))
+- Avoid copying snapshots for nonmatching filters ([#1485](https://github.com/MatthewMckee4/karva/pull/1485))
+- Share module names across scheduled tests ([#1484](https://github.com/MatthewMckee4/karva/pull/1484))
+- Reuse fallback durations when scheduling parameter cases ([#1482](https://github.com/MatthewMckee4/karva/pull/1482))
+- Borrow serialized snapshot values ([#1468](https://github.com/MatthewMckee4/karva/pull/1468))
+- Reuse unfiltered snapshot values ([#1426](https://github.com/MatthewMckee4/karva/pull/1426))
+- Cache root fixture lookups ([#1421](https://github.com/MatthewMckee4/karva/pull/1421))
+- Defer inline snapshot caller lookup ([#1419](https://github.com/MatthewMckee4/karva/pull/1419))
+- Cache argument sort keys ([#1393](https://github.com/MatthewMckee4/karva/pull/1393))
+- Borrow fixture call arguments ([#1391](https://github.com/MatthewMckee4/karva/pull/1391))
+- Skip redundant worker path normalization ([#1385](https://github.com/MatthewMckee4/karva/pull/1385))
+- Share fixture plans within modules ([#1381](https://github.com/MatthewMckee4/karva/pull/1381))
+- Skip unused fixture owner paths ([#1374](https://github.com/MatthewMckee4/karva/pull/1374))
+- Borrow fixture names during plan compilation ([#1368](https://github.com/MatthewMckee4/karva/pull/1368))
+- Stream cache JSON reads and writes ([#1366](https://github.com/MatthewMckee4/karva/pull/1366))
+- Filter function syntax before cloning ([#1361](https://github.com/MatthewMckee4/karva/pull/1361))
+- Skip unassigned parametrize combinations ([#1356](https://github.com/MatthewMckee4/karva/pull/1356))
+- Reduce controller collection memory ([#1355](https://github.com/MatthewMckee4/karva/pull/1355))
+
+### Tags & Marks
+
+- Support module-level Karva tags ([#1465](https://github.com/MatthewMckee4/karva/pull/1465))
+
+### Test Running
+
+- Run cached failures before other tests ([#1467](https://github.com/MatthewMckee4/karva/pull/1467))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+- [@adamtheturtle](https://github.com/adamtheturtle)
+
 ## 0.0.1-alpha.12
 
 ### Bug Fixes
