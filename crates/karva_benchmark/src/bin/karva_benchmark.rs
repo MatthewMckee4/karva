@@ -21,7 +21,7 @@ use clap::Parser;
 use fs_err::{self as fs, File};
 use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject};
 use karva_cache::CACHE_DIR;
-use karva_cli::ExitStatus;
+use karva_cli::{ExitStatus, OutputFormat};
 use karva_static::ToolEnvVars;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,8 @@ const MEDIUM_PROJECT_ITERATIONS: usize = 15;
 const STABLE_PROJECT_ITERATIONS: usize = 11;
 const LONG_PROJECT_ITERATIONS: usize = MEDIUM_PROJECT_ITERATIONS / 2;
 const EXTRA_LONG_PROJECT_ITERATIONS: usize = LONG_PROJECT_ITERATIONS.div_ceil(2);
+// Receipt: local async A/A variation reached +5.98% with 21 pairs and +4.67% with 31.
+const ASYNC_PROJECT_ITERATIONS: usize = 31;
 
 #[derive(Debug, Parser)]
 #[command(about = "Run Karva benchmark comparisons")]
@@ -360,6 +362,7 @@ fn compare(args: CompareArgs) -> Result<()> {
             candidate_diagnostic_output.as_deref(),
             &args.baseline_label,
             &args.candidate_label,
+            config.output_format(),
         );
         let memory_diagnostics = diagnostics
             .as_ref()
@@ -755,7 +758,11 @@ fn karva_invocation(
         num_workers.to_string(),
         "--no-ignore".to_string(),
         "--output-format".to_string(),
-        "concise".to_string(),
+        match config.output_format() {
+            OutputFormat::Full => "full",
+            OutputFormat::Concise => "concise",
+        }
+        .to_string(),
     ];
 
     if config.try_import_fixtures {
@@ -786,6 +793,35 @@ fn ensure_karva_completed(output: &Output, config: &BenchmarkProject) -> Result<
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
+
+    if let Some(expected) = config.expected_results() {
+        let normalized = normalize_diagnostic_text(&String::from_utf8_lossy(&output.stdout));
+        let actual = parse_test_stats(&normalized)
+            .with_context(|| format!("Missing test summary for benchmark `{}`", config.name))?;
+        let expected_exit = if expected.failed == 0 {
+            ExitStatus::Success
+        } else {
+            ExitStatus::Failure
+        };
+        anyhow::ensure!(
+            output.status.code() == Some(expected_exit.to_i32()),
+            "Unexpected exit status for benchmark `{}`: expected {}, got {}",
+            config.name,
+            expected_exit.to_i32(),
+            output.status
+        );
+        let expected = TestStats {
+            passed: expected.passed,
+            failed: expected.failed,
+            errors: 0,
+            skipped: 0,
+        };
+        anyhow::ensure!(
+            actual == expected,
+            "Unexpected results for benchmark `{}`: expected {expected:?}, got {actual:?}",
+            config.name
+        );
+    }
 
     Ok(())
 }
@@ -822,13 +858,20 @@ fn diagnostic_comparison(
     candidate: Option<&str>,
     baseline_label: &str,
     candidate_label: &str,
+    output_format: OutputFormat,
 ) -> Option<DiagnosticComparison> {
     let (Some(baseline), Some(candidate)) = (baseline, candidate) else {
         return None;
     };
 
-    let sorted_baseline = sort_diagnostic_lines(baseline);
-    let sorted_candidate = sort_diagnostic_lines(candidate);
+    // Full diagnostics come from one worker; preserve source/output associations within each test.
+    let (sorted_baseline, sorted_candidate) = match output_format {
+        OutputFormat::Concise => (
+            sort_diagnostic_lines(baseline),
+            sort_diagnostic_lines(candidate),
+        ),
+        OutputFormat::Full => (baseline.to_string(), candidate.to_string()),
+    };
     let diff = (sorted_baseline != sorted_candidate).then(|| {
         TextDiff::configure()
             .algorithm(Algorithm::Patience)
@@ -1138,10 +1181,10 @@ fn diagnostics_markdown_report(
         };
         writeln!(
             body,
-            "\n<details>\n<summary><code>{}</code> concise output diff</summary>\n",
+            "\n<details>\n<summary><code>{}</code> diagnostic output diff</summary>\n",
             project.name
         )?;
-        body.push_str("Durations, memory addresses, and line order are normalized.\n\n");
+        body.push_str("Durations and memory addresses are normalized; concise output also ignores line order.\n\n");
         write_code_block(&mut body, "diff", diff)?;
         writeln!(body)?;
         body.push_str("</details>\n");
@@ -1308,11 +1351,15 @@ fn write_summary_line(
 
 fn matrix_iterations(project_name: &str) -> usize {
     match project_name {
+        "karva-async" => ASYNC_PROJECT_ITERATIONS,
+        "karva-failures" | "karva-fixture-teardown" => FAST_PROJECT_ITERATIONS,
         "karva-dense-fixtures"
         | "karva-many-modules"
         | "karva-nested-fixtures"
         | "karva-retries"
         | "karva-snapshots"
+        | "karva-snapshot-diffs"
+        | "karva-captured-output"
         | "karva-wide-fixtures"
         | "fastapi"
         | "httpx"
@@ -1527,19 +1574,72 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroUsize;
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
+    #[cfg(windows)]
+    use std::os::windows::process::ExitStatusExt;
+    use std::process::{ExitStatus, Output};
 
     use camino::Utf8Path;
     use fs_err as fs;
+    use karva_cli::OutputFormat;
+    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::{
-        BenchmarkMetric, CACHE_DIR, ComparisonReport, DiagnosticComparison, DurationCacheSeed,
-        EXTRA_LONG_PROJECT_ITERATIONS, FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS,
-        MEDIUM_PROJECT_ITERATIONS, Measurement, ProjectComparison, STABLE_PROJECT_ITERATIONS,
-        TestStats, comparison_iterations, diagnostic_comparison, diagnostics_markdown_report,
+        ASYNC_PROJECT_ITERATIONS, BenchmarkMetric, CACHE_DIR, ComparisonReport,
+        DiagnosticComparison, DurationCacheSeed, EXTRA_LONG_PROJECT_ITERATIONS,
+        FAST_PROJECT_ITERATIONS, LONG_PROJECT_ITERATIONS, MEDIUM_PROJECT_ITERATIONS, Measurement,
+        ProjectComparison, STABLE_PROJECT_ITERATIONS, TestStats, comparison_iterations,
+        diagnostic_comparison, diagnostics_markdown_report, ensure_karva_completed,
         is_benchmarkable_exit, karva_invocation, markdown_report, matrix_iterations,
         normalize_diagnostic_text, standalone_html, trend, write_code_block,
     };
+
+    #[rstest]
+    #[case("karva-failures", "full", FAST_PROJECT_ITERATIONS)]
+    #[case("karva-fixture-teardown", "concise", FAST_PROJECT_ITERATIONS)]
+    #[case("karva-async", "concise", ASYNC_PROJECT_ITERATIONS)]
+    #[case("karva-snapshot-diffs", "full", LONG_PROJECT_ITERATIONS)]
+    #[case("karva-captured-output", "full", LONG_PROJECT_ITERATIONS)]
+    fn deterministic_workloads_have_calibrated_invocations(
+        #[case] name: &str,
+        #[case] format: &str,
+        #[case] iterations: usize,
+    ) {
+        let project = karva_benchmark::find_benchmark_project(name).expect("registered project");
+        let invocation = karva_invocation(project, Utf8Path::new("project"), NonZeroUsize::MIN)
+            .expect("invocation");
+        assert!(
+            invocation
+                .args
+                .windows(2)
+                .any(|args| args == ["--output-format", format])
+        );
+        assert!(project.expected_results().is_some());
+        assert_eq!(matrix_iterations(name), iterations);
+    }
+
+    #[rstest]
+    #[case("16384 tests run: 16384 passed, 0 skipped", true)]
+    #[case("0 tests run: 0 passed, 0 skipped", false)]
+    #[case("16384 tests run: 16383 passed, 1 failed, 0 skipped", false)]
+    #[case("16384 tests run: 16383 passed, 1 error, 0 skipped", false)]
+    #[case("16384 tests run: 16383 passed, 1 skipped", false)]
+    #[case("no summary", false)]
+    fn deterministic_results_reject_missing_or_changed_work(
+        #[case] summary: &str,
+        #[case] valid: bool,
+    ) {
+        let project = karva_benchmark::find_benchmark_project("karva-fixture-teardown")
+            .expect("registered project");
+        let output = Output {
+            status: ExitStatus::from_raw(0),
+            stdout: format!("Summary [   0.100s] {summary}\n").into_bytes(),
+            stderr: Vec::new(),
+        };
+        assert_eq!(ensure_karva_completed(&output, project).is_ok(), valid);
+    }
 
     #[test]
     fn duration_cache_seed_restores_warmed_state() {
@@ -1746,14 +1846,19 @@ mod tests {
         Summary [TIME] 3 tests run: 2 passed, 1 skipped
         ");
         let mut comparison = project("requests", 21, 1.0, 1.0);
-        comparison.diagnostics =
-            diagnostic_comparison(Some(&baseline), Some(&candidate), "main", "PR");
+        comparison.diagnostics = diagnostic_comparison(
+            Some(&baseline),
+            Some(&candidate),
+            "main",
+            "PR",
+            OutputFormat::Concise,
+        );
 
         let report = report_with_projects(vec![comparison]);
         let markdown = diagnostics_markdown_report(&report, true).expect("report should render");
         let summary = diagnostics_markdown_report(&report, false).expect("summary should render");
 
-        assert!(summary.contains("concise output diff"));
+        assert!(summary.contains("diagnostic output diff"));
         assert!(!summary.contains("full diagnostic output"));
 
         insta::assert_snapshot!(markdown, @"
@@ -1770,9 +1875,9 @@ mod tests {
         </details>
 
         <details>
-        <summary><code>requests</code> concise output diff</summary>
+        <summary><code>requests</code> diagnostic output diff</summary>
 
-        Durations, memory addresses, and line order are normalized.
+        Durations and memory addresses are normalized; concise output also ignores line order.
 
         ```diff
         --- main
@@ -1811,14 +1916,36 @@ mod tests {
     }
 
     #[test]
+    fn full_diagnostics_keep_failure_context_attached_to_its_test() {
+        let baseline = "test_first:\ninfo: first failure\ntest_second:\ninfo: second failure\n";
+        let candidate = "test_first:\ninfo: second failure\ntest_second:\ninfo: first failure\n";
+        let comparison = diagnostic_comparison(
+            Some(baseline),
+            Some(candidate),
+            "main",
+            "PR",
+            OutputFormat::Full,
+        )
+        .expect("comparison");
+        assert!(comparison.diff.is_some());
+        assert!(!comparison.workload_changed);
+    }
+
+    #[test]
     fn diagnostic_comparison_detects_equal_sized_workload_changes() {
         let baseline =
             "    PASS [TIME] test_first\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
         let candidate =
             "    PASS [TIME] test_second\nSummary [TIME] 1 test run: 1 passed, 0 skipped\n";
 
-        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
-            .expect("diagnostics should be available");
+        let comparison = diagnostic_comparison(
+            Some(baseline),
+            Some(candidate),
+            "main",
+            "PR",
+            OutputFormat::Concise,
+        )
+        .expect("diagnostics should be available");
 
         assert_eq!(comparison.baseline, comparison.candidate);
         assert!(comparison.workload_changed);
@@ -1829,8 +1956,14 @@ mod tests {
         let baseline = "    SKIP [TIME] test_first: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
         let candidate = "    SKIP [TIME] test_second: unavailable\nSummary [TIME] 1 test run: 0 passed, 1 skipped\n";
 
-        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
-            .expect("diagnostics should be available");
+        let comparison = diagnostic_comparison(
+            Some(baseline),
+            Some(candidate),
+            "main",
+            "PR",
+            OutputFormat::Concise,
+        )
+        .expect("diagnostics should be available");
 
         assert_eq!(comparison.baseline, comparison.candidate);
         assert!(comparison.workload_changed);
@@ -1841,8 +1974,14 @@ mod tests {
         let baseline = "    PASS [TIME] test_second\n    PASS [TIME] test_first\nSummary [TIME] 2 tests run: 2 passed, 0 skipped\n";
         let candidate = "    PASS [TIME] test_first\n    PASS [TIME] test_second\nSummary [TIME] 2 tests run: 2 passed, 0 skipped\n";
 
-        let comparison = diagnostic_comparison(Some(baseline), Some(candidate), "main", "PR")
-            .expect("diagnostics should be available");
+        let comparison = diagnostic_comparison(
+            Some(baseline),
+            Some(candidate),
+            "main",
+            "PR",
+            OutputFormat::Concise,
+        )
+        .expect("diagnostics should be available");
 
         assert!(!comparison.workload_changed);
         assert!(comparison.diff.is_none());
@@ -1865,7 +2004,13 @@ mod tests {
              Summary [   0.100s] 1 test run: 1 passed, 0 skipped\n",
         );
         let mut comparison = project("requests", 21, 1.0, 1.0);
-        comparison.diagnostics = diagnostic_comparison(Some(&output), Some(&output), "main", "PR");
+        comparison.diagnostics = diagnostic_comparison(
+            Some(&output),
+            Some(&output),
+            "main",
+            "PR",
+            OutputFormat::Concise,
+        );
 
         let report = report_with_projects(vec![comparison]);
         let markdown = diagnostics_markdown_report(&report, true).expect("report should render");

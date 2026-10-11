@@ -62,6 +62,13 @@ enum BenchmarkSource {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Required outcome totals for a generated workload; errors and skips must be zero.
+pub struct ExpectedResults {
+    pub passed: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
 /// Reproducible project and settings used as one benchmark workload.
 pub struct BenchmarkProject {
     /// Stable identifier used in reports and cache paths.
@@ -81,6 +88,28 @@ pub struct BenchmarkProject {
 
     /// Whether Karva must import modules to discover this project's fixtures.
     pub try_import_fixtures: bool,
+}
+
+impl BenchmarkProject {
+    /// Selects full diagnostics for workloads measuring rendering and captured failure output.
+    pub const fn output_format(&self) -> OutputFormat {
+        match self.source {
+            BenchmarkSource::Generated(
+                GeneratedBenchmark::Failures
+                | GeneratedBenchmark::SnapshotDiffs
+                | GeneratedBenchmark::CapturedOutput,
+            ) => OutputFormat::Full,
+            _ => OutputFormat::Concise,
+        }
+    }
+
+    /// Returns expected passing and failing counts when the generated workload defines them.
+    pub const fn expected_results(&self) -> Option<ExpectedResults> {
+        match self.source {
+            BenchmarkSource::Generated(workload) => workload.expected_results(),
+            BenchmarkSource::Git { .. } => None,
+        }
+    }
 }
 
 const fn generated_project(name: &'static str, workload: GeneratedBenchmark) -> BenchmarkProject {
@@ -357,6 +386,14 @@ pub const BENCHMARK_PROJECTS: &[BenchmarkProject] = &[
     SNAPSHOTS_PROJECT,
     RETRIES_PROJECT,
     WIDE_FIXTURES_PROJECT,
+    generated_project("karva-failures", GeneratedBenchmark::Failures),
+    generated_project(
+        "karva-fixture-teardown",
+        GeneratedBenchmark::FixtureTeardown,
+    ),
+    generated_project("karva-async", GeneratedBenchmark::Async),
+    generated_project("karva-snapshot-diffs", GeneratedBenchmark::SnapshotDiffs),
+    generated_project("karva-captured-output", GeneratedBenchmark::CapturedOutput),
     REQUESTS_PROJECT,
     FASTAPI_PROJECT,
     HTTPX_PROJECT,

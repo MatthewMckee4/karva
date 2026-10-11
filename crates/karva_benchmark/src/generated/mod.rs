@@ -4,13 +4,20 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use fs_err as fs;
 
+use crate::ExpectedResults;
+
+mod asynchronous;
+mod captured_output;
 mod dense_fixtures;
+mod failures;
+mod fixture_teardown;
 mod many_functions;
 mod many_modules;
 mod nested_fixtures;
 mod parametrized_matrix;
 mod retries;
 mod shared_conftest;
+mod snapshot_diffs;
 mod snapshots;
 mod wide_fixtures;
 
@@ -43,6 +50,50 @@ pub enum GeneratedBenchmark {
 
     /// Wide fixture dependency resolution and repeated fixture execution.
     WideFixtures,
+
+    /// Local and imported failures with multi-frame tracebacks.
+    Failures,
+
+    /// Yield-fixture cleanup at every supported scope.
+    FixtureTeardown,
+
+    /// Async test bodies and coroutine and generator fixtures.
+    Async,
+
+    /// Multiline mismatches and their rendered snapshot diffs.
+    SnapshotDiffs,
+
+    /// Successful and failing tests emitting captured stdout and stderr.
+    CapturedOutput,
+}
+
+impl GeneratedBenchmark {
+    /// Passing and failing totals used to detect missing work or unintended failures.
+    pub(super) const fn expected_results(self) -> Option<ExpectedResults> {
+        match self {
+            Self::Failures => Some(ExpectedResults {
+                passed: 0,
+                failed: failures::CASES,
+            }),
+            Self::FixtureTeardown => Some(ExpectedResults {
+                passed: fixture_teardown::CASES,
+                failed: 0,
+            }),
+            Self::Async => Some(ExpectedResults {
+                passed: asynchronous::CASES,
+                failed: 0,
+            }),
+            Self::SnapshotDiffs => Some(ExpectedResults {
+                passed: 0,
+                failed: snapshot_diffs::CASES,
+            }),
+            Self::CapturedOutput => Some(ExpectedResults {
+                passed: captured_output::CASES / 2,
+                failed: captured_output::CASES / 2,
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// Recreates one generated benchmark project, shaped on a small scale like:
@@ -82,6 +133,11 @@ pub fn generate_project(workload: GeneratedBenchmark, project_root: &Utf8Path) -
         GeneratedBenchmark::Snapshots => snapshots::generate(&tests),
         GeneratedBenchmark::Retries => retries::generate(&tests),
         GeneratedBenchmark::WideFixtures => wide_fixtures::generate(&tests),
+        GeneratedBenchmark::Failures => failures::generate(&tests),
+        GeneratedBenchmark::FixtureTeardown => fixture_teardown::generate(&tests),
+        GeneratedBenchmark::Async => asynchronous::generate(&tests),
+        GeneratedBenchmark::SnapshotDiffs => snapshot_diffs::generate(&tests),
+        GeneratedBenchmark::CapturedOutput => captured_output::generate(&tests),
     }
 }
 
@@ -89,12 +145,63 @@ pub fn generate_project(workload: GeneratedBenchmark, project_root: &Utf8Path) -
 mod tests {
     use camino::Utf8Path;
     use fs_err as fs;
+    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::{
         GeneratedBenchmark, dense_fixtures, generate_project, many_modules, nested_fixtures,
         parametrized_matrix, retries, snapshots, wide_fixtures,
     };
+
+    #[rstest]
+    #[case(GeneratedBenchmark::Failures, "test_failures.py", "def test_failure_")]
+    #[case(
+        GeneratedBenchmark::FixtureTeardown,
+        "test_teardown.py",
+        "def test_teardown_"
+    )]
+    #[case(GeneratedBenchmark::Async, "test_async.py", "async def test_async_")]
+    #[case(
+        GeneratedBenchmark::SnapshotDiffs,
+        "test_snapshot_diffs.py",
+        "def test_snapshot_diff_"
+    )]
+    #[case(
+        GeneratedBenchmark::CapturedOutput,
+        "test_output.py",
+        "def test_output_"
+    )]
+    fn deterministic_workloads_have_expected_tests(
+        #[case] workload: GeneratedBenchmark,
+        #[case] filename: &str,
+        #[case] definition: &str,
+    ) {
+        let temp_dir = tempdir().expect("temporary directory");
+        let root = Utf8Path::from_path(temp_dir.path()).expect("UTF-8 path");
+        generate_project(workload, root).expect("generate workload");
+        let source = fs::read_to_string(root.join("tests").join(filename)).expect("read tests");
+        let expected = workload.expected_results().expect("deterministic outcomes");
+        assert_eq!(
+            source.matches(definition).count(),
+            expected.passed + expected.failed
+        );
+        let metadata = fs::read_to_string(root.join("pyproject.toml")).expect("read metadata");
+        assert!(!metadata.contains("retry ="));
+        assert!(!metadata.contains("snapshot-update"));
+    }
+
+    #[test]
+    fn snapshot_mismatches_keep_nonempty_expectations() {
+        let temp_dir = tempdir().expect("temporary directory");
+        let root = Utf8Path::from_path(temp_dir.path()).expect("UTF-8 path");
+        generate_project(GeneratedBenchmark::SnapshotDiffs, root).expect("generate mismatches");
+        let source =
+            fs::read_to_string(root.join("tests/test_snapshot_diffs.py")).expect("read snapshots");
+        assert!(source.contains("record 1024:"));
+        assert!(source.contains("changed 1024:"));
+        assert!(source.contains("inline=EXPECTED"));
+        assert!(!source.contains("inline=\"\""));
+    }
 
     #[test]
     fn many_functions_workload_has_selected_tests() {
