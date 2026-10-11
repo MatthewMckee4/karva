@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -46,7 +48,8 @@ struct TracebackLocation {
 }
 
 impl Traceback {
-    /// Extracts traceback frames while reusing a known source snapshot when it matches.
+    /// Extracts frames using the known source snapshot and loading each external path once.
+    /// Source snapshots and failed reads are shared only within this traceback.
     pub fn from_error_with_source(
         py: Python,
         error: &PyErr,
@@ -68,10 +71,11 @@ impl Traceback {
                     return None;
                 }
             };
+            let mut sources = HashMap::new();
             let frames = locations
                 .into_iter()
                 .map(|frame| {
-                    let source = get_source_file_and_range(&frame, source_file).map(
+                    let source = get_source_file_and_range(&frame, source_file, &mut sources).map(
                         |(source_file, location)| TracebackFrameSource {
                             source_file,
                             location,
@@ -93,9 +97,12 @@ impl Traceback {
     }
 }
 
+/// Prefers the known source, otherwise memoizes each path's source or failed read.
+/// Each frame keeps its own line range even when it shares a source snapshot.
 fn get_source_file_and_range(
     traceback_location: &TracebackLocation,
     fallback_source_file: Option<&SourceFile>,
+    sources: &mut HashMap<Utf8PathBuf, Option<SourceFile>>,
 ) -> Option<(SourceFile, TextRange)> {
     if let Some(source_file) = fallback_source_file
         && source_file_matches_path(source_file, &traceback_location.file_path)
@@ -105,15 +112,19 @@ fn get_source_file_and_range(
         return Some((source_file.clone(), text_range));
     }
 
-    let source_text = std::fs::read_to_string(&traceback_location.file_path).ok()?;
+    let source_file = sources
+        .entry(traceback_location.file_path.clone())
+        .or_insert_with(|| {
+            let source_text = std::fs::read_to_string(&traceback_location.file_path).ok()?;
+            Some(
+                SourceFileBuilder::new(traceback_location.file_path.as_str(), source_text).finish(),
+            )
+        })
+        .as_ref()?;
+    let text_range =
+        calculate_line_range(source_file.source_text(), traceback_location.line_number)?;
 
-    let source_file =
-        SourceFileBuilder::new(traceback_location.file_path.as_str(), source_text.as_str())
-            .finish();
-
-    let text_range = calculate_line_range(&source_text, traceback_location.line_number)?;
-
-    Some((source_file, text_range))
+    Some((source_file.clone(), text_range))
 }
 
 fn source_file_matches_path(source_file: &SourceFile, traceback_path: &Utf8Path) -> bool {
@@ -183,6 +194,7 @@ mod tests {
     use std::ffi::CString;
 
     use rstest::rstest;
+    use tempfile::tempdir;
 
     use super::*;
 
@@ -254,6 +266,48 @@ mod tests {
             );
             assert_eq!(traceback.frames[0].line_number.get(), 3);
             assert_eq!(traceback.frames[5].line_number.get(), 5);
+            Ok(())
+        })
+    }
+
+    #[rstest]
+    #[case(0, "outer", 2, "inner()")]
+    #[case(1, "inner", 4, "raise ValueError('boom')")]
+    fn external_source_keeps_each_frame(
+        #[values(true, false)] readable: bool,
+        #[case] index: usize,
+        #[case] function: &str,
+        #[case] line: usize,
+        #[case] text: &str,
+    ) -> PyResult<()> {
+        let temp = tempdir().expect("temporary directory");
+        let path = Utf8Path::from_path(temp.path())
+            .expect("UTF-8 path")
+            .join("helpers.py");
+        let code = c"def outer():\n    inner()\ndef inner():\n    raise ValueError('boom')\n";
+        if readable {
+            std::fs::write(&path, code.to_bytes()).expect("write helper source");
+        }
+        let filename = CString::new(path.as_str())?;
+        Python::initialize();
+        Python::attach(|py| {
+            let module = PyModule::from_code(py, code, &filename, c"test_external_traceback")?;
+            let error = module
+                .getattr("outer")?
+                .call0()
+                .expect_err("test must raise");
+            let traceback = Traceback::from_error_with_fallback(py, &error, None)
+                .expect("exception must retain its traceback");
+
+            assert_eq!(traceback.frames.len(), 2);
+            let frame = &traceback.frames[index];
+            assert_eq!(frame.file_path, path);
+            assert_eq!(frame.function_name, function);
+            assert_eq!(frame.line_number.get(), line);
+            assert_eq!(frame.source.is_some(), readable);
+            if let Some(source) = &frame.source {
+                assert_eq!(source.source_file.slice(source.location), text);
+            }
             Ok(())
         })
     }
@@ -344,7 +398,8 @@ mod tests {
             )
             .finish();
 
-            let resolved = get_source_file_and_range(&location, Some(&source_file));
+            let resolved =
+                get_source_file_and_range(&location, Some(&source_file), &mut HashMap::new());
             assert!(resolved.is_some());
             let Some((resolved_source_file, range)) = resolved else {
                 return;
@@ -367,7 +422,59 @@ mod tests {
             )
             .finish();
 
-            assert!(get_source_file_and_range(&location, Some(&source_file)).is_none());
+            assert!(
+                get_source_file_and_range(&location, Some(&source_file), &mut HashMap::new())
+                    .is_none()
+            );
+        }
+
+        #[test]
+        fn shares_source_snapshot_between_frames_but_not_tracebacks() {
+            let temp = tempdir().expect("temporary directory");
+            let path = Utf8Path::from_path(temp.path())
+                .expect("UTF-8 path")
+                .join("helpers.py");
+            std::fs::write(&path, "first line\n    second line\n").expect("write original source");
+            let mut location = TracebackLocation {
+                file_path: path.clone(),
+                line_number: OneIndexed::from_zero_indexed(0),
+                function_name: "helper".to_string(),
+            };
+            let mut sources = HashMap::new();
+            let (first, first_range) = get_source_file_and_range(&location, None, &mut sources)
+                .expect("first frame source");
+            assert_eq!(first.slice(first_range), "first line");
+
+            std::fs::write(&path, "updated first\n    updated second\n")
+                .expect("replace source on disk");
+            location.line_number = OneIndexed::from_zero_indexed(1);
+            let (second, second_range) = get_source_file_and_range(&location, None, &mut sources)
+                .expect("second frame source");
+            assert_eq!(second, first);
+            assert_eq!(second.slice(second_range), "second line");
+
+            let (fresh, fresh_range) =
+                get_source_file_and_range(&location, None, &mut HashMap::new())
+                    .expect("new traceback source");
+            assert_eq!(fresh.slice(fresh_range), "updated second");
+        }
+
+        #[test]
+        fn shares_failed_reads_between_frames_but_not_tracebacks() {
+            let temp = tempdir().expect("temporary directory");
+            let path = Utf8Path::from_path(temp.path())
+                .expect("UTF-8 path")
+                .join("missing.py");
+            let location = TracebackLocation {
+                file_path: path.clone(),
+                line_number: OneIndexed::from_zero_indexed(0),
+                function_name: "helper".to_string(),
+            };
+            let mut sources = HashMap::new();
+            assert!(get_source_file_and_range(&location, None, &mut sources).is_none());
+            std::fs::write(&path, "new source\n").expect("create source on disk");
+            assert!(get_source_file_and_range(&location, None, &mut sources).is_none());
+            assert!(get_source_file_and_range(&location, None, &mut HashMap::new()).is_some());
         }
     }
 }
