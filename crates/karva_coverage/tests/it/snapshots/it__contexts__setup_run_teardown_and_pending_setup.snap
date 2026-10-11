@@ -1,0 +1,87 @@
+---
+source: crates/karva_coverage/tests/it/contexts.rs
+expression: "context.report(&[artifact], &CoverageFilters::default())"
+---
+{
+  "files": {
+    "sample.py": {
+      "contexts": {
+        "1": [
+          "environment|session"
+        ],
+        "10": [
+          "environment|test_choose(value)|teardown"
+        ],
+        "2": [
+          "environment|test_choose(value)|setup"
+        ],
+        "4": [
+          "environment|session"
+        ],
+        "5": [
+          "environment|session",
+          "environment|test_choose(value)|run"
+        ],
+        "6": [
+          "environment|test_choose(value)|run"
+        ],
+        "7": [
+          "environment|session"
+        ],
+        "9": [
+          "environment|session"
+        ]
+      },
+      "excluded_lines": [],
+      "executed_branches": [
+        [
+          5,
+          6
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "executed_lines": [
+        1,
+        2,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10
+      ],
+      "missing_branches": [],
+      "missing_lines": [],
+      "summary": {
+        "covered_branches": 2,
+        "covered_lines": 8,
+        "excluded_lines": [],
+        "missing_branches": 0,
+        "missing_lines": [],
+        "num_branches": 2,
+        "num_partial_branches": 0,
+        "num_statements": 8,
+        "percent_branches_covered": 100.0,
+        "percent_covered": 100.0
+      }
+    }
+  },
+  "meta": {
+    "format": 2,
+    "show_contexts": true,
+    "version": "karva"
+  },
+  "totals": {
+    "covered_branches": 2,
+    "covered_lines": 8,
+    "missing_branches": 0,
+    "num_branches": 2,
+    "num_partial_branches": 0,
+    "num_statements": 8,
+    "percent_branches_covered": 100.0,
+    "percent_covered": 100.0
+  }
+}

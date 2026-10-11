@@ -1,0 +1,44 @@
+---
+source: crates/karva_coverage/tests/it/reports.rs
+expression: "context.report(&[artifact], &filters)"
+---
+{
+  "files": {
+    "sample.py": {
+      "excluded_lines": [],
+      "executed_branches": [],
+      "executed_lines": [
+        1,
+        2
+      ],
+      "missing_branches": [],
+      "missing_lines": [],
+      "summary": {
+        "covered_branches": 0,
+        "covered_lines": 2,
+        "excluded_lines": [],
+        "missing_branches": 0,
+        "missing_lines": [],
+        "num_branches": 0,
+        "num_partial_branches": 0,
+        "num_statements": 2,
+        "percent_branches_covered": 100.0,
+        "percent_covered": 100.0
+      }
+    }
+  },
+  "meta": {
+    "format": 2,
+    "version": "karva"
+  },
+  "totals": {
+    "covered_branches": 0,
+    "covered_lines": 2,
+    "missing_branches": 0,
+    "num_branches": 0,
+    "num_partial_branches": 0,
+    "num_statements": 2,
+    "percent_branches_covered": 100.0,
+    "percent_covered": 100.0
+  }
+}

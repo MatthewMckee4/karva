@@ -177,6 +177,7 @@ impl CoverageSession {
                 contexts: into_owned_paths(contexts),
                 arcs: into_owned_paths(arcs),
                 arc_contexts: into_owned_paths(arc_contexts),
+                deferred_annotations: py_version_at_least(py, 3, 14)?,
             },
             branches,
             &roots,
@@ -999,6 +1000,9 @@ fn into_owned_paths<V>(map: HashMap<TrackedPath, V>) -> HashMap<PathBuf, V> {
 }
 
 struct CollectedCoverage {
+    /// Python 3.14 defers bare class annotations without emitting line events.
+    deferred_annotations: bool,
+
     executed: HashMap<PathBuf, HashSet<u32>>,
     contexts: HashMap<PathBuf, HashMap<u32, HashSet<String>>>,
     arcs: HashMap<PathBuf, HashSet<BranchArc>>,
@@ -1018,6 +1022,7 @@ fn save_data(
         mut contexts,
         mut arcs,
         mut arc_contexts,
+        deferred_annotations,
     } = collected;
     for path in walk_source_files(roots) {
         executed.entry(path).or_default();
@@ -1029,7 +1034,7 @@ fn save_data(
             executable,
             excluded,
             continuations,
-        } = executable_lines_with_exclusions(&path, exclusions)?;
+        } = executable_lines_with_exclusions(&path, exclusions, deferred_annotations)?;
         let logical_line = |line: u32| continuations.get(&line).copied().unwrap_or(line);
         let logical_arc = |arc: BranchArc| {
             let translate = |line: i32| {
@@ -1056,7 +1061,8 @@ fn save_data(
             }
         }
         let branches = if branches {
-            let (possible, partial) = branch_analysis_with_exclusions(&path, exclusions, partials)?;
+            let (possible, partial) =
+                branch_analysis_with_exclusions(&path, exclusions, partials, deferred_annotations)?;
             let executed_arcs = arcs
                 .remove(&path)
                 .unwrap_or_default()
@@ -1334,6 +1340,7 @@ code = Code()
                 contexts: HashMap::new(),
                 arcs: HashMap::new(),
                 arc_contexts: HashMap::new(),
+                deferred_annotations: false,
             },
             false,
             &[],

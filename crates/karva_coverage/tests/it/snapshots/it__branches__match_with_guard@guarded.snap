@@ -1,0 +1,74 @@
+---
+source: crates/karva_coverage/tests/it/branches.rs
+expression: context.measure(calls)
+---
+{
+  "files": {
+    "sample.py": {
+      "excluded_lines": [],
+      "executed_branches": [
+        [
+          3,
+          4
+        ]
+      ],
+      "executed_lines": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "missing_branches": [
+        [
+          3,
+          5
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          5,
+          7
+        ]
+      ],
+      "missing_lines": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "summary": {
+        "covered_branches": 1,
+        "covered_lines": 4,
+        "excluded_lines": [],
+        "missing_branches": 3,
+        "missing_lines": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "num_branches": 4,
+        "num_partial_branches": 1,
+        "num_statements": 8,
+        "percent_branches_covered": 25.0,
+        "percent_covered": 41.66666666666667
+      }
+    }
+  },
+  "meta": {
+    "format": 2,
+    "version": "karva"
+  },
+  "totals": {
+    "covered_branches": 1,
+    "covered_lines": 4,
+    "missing_branches": 3,
+    "num_branches": 4,
+    "num_partial_branches": 1,
+    "num_statements": 8,
+    "percent_branches_covered": 25.0,
+    "percent_covered": 41.66666666666667
+  }
+}

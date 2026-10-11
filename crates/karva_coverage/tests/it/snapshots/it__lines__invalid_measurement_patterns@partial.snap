@@ -1,0 +1,8 @@
+---
+source: crates/karva_coverage/tests/it/lines.rs
+expression: error.to_string()
+---
+ValueError: invalid coverage partial-branch pattern `[`: regex parse error:
+    [
+    ^
+error: unclosed character class

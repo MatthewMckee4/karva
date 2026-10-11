@@ -1,0 +1,8 @@
+---
+source: crates/karva_coverage/tests/it/reports.rs
+expression: error.to_string()
+---
+invalid coverage context pattern: regex parse error:
+    [
+    ^
+error: unclosed character class

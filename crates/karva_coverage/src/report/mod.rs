@@ -287,7 +287,9 @@ mod tests {
         CoverageMode, NativeBranchCoverage, NativeCoverage, NativeFileCoverage, SourceFingerprint,
     };
 
-    const SOURCE: &[u8] = b"first = 1\nsecond = 2\n";
+    const SOURCE: &[u8] = br"first = 1
+second = 2
+";
 
     fn write_artifact(
         directory: &tempfile::TempDir,

@@ -1,0 +1,61 @@
+---
+source: crates/karva_coverage/tests/it/branches.rs
+expression: "context.measure(r\"\n        parse('1')\n        parse('-3')\n        parse('invalid')\n    \")"
+---
+{
+  "files": {
+    "sample.py": {
+      "excluded_lines": [],
+      "executed_branches": [
+        [
+          10,
+          11
+        ],
+        [
+          10,
+          12
+        ]
+      ],
+      "executed_lines": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12
+      ],
+      "missing_branches": [],
+      "missing_lines": [],
+      "summary": {
+        "covered_branches": 2,
+        "covered_lines": 10,
+        "excluded_lines": [],
+        "missing_branches": 0,
+        "missing_lines": [],
+        "num_branches": 2,
+        "num_partial_branches": 0,
+        "num_statements": 10,
+        "percent_branches_covered": 100.0,
+        "percent_covered": 100.0
+      }
+    }
+  },
+  "meta": {
+    "format": 2,
+    "version": "karva"
+  },
+  "totals": {
+    "covered_branches": 2,
+    "covered_lines": 10,
+    "missing_branches": 0,
+    "num_branches": 2,
+    "num_partial_branches": 0,
+    "num_statements": 10,
+    "percent_branches_covered": 100.0,
+    "percent_covered": 100.0
+  }
+}

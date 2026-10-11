@@ -328,7 +328,11 @@ mod tests {
             branch_missing: vec![missing_arc],
             arc_contexts: BTreeMap::new(),
         };
-        let source = "hit = '<&>'\nmiss = 2\nif hit:\n    excluded = 4\n";
+        let source = r"hit = '<&>'
+miss = 2
+if hit:
+    excluded = 4
+";
         let page = render_source(
             &row,
             source,

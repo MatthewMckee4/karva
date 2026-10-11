@@ -5,6 +5,7 @@ use std::path::Path;
 use fs_err as fs;
 use regex::Regex;
 use ruff_python_ast::helpers::is_docstring_stmt;
+use ruff_python_ast::token::Tokens;
 use ruff_python_ast::{
     ElifElseClause, ExceptHandler, Expr, MatchCase, Stmt, StmtClassDef, StmtFunctionDef, StmtIf,
     StmtMatch,
@@ -15,8 +16,8 @@ use ruff_text_size::{Ranged, TextSize};
 
 use crate::data::BranchArc;
 use crate::executable::{
-    CoverageExclusions, comment_lines_matching, executable_lines_for_module, pattern_lines,
-    pragma_no_cover_lines,
+    CoverageExclusions, comment_lines_matching, executable_lines_for_module, loop_else_offset,
+    pattern_lines, pragma_no_cover_lines,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -50,9 +51,15 @@ pub(crate) fn branch_analysis_with_exclusions(
     path: &Path,
     exclusions: &CoverageExclusions,
     partials: &CoveragePartials,
+    deferred_annotations: bool,
 ) -> io::Result<(BTreeSet<BranchArc>, BTreeSet<u32>)> {
     let source = fs::read_to_string(path)?;
-    Ok(branch_analysis_for_source(&source, exclusions, partials))
+    Ok(branch_analysis_for_source(
+        &source,
+        exclusions,
+        partials,
+        deferred_annotations,
+    ))
 }
 
 #[cfg(test)]
@@ -61,6 +68,7 @@ fn branch_arcs_for_source(source: &str) -> BTreeSet<BranchArc> {
         source,
         &CoverageExclusions::default(),
         &CoveragePartials::default(),
+        false,
     )
     .0
 }
@@ -70,13 +78,14 @@ fn branch_arcs_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
 ) -> BTreeSet<BranchArc> {
-    branch_analysis_for_source(source, exclusions, &CoveragePartials::default()).0
+    branch_analysis_for_source(source, exclusions, &CoveragePartials::default(), false).0
 }
 
 fn branch_analysis_for_source(
     source: &str,
     exclusions: &CoverageExclusions,
     partials: &CoveragePartials,
+    deferred_annotations: bool,
 ) -> (BTreeSet<BranchArc>, BTreeSet<u32>) {
     let Some(parsed) = parse_unchecked(source, ParseOptions::from(Mode::Module)).try_into_module()
     else {
@@ -87,16 +96,23 @@ fn branch_analysis_for_source(
     excluded_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
     let partial_lines = partial_branch_lines(&parsed, source, &line_index, partials);
     let module = parsed.syntax();
-    let (executable, built_in_excluded) =
-        executable_lines_for_module(module, &line_index, &excluded_lines);
+    let (executable, built_in_excluded) = executable_lines_for_module(
+        module,
+        parsed.tokens(),
+        &line_index,
+        &excluded_lines,
+        deferred_annotations,
+    );
     excluded_lines.extend(built_in_excluded);
     let mut collector = BranchCollector {
         line_index: &line_index,
+        tokens: parsed.tokens(),
         excluded_lines: &excluded_lines,
         executable: &executable,
         arcs: BTreeSet::new(),
     };
-    collector.visit_body(&module.body, None);
+    // Module code objects start on line one, including their negative exit sentinel.
+    collector.visit_body(&module.body, Some(-1));
     let branch_lines = branch_lines(&collector.arcs);
     let partial_lines = partial_lines
         .into_iter()
@@ -137,6 +153,7 @@ fn branch_lines(arcs: &BTreeSet<BranchArc>) -> HashSet<u32> {
 /// Walks nested Python bodies while carrying each statement's fallthrough target.
 struct BranchCollector<'a> {
     line_index: &'a LineIndex,
+    tokens: &'a Tokens,
     excluded_lines: &'a HashSet<u32>,
     executable: &'a HashSet<u32>,
     arcs: BTreeSet<BranchArc>,
@@ -169,7 +186,7 @@ impl BranchCollector<'_> {
                     line,
                     [
                         self.first_executable_i32(&stmt.body),
-                        self.first_executable_i32(&stmt.orelse).or(next),
+                        self.loop_alternate_target(&stmt.body, &stmt.orelse, next),
                     ],
                 );
                 self.visit_body(&stmt.body, line.map(line_to_i32));
@@ -182,7 +199,7 @@ impl BranchCollector<'_> {
                         line,
                         [
                             self.first_executable_i32(&stmt.body),
-                            self.first_executable_i32(&stmt.orelse).or(next),
+                            self.loop_alternate_target(&stmt.body, &stmt.orelse, next),
                         ],
                     );
                 }
@@ -190,12 +207,19 @@ impl BranchCollector<'_> {
                 self.visit_body(&stmt.orelse, next);
             }
             Stmt::Try(stmt) => {
-                self.visit_body(&stmt.body, next);
+                let after_handler = self.first_executable_i32(&stmt.finalbody).or(next);
+                let after_body = self.first_executable_i32(&stmt.orelse).or(after_handler);
+                self.visit_body(&stmt.body, after_body);
                 for handler in &stmt.handlers {
-                    self.visit_except_handler(handler, next);
+                    self.visit_except_handler(handler, after_handler);
                 }
-                self.visit_body(&stmt.orelse, next);
+                self.visit_body(&stmt.orelse, after_handler);
                 self.visit_body(&stmt.finalbody, next);
+            }
+            Stmt::With(stmt) => {
+                // Leaving the suite executes cleanup on the with header before outer fallthrough.
+                let cleanup = self.line(stmt.range().start()).map(line_to_i32);
+                self.visit_body(&stmt.body, cleanup);
             }
             Stmt::Match(stmt) => self.visit_match(stmt, next),
             _ => {}
@@ -304,6 +328,20 @@ impl BranchCollector<'_> {
         } else {
             cases.iter().find_map(|case| self.match_case_target(case))
         }
+    }
+
+    fn loop_alternate_target(
+        &self,
+        body: &[Stmt],
+        orelse: &[Stmt],
+        next: Option<i32>,
+    ) -> Option<i32> {
+        if loop_else_offset(body, orelse, self.tokens)
+            .is_some_and(|offset| self.line_has_pragma(offset))
+        {
+            return None;
+        }
+        self.first_executable_i32(orelse).or(next)
     }
 
     fn first_executable_i32(&self, body: &[Stmt]) -> Option<i32> {
@@ -430,7 +468,13 @@ def f(items):
         #[values("for item in items", "while items")] header: &str,
     ) {
         let source = format!(
-            "def f(items):\n    {header}:\n        break\n    else:\n        return []\n    return [1]\n"
+            r"def f(items):
+    {header}:
+        break
+    else:
+        return []
+    return [1]
+"
         );
 
         assert_eq!(arcs(&source), vec![(2, 3), (2, 5)]);
@@ -440,7 +484,14 @@ def f(items):
     fn decorated_body_uses_first_decorator_exit(
         #[values("def f():", "class C:")] definition: &str,
     ) {
-        let source = format!("@first\n@second\n{definition}\n    if flag:\n        pass\n");
+        let source = format!(
+            r"@first
+@second
+{definition}
+    if flag:
+        pass
+"
+        );
 
         assert_eq!(arcs(&source), vec![(4, -1), (4, 5)]);
     }
@@ -499,6 +550,7 @@ def f(x):
             source,
             &CoverageExclusions::default(),
             &CoveragePartials::default(),
+            false,
         );
 
         assert_eq!(arcs.len(), 2);
@@ -516,7 +568,7 @@ def f(x):
         let partials = CoveragePartials::new(&["if x:".to_owned()]).expect("valid partial");
 
         let (_, partial) =
-            branch_analysis_for_source(source, &CoverageExclusions::default(), &partials);
+            branch_analysis_for_source(source, &CoverageExclusions::default(), &partials, false);
 
         assert_eq!(partial, BTreeSet::from([2]));
     }
