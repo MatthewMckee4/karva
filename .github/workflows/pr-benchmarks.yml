@@ -104,8 +104,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PYO3_PYTHON: ${{ steps.setup-python.outputs.python-path }}
-          # Both revisions reuse dependencies in the target directory restored above.
-          CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
           set -euo pipefail
 
@@ -119,11 +117,14 @@ jobs:
           artifact_dir="${RUNNER_TEMP}/benchmark-wheels"
 
           git worktree add --detach "${base_worktree}" "${BASE_SHA}"
+          # Isolate both revisions from artifacts left by shared-target builds.
           (
             cd "${base_worktree}"
-            uv run --no-project --with maturin maturin build --release --out "${base_wheel_dir}"
+            CARGO_TARGET_DIR="${base_worktree}/target" \
+              uv run --no-project --with maturin maturin build --release --out "${base_wheel_dir}"
           )
-          uv run --no-project --with maturin maturin build --release --out "${head_wheel_dir}"
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target/benchmark-head" \
+            uv run --no-project --with maturin maturin build --release --out "${head_wheel_dir}"
 
           base_wheel=$(find "${base_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
           head_wheel=$(find "${head_wheel_dir}" -maxdepth 1 -name "karva-*.whl" -print -quit)
