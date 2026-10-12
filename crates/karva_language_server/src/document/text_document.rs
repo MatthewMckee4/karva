@@ -213,9 +213,10 @@ mod tests {
 
         assert_eq!(
             document.contents(),
-            r"def test():
-    pass
-"
+            indoc! {r"
+                def test():
+                    pass
+            "}
         );
     }
 

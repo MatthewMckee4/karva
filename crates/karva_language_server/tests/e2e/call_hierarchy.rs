@@ -57,12 +57,12 @@ fn navigates_unopened_providers_and_unsaved_consumers() {
     workspace.write(
         "conftest.py",
         indoc! {r"
-        from karva import fixture
-        @fixture
-        def database(): pass
-        @fixture
-        def wrapper(database): pass
-    "},
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @fixture
+            def wrapper(database): pass
+        "},
     );
     workspace.write("test_saved.py", "def test_saved(wrapper): pass\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());

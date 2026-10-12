@@ -1,4 +1,3 @@
-use indoc::{formatdoc, indoc};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Output, Stdio};
@@ -304,12 +303,7 @@ fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Output {
             let output = karva
                 .wait_with_output()
                 .expect("collect stalled Karva output");
-            assert!(
-                false,
-                r"Karva stalled: {args:?}
-{}",
-                output_report(&output)
-            );
+            assert!(false, "Karva stalled: {args:?}\n{}", output_report(&output));
             return output;
         }
         thread::sleep(Duration::from_millis(10));
@@ -326,13 +320,8 @@ fn assert_status(output: &Output, expected_success: bool) {
 }
 
 fn output_report(output: &Output) -> String {
-    formatdoc!(
-        r"
-            status: {}
-            stdout:
-            {}
-            stderr:
-            {}",
+    format!(
+        "status: {}\nstdout:\n{}\nstderr:\n{}",
         output.status,
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),

@@ -1,5 +1,6 @@
-use indoc::indoc;
 use std::collections::{BTreeMap, BTreeSet};
+
+use indoc::indoc;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use insta_cmd::assert_cmd_snapshot;

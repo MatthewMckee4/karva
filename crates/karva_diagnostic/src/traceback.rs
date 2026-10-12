@@ -191,9 +191,9 @@ fn calculate_line_range(source_text: &str, line_number: OneIndexed) -> Option<Te
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
     use std::ffi::CString;
+
+    use indoc::indoc;
 
     use rstest::rstest;
     use tempfile::tempdir;
@@ -202,10 +202,7 @@ mod tests {
 
     #[rstest]
     fn extracts_frames_and_source(
-        #[values("test.py", "test_\"quoted\".py", indoc! {r"
-            test_
-            newline.py"})]
-        filename: &str,
+        #[values("test.py", "test_\"quoted\".py", "test_\nnewline.py")] filename: &str,
     ) -> PyResult<()> {
         Python::initialize();
         Python::attach(|py| {
@@ -473,9 +470,9 @@ mod tests {
             std::fs::write(
                 &path,
                 indoc! {r"
-                first line
-                    second line
-            "},
+                    first line
+                        second line
+                "},
             )
             .expect("write original source");
             let mut location = TracebackLocation {
@@ -491,9 +488,9 @@ mod tests {
             std::fs::write(
                 &path,
                 indoc! {r"
-                updated first
-                    updated second
-            "},
+                    updated first
+                        updated second
+                "},
             )
             .expect("replace source on disk");
             location.line_number = OneIndexed::from_zero_indexed(1);

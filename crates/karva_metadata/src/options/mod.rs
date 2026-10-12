@@ -1113,9 +1113,9 @@ impl Combine for OutputFormat {
 
 #[cfg(test)]
 mod tests {
-    use indoc::{formatdoc, indoc};
-
     use std::num::NonZeroU32;
+
+    use indoc::{formatdoc, indoc};
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use karva_combine::Combine;
@@ -1546,9 +1546,9 @@ report-path = "build/coverage.xml"
         let requested = CoveragePrecision::MAX + 1;
         let toml = formatdoc!(
             r"
-            [profile.default.coverage]
-            precision = {requested}
-        "
+                [profile.default.coverage]
+                precision = {requested}
+            "
         );
 
         let error = Config::from_toml_str(&toml).expect_err("reject excessive precision");

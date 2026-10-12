@@ -180,9 +180,9 @@ fn reports_configuration_parse_cause_and_recovers(
         config,
         &formatdoc!(
             r"
-            [{section}]
-            test-function-prefix = 123
-        "
+                [{section}]
+                test-function-prefix = 123
+            "
         ),
     );
     let uri = workspace.uri("test_example.py");
@@ -212,9 +212,9 @@ fn reports_configuration_parse_cause_and_recovers(
         config,
         &formatdoc!(
             r"
-            [{section}]
-            test-function-prefix = 'test'
-        "
+                [{section}]
+                test-function-prefix = 'test'
+            "
         ),
     );
     server.notify::<DidChangeWatchedFilesNotification>(DidChangeWatchedFilesParams {

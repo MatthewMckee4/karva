@@ -193,11 +193,11 @@ mod tests {
     #[test]
     fn resolves_inherited_provider() {
         let parent_source = indoc! {r"
-                from karva import fixture
-                @fixture
-                def database():
-                    yield value
-            "};
+            from karva import fixture
+            @fixture
+            def database():
+                yield value
+        "};
         let source = "def test_example(database): pass\n";
         let analysis = analyze_source_with_parents(
             SourceDocument::new(
@@ -221,11 +221,11 @@ mod tests {
     #[test]
     fn resolves_nearest_override() {
         let parent_source = indoc! {r"
-                from karva import fixture
-                @fixture
-                def database():
-                    yield parent
-            "};
+            from karva import fixture
+            @fixture
+            def database():
+                yield parent
+        "};
         let source = indoc! {r"
             from karva import fixture
             @fixture
@@ -267,13 +267,13 @@ mod tests {
         );
 
         let rejected = analysis(indoc! {r"
-                from karva import fixture
-                @fixture
-                def duplicate(): pass
-                @fixture
-                def duplicate(): pass
-                def test_example(duplicate): pass
-            "});
+            from karva import fixture
+            @fixture
+            def duplicate(): pass
+            @fixture
+            def duplicate(): pass
+            def test_example(duplicate): pass
+        "});
         assert!(
             fixture_implementation(
                 &rejected,

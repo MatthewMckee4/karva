@@ -84,10 +84,10 @@ mod tests {
         "};
         let parameter = "def test_parameter(database): pass\n";
         let metadata = indoc! {r#"
-                import pytest
-                @pytest.mark.usefixtures("database")
-                def test_metadata(): pass
-            "#};
+            import pytest
+            @pytest.mark.usefixtures("database")
+            def test_metadata(): pass
+        "#};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [
@@ -223,8 +223,8 @@ mod tests {
             offset(
                 source,
                 indoc! {r#"
-                database")
-                def test"#},
+                    database")
+                    def test"#},
             ),
         )
         .expect("custom fixture should resolve")

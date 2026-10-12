@@ -1,5 +1,6 @@
-use indoc::indoc;
 use std::collections::{HashMap, HashSet};
+
+use indoc::indoc;
 
 use karva_cli::PartitionSelection;
 use karva_python_semantic::TestCacheKey;
@@ -11,10 +12,10 @@ use crate::orchestration::{FailurePriority, LastFailedSelection};
 #[test]
 fn partition_selection_filters_after_sorting_by_qualified_name() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
-            def test_c(): pass
-            def test_a(): pass
-            def test_b(): pass
-        "});
+        def test_c(): pass
+        def test_a(): pass
+        def test_b(): pass
+    "});
     let selection = "slice:2/3"
         .parse::<PartitionSelection>()
         .expect("valid partition selection");
@@ -39,11 +40,11 @@ fn partition_selection_filters_after_sorting_by_qualified_name() {
 #[test]
 fn last_failed_filters_before_explicit_partition_selection() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
-            def test_c(): pass
-            def test_a(): pass
-            def test_b(): pass
-            def test_d(): pass
-        "});
+        def test_c(): pass
+        def test_a(): pass
+        def test_b(): pass
+        def test_d(): pass
+    "});
     let selection = "slice:2/2"
         .parse::<PartitionSelection>()
         .expect("valid partition selection");
@@ -72,13 +73,13 @@ fn last_failed_filters_before_explicit_partition_selection() {
 #[test]
 fn cached_case_roots_select_opaque_functions_without_selecting_siblings() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
-            @karva.tags.parametrize('value', [0, 1])
-            def test_value(value): pass
-            @karva.tags.parametrize('value', range(3))
-            def test_dynamic(value): pass
-            def test_value_extra(): pass
-            def test_pass(): pass
-        "});
+        @karva.tags.parametrize('value', [0, 1])
+        def test_value(value): pass
+        @karva.tags.parametrize('value', range(3))
+        def test_dynamic(value): pass
+        def test_value_extra(): pass
+        def test_pass(): pass
+    "});
     let failed = HashSet::from([
         TestCacheKey::parameter_case_name("test_sample::test_value", 1),
         TestCacheKey::parameter_case_name("test_sample::test_dynamic", 2),

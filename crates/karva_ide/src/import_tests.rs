@@ -403,10 +403,7 @@ fn wildcard_binding_collisions_use_source_name_for_custom_fixture_names(
             from support import *
             provider = replacement
         "},
-        indoc! {r"
-            provider = replacement
-            from support import *
-        "}
+        "provider = replacement\nfrom support import *\n"
     )]
     conftest: &str,
 ) {
@@ -789,9 +786,7 @@ fn potentially_callable_module_values_remain_visibility_barriers(
         "setting = provider",
         "setting = lambda: None",
         "first, second = (provider, 30)",
-        indoc! {r"
-            if enabled:
-                setting = 30"},
+        "if enabled:\n    setting = 30",
         "setting = [captured := provider]"
     )]
     statement: &str,

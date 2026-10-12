@@ -580,12 +580,12 @@ mod tests {
         };
         let builtin_path = Utf8Path::new("/venv/lib/python3.12/site-packages/karva/_builtins.py");
         let builtin_source = indoc! {r"
-                from karva._karva import fixture
+            from karva._karva import fixture
 
-                @fixture
-                def tmp_path():
-                    yield path
-            "};
+            @fixture
+            def tmp_path():
+                yield path
+        "};
         let builtin = collect_source_with_module_name(
             &builtin_path.to_path_buf(),
             "karva._builtins",

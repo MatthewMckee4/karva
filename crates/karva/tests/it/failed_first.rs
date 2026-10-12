@@ -345,7 +345,7 @@ def test_b():
 
     context.write_file("fixed", "");
     context.write_file("order", "");
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--failed-first", "--status-level=none"]), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--failed-first", "--status-level=none"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -353,7 +353,7 @@ def test_b():
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
 
     let order = context.read_file("order");
     let events = order.lines().collect::<Vec<_>>();

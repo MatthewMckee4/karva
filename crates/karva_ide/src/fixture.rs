@@ -1519,15 +1519,14 @@ mod tests {
     #[test]
     fn resolves_local_and_builtin_fixtures() {
         assert!(
-            analyze(
-                r"from karva import fixture
+            analyze(indoc! {r"
+                from karva import fixture
 
-@fixture
-def database(): pass
+                @fixture
+                def database(): pass
 
-def test_example(database, tmp_path): pass
-"
-            )
+                def test_example(database, tmp_path): pass
+            "})
             .diagnostics
             .is_empty()
         );
@@ -1536,14 +1535,14 @@ def test_example(database, tmp_path): pass
     #[test]
     fn reports_duplicate_fixture_names() {
         let analysis = analyze(indoc! {r#"
-                from karva import fixture
+            from karva import fixture
 
-                @fixture
-                def first(): pass
+            @fixture
+            def first(): pass
 
-                @fixture(name="first")
-                def second(): pass
-            "#});
+            @fixture(name="first")
+            def second(): pass
+        "#});
 
         assert_eq!(
             analysis
@@ -1559,11 +1558,11 @@ def test_example(database, tmp_path): pass
     #[test]
     fn reports_invalid_literal_scope() {
         let analysis = analyze(indoc! {r#"
-                from karva import fixture
+            from karva import fixture
 
-                @fixture(scope="forever")
-                def database(): pass
-            "#});
+            @fixture(scope="forever")
+            def database(): pass
+        "#});
 
         assert_eq!(analysis.diagnostics[0].code, DiagnosticCode::InvalidFixture);
         assert_eq!(
@@ -1575,13 +1574,12 @@ def test_example(database, tmp_path): pass
     #[test]
     fn dynamic_scope_remains_unknown() {
         assert!(
-            analyze(
-                r"from karva import fixture
+            analyze(indoc! {r"
+                from karva import fixture
 
-@fixture(scope=choose_scope)
-def database(missing): pass
-"
-            )
+                @fixture(scope=choose_scope)
+                def database(missing): pass
+            "})
             .diagnostics
             .iter()
             .all(|diagnostic| diagnostic.code != DiagnosticCode::FixtureScopeMismatch)
@@ -1591,16 +1589,15 @@ def database(missing): pass
     #[test]
     fn reports_dependency_cycle() {
         assert!(
-            diagnostic_codes(
-                r"from karva import fixture
+            diagnostic_codes(indoc! {r"
+                from karva import fixture
 
-@fixture
-def first(second): pass
+                @fixture
+                def first(second): pass
 
-@fixture
-def second(first): pass
-"
-            )
+                @fixture
+                def second(first): pass
+            "})
             .contains(&DiagnosticCode::FixtureCycle)
         );
     }
@@ -1608,16 +1605,15 @@ def second(first): pass
     #[test]
     fn reports_scope_mismatch() {
         assert!(
-            diagnostic_codes(
-                r#"from karva import fixture
+            diagnostic_codes(indoc! {r#"
+                from karva import fixture
 
-@fixture
-def narrow(): pass
+                @fixture
+                def narrow(): pass
 
-@fixture(scope="session")
-def broad(narrow): pass
-"#
-            )
+                @fixture(scope="session")
+                def broad(narrow): pass
+            "#})
             .contains(&DiagnosticCode::FixtureScopeMismatch)
         );
     }
@@ -1625,13 +1621,12 @@ def broad(narrow): pass
     #[test]
     fn parametrized_arguments_are_not_fixtures() {
         assert!(
-            analyze(
-                r#"import pytest
+            analyze(indoc! {r#"
+                import pytest
 
-@pytest.mark.parametrize("value", [1])
-def test_example(value, tmp_path): pass
-"#
-            )
+                @pytest.mark.parametrize("value", [1])
+                def test_example(value, tmp_path): pass
+            "#})
             .diagnostics
             .is_empty()
         );
@@ -1847,13 +1842,13 @@ def test_example(value, tmp_path): pass
     #[test]
     fn unknown_fixture_decorator_suppresses_false_missing_error() {
         let analysis = analyze(indoc! {r"
-                from custom import fixture
+            from custom import fixture
 
-                @fixture
-                def database(): pass
+            @fixture
+            def database(): pass
 
-                def test_example(database): pass
-            "});
+            def test_example(database): pass
+        "});
 
         assert!(analysis.fixture_model.local().is_empty());
         assert!(analysis.diagnostics.is_empty());
@@ -1862,13 +1857,13 @@ def test_example(value, tmp_path): pass
     #[test]
     fn known_fixture_import_produces_a_provider() {
         let analysis = analyze(indoc! {r"
-                from karva import fixture
+            from karva import fixture
 
-                @fixture
-                def database(): pass
+            @fixture
+            def database(): pass
 
-                def test_example(database): pass
-            "});
+            def test_example(database): pass
+        "});
 
         assert_eq!(analysis.fixture_model.local()[0].name, "database");
         assert!(analysis.diagnostics.is_empty());
@@ -1877,13 +1872,12 @@ def test_example(value, tmp_path): pass
     #[test]
     fn reports_unsupported_fixture_argument() {
         assert_eq!(
-            diagnostic_codes(
-                r"from karva import fixture
+            diagnostic_codes(indoc! {r"
+                from karva import fixture
 
-@fixture(reuse=True)
-def database(): pass
-"
-            ),
+                @fixture(reuse=True)
+                def database(): pass
+            "}),
             [DiagnosticCode::InvalidFixture]
         );
     }
@@ -1891,13 +1885,12 @@ def database(): pass
     #[test]
     fn karva_parametrized_arguments_are_not_fixtures() {
         assert!(
-            analyze(
-                r#"import karva
+            analyze(indoc! {r#"
+                import karva
 
-@karva.tags.parametrize("value", [1])
-def test_example(value, tmp_path): pass
-"#
-            )
+                @karva.tags.parametrize("value", [1])
+                def test_example(value, tmp_path): pass
+            "#})
             .diagnostics
             .is_empty()
         );
@@ -1906,13 +1899,12 @@ def test_example(value, tmp_path): pass
     #[test]
     fn unknown_parametrize_decorator_suppresses_false_missing_error() {
         assert!(
-            diagnostic_codes(
-                r#"import custom
+            diagnostic_codes(indoc! {r#"
+                import custom
 
-@custom.parametrize("value", [1])
-def test_example(value): pass
-"#
-            )
+                @custom.parametrize("value", [1])
+                def test_example(value): pass
+            "#})
             .is_empty()
         );
     }

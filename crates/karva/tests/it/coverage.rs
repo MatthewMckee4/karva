@@ -488,9 +488,9 @@ exclude_lines = ["("]
         (
             "test_example.py",
             indoc! {r"
-            def test_example():
-                assert True
-        "},
+                def test_example():
+                    assert True
+            "},
         ),
     ]);
 
@@ -595,25 +595,25 @@ fn test_cov_multiple_sources() {
         (
             "pkg_a/code.py",
             indoc! {r"
-            def a():
-                return 1
-        "},
+                def a():
+                    return 1
+            "},
         ),
         ("pkg_b/__init__.py", ""),
         (
             "pkg_b/code.py",
             indoc! {r"
-            def b():
-                return 2
-        "},
+                def b():
+                    return 2
+            "},
         ),
         ("pkg_c/__init__.py", ""),
         (
             "pkg_c/code.py",
             indoc! {r"
-            def c():
-                return 3
-        "},
+                def c():
+                    return 3
+            "},
         ),
         (
             "test_multi.py",
@@ -916,10 +916,11 @@ def test_only_covered():
             .read_file("build/coverage.json")
             .contains(r#""covered_lines": 5"#)
     );
-    assert!(context.read_file("build/coverage.lcov").contains(
-        r"LF:6
-LH:5"
-    ));
+    assert!(
+        context
+            .read_file("build/coverage.lcov")
+            .contains("LF:6\nLH:5")
+    );
 }
 
 #[test]
@@ -928,9 +929,9 @@ fn test_cov_report_failure_does_not_block_other_reports() {
         (
             "test_covered.py",
             indoc! {r"
-            def test_pass():
-                assert True
-        "},
+                def test_pass():
+                    assert True
+            "},
         ),
         ("blocked", "not a directory"),
     ]);

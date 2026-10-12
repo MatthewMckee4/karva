@@ -581,8 +581,8 @@ mod tests {
             offset(
                 source,
                 indoc! {r#"
-            database")
-            def test"#},
+                    database")
+                    def test"#},
             ),
         )
         .expect("metadata should resolve");
@@ -595,10 +595,10 @@ mod tests {
     #[test]
     fn rejects_rename_when_any_occurrence_is_not_editable() {
         let provider = indoc! {r"
-                from karva import fixture
-                @fixture(name='data' 'base')
-                def provider(): pass
-            "};
+            from karva import fixture
+            @fixture(name='data' 'base')
+            def provider(): pass
+        "};
         let test = "def test_example(database): pass\n";
         let path = Utf8Path::new("/project/test_example.py");
         let index = WorkspaceSourceIndex::from_documents(
@@ -773,10 +773,10 @@ mod tests {
     #[test]
     fn custom_fixture_import_does_not_disable_public_name_rename() {
         let provider = indoc! {r#"
-                from karva import fixture
-                @fixture(name="database")
-                def provider(): pass
-            "#};
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+        "#};
         let reexport = "from support import provider as db\n";
         let test = "def test_example(database): pass\n";
         let index = WorkspaceSourceIndex::from_documents(
@@ -963,11 +963,11 @@ mod tests {
     #[test]
     fn rejects_default_provider_exported_through_all() {
         let source = indoc! {r#"
-                from karva import fixture
-                @fixture
-                def database(): pass
-                __all__ = ["database"]
-            "#};
+            from karva import fixture
+            @fixture
+            def database(): pass
+            __all__ = ["database"]
+        "#};
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [SourceDocument::new(

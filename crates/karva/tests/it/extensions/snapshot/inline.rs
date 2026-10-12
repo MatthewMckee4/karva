@@ -233,13 +233,11 @@ def test_closing():
     let source = context.read_file("test.py");
     assert!(
         source.contains("        \"\"\""),
-        r"Expected closing triple-quote at 8-space indent (content level), got:
-{source}"
+        "Expected closing triple-quote at 8-space indent (content level), got:\n{source}"
     );
     assert!(
         !source.contains("\n    \"\"\""),
-        r"Closing triple-quote should NOT be at 4-space indent (call level), got:
-{source}"
+        "Closing triple-quote should NOT be at 4-space indent (call level), got:\n{source}"
     );
 }
 
@@ -642,13 +640,11 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        r"Expected first inline rewritten to 'hello', got:
-{source}"
+        "Expected first inline rewritten to 'hello', got:\n{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("world", inline="")"#),
-        r"Expected second inline still empty, got:
-{source}"
+        "Expected second inline still empty, got:\n{source}"
     );
 
     let pending = context
@@ -687,13 +683,11 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        r"Expected first inline still 'hello', got:
-{source}"
+        "Expected first inline still 'hello', got:\n{source}"
     );
     assert!(
         source.contains(r#"inline="world""#),
-        r"Expected second inline rewritten to 'world', got:
-{source}"
+        "Expected second inline rewritten to 'world', got:\n{source}"
     );
     assert!(
         !context
@@ -824,8 +818,7 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        r"Expected first inline rewritten, got:
-{source}"
+        "Expected first inline rewritten, got:\n{source}"
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @r#"
@@ -873,13 +866,11 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="hello""#),
-        r"Expected first inline still correct, got:
-{source}"
+        "Expected first inline still correct, got:\n{source}"
     );
     assert!(
         source.contains(r#"inline="world""#),
-        r"Expected second inline rewritten to 'world', got:
-{source}"
+        "Expected second inline rewritten to 'world', got:\n{source}"
     );
     assert!(
         !context
@@ -1005,13 +996,11 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains("inline=\"\"\""),
-        r"Expected first inline rewritten to triple-quoted, got:
-{source}"
+        "Expected first inline rewritten to triple-quoted, got:\n{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("world", inline="")"#),
-        r"Expected second inline still empty, got:
-{source}"
+        "Expected second inline still empty, got:\n{source}"
     );
 
     let pending = context
@@ -1050,8 +1039,7 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="world""#),
-        r"Expected second inline rewritten to 'world', got:
-{source}"
+        "Expected second inline rewritten to 'world', got:\n{source}"
     );
     assert!(!pending.exists(), "Expected no pending second snapshot");
 }
@@ -1232,8 +1220,7 @@ def test_second():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"inline="world""#),
-        r"Expected second inline rewritten to 'world', got:
-{source}"
+        "Expected second inline rewritten to 'world', got:\n{source}"
     );
     assert!(!old_pending.exists(), "Expected old .snap.new removed");
     assert!(!new_pending.exists(), "Expected new .snap.new removed");
@@ -1322,13 +1309,11 @@ def test_third():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"karva.assert_snapshot("fixed", inline="fixed")"#),
-        r"Middle inline was corrupted! Got:
-{source}"
+        "Middle inline was corrupted! Got:\n{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("hello", inline="hello")"#),
-        r"Third inline not rewritten correctly! Got:
-{source}"
+        "Third inline not rewritten correctly! Got:\n{source}"
     );
 }
 
@@ -1481,13 +1466,11 @@ def test_third():
     let source = context.read_file("test.py");
     assert!(
         source.contains(r#"karva.assert_snapshot("fixed", inline="fixed")"#),
-        r"Middle inline was corrupted by review! Got:
-{source}"
+        "Middle inline was corrupted by review! Got:\n{source}"
     );
     assert!(
         source.contains(r#"karva.assert_snapshot("hello", inline="hello")"#),
-        r"Third inline not rewritten by review! Got:
-{source}"
+        "Third inline not rewritten by review! Got:\n{source}"
     );
 }
 
@@ -1807,8 +1790,7 @@ def test_single_quote():
     let source = context.read_file("test.py");
     assert!(
         source.contains("inline='hello'") || source.contains(r#"inline="hello""#),
-        r"Expected inline value rewritten, got:
-{source}"
+        "Expected inline value rewritten, got:\n{source}"
     );
 }
 

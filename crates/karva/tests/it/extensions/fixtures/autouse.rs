@@ -753,8 +753,8 @@ def test_inherited_autouse_again():
             override_path,
             &formatdoc!(
                 r"
-            {source}
-            {tests}"
+                    {source}
+                    {tests}"
             ),
         );
     }

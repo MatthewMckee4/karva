@@ -1,6 +1,7 @@
-use indoc::indoc;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::Stdio;
+
+use indoc::indoc;
 
 use anyhow::{Context, bail};
 use lsp_server::{Message, Notification, Request, Response};

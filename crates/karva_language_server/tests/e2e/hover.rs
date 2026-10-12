@@ -219,12 +219,13 @@ fn hovers_nearest_nested_fixture_provider() {
 
     assert_eq!(
         response["contents"]["value"],
-        r"def database():
+        indoc! {r"
+            def database():
 
-Karva fixture: database
-Scope: function
-Autouse: false
-Provider: /project/package/conftest.py"
+            Karva fixture: database
+            Scope: function
+            Autouse: false
+            Provider: /project/package/conftest.py"}
     );
 }
 

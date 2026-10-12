@@ -414,16 +414,16 @@ def test_from_two():
     context.write_file(
         "test_one.py",
         indoc! {r"
-        def test_other():
-            pass
-    "},
+            def test_other():
+                pass
+        "},
     );
     context.write_file(
         "test_two.py",
         indoc! {r"
-        def test_other():
-            pass
-    "},
+            def test_other():
+                pass
+        "},
     );
 
     assert_cmd_snapshot!(context.snapshot("prune").arg("snapshots/test_one"), @r"

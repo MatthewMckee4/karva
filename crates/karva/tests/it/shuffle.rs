@@ -1,4 +1,3 @@
-use indoc::formatdoc;
 use insta::assert_snapshot;
 use insta_cmd::assert_cmd_snapshot;
 use serde_json::Value;
@@ -21,12 +20,7 @@ fn recording_tests(names: &[&str]) -> String {
         .map(|name| format!(r#"def test_{name}(): _record("{name}")"#))
         .collect::<Vec<_>>()
         .join("\n");
-    formatdoc!(
-        r"
-        {RECORDER}
-        {tests}
-    "
-    )
+    format!("{RECORDER}\n{tests}\n")
 }
 
 #[test]

@@ -2963,9 +2963,9 @@ fn test_no_retry_run_unchanged_output() {
     let context = TestContext::with_file(
         "test.py",
         indoc! {r"
-        def test_a(): pass
-        def test_b(): pass
-    "},
+            def test_a(): pass
+            def test_b(): pass
+        "},
     );
 
     assert_cmd_snapshot!(context.command_no_parallel().args(["--retry=2"]), @"

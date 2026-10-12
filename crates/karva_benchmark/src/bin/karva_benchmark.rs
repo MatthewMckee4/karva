@@ -1573,9 +1573,9 @@ fn utf8_path(path: PathBuf) -> Result<Utf8PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
     use std::num::NonZeroUsize;
+
+    use indoc::indoc;
     #[cfg(unix)]
     use std::os::unix::process::ExitStatusExt;
     #[cfg(windows)]
@@ -1842,14 +1842,14 @@ mod tests {
     #[test]
     fn diagnostics_report_renders_changes() {
         let baseline = normalize_diagnostic_text(indoc! {r"
-                    PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)
-                Summary [   0.100s] 3 tests run: 2 passed, 1 skipped
-            "});
+                PASS [   0.001s] test_hooks(hook=<function hook at 0x123abc>)
+            Summary [   0.100s] 3 tests run: 2 passed, 1 skipped
+        "});
         let candidate = normalize_diagnostic_text(indoc! {r"
-                    PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)
-                new diagnostic
-                Summary [   1.000s] 3 tests run: 1 passed, 1 error, 1 skipped
-            "});
+                PASS [   0.900s] test_hooks(hook=<function hook at 0x456def>)
+            new diagnostic
+            Summary [   1.000s] 3 tests run: 1 passed, 1 error, 1 skipped
+        "});
         insta::assert_snapshot!(baseline, @"
             PASS [TIME] test_hooks(hook=<function hook at 0xADDR>)
         Summary [TIME] 3 tests run: 2 passed, 1 skipped
@@ -1953,13 +1953,13 @@ mod tests {
     #[test]
     fn diagnostic_comparison_detects_equal_sized_workload_changes() {
         let baseline = indoc! {r"
-                    PASS [TIME] test_first
-                Summary [TIME] 1 test run: 1 passed, 0 skipped
-            "};
+                PASS [TIME] test_first
+            Summary [TIME] 1 test run: 1 passed, 0 skipped
+        "};
         let candidate = indoc! {r"
-                    PASS [TIME] test_second
-                Summary [TIME] 1 test run: 1 passed, 0 skipped
-            "};
+                PASS [TIME] test_second
+            Summary [TIME] 1 test run: 1 passed, 0 skipped
+        "};
 
         let comparison = diagnostic_comparison(
             Some(baseline),
@@ -2032,30 +2032,22 @@ mod tests {
             &mut markdown,
             "text",
             indoc! {r"
-            before
-            ```
-            after
-        "},
+                before
+                ```
+                after
+            "},
         )
         .expect("code block should render");
 
-        assert_eq!(
-            markdown,
-            r"````text
-before
-```
-after
-````
-"
-        );
+        assert_eq!(markdown, "````text\nbefore\n```\nafter\n````\n");
     }
 
     #[test]
     fn diagnostics_report_omits_unchanged_diffs() {
         let output = normalize_diagnostic_text(indoc! {r"
-                    PASS [   0.001s] test_pass
-                Summary [   0.100s] 1 test run: 1 passed, 0 skipped
-            "});
+                PASS [   0.001s] test_pass
+            Summary [   0.100s] 1 test run: 1 passed, 0 skipped
+        "});
         let mut comparison = project("requests", 21, 1.0, 1.0);
         comparison.diagnostics = diagnostic_comparison(
             Some(&output),

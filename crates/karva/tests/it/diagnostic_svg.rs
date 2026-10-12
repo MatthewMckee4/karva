@@ -1,4 +1,3 @@
-use indoc::formatdoc;
 use regex::Regex;
 
 use crate::common::TestContext;
@@ -56,14 +55,8 @@ original
         .args(["--color=always", "--status-level=all"])
         .output()
         .expect("karva should run");
-    let actual = formatdoc!(
-        r"
-            success: {}
-            exit_code: {}
-            ----- stdout -----
-            {}
-            ----- stderr -----
-            {}",
+    let actual = format!(
+        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
         output.status.success(),
         output
             .status

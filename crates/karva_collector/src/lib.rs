@@ -704,13 +704,7 @@ class Thing:
         let prompt = prompt_range(source, range).expect("find executable prompt");
         assert_eq!(
             usize::from(prompt.start()),
-            source
-                .find(
-                    r"
->>>"
-                )
-                .expect("find prompt line")
-                + 1
+            source.find("\n>>>").expect("find prompt line") + 1
         );
     }
 

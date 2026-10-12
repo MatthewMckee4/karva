@@ -316,12 +316,7 @@ mod tests {
         let mut edited = format!("{source}{}", action.new_text);
         edited.insert_str(action.import_offset.to_usize(), &action.import_text);
         assert!(edited.starts_with(
-            r#"#!/usr/bin/env python3
-"""Project tests."""
-from __future__ import annotations
-from karva import fixture
-import karva
-"#
+            "#!/usr/bin/env python3\n\"\"\"Project tests.\"\"\"\nfrom __future__ import annotations\nfrom karva import fixture\nimport karva\n"
         ));
         assert!(analyze(&edited).diagnostics.is_empty());
     }

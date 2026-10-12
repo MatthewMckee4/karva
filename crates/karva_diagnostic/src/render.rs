@@ -271,18 +271,9 @@ mod tests {
     fn keeps_leading_gutter_padding() {
         assert_eq!(
             compact_gutter_padding(
-                r" --> test.py:4:5
-  |
-4 | def test():
-  | ^^^
-  |
-info: failed"
+                " --> test.py:4:5\n  |\n4 | def test():\n  | ^^^\n  |\ninfo: failed"
             ),
-            r" --> test.py:4:5
-  |
-4 | def test():
-  | ^^^
-info: failed"
+            " --> test.py:4:5\n  |\n4 | def test():\n  | ^^^\ninfo: failed"
         );
     }
 

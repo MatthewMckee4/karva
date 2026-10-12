@@ -669,9 +669,9 @@ fn check_cancelled(cancellation: &RequestCancellationToken) -> Result<(), Source
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
     use std::fs;
+
+    use indoc::indoc;
 
     use karva_ide::{SourceAnalysisSettings, fixture_definition};
     use ruff_python_ast::PythonVersion;

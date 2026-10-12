@@ -258,9 +258,9 @@ pub(crate) fn uri_to_path(uri: &Uri) -> Result<Utf8PathBuf, WorkspaceError> {
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
     use std::cell::Cell;
+
+    use indoc::indoc;
     use std::fs;
 
     use ruff_python_ast::PythonVersion;

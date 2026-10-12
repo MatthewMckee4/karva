@@ -212,10 +212,10 @@ fn keeps_nested_fixture_references_separate() {
 fn uses_custom_public_name_and_utf16_ranges() {
     let workspace = Workspace::new();
     let provider_source = indoc! {r#"
-            from karva import fixture
-            @fixture(name="database")
-            def provider(): pass
-        "#};
+        from karva import fixture
+        @fixture(name="database")
+        def provider(): pass
+    "#};
     workspace.write("conftest.py", provider_source);
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let provider_uri = workspace.uri("conftest.py");

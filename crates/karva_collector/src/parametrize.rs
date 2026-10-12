@@ -171,9 +171,9 @@ mod tests {
     #[test]
     fn karva_tags_parametrize_list_of_tuples() {
         let f = parse_function(indoc! {r"
-                @karva.tags.parametrize('a, b', [(1, 2), (3, 4)])
-                def test_x(a, b): pass
-            "});
+            @karva.tags.parametrize('a, b', [(1, 2), (3, 4)])
+            def test_x(a, b): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(2));
     }
 
@@ -189,28 +189,28 @@ mod tests {
     #[test]
     fn keyword_argvalues() {
         let f = parse_function(indoc! {r"
-                @pytest.mark.parametrize(argnames='x', argvalues=[1, 2, 3, 4])
-                def test_x(x): pass
-            "});
+            @pytest.mark.parametrize(argnames='x', argvalues=[1, 2, 3, 4])
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(4));
     }
 
     #[test]
     fn stacked_decorators_multiply() {
         let f = parse_function(indoc! {r"
-                @pytest.mark.parametrize('a', [1, 2, 3])
-                @pytest.mark.parametrize('b', [4, 5])
-                def test_x(a, b): pass
-            "});
+            @pytest.mark.parametrize('a', [1, 2, 3])
+            @pytest.mark.parametrize('b', [4, 5])
+            def test_x(a, b): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(6));
     }
 
     #[test]
     fn tuple_argvalues_counts_outer_elements() {
         let f = parse_function(indoc! {r"
-                @parametrize('x', ((1, 2), (3, 4), (5, 6)))
-                def test_x(x): pass
-            "});
+            @parametrize('x', ((1, 2), (3, 4), (5, 6)))
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(3));
     }
 
@@ -244,10 +244,10 @@ mod tests {
     #[test]
     fn dynamic_decorator_propagates_none() {
         let f = parse_function(indoc! {r"
-                @parametrize('a', [1, 2])
-                @parametrize('b', dynamic_values())
-                def test_x(a, b): pass
-            "});
+            @parametrize('a', [1, 2])
+            @parametrize('b', dynamic_values())
+            def test_x(a, b): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 }

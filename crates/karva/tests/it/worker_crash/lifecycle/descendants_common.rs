@@ -1,4 +1,3 @@
-use indoc::formatdoc;
 use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -140,10 +139,8 @@ fn run_karva_when_ready(
     while Instant::now() < deadline && !context.root().join(marker).exists() {
         if karva.try_wait().expect("poll Karva").is_some() {
             let output = karva.wait_with_output().expect("collect Karva output");
-            return Err(formatdoc!(
-                r"
-                    Karva exited before {marker}:
-                    {}",
+            return Err(format!(
+                "Karva exited before {marker}:\n{}",
                 snapshot_output(&output)
             ));
         }
@@ -165,10 +162,8 @@ fn run_karva_when_ready(
         let output = karva
             .wait_with_output()
             .expect("collect stalled Karva output");
-        return Err(formatdoc!(
-            r"
-                child did not become ready before the timeout test:
-                {}",
+        return Err(format!(
+            "child did not become ready before the timeout test:\n{}",
             snapshot_output(&output)
         ));
     }
@@ -200,10 +195,8 @@ fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Result<Output
             let output = karva
                 .wait_with_output()
                 .expect("collect stalled Karva output");
-            return Err(formatdoc!(
-                r"
-                    Karva stalled: {args:?}
-                    {}",
+            return Err(format!(
+                "Karva stalled: {args:?}\n{}",
                 snapshot_output(&output)
             ));
         }
@@ -212,14 +205,8 @@ fn collect_karva(mut karva: std::process::Child, args: &[&str]) -> Result<Output
 }
 
 fn snapshot_output(output: &Output) -> String {
-    formatdoc!(
-        r"
-            success: {}
-            exit_code: {}
-            ----- stdout -----
-            {}
-            ----- stderr -----
-            {}",
+    format!(
+        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
         output.status.success(),
         output
             .status

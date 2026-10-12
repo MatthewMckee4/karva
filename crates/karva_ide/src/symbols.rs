@@ -169,8 +169,9 @@ mod tests {
             symbols[0].range,
             range(
                 source,
-                r"@fixture
-def database(): pass"
+                indoc! {r"
+                    @fixture
+                    def database(): pass"}
             )
         );
         assert_eq!(symbols[0].selection_range, range(source, "database"));
@@ -180,8 +181,9 @@ def database(): pass"
             symbols[1].range,
             range(
                 source,
-                r#"@fixture(name="store")
-def provider(): pass"#
+                indoc! {r#"
+                    @fixture(name="store")
+                    def provider(): pass"#}
             )
         );
         assert_eq!(symbols[1].selection_range, range(source, "store"));

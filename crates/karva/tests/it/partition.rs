@@ -438,9 +438,7 @@ fn module_and_function_parametrize_cases_are_not_dropped(
     #[values(
         "pytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])",
         "karva_tag = karva.tags.parametrize('module_value', [1, 2, 3])",
-        indoc! {r"
-            if True:
-                pytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])"},
+        "if True:\n    pytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])",
         "from marks import pytestmark"
     )]
     module_mark: &str,

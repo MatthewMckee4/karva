@@ -13,10 +13,10 @@ use super::{TestServer, Workspace};
 fn prepares_and_renames_fixture_occurrences_across_files() {
     let workspace = Workspace::new();
     let provider_source = indoc! {r#"
-            from karva import fixture
-            @fixture(name="data\x62ase")
-            def provider(): pass
-        "#};
+        from karva import fixture
+        @fixture(name="data\x62ase")
+        def provider(): pass
+    "#};
     workspace.write("conftest.py", provider_source);
     workspace.write("tests/test_other.py", "def test_other(database): pass\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -277,9 +277,9 @@ fn renames_parameter_body_references(
     let uri = workspace.uri("test_example.py");
     let source = formatdoc!(
         r"
-        from karva import fixture
-        {declaration}(database):
-        {body}"
+            from karva import fixture
+            {declaration}(database):
+            {body}"
     );
     open(&mut server, uri.clone(), &source);
     let line = if declaration.starts_with('@') { 2 } else { 1 };

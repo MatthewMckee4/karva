@@ -971,9 +971,9 @@ mod tests {
         std::fs::write(
             dir_path.join("test.py"),
             indoc! {r"
-            def test_other():
-                pass
-        "},
+                def test_other():
+                    pass
+            "},
         )
         .expect("write");
 
@@ -1027,9 +1027,9 @@ mod tests {
         std::fs::write(
             dir_path.join("test.py"),
             indoc! {r"
-            def test_foo():
-                pass
-        "},
+                def test_foo():
+                    pass
+            "},
         )
         .expect("write");
 

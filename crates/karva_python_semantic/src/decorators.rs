@@ -483,14 +483,14 @@ mod tests {
     #[test]
     fn resolves_fixture_aliases_and_rejects_unrelated_attributes() {
         let statements = module(indoc! {r"
-                from karva import fixture as resource
+            from karva import fixture as resource
 
-                @resource
-                def first(): pass
+            @resource
+            def first(): pass
 
-                @other.fixture
-                def second(): pass
-            "});
+            @other.fixture
+            def second(): pass
+        "});
         let bindings =
             DecoratorBindings::before(&statements, function(&statements, 1).range.start());
         assert!(is_fixture_function_with_bindings(
@@ -508,16 +508,16 @@ mod tests {
     #[test]
     fn rebinding_shadows_imported_fixture() {
         let statements = module(indoc! {r"
-                from karva import fixture as resource
+            from karva import fixture as resource
 
-                @resource
-                def first(): pass
+            @resource
+            def first(): pass
 
-                resource = custom
+            resource = custom
 
-                @resource
-                def second(): pass
-            "});
+            @resource
+            def second(): pass
+        "});
         let bindings =
             DecoratorBindings::before(&statements, function(&statements, 1).range.start());
         assert!(is_fixture_function_with_bindings(
@@ -535,15 +535,15 @@ mod tests {
     #[test]
     fn resolves_pytest_namespace_aliases() {
         let statements = module(indoc! {r"
-                import pytest as pt
-                from pytest.mark import parametrize as cases
+            import pytest as pt
+            from pytest.mark import parametrize as cases
 
-                @pt.fixture
-                def first(): pass
+            @pt.fixture
+            def first(): pass
 
-                @cases('value', [1])
-                def test_example(value): pass
-            "});
+            @cases('value', [1])
+            def test_example(value): pass
+        "});
         let bindings =
             DecoratorBindings::before(&statements, function(&statements, 2).range.start());
         assert!(bindings.is_fixture(&function(&statements, 2).decorator_list[0].expression));
@@ -555,11 +555,11 @@ mod tests {
     #[test]
     fn dotted_import_without_alias_binds_the_root_module() {
         let statements = module(indoc! {r"
-                import karva.tags
+            import karva.tags
 
-                @karva.tags.parametrize('value', [1])
-                def test_example(value): pass
-            "});
+            @karva.tags.parametrize('value', [1])
+            def test_example(value): pass
+        "});
         let test = function(&statements, 1);
         let bindings = DecoratorBindings::before(&statements, test.range.start());
         assert!(bindings.is_parametrize(&test.decorator_list[0].expression));
@@ -568,26 +568,26 @@ mod tests {
     #[test]
     fn control_flow_rebinding_is_unknown_and_relative_imports_are_unrelated() {
         let statements = module(indoc! {r"
-                from karva import fixture as resource
+            from karva import fixture as resource
 
-                if condition:
-                    resource = custom
+            if condition:
+                resource = custom
 
-                @resource
-                def after_if(): pass
+            @resource
+            def after_if(): pass
 
-                try:
-                    resource = custom
-                except Exception:
-                    pass
+            try:
+                resource = custom
+            except Exception:
+                pass
 
-                @resource
-                def after_try(): pass
+            @resource
+            def after_try(): pass
 
-                from .karva import fixture as relative
-                @relative
-                def relative_fixture(): pass
-            "});
+            from .karva import fixture as relative
+            @relative
+            def relative_fixture(): pass
+        "});
         let after_if = function(&statements, 2);
         let bindings = DecoratorBindings::before(&statements, after_if.range.start());
         assert!(!is_fixture_function_with_bindings(after_if, &bindings));
@@ -605,20 +605,20 @@ mod tests {
     #[test]
     fn wildcard_and_named_rebindings_shadow_fixture_but_annotations_do_not() {
         let statements = module(indoc! {r"
-                from karva import fixture
+            from karva import fixture
 
-                fixture: object
-                @fixture
-                def annotated(): pass
+            fixture: object
+            @fixture
+            def annotated(): pass
 
-                (fixture := custom)
-                @fixture
-                def named(): pass
+            (fixture := custom)
+            @fixture
+            def named(): pass
 
-                from custom import *
-                @fixture
-                def wildcard(): pass
-            "});
+            from custom import *
+            @fixture
+            def wildcard(): pass
+        "});
         let annotated = function(&statements, 2);
         let bindings = DecoratorBindings::before(&statements, annotated.range.start());
         assert!(is_fixture_function_with_bindings(annotated, &bindings));
@@ -633,14 +633,14 @@ mod tests {
     #[test]
     fn match_captures_shadow_known_names() {
         let statements = module(indoc! {r"
-                from karva import fixture
+            from karva import fixture
 
-                match value:
-                    case fixture: pass
+            match value:
+                case fixture: pass
 
-                @fixture
-                def after_match(): pass
-            "});
+            @fixture
+            def after_match(): pass
+        "});
         let after_match = function(&statements, 2);
         let bindings = DecoratorBindings::before(&statements, after_match.range.start());
         assert!(!is_fixture_function_with_bindings(after_match, &bindings));
@@ -649,15 +649,15 @@ mod tests {
     #[test]
     fn framework_namespaces_do_not_cross_match() {
         let statements = module(indoc! {r"
-                import karva
-                import pytest
+            import karva
+            import pytest
 
-                @karva.tags.use_fixtures('db')
-                def karva_test(): pass
+            @karva.tags.use_fixtures('db')
+            def karva_test(): pass
 
-                @pytest.mark.use_fixtures('db')
-                def pytest_test(): pass
-            "});
+            @pytest.mark.use_fixtures('db')
+            def pytest_test(): pass
+        "});
         let karva_test = function(&statements, 2);
         let pytest_test = function(&statements, 3);
         let bindings = DecoratorBindings::before(&statements, karva_test.range.start());
