@@ -27,9 +27,9 @@ pub enum UnhandledExceptionKind {
 
 /// A captured exception, including its traceback until diagnostic rendering.
 pub struct UnhandledExceptionEvent {
-    pub(crate) kind: UnhandledExceptionKind,
+    pub(super) kind: UnhandledExceptionKind,
 
-    pub(crate) error: PyErr,
+    pub(super) error: PyErr,
 }
 
 #[derive(Default)]
@@ -139,7 +139,7 @@ pub struct UnhandledExceptionCapture {
 }
 
 impl UnhandledExceptionCapture {
-    pub(crate) fn start(py: Python<'_>) -> PyResult<Self> {
+    pub(super) fn start(py: Python<'_>) -> PyResult<Self> {
         let threading = py.import("threading")?;
         let sys = py.import("sys")?;
         let previous_thread_hook = threading.getattr("excepthook")?.unbind();
@@ -167,12 +167,12 @@ impl UnhandledExceptionCapture {
     }
 
     /// Begins attribution before fixture setup, without needing a resolved name.
-    pub(crate) fn begin_attempt(&self) {
+    pub(super) fn begin_attempt(&self) {
         self.hooks.get().state().attempt_events = Some(Vec::new());
     }
 
     /// Ends attribution atomically with taking all events for this attempt.
-    pub(crate) fn finish_attempt(&self) -> Vec<UnhandledExceptionEvent> {
+    pub(super) fn finish_attempt(&self) -> Vec<UnhandledExceptionEvent> {
         self.hooks
             .get()
             .state()
@@ -182,7 +182,7 @@ impl UnhandledExceptionCapture {
     }
 
     /// Restores both hooks, retaining captured events even if restoration fails.
-    pub(crate) fn finish(self, py: Python<'_>) -> (Vec<UnhandledExceptionEvent>, Vec<PyErr>) {
+    pub(super) fn finish(self, py: Python<'_>) -> (Vec<UnhandledExceptionEvent>, Vec<PyErr>) {
         let thread_result = self
             .threading
             .bind(py)

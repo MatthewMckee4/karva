@@ -1,10 +1,37 @@
 //! Exceptions escaping Python calls must survive lifecycle and report boundaries.
 
-use insta::{assert_snapshot, with_settings};
+use insta::internals::SettingsBindDropGuard;
+use insta::{Settings, assert_snapshot};
 use insta_cmd::assert_cmd_snapshot;
+use karva_static::ToolEnvVars;
 use rstest::rstest;
 
 use crate::common::TestContext;
+
+/// Python 3.14 moved unraisable object details into `err_msg` and clears `object`.
+/// Keep both contracts visible, normalizing only function addresses in that text.
+fn background_snapshots(case: &str) -> SettingsBindDropGuard {
+    let mut settings = Settings::clone_current();
+    let version = std::env::var(ToolEnvVars::PYTHON_VERSION).unwrap_or_else(|_| "3.13".to_string());
+    let modern_unraisable = version
+        .split('.')
+        .nth(1)
+        .and_then(|minor| minor.parse::<u32>().ok())
+        .is_some_and(|minor| minor >= 14);
+    let suffix = if modern_unraisable && !case.starts_with("thread") {
+        if case.is_empty() {
+            "py314".to_string()
+        } else {
+            format!("{case}_py314")
+        }
+    } else {
+        case.to_string()
+    };
+    settings.set_snapshot_suffix(suffix);
+    settings.add_filter(r"(function [^<>]+ at )0x[0-9a-fA-F]+", "$1[ADDRESS]");
+    settings.add_filter(r#"time="[0-9.]+""#, "time=\"[TIME]\"");
+    settings.bind_to_scope()
+}
 
 const HELPERS: &str = r#"
 import threading
@@ -54,9 +81,8 @@ def test_background(resource):
 "#
         ),
     );
-    with_settings!({snapshot_suffix => format!("{kind}_{phase}")}, {
-        assert_cmd_snapshot!(context.command_no_parallel());
-    });
+    let _snapshots = background_snapshots(&format!("{kind}_{phase}"));
+    assert_cmd_snapshot!(context.command_no_parallel());
 }
 
 #[test]
@@ -74,6 +100,7 @@ def test_background():
 "#
         ),
     );
+    let _snapshots = background_snapshots("");
     assert_cmd_snapshot!(context.command_no_parallel());
 }
 
@@ -115,9 +142,8 @@ def test_passes():
 "#
         ),
     );
-    with_settings!({snapshot_suffix => format!("{kind}_{phase}")}, {
-        assert_cmd_snapshot!(context.command_no_parallel());
-    });
+    let _snapshots = background_snapshots(&format!("{kind}_{phase}"));
+    assert_cmd_snapshot!(context.command_no_parallel());
 }
 
 #[test]
@@ -175,9 +201,8 @@ def test_background():
 "#
         ),
     );
-    with_settings!({snapshot_suffix => kind}, {
-        assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"));
-    });
+    let _snapshots = background_snapshots(kind);
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--retry=1"));
 }
 
 #[test]
@@ -208,6 +233,7 @@ def test_passes():
             ),
         ),
     ]);
+    let _snapshots = background_snapshots("");
     assert_cmd_snapshot!(
         context
             .command()
@@ -233,6 +259,7 @@ def test_expected_failure():
 "#
         ),
     );
+    let _snapshots = background_snapshots("");
     assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"));
 }
 
@@ -274,6 +301,7 @@ def test_callback():
     assert reference() is None
 "#,
     );
+    let _snapshots = background_snapshots("");
     assert_cmd_snapshot!(context.command_no_parallel());
 }
 
@@ -297,18 +325,14 @@ def test_background():
         "karva.toml",
         "[profile.default.junit]\npath = \"results.xml\"\n",
     );
-    with_settings!({snapshot_suffix => format}, {
-        assert_cmd_snapshot!(context.command_no_parallel().args([
-            "--status-level=none",
-            "--result-output=results.out",
-            &format!("--result-format={format}"),
-        ]));
-        assert_snapshot!("machine_report", context.read_file("results.out"));
-        // JUnit timings do not use the JSON normalization supplied by TestContext.
-        with_settings!({filters => vec![(r#"time="[0-9.]+""#, "time=\"[TIME]\"")]}, {
-            assert_snapshot!("junit_report", context.read_file("results.xml"));
-        });
-    });
+    let _snapshots = background_snapshots(format);
+    assert_cmd_snapshot!(context.command_no_parallel().args([
+        "--status-level=none",
+        "--result-output=results.out",
+        &format!("--result-format={format}"),
+    ]));
+    assert_snapshot!("machine_report", context.read_file("results.out"));
+    assert_snapshot!("junit_report", context.read_file("results.xml"));
 }
 
 #[test]
@@ -350,9 +374,12 @@ def test_background():
 "#
         ),
     );
-    with_settings!({snapshot_suffix => kind}, {
-        assert_cmd_snapshot!(context.command_no_parallel().args(["--retry=2", "--status-level=none"]));
-    });
+    let _snapshots = background_snapshots(kind);
+    assert_cmd_snapshot!(
+        context
+            .command_no_parallel()
+            .args(["--retry=2", "--status-level=none"])
+    );
 }
 
 #[test]
@@ -376,5 +403,6 @@ def test_background(resource):
 "#
         ),
     );
+    let _snapshots = background_snapshots("");
     assert_cmd_snapshot!(context.command_no_parallel());
 }

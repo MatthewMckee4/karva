@@ -1,0 +1,72 @@
+---
+source: crates/karva/tests/it/unhandled_exceptions.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--status-level=none"
+    - "--result-output=results.out"
+    - "--result-format=jsonl"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-159e26bc99a3fb2b-py3.15.0-e8731cbbba46541b
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+failures:
+
+test_background::test_background:
+
+error[unhandled-thread-exception]: Unhandled exception `RuntimeError` in thread `background`
+  --> test_background.py:28:5
+   |
+28 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Exception raised here
+ --> test_background.py:7:5
+  |
+7 |     raise RuntimeError("background failed")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: background failed
+
+error[unraisable-exception]: Unraisable exception `RuntimeError`
+  --> test_background.py:28:5
+   |
+28 | def test_background():
+   |     ^^^^^^^^^^^^^^^
+info: Exception ignored while calling deallocator <function BrokenCleanup.__del__ at [ADDRESS]>
+info: Object: `None`
+info: Exception raised here
+  --> test_background.py:12:9
+   |
+12 |         raise RuntimeError("cleanup failed")
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: cleanup failed
+
+diagnostics:
+
+error[unhandled-thread-exception]: Unhandled exception `RuntimeError` in thread `background`
+info: Exception raised here
+ --> test_background.py:7:5
+  |
+7 |     raise RuntimeError("background failed")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: background failed
+
+error[unraisable-exception]: Unraisable exception `RuntimeError`
+info: Exception ignored while calling deallocator <function BrokenCleanup.__del__ at [ADDRESS]>
+info: Object: `None`
+info: Exception raised here
+  --> test_background.py:12:9
+   |
+12 |         raise RuntimeError("cleanup failed")
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: cleanup failed
+
+────────────
+     Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+----- stderr -----

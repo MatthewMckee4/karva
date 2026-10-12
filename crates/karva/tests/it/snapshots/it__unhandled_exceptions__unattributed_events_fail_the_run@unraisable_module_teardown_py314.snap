@@ -1,0 +1,33 @@
+---
+source: crates/karva/tests/it/unhandled_exceptions.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-159e26bc99a3fb2b-py3.15.0-e8731cbbba46541b
+---
+success: false
+exit_code: 1
+----- stdout -----
+    Starting 1 test across 1 worker
+        PASS [TIME] test_background::test_passes
+
+diagnostics:
+
+error[unraisable-exception]: Unraisable exception `RuntimeError`
+info: Exception ignored while calling deallocator <function BrokenCleanup.__del__ at [ADDRESS]>
+info: Object: `None`
+info: Exception raised here
+  --> test_background.py:12:9
+   |
+12 |         raise RuntimeError("cleanup failed")
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+info: RuntimeError: cleanup failed
+
+────────────
+     Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+----- stderr -----
