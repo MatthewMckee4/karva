@@ -6,10 +6,10 @@ use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
-use crate::warnings::{WarningCapture, warning_capture_error};
 use crate::diagnostic::unhandled_exception_diagnostic;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_async_test_with_timeout, run_coroutine};
+use crate::warnings::{WarningCapture, warning_capture_error};
 
 use super::reporting::finish_output_capture;
 use super::{VariantRunner, VariantSettings};
@@ -93,6 +93,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             .package_runner
             .clean_up_test_attempt(self.py, test_finalizers);
         let teardown_failed = !finalizer_diagnostics.is_empty();
+        // Argument references can keep fixture values alive after cache cleanup.
+        // Include their destruction in teardown attribution and timing.
+        drop(function_arguments);
         let phases = PhaseDurations {
             setup: setup_duration,
             call: body.call_duration,
@@ -112,9 +115,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             self.input.test.definition(),
         );
 
-        // Argument references can keep fixture values alive after cache cleanup.
-        // Drop them while teardown still belongs to this attempt.
-        drop(function_arguments);
         if let Some(capture) = warning_capture
             && let Err(error) = capture.finish(
                 self.py,
