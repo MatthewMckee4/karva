@@ -357,7 +357,7 @@ mod tests {
         let analysis = index.analyze(path).expect("indexed source should analyze");
 
         assert!(index.parent_modules(path).is_empty());
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
         assert_eq!(analysis.fixture_model.visible().len(), 1);
     }
 
@@ -375,7 +375,7 @@ mod tests {
         assert!(Arc::ptr_eq(&first.module, &index.modules[path]));
         assert!(Arc::ptr_eq(&first.module, &second.module));
         assert!(Arc::ptr_eq(&first.fixture_model, &second.fixture_model));
-        assert!(!first.diagnostics.is_empty());
+        assert_ne!(first.diagnostics.as_slice(), []);
         first.diagnostics.clear();
         assert_eq!(
             index.analyze(path).expect("later cache hit").diagnostics,
@@ -451,8 +451,8 @@ mod tests {
         let original_analysis = original
             .analyze(path)
             .expect("original source should analyze");
-        assert!(original_analysis.diagnostics.is_empty());
-        assert!(original_analysis.module.test_function_defs.is_empty());
+        assert_eq!(original_analysis.diagnostics.as_slice(), []);
+        assert_eq!(original_analysis.module.test_function_defs.as_slice(), []);
 
         let mut changed_settings = settings();
         changed_settings.test_function_prefix = "spec".to_owned();
@@ -465,7 +465,7 @@ mod tests {
         let changed_settings_analysis = changed_settings_index
             .analyze(path)
             .expect("changed source should analyze");
-        assert!(changed_settings_analysis.diagnostics.is_empty());
+        assert_eq!(changed_settings_analysis.diagnostics.as_slice(), []);
         assert_eq!(changed_settings_analysis.module.test_function_defs.len(), 1);
 
         let changed_provider = document(

@@ -237,7 +237,7 @@ fn searches_independent_roots_and_preserves_duplicate_names(
     let value = serde_json::to_value(response).expect("symbols serialize");
     let symbols = value.as_array().expect("symbol list");
     if query == "absent" {
-        assert!(symbols.is_empty());
+        assert_eq!(symbols.as_slice(), [] as [serde_json::Value; 0]);
     } else {
         assert_eq!(symbols.len(), 2);
         assert!(symbols.iter().all(|symbol| symbol["name"] == "test_same"));

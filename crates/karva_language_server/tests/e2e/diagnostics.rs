@@ -225,7 +225,7 @@ fn reports_configuration_parse_cause_and_recovers(
     });
     let recovered = server.receive_notification::<PublishDiagnosticsNotification>();
     assert_eq!(recovered.uri, uri);
-    assert!(recovered.diagnostics.is_empty());
+    assert_eq!(recovered.diagnostics.as_slice(), []);
 }
 
 fn capabilities() -> ClientCapabilities {
@@ -287,6 +287,6 @@ fn literal_configuration_values_preserve_missing_fixture_diagnostics(
         }
         "#);
     } else {
-        assert!(diagnostics.diagnostics.is_empty());
+        assert_eq!(diagnostics.diagnostics.as_slice(), []);
     }
 }

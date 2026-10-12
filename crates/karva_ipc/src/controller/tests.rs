@@ -422,7 +422,7 @@ fn completion_closes_connection_after_terminal_event() {
     let worker = thread::spawn(move || {
         let (client, selection) =
             WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
-        assert!(selection.test_paths.is_empty());
+        assert_eq!(selection.test_paths.as_slice(), []);
         client.complete().expect("complete worker");
     });
 
@@ -518,7 +518,7 @@ fn truncated_terminal_event_is_a_worker_disconnect() {
         BufReader::new(stream.try_clone().expect("clone stream"))
             .read_line(&mut selection)
             .expect("read selection");
-        assert!(!selection.is_empty());
+        assert_ne!(selection, "");
 
         stream.write_all(br#"{"C""#).expect("write truncated event");
         stream.flush().expect("flush truncated event");
@@ -583,7 +583,7 @@ fn buffered_event_reaches_controller_before_worker_completes() {
     let worker = thread::spawn(move || {
         let (client, selection) =
             WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
-        assert!(selection.test_paths.is_empty());
+        assert_eq!(selection.test_paths.as_slice(), []);
         client
             .send_event(WorkerEvent::TestSlow)
             .expect("send event");

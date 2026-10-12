@@ -906,7 +906,7 @@ mod tests {
             fixture_definition(&analysis, offset).expect("unsaved fixture should be visible");
 
         assert_eq!(database.path, conftest);
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
     }
 
     #[test]
@@ -1293,12 +1293,13 @@ mod tests {
         let first = prepare(Arc::clone(&cache), Fixture::settings())
             .build(&RequestCancellationToken::default())
             .expect("first generation");
-        assert!(
+        assert_eq!(
             first
                 .module(&path)
                 .expect("module")
                 .test_function_defs
-                .is_empty()
+                .as_slice(),
+            []
         );
         let syntax = Arc::clone(&cache.parsed.lock().expect("parsed state").modules[&path]);
         let mut settings = Fixture::settings();

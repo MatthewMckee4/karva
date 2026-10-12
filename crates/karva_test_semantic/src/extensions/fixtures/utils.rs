@@ -68,13 +68,13 @@ mod tests {
     fn test_missing_arguments_from_different_function() {
         let err = "test_func() missing 1 required positional argument: 'a'";
         let missing_args = missing_arguments_from_error("test_funca", err);
-        assert!(missing_args.is_empty());
+        assert_eq!(missing_args, [] as [String; 0]);
     }
 
     #[test]
     fn test_missing_arguments_from_unrecognized_message() {
         let err = "test_func() missing required keyword-only argument: 'a'";
         let missing_args = missing_arguments_from_error("test_func", err);
-        assert!(missing_args.is_empty());
+        assert_eq!(missing_args, [] as [String; 0]);
     }
 }

@@ -451,7 +451,7 @@ mod tests {
             function_names(&module.test_function_defs),
             ["test_first", "test_second"]
         );
-        assert!(module.fixture_function_defs.is_empty());
+        assert_eq!(module.fixture_function_defs.as_slice(), []);
     }
 
     #[test]
@@ -537,8 +537,8 @@ async def test_metadata(a: int, b: int) -> None:
         let full_test = &full.test_function_defs[0];
         let scheduled_test = &scheduled.test_function_defs[0];
 
-        assert!(scheduled_test.body.is_empty());
-        assert!(!full_test.body.is_empty());
+        assert_eq!(scheduled_test.body.as_slice(), []);
+        assert_ne!(full_test.body.as_slice(), []);
         assert_eq!(scheduled_test.name, full_test.name);
         assert_eq!(scheduled_test.range, full_test.range);
         assert_eq!(scheduled_test.is_async, full_test.is_async);

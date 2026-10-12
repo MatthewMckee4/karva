@@ -95,7 +95,7 @@ fn crash_recovery_does_not_repeat_completed_dynamic_functions() {
     );
 
     assert!(pending.is_empty());
-    assert!(pending.resume_skip().is_empty());
+    assert_eq!(pending.resume_skip(), []);
 }
 
 #[test]

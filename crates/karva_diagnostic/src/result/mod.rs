@@ -307,7 +307,7 @@ mod tests {
         aggregated.register_rendered_test_case(cache_key, result, false);
 
         assert_eq!(aggregated.stats.passed(), 1);
-        assert!(aggregated.test_cases.is_empty());
+        assert_eq!(aggregated.test_cases.as_slice(), []);
     }
 
     #[test]

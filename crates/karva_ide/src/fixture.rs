@@ -1518,7 +1518,7 @@ mod tests {
 
     #[test]
     fn resolves_local_and_builtin_fixtures() {
-        assert!(
+        assert_eq!(
             analyze(indoc! {r"
                 from karva import fixture
 
@@ -1528,7 +1528,8 @@ mod tests {
                 def test_example(database, tmp_path): pass
             "})
             .diagnostics
-            .is_empty()
+            .as_slice(),
+            []
         );
     }
 
@@ -1620,7 +1621,7 @@ mod tests {
 
     #[test]
     fn parametrized_arguments_are_not_fixtures() {
-        assert!(
+        assert_eq!(
             analyze(indoc! {r#"
                 import pytest
 
@@ -1628,7 +1629,8 @@ mod tests {
                 def test_example(value, tmp_path): pass
             "#})
             .diagnostics
-            .is_empty()
+            .as_slice(),
+            []
         );
     }
 
@@ -1653,7 +1655,7 @@ mod tests {
         )
         .expect("source should analyze");
 
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
     }
 
     #[test]
@@ -1680,7 +1682,7 @@ mod tests {
         );
         let analysis = analyze_sources(current, &[parent], &settings());
 
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
         let dependency = &analysis.fixture_model.local()[0].dependencies[0].resolution;
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/conftest.py")
@@ -1720,7 +1722,7 @@ mod tests {
         );
         let analysis = analyze_sources(current, &[root, nearest], &settings());
 
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
         let dependency = &analysis.fixture_model.local()[0].dependencies[0].resolution;
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/pkg/conftest.py")
@@ -1850,8 +1852,8 @@ mod tests {
             def test_example(database): pass
         "});
 
-        assert!(analysis.fixture_model.local().is_empty());
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.fixture_model.local(), []);
+        assert_eq!(analysis.diagnostics.as_slice(), []);
     }
 
     #[test]
@@ -1866,7 +1868,7 @@ mod tests {
         "});
 
         assert_eq!(analysis.fixture_model.local()[0].name, "database");
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
     }
 
     #[test]
@@ -1884,7 +1886,7 @@ mod tests {
 
     #[test]
     fn karva_parametrized_arguments_are_not_fixtures() {
-        assert!(
+        assert_eq!(
             analyze(indoc! {r#"
                 import karva
 
@@ -1892,20 +1894,22 @@ mod tests {
                 def test_example(value, tmp_path): pass
             "#})
             .diagnostics
-            .is_empty()
+            .as_slice(),
+            []
         );
     }
 
     #[test]
     fn unknown_parametrize_decorator_suppresses_false_missing_error() {
-        assert!(
+        assert_eq!(
             diagnostic_codes(indoc! {r#"
                 import custom
 
                 @custom.parametrize("value", [1])
                 def test_example(value): pass
             "#})
-            .is_empty()
+            .as_slice(),
+            []
         );
     }
 

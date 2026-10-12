@@ -138,18 +138,20 @@ fn range_limits_hints_and_empty_ranges_return_no_hints() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].position, Position::new(1, 21));
     let boundary = Range::new(Position::new(1, 0), Position::new(1, 21));
-    assert!(
+    assert_eq!(
         server
             .request::<InlayHintRequest>(params(uri.clone(), boundary))
             .expect("hints response")
-            .is_empty()
+            .as_slice(),
+        []
     );
     let empty = Range::new(Position::new(1, 21), Position::new(1, 21));
-    assert!(
+    assert_eq!(
         server
             .request::<InlayHintRequest>(params(uri, empty))
             .expect("hints response")
-            .is_empty()
+            .as_slice(),
+        []
     );
 }
 
@@ -290,7 +292,10 @@ fn rejects_hints_from_stale_document_versions() {
         .expect_err("stale hint request should fail");
     server.receive_notification::<PublishDiagnosticsNotification>();
     assert_eq!(error.code, lsp_server::ErrorCode::ContentModified as i32);
-    assert!(hints(&mut server, uri, "def test_example(): pass\n").is_empty());
+    assert_eq!(
+        hints(&mut server, uri, "def test_example(): pass\n").as_slice(),
+        []
+    );
 }
 
 #[test]

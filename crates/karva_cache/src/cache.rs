@@ -331,7 +331,7 @@ mod tests {
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
 
         let read = read_last_failed(&cache_dir).unwrap();
-        assert!(read.is_empty());
+        assert_eq!(read.as_slice(), []);
     }
 
     #[test]
@@ -381,7 +381,7 @@ mod tests {
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf())?;
         let artifacts = RunArtifacts::new(&cache_dir, &RunHash::current_time());
 
-        assert!(artifacts.coverage_files()?.is_empty());
+        assert_eq!(artifacts.coverage_files()?, [] as [Utf8PathBuf; 0]);
         Ok(())
     }
 
@@ -422,7 +422,7 @@ mod tests {
         let cache_dir = Utf8PathBuf::try_from(tmp.path().to_path_buf()).unwrap();
 
         write_last_failed(&cache_dir, &[]).unwrap();
-        assert!(read_last_failed(&cache_dir).unwrap().is_empty());
+        assert_eq!(read_last_failed(&cache_dir).unwrap().as_slice(), []);
     }
 
     #[test]
@@ -453,7 +453,7 @@ mod tests {
         let cache_dir = Utf8PathBuf::try_from(tmp.path().join("nope")).unwrap();
 
         let result = prune_cache(&cache_dir).unwrap();
-        assert!(result.removed.is_empty());
+        assert_eq!(result.removed, [] as [String; 0]);
     }
 
     #[test]

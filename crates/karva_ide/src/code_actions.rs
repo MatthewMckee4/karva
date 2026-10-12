@@ -274,7 +274,7 @@ mod tests {
         let mut edited = format!("{source}{}", actions[0].new_text);
         edited.insert_str(actions[0].import_offset.to_usize(), &actions[0].import_text);
         let analysis = analyze(&edited);
-        assert!(analysis.diagnostics.is_empty());
+        assert_eq!(analysis.diagnostics.as_slice(), []);
         assert!(
             source_symbols(&analysis)
                 .iter()
@@ -289,10 +289,11 @@ mod tests {
         assert_eq!(actions.len(), 1);
         let inserted = &actions[0].new_text;
         assert!(!inserted.replace("\r\n", "").contains('\n'));
-        assert!(
+        assert_eq!(
             analyze(&format!("{source}{inserted}"))
                 .diagnostics
-                .is_empty()
+                .as_slice(),
+            []
         );
     }
 
@@ -318,7 +319,7 @@ mod tests {
         assert!(edited.starts_with(
             "#!/usr/bin/env python3\n\"\"\"Project tests.\"\"\"\nfrom __future__ import annotations\nfrom karva import fixture\nimport karva\n"
         ));
-        assert!(analyze(&edited).diagnostics.is_empty());
+        assert_eq!(analyze(&edited).diagnostics.as_slice(), []);
     }
 
     #[test]

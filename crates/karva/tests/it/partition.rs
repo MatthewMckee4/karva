@@ -299,8 +299,8 @@ def test_value(value):
         .map(str::parse::<usize>)
         .collect::<Result<Vec<_>, _>>()
         .expect("worker 1 case indices");
-    assert!(!first_worker.is_empty());
-    assert!(!second_worker.is_empty());
+    assert_ne!(first_worker, [] as [usize; 0]);
+    assert_ne!(second_worker, [] as [usize; 0]);
     first_worker.extend(second_worker);
     first_worker.sort_unstable();
     assert_eq!(first_worker, (0..10).collect::<Vec<_>>());
