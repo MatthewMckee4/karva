@@ -55,8 +55,24 @@ def test_recorded():
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--status-level=none", "--result-output=results.json",])
-    );
+            .args(["--status-level=none", "--result-output=results.json",]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    warnings:
+      test.py:5: DeprecationWarning: import warning (1 emitted)
+      test.py:9: ResourceWarning: setup warning (1 emitted)
+      test.py:11: RuntimeWarning: teardown warning (1 emitted)
+      test.py:15: UserWarning: session setup (1 emitted)
+      test.py:17: UserWarning: session teardown (1 emitted)
+      test.py:20: DeprecationWarning: call warning (1 emitted)
+
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
     let warnings = report["warnings"].as_array().expect("warnings");
@@ -76,12 +92,49 @@ def test_recorded():
     }));
     let xml = context.read_file("results.xml");
     let duration = regex::Regex::new(r#"time="[0-9.]+""#).expect("duration regex");
-    assert_snapshot!(duration.replace_all(&xml, "time=\"[TIME]\""));
+    assert_snapshot!(duration.replace_all(&xml, "time=\"[TIME]\""), @r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <testsuites name="karva-tests" tests="3" failures="0" skipped="0" errors="0" time="[TIME]">
+      <testsuite name="test" tests="3" failures="0" skipped="0" errors="0" time="[TIME]">
+        <testcase classname="test" name="test_consumed(recwarn)" time="[TIME]"/>
+        <testcase classname="test" name="test_recorded" time="[TIME]"/>
+        <testcase classname="test" name="test_warn(value=1)" time="[TIME]">
+          <system-err>test.py:20: DeprecationWarning: call warning (attempt 1)
+    test.py:9: ResourceWarning: setup warning (attempt 1)
+    test.py:11: RuntimeWarning: teardown warning (attempt 1)
+    </system-err>
+        </testcase>
+      </testsuite>
+      <testsuite name="warnings" tests="0" failures="0" skipped="0" errors="0" time="[TIME]">
+          <system-err>test.py:5: DeprecationWarning: import warning
+    test.py:15: UserWarning: session setup
+    test.py:17: UserWarning: session teardown
+    </system-err>
+      </testsuite>
+    </testsuites>
+    "#);
     assert_cmd_snapshot!(context.command_no_parallel().args([
         "--status-level=none",
         "--result-output=results.jsonl",
         "--result-format=jsonl",
-    ]));
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    warnings:
+      test.py:5: DeprecationWarning: import warning (1 emitted)
+      test.py:9: ResourceWarning: setup warning (1 emitted)
+      test.py:11: RuntimeWarning: teardown warning (1 emitted)
+      test.py:15: UserWarning: session setup (1 emitted)
+      test.py:17: UserWarning: session teardown (1 emitted)
+      test.py:20: DeprecationWarning: call warning (1 emitted)
+
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     let jsonl = context.read_file("results.jsonl");
     let warnings = jsonl
         .lines()
@@ -108,10 +161,26 @@ fn repeated_warnings_are_counted_across_workers(#[values(1, 2)] workers: usize) 
     }
     context.write_file("test.py", &source);
     insta::allow_duplicates! {
-        assert_cmd_snapshot!("repeated_warning_budget_exceeded", context.command().args([
+        assert_cmd_snapshot!(context.command().args([
             &format!("--num-workers={workers}"), "--status-level=none", "--max-warnings=9",
             "--result-output=results.json",
-        ]));
+        ]), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+
+        diagnostics:
+
+        error[max-warnings]: max-warnings budget exceeded: limit 9, emitted 10
+
+        warnings:
+          test.py:4: DeprecationWarning: repeated (10 emitted)
+
+        ────────────
+             Summary [TIME] 10 tests run: 10 passed, 0 skipped
+
+        ----- stderr -----
+        ");
     }
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
@@ -119,9 +188,21 @@ fn repeated_warnings_are_counted_across_workers(#[values(1, 2)] workers: usize) 
     assert_eq!(report["status"], "failed");
     assert_eq!(report["stats"]["passed"], 10);
     insta::allow_duplicates! {
-        assert_cmd_snapshot!("repeated_warning_budget_met", context.command().args([
+        assert_cmd_snapshot!(context.command().args([
             &format!("--num-workers={workers}"), "--status-level=none", "--max-warnings=10",
-        ]));
+        ]), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+
+        warnings:
+          test.py:4: DeprecationWarning: repeated (10 emitted)
+
+        ────────────
+             Summary [TIME] 10 tests run: 10 passed, 0 skipped
+
+        ----- stderr -----
+        ");
     }
 }
 
@@ -158,19 +239,63 @@ warning-filters = ["error", "ignore:visible:DeprecationWarning"]
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--profile=ci", "--status-level=none"])
-    );
+            .args(["--profile=ci", "--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     assert_cmd_snapshot!(context.command_no_parallel().args([
         "--profile=ci",
         "--status-level=none",
         "-W",
         "default",
-    ]));
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    warnings:
+      test.py:15: DeprecationWarning: visible (1 emitted)
+
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     assert_cmd_snapshot!(context.command_no_parallel().args([
         "--status-level=none",
         "-W",
         "error",
-    ]));
+    ]), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test::test_visible:
+
+    error[test-failure]: Test `test_visible` failed
+      --> test.py:14:5
+       |
+    14 | def test_visible():
+       |     ^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:15:5
+       |
+    15 |     warnings.warn("visible", DeprecationWarning)
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: visible
+
+    ────────────
+         Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[test]
@@ -193,7 +318,21 @@ def test_case(value):
         "--retry=1",
         "--status-level=none",
         "--result-output=results.json",
-    ]));
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    warnings:
+      test.py:8: DeprecationWarning: case (4 emitted)
+
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed (2 flaky), 0 skipped
+       FLAKY 2/2 [TIME] test::test_case(value=1)
+       FLAKY 2/2 [TIME] test::test_case(value=2)
+
+    ----- stderr -----
+    ");
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
     let warnings = report["warnings"].as_array().expect("warnings");
@@ -228,9 +367,104 @@ fn rejects_invalid_project_filters(#[case] filter: &str) {
         "karva.toml",
         &format!("[profile.default.test]\nwarning-filters = [{filter:?}]\n"),
     );
-    insta::with_settings!({snapshot_suffix => filter.replace(':', "_").replace('[', "regex")}, {
-        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"));
-    });
+    let mut command = context.command_no_parallel();
+    command.arg("--status-level=none");
+    match filter {
+        "bad-action" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[warning-policy]: ValueError: invalid warning filter 'bad-action': unknown action 'bad-action'
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "ignore::UnknownWarning" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[warning-policy]: ValueError: invalid warning filter 'ignore::UnknownWarning': unknown category 'UnknownWarning'
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "ignore::ValueError" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[warning-policy]: ValueError: invalid warning filter 'ignore::ValueError': 'ValueError' is not a warning category
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "ignore:[" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[warning-policy]: ValueError: invalid warning filter 'ignore:[': unterminated character set at position 0
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "ignore::::-1" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[warning-policy]: ValueError: invalid warning filter 'ignore::::-1': line must be non-negative
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "ignore::::x" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[warning-policy]: ValueError: invalid warning filter 'ignore::::x': invalid literal for int() with base 10: 'x'
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        _ => {
+            assert_eq!(filter, "ignore::::1:extra");
+            assert_cmd_snapshot!(command, @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+            diagnostics:
+
+            error[warning-policy]: ValueError: invalid warning filter 'ignore::::1:extra': too many fields
+
+            ────────────
+                 Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+            ----- stderr -----
+            ");
+        }
+    }
 }
 
 #[rstest]
@@ -249,9 +483,21 @@ def test_never_runs():
 "#
         ),
     );
-    insta::with_settings!({snapshot_suffix => decorator}, {
-        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"));
-    });
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test`: invalid warning filter 'ignore::UnknownWarning': unknown category 'UnknownWarning'
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
 }
 
 #[test]
@@ -287,7 +533,20 @@ def test_modify(value):
         "imported.py",
         "import warnings\nwarnings.warn('imported during test')\n",
     );
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]));
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    warnings:
+      imported.py:2: UserWarning: imported during test (1 emitted)
+      test.py:22: UserWarning: registry warning (2 emitted)
+
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[test]
@@ -315,8 +574,23 @@ def test_filters():
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--status-level=none", "--max-warnings=1"])
-    );
+            .args(["--status-level=none", "--max-warnings=1"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[max-warnings]: max-warnings budget exceeded: limit 1, emitted 2
+
+    warnings:
+      custom.py:42: CustomWarning: allowed (2 emitted)
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[rstest]
@@ -334,9 +608,73 @@ fn strict_policy_applies_to_import_setup_and_teardown(
     };
     let context =
         TestContext::with_file("test.py", &format!("import warnings\nimport karva\n{body}"));
-    insta::with_settings!({snapshot_suffix => phase}, {
-        assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none", "-W", "error"]));
-    });
+    let mut command = context.command_no_parallel();
+    command.args(["--status-level=none", "-W", "error"]);
+    match phase {
+        "import" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+        diagnostics:
+
+        error[failed-to-import-module]: Failed to import python module `test`: strict
+
+        ────────────
+             Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+        ----- stderr -----
+        "),
+        "setup" => assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+
+        failures:
+
+        test::test_strict (requires fixture `value`):
+
+        error[fixture-failure]: Fixture `value` failed
+         --> test.py:4:5
+          |
+        4 | def value():
+          |     ^^^^^
+        info: Fixture failed here
+         --> test.py:5:5
+          |
+        5 |     warnings.warn('strict', ResourceWarning)
+          |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        info: strict
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        "),
+        _ => {
+            assert_eq!(phase, "teardown");
+            assert_cmd_snapshot!(command, @"
+            success: false
+            exit_code: 1
+            ----- stdout -----
+
+            failures:
+
+            test::test_strict(value=1):
+
+            error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `value`
+             --> test.py:4:5
+              |
+            4 | def value():
+              |     ^^^^^
+            info: Failed to reset fixture: strict
+
+            ────────────
+                 Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+            ----- stderr -----
+            ");
+        }
+    }
 }
 
 #[test]
@@ -359,7 +697,34 @@ def test_parameters(value):
         "--status-level=none",
         "-W",
         "error"
-    ]));
+    ]), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test::test_parameters(value=2):
+
+    error[test-failure]: Test `test_parameters` failed
+     --> test.py:8:5
+      |
+    8 | def test_parameters(value):
+      |     ^^^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `value`: `2`
+    info: Test failed here
+      --> test.py:10:5
+       |
+    10 |     warnings.warn("parameter warning")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: parameter warning
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }
 
 #[rstest]
@@ -393,7 +758,15 @@ def test_karva():
         ),
     );
     insta::allow_duplicates! {
-        assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]));
+        assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
     }
 }
 
@@ -404,10 +777,37 @@ fn cli_overrides_profile_warning_budget() {
         "import warnings\ndef test_warn():\n    warnings.warn('budget warning')\n",
     );
     context.write_file("karva.toml", "[profile.default.test]\nmax-warnings = 0\n");
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"));
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    diagnostics:
+
+    error[max-warnings]: max-warnings budget exceeded: limit 0, emitted 1
+
+    warnings:
+      test.py:3: UserWarning: budget warning (1 emitted)
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     assert_cmd_snapshot!(
         context
             .command_no_parallel()
-            .args(["--status-level=none", "--max-warnings=1"])
-    );
+            .args(["--status-level=none", "--max-warnings=1"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    warnings:
+      test.py:3: UserWarning: budget warning (1 emitted)
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
