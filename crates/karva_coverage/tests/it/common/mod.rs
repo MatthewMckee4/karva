@@ -3,6 +3,7 @@
 //! are serialized for cargo test; nextest isolates each test in its own process.
 
 use std::ffi::CString;
+use std::fmt::Write;
 use std::sync::Mutex;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -161,6 +162,59 @@ impl TestContext {
 pub fn execute(py: Python<'_>, globals: &Bound<'_, PyDict>, calls: &str) -> PyResult<()> {
     let calls = CString::new(source_text(calls)).expect("test body without NUL");
     py.run(&calls, Some(globals), Some(globals))
+}
+
+/// Keeps every report field visible while rendering line lists and branch pairs on one row.
+pub fn report_snapshot(report: &Value) -> String {
+    fn inline(value: &Value) -> String {
+        if let Value::Array(values) = value {
+            let values = values.iter().map(inline).collect::<Vec<_>>().join(", ");
+            format!("[{values}]")
+        } else {
+            value.to_string()
+        }
+    }
+
+    fn table(value: &Value, heading: &str, output: &mut String) {
+        let Value::Object(fields) = value else {
+            output.push_str(&inline(value));
+            return;
+        };
+        if fields.is_empty() {
+            writeln!(output, "{heading}: {{}}\n").expect("snapshot table");
+            return;
+        }
+        if fields.values().any(|value| !value.is_object()) {
+            let width = fields
+                .iter()
+                .filter(|(_, value)| !value.is_object())
+                .map(|(field, _)| field.len())
+                .chain(std::iter::once("field".len()))
+                .max()
+                .expect("table header");
+            writeln!(output, "{heading}\n{:width$} | value", "field").expect("snapshot header");
+            for (field, value) in fields {
+                if !value.is_object() {
+                    writeln!(output, "{field:width$} | {}", inline(value)).expect("snapshot row");
+                }
+            }
+            output.push('\n');
+        }
+        for (field, value) in fields {
+            if value.is_object() {
+                let heading = if heading.is_empty() {
+                    field.clone()
+                } else {
+                    format!("{heading}.{field}")
+                };
+                table(value, &heading, output);
+            }
+        }
+    }
+
+    let mut output = String::new();
+    table(report, "", &mut output);
+    output
 }
 
 /// Removes the Rust fixture margin and its opening blank line; Python starts on line one.
