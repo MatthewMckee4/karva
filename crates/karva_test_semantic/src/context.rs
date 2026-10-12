@@ -137,7 +137,7 @@ impl RunState {
 
 impl Context<'_> {
     /// Forwards a warning without converting it into a failure diagnostic.
-    pub(crate) fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
+    pub(super) fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
         self.reporter.report_warning(warning);
     }
 
