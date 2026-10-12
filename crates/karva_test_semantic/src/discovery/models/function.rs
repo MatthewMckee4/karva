@@ -48,9 +48,9 @@ impl DiscoveredTestFunction {
         );
 
         let mut tags = Tags::from_py_any(py, &py_function, Some(&stmt_function_def))?;
-        tags.extend(module_tags);
+        tags.inherit(module_tags);
         if let Ok(marks) = py_module.getattr("pytestmark") {
-            tags.extend(
+            tags.inherit(
                 &Tags::from_pytest_marks(py, &marks.unbind(), Some(&py_module.dict()))?
                     .unwrap_or_default(),
             );

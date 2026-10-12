@@ -11,6 +11,8 @@ use karva_metadata::filter::EvalContext;
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
+use crate::warnings::{WarningCapture, warning_capture_error};
+
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::test_iterator::TestVariant;
 use crate::utils::{set_attempt_env, set_test_name_env};
@@ -161,6 +163,25 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         params: HashMap<String, Arc<Py<PyAny>>>,
         output_capture: Option<PythonOutputCapture>,
     ) -> PreparedTestAttempt {
+        let filters = self
+            .package_runner
+            .context
+            .settings()
+            .test()
+            .warning_filters
+            .iter()
+            .chain(self.input.tags.warning_filters().iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        let warning_capture = match WarningCapture::start(self.py, &filters) {
+            Ok(capture) => Some(capture),
+            Err(error) => {
+                self.package_runner
+                    .state
+                    .add_run_diagnostic(warning_capture_error(&error));
+                None
+            }
+        };
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
@@ -174,6 +195,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             fixtures,
             setup_duration: setup_start.elapsed(),
             output_capture,
+            warning_capture,
         }
     }
 

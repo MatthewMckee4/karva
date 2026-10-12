@@ -817,7 +817,8 @@ fn test_mock_env() {
 
             def test_setenv() -> None:
                 monkeypatch = MockEnv()
-                monkeypatch.setenv("XYZ123", 2)  # type: ignore[arg-type]
+                with karva.warns(UserWarning, match="Value of environment variable XYZ123 type should be str"):
+                    monkeypatch.setenv("XYZ123", 2)  # type: ignore[arg-type]
                 import os
 
                 assert os.environ["XYZ123"] == "2"

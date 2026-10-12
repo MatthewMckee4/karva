@@ -221,6 +221,7 @@ pub fn run_parallel_tests(
     for test in interrupted_tests {
         results.register_interrupted_test(&test.name, test.duration);
     }
+    results.enforce_warning_budget(project.settings().test().max_warnings);
     let results = results.into_sorted();
 
     if !config.no_cache {

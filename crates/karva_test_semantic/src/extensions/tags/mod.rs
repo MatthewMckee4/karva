@@ -126,6 +126,10 @@ pub enum Tag {
     ExpectFail(ExpectFailTag),
     Timeout(TimeoutTag),
     FailSlow(FailSlowTag),
+
+    /// Ordered Python warning filters validated during collection.
+    FilterWarnings(Vec<String>),
+
     Custom(CustomTag),
 }
 
@@ -135,6 +139,7 @@ impl Tag {
     const SKIP_NAME: &'static str = "skip";
     const EXPECT_FAIL_NAME: &'static str = "expect_fail";
     const TIMEOUT_NAME: &'static str = "timeout";
+    const FILTER_WARNINGS_NAME: &'static str = "filter_warnings";
     const FAIL_SLOW_NAME: &'static str = "fail_slow";
 
     const PYTEST_PARAMETRIZE_NAME: &'static str = "parametrize";
@@ -151,6 +156,7 @@ impl Tag {
         Self::EXPECT_FAIL_NAME,
         Self::TIMEOUT_NAME,
         Self::FAIL_SLOW_NAME,
+        Self::FILTER_WARNINGS_NAME,
     ];
 
     const PYTEST_BUILTIN_NAMES: &'static [&'static str] = &[
@@ -160,6 +166,7 @@ impl Tag {
         Self::PYTEST_TIMEOUT_NAME,
         Self::PYTEST_USE_FIXTURES_NAME,
         Self::PYTEST_EXPECT_FAIL_NAME,
+        "filterwarnings",
     ];
 
     fn name(&self) -> &str {
@@ -170,6 +177,7 @@ impl Tag {
             Self::ExpectFail(_) => Self::EXPECT_FAIL_NAME,
             Self::Timeout(_) => Self::TIMEOUT_NAME,
             Self::FailSlow(_) => Self::FAIL_SLOW_NAME,
+            Self::FilterWarnings(_) => Self::FILTER_WARNINGS_NAME,
             Self::Custom(custom) => custom.name(),
         }
     }
@@ -210,6 +218,15 @@ impl Tag {
                 .map(|tag| tag.map(Self::ExpectFail)),
             Self::PYTEST_TIMEOUT_NAME => {
                 TimeoutTag::try_from_pytest_mark(py_mark).map(|tag| tag.map(Self::Timeout))
+            }
+            "filterwarnings" => {
+                let filters = py_mark.getattr("args")?.extract::<Vec<String>>()?;
+                py_mark
+                    .py()
+                    .import("karva._warnings")?
+                    .getattr("validate_filters")?
+                    .call1((filters.clone(),))?;
+                Ok(Some(Self::FilterWarnings(filters)))
             }
             // Any other marker is treated as a custom marker
             _ => Ok(CustomTag::try_from_pytest_mark(py_mark).map(Self::Custom)),
@@ -328,6 +345,7 @@ impl Tag {
             )),
             PyTag::Timeout { seconds } => Self::Timeout(TimeoutTag::new(*seconds)),
             PyTag::FailSlow { seconds } => Self::FailSlow(FailSlowTag::new(*seconds)),
+            PyTag::FilterWarnings { filters } => Self::FilterWarnings(filters.clone()),
             PyTag::Custom {
                 tag_name,
                 tag_args,
@@ -361,6 +379,8 @@ pub struct RuntimeTags {
     expect_fail: Option<ExpectFailTag>,
     timeout: Option<TimeoutTag>,
     fail_slow: Option<FailSlowTag>,
+    /// Local filters in application order; later rules have higher precedence.
+    warning_filters: Vec<String>,
     names: Vec<String>,
 }
 
@@ -388,6 +408,9 @@ impl RuntimeTags {
                 Tag::ExpectFail(expect_fail) if self.expect_fail.is_none() => {
                     self.expect_fail = Some(expect_fail.clone());
                 }
+                Tag::FilterWarnings(filters) => {
+                    self.warning_filters.extend(filters.iter().cloned());
+                }
                 Tag::Timeout(timeout) if self.timeout.is_none() => self.timeout = Some(*timeout),
                 Tag::FailSlow(fail_slow) if self.fail_slow.is_none() => {
                     self.fail_slow = Some(*fail_slow);
@@ -414,6 +437,10 @@ impl RuntimeTags {
 
     pub(crate) fn timeout_tag(&self) -> Option<TimeoutTag> {
         self.timeout
+    }
+
+    pub(crate) fn warning_filters(&self) -> &[String] {
+        &self.warning_filters
     }
 
     pub(crate) fn fail_slow_tag(&self) -> Option<FailSlowTag> {
@@ -489,6 +516,26 @@ impl Tags {
 
     pub(crate) fn extend(&mut self, other: &Self) {
         self.inner.extend(other.inner.iter().cloned());
+    }
+
+    /// Inherits module policy without overriding function-local warning filters.
+    /// Other tags retain their existing first-match priority.
+    pub(crate) fn inherit(&mut self, other: &Self) {
+        self.inner.splice(
+            0..0,
+            other
+                .inner
+                .iter()
+                .filter(|tag| matches!(tag, Tag::FilterWarnings(_)))
+                .cloned(),
+        );
+        self.inner.extend(
+            other
+                .inner
+                .iter()
+                .filter(|tag| !matches!(tag, Tag::FilterWarnings(_)))
+                .cloned(),
+        );
     }
 
     /// Removes parametrization from test kinds that pytest does not parametrize.

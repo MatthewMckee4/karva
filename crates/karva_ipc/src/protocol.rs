@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 /// One runtime state change sent from a worker to the controller.
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
+    /// Unconsumed warning from collection, execution, or fixture cleanup.
+    Warning(karva_diagnostic::TestWarning),
+
     /// Test exceeded the configured slow-test threshold.
     TestSlow,
 

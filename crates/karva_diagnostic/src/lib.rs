@@ -12,7 +12,7 @@ pub use result::{
     AggregatedResults, CapturedTestOutput, DisplayFlakyTests, FixtureFailure, FixtureUsage,
     FlakyTest, IndividualTestResultKind, RenderedDiagnostic, RunResults, TestCaseAttempt,
     TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome,
-    TestExecutionResult, TestResultStats,
+    TestExecutionResult, TestResultStats, TestWarning,
 };
 
 pub use diagnostic::{

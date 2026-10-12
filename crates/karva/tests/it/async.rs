@@ -750,6 +750,15 @@ async def test_existing_handler():
         ",
     );
 
+    // These compatibility tests intentionally exercise deprecated loop policies.
+    context.write_file(
+        "karva.toml",
+        r#"
+[profile.default.test]
+warning-filters = ["ignore:'asyncio\\.(DefaultEventLoopPolicy|set_event_loop_policy)' is deprecated:DeprecationWarning"]
+"#,
+    );
+
     assert_cmd_snapshot!(context.command(), @"
     success: false
     exit_code: 1
@@ -810,6 +819,15 @@ async def test_existing_task_factory():
     await task
     assert created
         ",
+    );
+
+    // These compatibility tests intentionally exercise deprecated loop policies.
+    context.write_file(
+        "karva.toml",
+        r#"
+[profile.default.test]
+warning-filters = ["ignore:'asyncio\\.(DefaultEventLoopPolicy|set_event_loop_policy)' is deprecated:DeprecationWarning"]
+"#,
     );
 
     assert_cmd_snapshot!(context.command(), @"

@@ -17,6 +17,16 @@ use crate::verbosity::Verbosity;
 /// User-facing test selection, execution, and reporting arguments.
 #[derive(Debug, Parser, Clone, Default)]
 pub struct SubTestCommand {
+    /// Python warning filter; repeat to add ordered rules. Later rules win.
+    /// CLI rules replace configured warning-filters. Test-local tags win over CLI.
+    #[arg(short = 'W', long = "warning-filter", action = clap::ArgAction::Append)]
+    pub warning_filters: Vec<String>,
+
+    /// Fail the completed run if emitted warnings exceed this count.
+    /// Includes collection, fixture cleanup, and every retry across all workers.
+    #[arg(long, value_name = "COUNT")]
+    pub max_warnings: Option<usize>,
+
     /// List of files or directories to test.
     #[clap(
         help = "List of files, directories, or test functions to test [default: tests if it exists, otherwise the project root]",
@@ -497,6 +507,8 @@ impl SubTestCommand {
                 final_status_level: self.final_status_level,
             }),
             test: Some(TestOptions {
+                warning_filters: (!self.warning_filters.is_empty()).then_some(self.warning_filters),
+                max_warnings: self.max_warnings,
                 test_function_prefix: self.test_prefix,
                 strict_tags: None,
                 fail_fast,

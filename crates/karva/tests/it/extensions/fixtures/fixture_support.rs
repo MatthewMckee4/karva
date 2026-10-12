@@ -254,6 +254,10 @@ def test_deprecated_call_context_still_matches():
     success: true
     exit_code: 0
     ----- stdout -----
+
+    warnings:
+      test.py:56: RuntimeWarning: wrong (1 emitted)
+
     ────────────
          Summary [TIME] 5 tests run: 5 passed, 0 skipped
 
@@ -309,6 +313,10 @@ def test_warns_restores_filters_when_block_raises():
     success: true
     exit_code: 0
     ----- stdout -----
+
+    warnings:
+      test.py:17: UserWarning: present (1 emitted)
+
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
@@ -377,9 +385,8 @@ def test_warning_message_mismatch():
     info: Regex pattern 'expected message' did not match any emitted warning.
            Emitted warnings: [UserWarning('different message')].
 
-    captured stderr:
-    <temp_dir>/test.py:14: UserWarning: different message
-      warnings.warn("different message", UserWarning)
+    warnings:
+      test.py:14: UserWarning: different message (1 emitted)
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
@@ -428,7 +435,7 @@ def test_callable_wrong_warning():
     );
     let _settings_scope = settings.bind_to_scope();
 
-    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -462,15 +469,14 @@ def test_callable_wrong_warning():
     info: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.
            Emitted warnings: [RuntimeWarning('wrong')].
 
-    captured stderr:
-    <temp_dir>/test.py:12: RuntimeWarning: wrong
-      karva.warns(UserWarning, lambda: warnings.warn("wrong", RuntimeWarning))
+    warnings:
+      test.py:12: RuntimeWarning: wrong (1 emitted)
 
     ────────────
          Summary [TIME] 2 tests run: 0 passed, 2 failed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 // =============================================================================

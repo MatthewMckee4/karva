@@ -10,6 +10,11 @@ use crate::result::{IndividualTestResultKind, TestExecutionResult};
 
 /// A reporter for test execution time logging to the user.
 pub trait Reporter: Send + Sync {
+    /// Reports one unconsumed Python warning, independent of test outcome.
+    fn report_warning(&self, warning: crate::TestWarning) {
+        let _ = warning;
+    }
+
     /// Report the completion of a non-retried test.
     fn report_test_case_result(
         &self,

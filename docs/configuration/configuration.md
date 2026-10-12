@@ -1059,6 +1059,35 @@ When both [`fail_fast`](#fail-fast) and `max-fail` are set,
 
 ---
 
+#### `max-warnings`
+
+Maximum warnings emitted across all workers, including collection,
+fixture cleanup, and retries. Exceeding it fails the completed run.
+Ignored, exception-converted, and explicitly recorded warnings do not
+count. Omit to disable the budget; zero requires a warning-free run.
+
+**Default value**: `unlimited`
+
+**Type**: `non-negative integer`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    max-warnings = 0
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    max-warnings = 0
+    ```
+
+---
+
 #### `no-tests`
 
 Configures behavior when no tests are found to run.
@@ -1385,6 +1414,35 @@ This is often slower, so it is not recommended for most projects.
     ```toml
     [tool.karva.profile.default.test]
     try-import-fixtures = true
+    ```
+
+---
+
+#### `warning-filters`
+
+Ordered Python `action:message:category:module:line` warning filters.
+Message and module fields are regular expressions. Later entries win.
+Named profiles replace the default profile's list; CLI filters replace
+the selected profile's list. Test-local filters take highest precedence.
+
+**Default value**: `["default"]`
+
+**Type**: `list[string]`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    warning-filters = ["error", "ignore:legacy API:DeprecationWarning"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    warning-filters = ["error", "ignore:legacy API:DeprecationWarning"]
     ```
 
 ---

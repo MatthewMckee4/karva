@@ -14,6 +14,7 @@ mod py_attach;
 mod python;
 mod runner;
 mod utils;
+mod warnings;
 
 pub(crate) use context::{Context, RunState};
 pub use karva_coverage::CoverageConfig;
@@ -79,6 +80,13 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
     let mut state = RunState::default();
 
     attach_with_output(settings.terminal().show_python_output, |py| {
+        let warnings = match warnings::WarningCapture::start(py, &settings.test().warning_filters) {
+            Ok(capture) => capture,
+            Err(error) => {
+                state.add_run_diagnostic(warnings::warning_capture_error(&error));
+                return state.into_result();
+            }
+        };
         if let Err(error) = assertions::install(py, context.cwd()) {
             tracing::warn!("failed to install assertion instrumentation: {error}");
         }
@@ -117,6 +125,9 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
             tracing::error!("Failed to save coverage data: {err}");
         }
 
+        if let Err(error) = warnings.finish(py, &context, None, None) {
+            state.add_run_diagnostic(warnings::warning_capture_error(&error));
+        }
         state.into_result()
     })
 }

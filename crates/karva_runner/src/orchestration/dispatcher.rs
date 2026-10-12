@@ -151,6 +151,7 @@ impl EventDispatcher {
                 anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
             }
             match *message.event {
+                WorkerEvent::Warning(warning) => self.results.warnings.push(warning),
                 WorkerEvent::TestSlow => self.results.register_slow_test(),
                 WorkerEvent::TestTimedOut {
                     cache_key,

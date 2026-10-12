@@ -6,6 +6,7 @@ use camino::Utf8Path;
 use karva_diagnostic::AggregatedResults;
 use karva_diagnostic::{
     FixtureFailure, RenderedDiagnostic, TestCaseAttempt, TestCaseOutcome, TestCaseResult,
+    TestWarning,
 };
 use karva_metadata::JunitSettings;
 use karva_project::path::absolute;
@@ -63,11 +64,35 @@ fn build_junit_xml(settings: &JunitSettings, results: &AggregatedResults) -> Res
         results.stats.errors() + run_errors,
     )?;
 
+    let mut warnings_by_test: BTreeMap<&str, Vec<&TestWarning>> = BTreeMap::new();
+    for warning in &results.warnings {
+        if let Some(test) = warning.test.as_deref() {
+            warnings_by_test.entry(test).or_default().push(warning);
+        }
+    }
     for (module_name, cases) in suites {
-        write_suite(&mut xml, settings, module_name, cases)?;
+        write_suite(&mut xml, settings, module_name, cases, &warnings_by_test)?;
     }
     write_run_diagnostics_suite(&mut xml, settings, &results.run_diagnostics)?;
 
+    let run_warnings = results
+        .warnings
+        .iter()
+        .filter(|warning| warning.test.is_none())
+        .collect::<Vec<_>>();
+    if !run_warnings.is_empty() {
+        xml.push_str("  <testsuite name=\"warnings\" tests=\"0\" failures=\"0\" skipped=\"0\" errors=\"0\" time=\"0\">\n");
+        let mut text = String::new();
+        for warning in run_warnings {
+            writeln!(
+                text,
+                "{}:{}: {}: {}",
+                warning.filename, warning.lineno, warning.category, warning.message
+            )?;
+        }
+        write_captured_stream(&mut xml, "system-err", &text)?;
+        xml.push_str("  </testsuite>\n");
+    }
     xml.push_str("</testsuites>\n");
     Ok(xml)
 }
@@ -77,6 +102,7 @@ fn write_suite(
     settings: &JunitSettings,
     module_name: &str,
     cases: Vec<&TestCaseResult>,
+    warnings: &BTreeMap<&str, Vec<&TestWarning>>,
 ) -> Result<()> {
     let tests = cases.len();
     let failures = cases
@@ -107,14 +133,24 @@ fn write_suite(
     )?;
 
     for case in cases {
-        write_case(xml, settings, case)?;
+        write_case(
+            xml,
+            settings,
+            case,
+            warnings.get(case.full_name()).map_or(&[], Vec::as_slice),
+        )?;
     }
 
     xml.push_str("  </testsuite>\n");
     Ok(())
 }
 
-fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult) -> Result<()> {
+fn write_case(
+    xml: &mut String,
+    settings: &JunitSettings,
+    case: &TestCaseResult,
+    warnings: &[&TestWarning],
+) -> Result<()> {
     let time = junit_case_duration(case).as_secs_f64();
     let output = case.captured_output();
     let include_output = match case.outcome() {
@@ -129,8 +165,10 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
     let has_output = include_output
         && output.is_some_and(|output| !output.stdout().is_empty() || !output.stderr().is_empty());
     let has_reruns = case.attempts().len() > 1;
-    let is_self_closing =
-        matches!(case.outcome(), TestCaseOutcome::Passed) && !has_output && !has_reruns;
+    let is_self_closing = matches!(case.outcome(), TestCaseOutcome::Passed)
+        && !has_output
+        && !has_reruns
+        && warnings.is_empty();
 
     write!(
         xml,
@@ -201,9 +239,32 @@ fn write_case(xml: &mut String, settings: &JunitSettings, case: &TestCaseResult)
 
     if has_output && let Some(output) = output {
         write_captured_stream(xml, "system-out", output.stdout())?;
-        write_captured_stream(xml, "system-err", output.stderr())?;
+        if warnings.is_empty() {
+            write_captured_stream(xml, "system-err", output.stderr())?;
+        }
     }
 
+    if !warnings.is_empty() {
+        let mut text = String::new();
+        if has_output && let Some(output) = output {
+            text.push_str(output.stderr());
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+        }
+        for warning in warnings {
+            writeln!(
+                text,
+                "{}:{}: {}: {} (attempt {})",
+                warning.filename,
+                warning.lineno,
+                warning.category,
+                warning.message,
+                warning.attempt.unwrap_or(1)
+            )?;
+        }
+        write_captured_stream(xml, "system-err", &text)?;
+    }
     xml.push_str("    </testcase>\n");
     Ok(())
 }

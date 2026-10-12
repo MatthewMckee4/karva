@@ -383,6 +383,34 @@ impl TerminalOptions {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 /// Controls test selection, retries, timeouts, and failure policies.
 pub struct TestOptions {
+    /// Ordered Python `action:message:category:module:line` warning filters.
+    /// Message and module fields are regular expressions. Later entries win.
+    /// Named profiles replace the default profile's list; CLI filters replace
+    /// the selected profile's list. Test-local filters take highest precedence.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = r#"["default"]"#,
+        value_type = "list[string]",
+        example = r#"
+        warning-filters = ["error", "ignore:legacy API:DeprecationWarning"]
+    "#
+    )]
+    pub warning_filters: Option<Vec<String>>,
+
+    /// Maximum warnings emitted across all workers, including collection,
+    /// fixture cleanup, and retries. Exceeding it fails the completed run.
+    /// Ignored, exception-converted, and explicitly recorded warnings do not
+    /// count. Omit to disable the budget; zero requires a warning-free run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = "unlimited",
+        value_type = "non-negative integer",
+        example = r#"
+        max-warnings = 0
+    "#
+    )]
+    pub max_warnings: Option<usize>,
+
     /// The prefix to use for test functions.
     ///
     /// Defaults to `test`.
@@ -657,6 +685,11 @@ impl TestOptions {
             .unwrap_or_default();
 
         TestSettings {
+            warning_filters: self
+                .warning_filters
+                .clone()
+                .unwrap_or_else(|| vec!["default".to_string()]),
+            max_warnings: self.max_warnings,
             test_function_prefix: self
                 .test_function_prefix
                 .clone()

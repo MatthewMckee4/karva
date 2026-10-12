@@ -73,6 +73,10 @@ impl WorkerReporter {
 }
 
 impl Reporter for WorkerReporter {
+    fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
+        self.send(WorkerEvent::Warning(warning));
+    }
+
     fn report_test_case_result(
         &self,
         test_name: &QualifiedTestName,

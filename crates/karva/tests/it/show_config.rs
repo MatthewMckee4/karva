@@ -21,6 +21,7 @@ fn show_config_default_profile() {
     final-status-level = "pass"
 
     [test]
+    warning-filters = ["default"]
     test-function-prefix = "test"
     strict-tags = false
     try-import-fixtures = false
