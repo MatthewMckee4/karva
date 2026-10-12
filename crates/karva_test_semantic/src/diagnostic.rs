@@ -9,6 +9,7 @@ use karva_diagnostic::{
 };
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
+use pyo3::types::{PyAnyMethods, PyTypeMethods};
 use pyo3::{PyErr, Python, exceptions::PyAssertionError};
 use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::{OneIndexed, SourceFile};
@@ -26,6 +27,7 @@ use crate::runner::{
     FixtureArguments, FixtureCallError, FixtureChainEntry, FixtureResolutionEntry,
     FixtureResolutionError,
 };
+use crate::unhandled_exceptions::{UnhandledExceptionEvent, UnhandledExceptionKind};
 use crate::utils::truncate_string;
 
 #[derive(Clone, Copy)]
@@ -58,6 +60,111 @@ impl<'a> FailedFunctionDefinition<'a> {
             parameters: definition.parameters(),
         }
     }
+}
+
+declare_diagnostic_type! {
+    /// ## Unhandled thread exception
+    ///
+    /// Raised when a background thread exits because of an unhandled exception.
+    pub static UNHANDLED_THREAD_EXCEPTION = {
+        summary: "A thread raised an unhandled exception",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Unraisable exception
+    ///
+    /// Raised when Python reports a failure through `sys.unraisablehook`.
+    pub static UNRAISABLE_EXCEPTION = {
+        summary: "Python could not raise an exception normally",
+        severity: Severity::Error,
+    }
+}
+
+declare_diagnostic_type! {
+    /// ## Exception hook failure
+    ///
+    /// Hook installation and restoration failures invalidate exception capture.
+    pub static EXCEPTION_HOOK_FAILURE = {
+        summary: "Could not install or restore Python exception hooks",
+        severity: Severity::Error,
+    }
+}
+
+/// Fails the run when worker-wide exception capture cannot be maintained.
+pub fn exception_hook_diagnostic(action: &str, reason: &str) -> Diagnostic {
+    EXCEPTION_HOOK_FAILURE.diagnostic(format!(
+        "Failed to {action} Python exception hooks: {reason}"
+    ))
+}
+
+/// Renders a retained hook event, optionally attributing it to an active test.
+pub fn unhandled_exception_diagnostic(
+    py: Python<'_>,
+    event: &UnhandledExceptionEvent,
+    test: Option<&TestDefinition>,
+    verbose: bool,
+) -> Diagnostic {
+    let exception_type = event
+        .error
+        .get_type(py)
+        .name()
+        .map_or_else(|_| "Python exception".to_string(), |name| name.to_string());
+    let mut diagnostic = match &event.kind {
+        UnhandledExceptionKind::Thread { name } => UNHANDLED_THREAD_EXCEPTION.diagnostic(format!(
+            "Unhandled exception `{exception_type}` in thread `{}`",
+            truncate_string(name)
+        )),
+        UnhandledExceptionKind::Unraisable { .. } => {
+            UNRAISABLE_EXCEPTION.diagnostic(format!("Unraisable exception `{exception_type}`"))
+        }
+    };
+    if let Some(test) = test {
+        annotate_test(&mut diagnostic, test);
+    }
+    if let UnhandledExceptionKind::Unraisable { context, object } = &event.kind {
+        if let Some(context) = context {
+            diagnostic.info(indent_continuation_lines(context));
+        }
+        diagnostic.info(format!("Object: `{}`", truncate_string(object)));
+    }
+    let traceback = match test {
+        Some(test) => Traceback::from_error_with_source(py, &event.error, test.source_file()),
+        None => Traceback::from_error(py, &event.error),
+    };
+    if let Some(Traceback { frames }) = traceback {
+        for (index, frame) in frames.iter().enumerate() {
+            if !verbose && index + 1 != frames.len() {
+                continue;
+            }
+            let message = if index + 1 == frames.len() {
+                "Exception raised here".to_string()
+            } else {
+                format!("Called `{}` here", frames[index + 1].function_name)
+            };
+            if let Some(source) = &frame.source {
+                let mut sub = SubDiagnostic::new(Severity::Info, message);
+                sub.annotate(Annotation::primary(
+                    Span::from(source.source_file.clone()).with_range(source.location),
+                ));
+                diagnostic.sub(sub);
+            } else {
+                diagnostic.info(format!(
+                    "{message}: {}:{}",
+                    frame.file_path, frame.line_number
+                ));
+            }
+        }
+    }
+    let message = event.error.value(py).str().map_or_else(
+        |_| "<exception message unavailable>".to_string(),
+        |message| message.to_string(),
+    );
+    diagnostic.info(indent_continuation_lines(&format!(
+        "{exception_type}: {message}"
+    )));
+    diagnostic
 }
 
 declare_diagnostic_type! {

@@ -123,3 +123,26 @@ async def test_handled_background_failure():
     with karva.raises(RuntimeError):
         await task
 ```
+
+## Background threads and unraisable exceptions
+
+Karva reports exceptions that escape a background thread through
+`threading.excepthook`, and exceptions that Python cannot propagate normally
+through `sys.unraisablehook`, such as failures in `__del__` or weak-reference
+callbacks.
+
+Events during a test's fixture setup, call, or function-scoped teardown become
+errors on that test. Events outside an active attempt, including imports and
+scope-level fixture setup or teardown, become run diagnostics. Every captured
+event makes the run fail;
+retries, skips, and expected-failure tags cannot hide it. Multiple events are
+retained in terminal output and JSON, JSONL, and JUnit reports.
+
+Exceptions caught inside a thread remain handled. `SystemExit` in a thread is
+ignored, following Python's normal behavior. Join background threads before
+returning from a test so failures are attributed to that test while it is
+active.
+
+The hooks are installed before discovery and restored when worker execution
+finishes. Unraisable-object diagnostics show callable or type names without
+calling user-defined `__repr__` methods.

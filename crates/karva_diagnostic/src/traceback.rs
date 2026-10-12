@@ -48,6 +48,11 @@ struct TracebackLocation {
 }
 
 impl Traceback {
+    /// Extracts exception frames without a known source snapshot, as for worker diagnostics.
+    pub fn from_error(py: Python<'_>, error: &PyErr) -> Option<Self> {
+        Self::from_error_with_fallback(py, error, None)
+    }
+
     /// Extracts frames using the known source snapshot and loading each external path once.
     /// Source snapshots and failed reads are shared only within this traceback.
     pub fn from_error_with_source(

@@ -6,10 +6,10 @@ use karva_coverage::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 
-use crate::warnings::{WarningCapture, warning_capture_error};
-
+use crate::diagnostic::unhandled_exception_diagnostic;
 use crate::extensions::functions::snapshot::set_snapshot_context;
 use crate::utils::{run_async_test_with_timeout, run_coroutine};
+use crate::warnings::{WarningCapture, warning_capture_error};
 
 use super::reporting::finish_output_capture;
 use super::{VariantRunner, VariantSettings};
@@ -93,6 +93,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             .package_runner
             .clean_up_test_attempt(self.py, test_finalizers);
         let teardown_failed = !finalizer_diagnostics.is_empty();
+        // Argument references can keep fixture values alive after cache cleanup.
+        // Include their destruction in teardown attribution and timing.
+        drop(function_arguments);
         let phases = PhaseDurations {
             setup: setup_duration,
             call: body.call_duration,
@@ -111,7 +114,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             settings.retry.fail_slow_budget,
             self.input.test.definition(),
         );
-        let retryable = body.retryable || teardown_failed || (budget_exceeded && !skipped);
 
         if let Some(capture) = warning_capture
             && let Err(error) = capture.finish(
@@ -126,6 +128,22 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 .add_run_diagnostic(warning_capture_error(&error));
         }
         let captured_output = finish_output_capture(self.py, output_capture);
+        let events = self.package_runner.exception_capture.finish_attempt();
+        // A retry must not hide an unhandled exception behind a later pass.
+        let retryable = events.is_empty()
+            && (body.retryable || teardown_failed || (budget_exceeded && !skipped));
+        let diagnostics = events
+            .iter()
+            .map(|event| {
+                unhandled_exception_diagnostic(
+                    self.py,
+                    event,
+                    Some(self.input.test.definition()),
+                    self.package_runner.context.is_verbose(),
+                )
+            })
+            .collect();
+        let outcome = attach_related_diagnostics(outcome, diagnostics);
 
         AttemptResult {
             lifecycle: TestLifecycleAttempt {

@@ -16,6 +16,7 @@ use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionErro
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::{CompiledTestPlan, PendingTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
+use crate::unhandled_exceptions::UnhandledExceptionCapture;
 use crate::{Context, RunState};
 
 mod failure;
@@ -93,6 +94,8 @@ pub struct PackageRunner<'context, 'settings> {
     finalizer_cache: FinalizerCache,
     /// Active coverage session for this worker, when coverage is enabled.
     coverage: Option<&'context CoverageSession>,
+    /// Worker-wide capture whose attempt attribution follows this runner.
+    exception_capture: &'context UnhandledExceptionCapture,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: u32,
     /// Module whose scoped fixtures are currently being prepared or executed.
@@ -109,6 +112,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         context: &'context Context<'settings>,
         state: &'context mut RunState,
         coverage: Option<&'context CoverageSession>,
+        exception_capture: &'context UnhandledExceptionCapture,
     ) -> Self {
         Self {
             context,
@@ -116,6 +120,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             fixture_cache: FixtureCache::default(),
             finalizer_cache: FinalizerCache::default(),
             coverage,
+            exception_capture,
             failed_count: 0,
             active_module: None,
             stdin_capture: None,
