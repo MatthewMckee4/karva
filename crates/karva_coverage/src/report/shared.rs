@@ -720,7 +720,7 @@ mod tests {
         assert_eq!(row.branch_miss, 0);
         assert_eq!(row.branch_partial, 0);
         assert_eq!(row.branch_executed, vec![BranchArc { from: 1, to: 2 }]);
-        assert!(row.branch_missing.is_empty());
+        assert_eq!(row.branch_missing, [] as [BranchArc; 0]);
     }
 
     #[test]

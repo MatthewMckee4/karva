@@ -469,7 +469,7 @@ def f(x):
         return 0
 ";
 
-        assert!(arcs(source).is_empty());
+        assert_eq!(arcs(source), [] as [(i32, i32); 0]);
     }
 
     #[test]
@@ -550,6 +550,6 @@ if TYPE_CHECKING:
         value = 2
 ";
 
-        assert!(arcs(source).is_empty());
+        assert_eq!(arcs(source), [] as [(i32, i32); 0]);
     }
 }

@@ -288,12 +288,12 @@ mod tests {
             BranchArc { from: 5, to: 6 },
         ];
         assert_eq!(line_arcs(&arcs, 3), &arcs[1..4]);
-        assert!(line_arcs(&arcs, 4).is_empty());
+        assert_eq!(line_arcs(&arcs, 4), []);
     }
 
     #[test]
     fn empty_arcs_have_no_line_annotations() {
-        assert!(line_arcs(&[], 1).is_empty());
+        assert_eq!(line_arcs(&[], 1), []);
     }
 
     #[test]
