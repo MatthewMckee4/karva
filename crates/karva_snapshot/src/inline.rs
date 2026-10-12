@@ -410,6 +410,8 @@ pub(super) fn apply_inline_snapshot_update(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     #[test]
@@ -470,7 +472,10 @@ mod tests {
 
     #[test]
     fn generate_literal_multi_line() {
-        insta::assert_snapshot!(generate_inline_literal("line 1\nline 2\n", 4), @r#"
+        insta::assert_snapshot!(generate_inline_literal(indoc! {r"
+            line 1
+            line 2
+        "}, 4), @r#"
         """\
                 line 1
                 line 2
@@ -480,7 +485,9 @@ mod tests {
 
     #[test]
     fn generate_literal_multi_line_no_trailing_newline() {
-        insta::assert_snapshot!(generate_inline_literal("line 1\nline 2", 4), @r#"
+        insta::assert_snapshot!(generate_inline_literal(indoc! {r"
+            line 1
+            line 2"}, 4), @r#"
         """\
                 line 1
                 line 2
@@ -533,7 +540,10 @@ mod tests {
 
     #[test]
     fn find_inline_line_2() {
-        let source = "import karva\n    karva.assert_snapshot('hello', inline=\"\")\n";
+        let source = indoc! {r#"
+            import karva
+                karva.assert_snapshot('hello', inline="")
+        "#};
         let loc = find_inline_argument(source, 2, None).expect("should find");
         insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }
@@ -580,13 +590,13 @@ mod tests {
 
     #[test]
     fn find_inline_skips_wrong_function() {
-        let source = "\
-def test_wrong():
-    karva.assert_snapshot('wrong', inline=\"wrong_value\")
+        let source = indoc! {r#"
+            def test_wrong():
+                karva.assert_snapshot('wrong', inline="wrong_value")
 
-def test_right():
-    karva.assert_snapshot('right', inline=\"\")
-";
+            def test_right():
+                karva.assert_snapshot('right', inline="")
+        "#};
         let loc =
             find_inline_argument(source, 1, Some("test_right")).expect("should find test_right");
         insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
@@ -594,40 +604,44 @@ def test_right():
 
     #[test]
     fn find_inline_no_function_name_returns_first() {
-        let source = "\
-def test_wrong():
-    karva.assert_snapshot('wrong', inline=\"wrong_value\")
+        let source = indoc! {r#"
+            def test_wrong():
+                karva.assert_snapshot('wrong', inline="wrong_value")
 
-def test_right():
-    karva.assert_snapshot('right', inline=\"\")
-";
+            def test_right():
+                karva.assert_snapshot('right', inline="")
+        "#};
         let loc = find_inline_argument(source, 1, None).expect("should find first");
         insta::assert_snapshot!(&source[loc.start..loc.end], @r#""wrong_value""#);
     }
 
     #[test]
     fn containing_function_name_simple() {
-        let source = "def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
+        let source = indoc! {r#"
+            def test_hello():
+                karva.assert_snapshot('hello', inline="")"#};
         let name = containing_function_name(source, source.len());
         insta::assert_snapshot!(name.unwrap(), @"test_hello");
     }
 
     #[test]
     fn containing_function_name_async() {
-        let source = "async def test_hello():\n    karva.assert_snapshot('hello', inline=\"\")";
+        let source = indoc! {r#"
+            async def test_hello():
+                karva.assert_snapshot('hello', inline="")"#};
         let name = containing_function_name(source, source.len());
         insta::assert_snapshot!(name.unwrap(), @"test_hello");
     }
 
     #[test]
     fn containing_function_name_skips_inner_def() {
-        let source = "\
-def test_outer():
-    class Custom:
-        def __repr__(self) -> str:
-            return \"CustomRepr\"
+        let source = indoc! {r#"
+            def test_outer():
+                class Custom:
+                    def __repr__(self) -> str:
+                        return "CustomRepr"
 
-    karva.assert_snapshot(Custom(), inline=\"\")";
+                karva.assert_snapshot(Custom(), inline="")"#};
         let call_pos = source.find("karva.assert_snapshot").expect("call found");
         let name = containing_function_name(source, call_pos);
         insta::assert_snapshot!(name.unwrap(), @"test_outer");
@@ -635,14 +649,14 @@ def test_outer():
 
     #[test]
     fn find_inline_with_inner_class_def() {
-        let source = "\
-def test_custom():
-    class Custom:
-        def __repr__(self) -> str:
-            return \"CustomRepr\"
+        let source = indoc! {r#"
+            def test_custom():
+                class Custom:
+                    def __repr__(self) -> str:
+                        return "CustomRepr"
 
-    karva.assert_snapshot(Custom(), inline=\"\")
-";
+                karva.assert_snapshot(Custom(), inline="")
+        "#};
         let loc = find_inline_argument(source, 1, Some("test_custom")).expect("should find");
         insta::assert_snapshot!(&source[loc.start..loc.end], @r#""""#);
     }

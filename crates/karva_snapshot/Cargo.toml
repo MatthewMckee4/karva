@@ -23,6 +23,7 @@ tempfile = { workspace = true }
 terminal_size = { workspace = true }
 
 [dev-dependencies]
+indoc = { workspace = true }
 insta = { workspace = true, features = ["filters"] }
 
 [lints]

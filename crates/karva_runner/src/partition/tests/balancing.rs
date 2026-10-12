@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use indoc::indoc;
+
 use karva_python_semantic::TestCacheKey;
 
 use super::super::{Partition, TestOrdering, partition_collected_tests, scheduled_test_count};
@@ -41,10 +43,10 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
 
 #[test]
 fn literal_parametrize_cases_split_across_workers() {
-    let (_temp_dir, _test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])
+        def test_value(value): pass
+    "});
 
     let partitions = partition_collected_tests(
         &package,
@@ -78,10 +80,10 @@ fn literal_parametrize_cases_split_across_workers() {
 
 #[test]
 fn failed_first_places_cached_parametrize_case_first() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', [0, 1, 2])\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', [0, 1, 2])
+        def test_value(value): pass
+    "});
     let failed = HashSet::from([TestCacheKey::function_name("test_sample::test_value[1]")]);
 
     let partitions = partition_collected_tests(
@@ -107,10 +109,10 @@ fn failed_first_places_cached_parametrize_case_first() {
 
 #[test]
 fn dynamic_parametrize_cases_remain_one_unit() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', range(6))\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', range(6))
+        def test_value(value): pass
+    "});
 
     let partitions = partition_collected_tests(
         &package,
@@ -135,10 +137,10 @@ fn dynamic_parametrize_cases_remain_one_unit() {
 
 #[test]
 fn last_failed_case_selects_opaque_dynamic_parameter_function() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', range(6))\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', range(6))
+        def test_value(value): pass
+    "});
     let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_value[2]")]);
 
     let partitions = partition_collected_tests(
@@ -163,10 +165,10 @@ fn last_failed_case_selects_opaque_dynamic_parameter_function() {
 
 #[test]
 fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', [1])\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', [1])
+        def test_value(value): pass
+    "});
     let durations = HashMap::from([(
         TestCacheKey::function_name("test_sample::test_value"),
         Duration::from_millis(10),
@@ -192,10 +194,10 @@ fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
 
 #[test]
 fn literal_parametrize_cases_share_legacy_function_duration() {
-    let (_temp_dir, _test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])
+        def test_value(value): pass
+    "});
     let durations = HashMap::from([(
         TestCacheKey::function_name("test_sample::test_value"),
         Duration::from_millis(60),
@@ -220,11 +222,11 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
 
 #[test]
 fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "def test_a(): pass\n\
-         def test_b(): pass\n\
-         def test_c(): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        def test_a(): pass
+        def test_b(): pass
+        def test_c(): pass
+    "});
     let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_b")]);
     let durations = HashMap::from([
         (
@@ -264,11 +266,11 @@ fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
 
 #[test]
 fn last_failed_and_failed_first_select_and_prioritize_together() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "def test_a(): pass\n\
-         def test_b(): pass\n\
-         def test_c(): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        def test_a(): pass
+        def test_b(): pass
+        def test_c(): pass
+    "});
     let last_failed = HashSet::from([
         TestCacheKey::function_name("test_sample::test_b"),
         TestCacheKey::function_name("test_sample::test_c"),
@@ -296,12 +298,12 @@ fn last_failed_and_failed_first_select_and_prioritize_together() {
 
 #[test]
 fn failed_first_keeps_partition_selection_before_priority_ordering() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "def test_a(): pass\n\
-         def test_b(): pass\n\
-         def test_c(): pass\n\
-         def test_d(): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        def test_a(): pass
+        def test_b(): pass
+        def test_c(): pass
+        def test_d(): pass
+    "});
     let selection = "slice:1/2".parse().expect("valid partition selection");
     let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_b")]);
 
@@ -365,10 +367,10 @@ fn failed_first_reorders_across_module_groups() {
 
 #[test]
 fn exact_case_duration_overrides_legacy_fallback() {
-    let (_temp_dir, _test_path, package) = collected_package(
-        "@karva.tags.parametrize('value', [0, 1, 2])\n\
-         def test_value(value): pass\n",
-    );
+    let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
+        @karva.tags.parametrize('value', [0, 1, 2])
+        def test_value(value): pass
+    "});
     let durations = HashMap::from([
         (
             TestCacheKey::function_name("test_sample::test_value"),
@@ -401,9 +403,11 @@ fn exact_case_duration_overrides_legacy_fallback() {
 
 #[test]
 fn module_marks_keep_function_parametrize_atomic() {
-    let (_temp_dir, test_path, package) = collected_package(
-        "pytestmark = marks\n@karva.tags.parametrize('value', [0, 1, 2])\ndef test_value(value): pass\n",
-    );
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        pytestmark = marks
+        @karva.tags.parametrize('value', [0, 1, 2])
+        def test_value(value): pass
+    "});
     let partitions = partition_collected_tests(
         &package,
         2,

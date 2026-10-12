@@ -512,6 +512,8 @@ pub fn truncate_string(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use pyo3::IntoPyObjectExt;
     use pyo3::prelude::*;
     use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods};
@@ -589,7 +591,14 @@ mod tests {
         Python::attach(|py| {
             let namespace = PyDict::new(py);
             py.run(
-                c"class Value(int):\n    calls = 0\n    def __str__(self):\n        type(self).calls += 1\n        return 'value'\nvalue = Value(1)\n",
+                indoc! {cr"
+                    class Value(int):
+                        calls = 0
+                        def __str__(self):
+                            type(self).calls += 1
+                            return 'value'
+                    value = Value(1)
+                "},
                 Some(&namespace),
                 None,
             )

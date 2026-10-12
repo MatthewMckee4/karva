@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     ClientCapabilities, DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
     DidOpenTextDocumentNotification, DidOpenTextDocumentParams, GeneralClientCapabilities,
@@ -54,15 +55,19 @@ fn hints_resolved_injection_sites_without_python_type_annotations() {
             .is_some()
     );
     let uri = workspace.uri("test_hints.py");
-    let source = concat!(
-        "import pytest\nfrom karva import fixture\n",
-        "@fixture(name='database', scope='module')\ndef provider(): pass\n",
-        "@fixture\ndef wrapper(database): pass\n",
-        "@pytest.mark.usefixtures('database', 'tmp_path', 'unknown')\n",
-        "def test_example(database, tmp_path, missing): pass\n",
-        "@pytest.mark.parametrize('value', [1])\ndef test_param(value): pass\n",
-        "def helper(database): pass\n",
-    );
+    let source = indoc! {r"
+        import pytest
+        from karva import fixture
+        @fixture(name='database', scope='module')
+        def provider(): pass
+        @fixture
+        def wrapper(database): pass
+        @pytest.mark.usefixtures('database', 'tmp_path', 'unknown')
+        def test_example(database, tmp_path, missing): pass
+        @pytest.mark.parametrize('value', [1])
+        def test_param(value): pass
+        def helper(database): pass
+    "};
     open(&mut server, uri.clone(), source);
     let result = hints(&mut server, uri, source);
     insta::assert_json_snapshot!(workspace.normalize(result), @r#"
@@ -121,7 +126,10 @@ fn range_limits_hints_and_empty_ranges_return_no_hints() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_hints.py");
-    let source = "def test_one(tmp_path): pass\ndef test_two(tmp_path): pass\n";
+    let source = indoc! {r"
+        def test_one(tmp_path): pass
+        def test_two(tmp_path): pass
+    "};
     open(&mut server, uri.clone(), source);
     let range = Range::new(Position::new(1, 0), Position::new(2, 0));
     let result = server
@@ -181,11 +189,19 @@ fn nearest_provider_and_unsaved_overlays_determine_scope() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture(scope='session')\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='session')
+            def database(): pass
+        "},
     );
     workspace.write(
         "pkg/conftest.py",
-        "from karva import fixture\n@fixture(scope='module')\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='module')
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("pkg/test_hints.py");
@@ -197,7 +213,11 @@ fn nearest_provider_and_unsaved_overlays_determine_scope() {
     open(
         &mut server,
         provider,
-        "from karva import fixture\n@fixture(scope='function')\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='function')
+            def database(): pass
+        "},
     );
     let after = hints(&mut server, uri, source);
     server.receive_notification::<PublishDiagnosticsNotification>();
@@ -278,7 +298,11 @@ fn refreshes_consumers_after_unsaved_provider_changes() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture(scope='module')\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='module')
+            def database(): pass
+        "},
     );
     let capabilities = ClientCapabilities {
         workspace: Some(WorkspaceClientCapabilities {
@@ -297,7 +321,11 @@ fn refreshes_consumers_after_unsaved_provider_changes() {
     open(
         &mut server,
         provider.clone(),
-        "from karva import fixture\n@fixture(scope='module')\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='module')
+            def database(): pass
+        "},
     );
     server.receive_notification::<PublishDiagnosticsNotification>();
     let (second_id, ()) = server.receive_request::<InlayHintRefreshRequest>();
@@ -311,8 +339,12 @@ fn refreshes_consumers_after_unsaved_provider_changes() {
         content_changes: vec![
             TextDocumentContentChangeEvent::TextDocumentContentChangeWholeDocument(
                 TextDocumentContentChangeWholeDocument::new(
-                    "from karva import fixture\n@fixture(scope='session')\ndef database(): pass\n"
-                        .to_owned(),
+                    indoc! {r"
+                        from karva import fixture
+                        @fixture(scope='session')
+                        def database(): pass
+                    "}
+                    .to_owned(),
                 ),
             ),
         ],

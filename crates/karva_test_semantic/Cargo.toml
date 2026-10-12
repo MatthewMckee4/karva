@@ -34,5 +34,8 @@ ruff_text_size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+indoc = { workspace = true }
+
 [lints]
 workspace = true

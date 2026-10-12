@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, Definition, DefinitionParams, DefinitionRequest, DefinitionResponse,
@@ -13,7 +14,12 @@ fn goes_to_fixture_in_disk_ancestor() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
@@ -48,12 +54,14 @@ fn goes_to_unsaved_local_fixture_override() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "from karva import fixture\n\n",
-        "@fixture\n",
-        "def local(): pass\n\n",
-        "def test_example(local): pass\n",
-    );
+    let source = indoc! {r"
+        from karva import fixture
+
+        @fixture
+        def local(): pass
+
+        def test_example(local): pass
+    "};
     open(&mut server, uri.clone(), source);
 
     let response =
@@ -123,23 +131,34 @@ fn goes_to_unsaved_nested_ancestor_override() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "package/conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let ancestor_uri = workspace.uri("package/conftest.py");
     open(
         &mut server,
         ancestor_uri,
-        concat!(
-            "from karva import fixture\n\n",
-            "@fixture\n",
-            "def database():\n",
-            "    return \"unsaved\"\n",
-        ),
+        indoc! {r#"
+            from karva import fixture
+
+            @fixture
+            def database():
+                return "unsaved"
+        "#},
     );
     let test_uri = workspace.uri("package/test_example.py");
     open(
@@ -174,11 +193,21 @@ fn resolves_nested_package_fixture_shadowing() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef root_only(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def root_only(): pass
+        "},
     );
     workspace.write(
         "package/conftest.py",
-        "from karva import fixture\n\n@fixture\ndef nested_only(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def nested_only(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("package/test_example.py");
@@ -213,15 +242,30 @@ fn resolves_nearest_fixture_across_multiple_nested_conftests() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "package/conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "package/inner/conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("package/inner/test_example.py");
@@ -242,21 +286,24 @@ fn goes_to_fixture_dependencies_and_usefixtures_strings() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        concat!(
-            "from karva import fixture\n\n",
-            "@fixture\n",
-            "def parent(): pass\n\n",
-            "@fixture\n",
-            "def child(parent): pass\n",
-        ),
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def parent(): pass
+
+            @fixture
+            def child(parent): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "import pytest\n\n",
-        "@pytest.mark.usefixtures(\"parent\")\n",
-        "def test_example(child): pass\n",
-    );
+    let source = indoc! {r#"
+        import pytest
+
+        @pytest.mark.usefixtures("parent")
+        def test_example(child): pass
+    "#};
     open(&mut server, uri.clone(), source);
 
     let child =
@@ -347,7 +394,11 @@ fn follows_project_fixture_imports_outside_open_document_selection() {
     let workspace = Workspace::new();
     workspace.write(
         "support/providers.py",
-        "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(name='database')
+            def provider(): pass
+        "},
     );
     workspace.write(
         "support/__init__.py",
@@ -371,7 +422,11 @@ fn follows_project_fixture_wildcard_imports() {
     let workspace = Workspace::new();
     workspace.write(
         "support/providers.py",
-        "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture(name='database')
+            def provider(): pass
+        "},
     );
     workspace.write("conftest.py", "from support.providers import *\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
@@ -406,7 +461,11 @@ fn does_not_follow_private_fixture_through_default_wildcard_import() {
     let workspace = Workspace::new();
     workspace.write(
         "support/providers.py",
-        "from karva import fixture\n@fixture\ndef _private(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def _private(): pass
+        "},
     );
     workspace.write("conftest.py", "from support.providers import *\n");
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());

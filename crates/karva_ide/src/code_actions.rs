@@ -237,6 +237,8 @@ impl<'a> SourceOrderVisitor<'a> for Identifiers {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
     use crate::{SourceAnalysisSettings, analyze_source, source_symbols};
     use camino::Utf8PathBuf;
@@ -296,20 +298,35 @@ mod tests {
 
     #[test]
     fn header_imports_and_all_consumer_scopes_are_preserved() {
-        let source = "#!/usr/bin/env python3\n\"\"\"Project tests.\"\"\"\nfrom __future__ import annotations\nfrom karva import fixture\n\n@fixture(scope='session')\ndef shared(database): return database\n\ndef test_example(database): pass\n";
+        let source = indoc! {r#"
+            #!/usr/bin/env python3
+            """Project tests."""
+            from __future__ import annotations
+            from karva import fixture
+
+            @fixture(scope='session')
+            def shared(database): return database
+
+            def test_example(database): pass
+        "#};
         let actions = fixture_code_actions(&analyze(source));
         assert_eq!(actions.len(), 2);
         let action = &actions[0];
         assert!(action.new_text.contains("scope=\"session\""));
         let mut edited = format!("{source}{}", action.new_text);
         edited.insert_str(action.import_offset.to_usize(), &action.import_text);
-        assert!(edited.starts_with("#!/usr/bin/env python3\n\"\"\"Project tests.\"\"\"\nfrom __future__ import annotations\nfrom karva import fixture\nimport karva\n"));
+        assert!(edited.starts_with(
+            "#!/usr/bin/env python3\n\"\"\"Project tests.\"\"\"\nfrom __future__ import annotations\nfrom karva import fixture\nimport karva\n"
+        ));
         assert!(analyze(&edited).diagnostics.is_empty());
     }
 
     #[test]
     fn existing_module_binding_is_not_overwritten() {
-        let source = "database = 42\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            database = 42
+            def test_example(database): pass
+        "};
         assert!(fixture_code_actions(&analyze(source)).is_empty());
     }
 }

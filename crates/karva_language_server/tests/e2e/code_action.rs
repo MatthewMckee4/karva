@@ -1,3 +1,4 @@
+use indoc::indoc;
 use lsp_types::{
     ClientCapabilities, CodeActionContext, CodeActionKind, CodeActionParams, CodeActionRequest,
     DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
@@ -202,12 +203,35 @@ fn respects_action_filters_and_client_edit_capabilities(
 #[rstest::rstest]
 fn ambiguous_or_invalid_fixes_are_suppressed(
     #[values(
-        "database = 42\ndef test_example(database): pass\n",
-        "fixture = 1\nkarva = 2\ndef test_example(database): pass\n",
-        "NotImplementedError = 1\ndef test_example(database): pass\n",
-        "import pytest\n@pytest.mark.usefixtures('bad-name')\ndef test_example(): pass\n",
-        "from karva import fixture\n@fixture(scope=dynamic)\ndef provider(database): pass\n",
-        "from karva import fixture\n@fixture(scope='bad')\ndef database(): pass\ndef test_example(database): pass\n"
+        indoc! {r"
+            database = 42
+            def test_example(database): pass
+        "},
+        indoc! {r"
+            fixture = 1
+            karva = 2
+            def test_example(database): pass
+        "},
+        indoc! {r"
+            NotImplementedError = 1
+            def test_example(database): pass
+        "},
+        indoc! {r"
+            import pytest
+            @pytest.mark.usefixtures('bad-name')
+            def test_example(): pass
+        "},
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope=dynamic)
+            def provider(database): pass
+        "},
+        indoc! {r"
+            from karva import fixture
+            @fixture(scope='bad')
+            def database(): pass
+            def test_example(database): pass
+        "}
     )]
     source: &str,
 ) {

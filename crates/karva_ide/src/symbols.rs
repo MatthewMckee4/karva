@@ -112,6 +112,8 @@ pub fn source_tests(analysis: &SourceAnalysis) -> Vec<SourceTest> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::{TextRange, TextSize};
@@ -149,7 +151,15 @@ mod tests {
 
     #[test]
     fn emits_regular_and_custom_fixtures_with_public_names() {
-        let source = "from karva import fixture\n\n@fixture\ndef database(): pass\n\n@fixture(name=\"store\")\ndef provider(): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+
+            @fixture(name="store")
+            def provider(): pass
+        "#};
         let symbols = symbols(source, "test");
 
         assert_eq!(symbols.len(), 2);
@@ -157,21 +167,39 @@ mod tests {
         assert_eq!(symbols[0].name, "database");
         assert_eq!(
             symbols[0].range,
-            range(source, "@fixture\ndef database(): pass")
+            range(
+                source,
+                indoc! {r"
+                    @fixture
+                    def database(): pass"}
+            )
         );
         assert_eq!(symbols[0].selection_range, range(source, "database"));
         assert_eq!(symbols[0].detail, None);
         assert_eq!(symbols[1].name, "store");
         assert_eq!(
             symbols[1].range,
-            range(source, "@fixture(name=\"store\")\ndef provider(): pass")
+            range(
+                source,
+                indoc! {r#"
+                    @fixture(name="store")
+                    def provider(): pass"#}
+            )
         );
         assert_eq!(symbols[1].selection_range, range(source, "store"));
     }
 
     #[test]
     fn emits_tests_with_static_case_detail_and_no_dynamic_detail() {
-        let source = "import pytest\n\n@pytest.mark.parametrize(\"value\", [1, 2])\ndef test_static(value): pass\n\n@pytest.mark.parametrize(\"value\", cases())\ndef test_dynamic(value): pass\n";
+        let source = indoc! {r#"
+            import pytest
+
+            @pytest.mark.parametrize("value", [1, 2])
+            def test_static(value): pass
+
+            @pytest.mark.parametrize("value", cases())
+            def test_dynamic(value): pass
+        "#};
         let symbols = symbols(source, "test");
 
         assert_eq!(symbols.len(), 2);
@@ -185,14 +213,29 @@ mod tests {
 
     #[test]
     fn uses_singular_case_detail() {
-        let source = "import pytest\n\n@pytest.mark.parametrize(\"value\", [1])\ndef test_one(value): pass\n";
+        let source = indoc! {r#"
+            import pytest
+
+            @pytest.mark.parametrize("value", [1])
+            def test_one(value): pass
+        "#};
 
         assert_eq!(symbols(source, "test")[0].detail.as_deref(), Some("1 case"));
     }
 
     #[test]
     fn excludes_rejected_fixtures_and_uses_custom_test_prefix() {
-        let source = "from karva import fixture\n\n@fixture\ndef duplicate(): pass\n@fixture\ndef duplicate(): pass\n\ndef spec_case(): pass\ndef test_case(): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def duplicate(): pass
+            @fixture
+            def duplicate(): pass
+
+            def spec_case(): pass
+            def test_case(): pass
+        "};
         let symbols = symbols(source, "spec_");
 
         assert_eq!(symbols.len(), 1);
@@ -202,7 +245,16 @@ mod tests {
 
     #[test]
     fn symbols_follow_source_order() {
-        let source = "from karva import fixture\n\ndef test_before(): pass\n\n@fixture\ndef database(): pass\n\ndef test_after(): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+
+            def test_before(): pass
+
+            @fixture
+            def database(): pass
+
+            def test_after(): pass
+        "};
         let symbols = symbols(source, "test");
 
         assert_eq!(

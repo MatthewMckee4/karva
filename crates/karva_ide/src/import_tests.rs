@@ -1,6 +1,7 @@
 //! Fixture import regression tests exercise source identity and runtime exposure names together.
 
 use camino::Utf8Path;
+use indoc::indoc;
 use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextSize;
 
@@ -32,7 +33,11 @@ fn imported_custom_fixture_keeps_its_public_name_and_source_identity() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture(name='database')
+                    def provider(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
@@ -69,7 +74,11 @@ fn follows_relative_reexports_and_keeps_declared_name_through_aliases() {
         &[
             (
                 "/project/support/provider.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/support/__init__.py",
@@ -126,7 +135,10 @@ fn import_cycles_and_unknown_external_exports_remain_unresolved() {
             ("/project/b.py", "from a import database\n"),
             (
                 "/project/conftest.py",
-                "from a import database\nfrom external import other\n",
+                indoc! {r"
+                    from a import database
+                    from external import other
+                "},
             ),
             ("/project/test_query.py", test),
         ],
@@ -146,7 +158,12 @@ fn overwritten_export_does_not_resolve_to_old_fixture() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\ndatabase = replacement\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                    database = replacement
+                "},
             ),
             ("/project/conftest.py", "from support import database\n"),
             ("/project/test_query.py", test),
@@ -162,11 +179,18 @@ fn overwritten_export_does_not_resolve_to_old_fixture() {
 
 #[test]
 fn imports_in_tests_require_runtime_discovery_setting() {
-    let test = "from support import database\ndef test_query(database): pass\n";
+    let test = indoc! {r"
+        from support import database
+        def test_query(database): pass
+    "};
     let sources = [
         (
             "/project/support.py",
-            "from karva import fixture\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "},
         ),
         ("/project/test_query.py", test),
     ];
@@ -189,7 +213,13 @@ fn wildcard_import_uses_public_exports_and_fixture_metadata() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n@fixture\ndef _private(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture(name='database')
+                    def provider(): pass
+                    @fixture
+                    def _private(): pass
+                "},
             ),
             ("/project/conftest.py", "from support import *\n"),
             ("/project/test_query.py", test),
@@ -212,11 +242,23 @@ fn wildcard_import_honors_literal_all_and_empty_all() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n__all__ = ['_private']\n@fixture\ndef database(): pass\n@fixture\ndef _private(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    __all__ = ['_private']
+                    @fixture
+                    def database(): pass
+                    @fixture
+                    def _private(): pass
+                "},
             ),
             (
                 "/project/empty_support.py",
-                "from karva import fixture\n__all__ = []\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    __all__ = []
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/private/conftest.py", "from support import *\n"),
             (
@@ -253,7 +295,11 @@ fn wildcard_import_follows_relative_reexports_and_unknown_all_is_conservative() 
         &[
             (
                 "/project/support/provider.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/support/__init__.py", "from .provider import *\n"),
             ("/project/conftest.py", "from support import *\n"),
@@ -270,7 +316,12 @@ fn wildcard_import_follows_relative_reexports_and_unknown_all_is_conservative() 
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n__all__ = make_exports()\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    __all__ = make_exports()
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/conftest.py", "from support import *\n"),
             ("/project/test_query.py", test),
@@ -291,11 +342,18 @@ fn later_rebinding_hides_wildcard_fixture() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
-                "from support import *\ndatabase = replacement\n",
+                indoc! {r"
+                    from support import *
+                    database = replacement
+                "},
             ),
             ("/project/test_query.py", test),
         ],
@@ -315,7 +373,11 @@ fn known_wildcard_imports_still_report_missing_fixtures() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/conftest.py", "from support import *\n"),
             ("/project/test_query.py", test),
@@ -337,7 +399,10 @@ fn known_wildcard_imports_still_report_missing_fixtures() {
 #[rstest::rstest]
 fn wildcard_binding_collisions_use_source_name_for_custom_fixture_names(
     #[values(
-        "from support import *\nprovider = replacement\n",
+        indoc! {r"
+            from support import *
+            provider = replacement
+        "},
         "provider = replacement\nfrom support import *\n"
     )]
     conftest: &str,
@@ -347,7 +412,11 @@ fn wildcard_binding_collisions_use_source_name_for_custom_fixture_names(
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture(name='database')
+                    def provider(): pass
+                "},
             ),
             ("/project/conftest.py", conftest),
             ("/project/test_query.py", test),
@@ -389,7 +458,13 @@ fn mutated_literal_all_is_unknown() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n__all__ = ['database']\n__all__.append('other')\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    __all__ = ['database']
+                    __all__.append('other')
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/conftest.py", "from support import *\n"),
             ("/project/test_query.py", test),
@@ -410,11 +485,18 @@ fn conditional_wildcard_import_is_unknown() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
-                "if condition:\n    from support import *\n",
+                indoc! {r"
+                    if condition:
+                        from support import *
+                "},
             ),
             ("/project/test_query.py", test),
         ],
@@ -434,11 +516,18 @@ fn conditional_wildcard_reexport_remains_unknown() {
         &[
             (
                 "/project/provider.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/support.py",
-                "if condition:\n    from provider import *\n",
+                indoc! {r"
+                    if condition:
+                        from provider import *
+                "},
             ),
             ("/project/conftest.py", "from support import *\n"),
             ("/project/test_query.py", test),
@@ -459,15 +548,26 @@ fn conflicting_wildcard_bindings_remain_unknown() {
         &[
             (
                 "/project/first.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/second.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
-                "from first import *\nfrom second import *\n",
+                indoc! {r"
+                    from first import *
+                    from second import *
+                "},
             ),
             ("/project/test_query.py", test),
         ],
@@ -487,11 +587,20 @@ fn wildcard_shadowing_removes_earlier_local_fixture() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture(name='database')\ndef provider(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture(name='database')
+                    def provider(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\nfrom support import *\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                    from support import *
+                "},
             ),
             ("/project/test_query.py", test),
         ],
@@ -511,11 +620,18 @@ fn aliased_all_binding_does_not_hide_wildcard_exports() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
-                "from support import __all__ as exported\nfrom support import *\n",
+                indoc! {r"
+                    from support import __all__ as exported
+                    from support import *
+                "},
             ),
             ("/project/test_query.py", test),
         ],
@@ -534,7 +650,11 @@ fn imported_fixture_bound_to_all_remains_navigable() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "/project/conftest.py",
@@ -560,11 +680,18 @@ fn all_binding_alias_invalidates_wildcard_exports() {
         &[
             (
                 "/project/support.py",
-                "from provider import database as __all__\nfrom provider import *\n",
+                indoc! {r"
+                    from provider import database as __all__
+                    from provider import *
+                "},
             ),
             (
                 "/project/provider.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/conftest.py", "from support import *\n"),
             ("/project/test_query.py", test),
@@ -585,7 +712,11 @@ fn imported_fixtures_rename_source_bindings_and_reexports() {
         &[
             (
                 "/project/support.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             ("/project/conftest.py", "from support import database\n"),
             ("/project/test_query.py", test),

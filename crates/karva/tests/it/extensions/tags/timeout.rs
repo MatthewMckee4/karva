@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
@@ -760,7 +761,11 @@ fn hard_timeout_retry_uses_fresh_python_state_and_reports_all_attempts() {
     let context = TestContext::with_files([
         (
             "karva.toml",
-            "[profile.default.junit]\npath = 'results.xml'\nstore-failure-output = true\n",
+            indoc! {r"
+                [profile.default.junit]
+                path = 'results.xml'
+                store-failure-output = true
+            "},
         ),
         (
             "test.py",

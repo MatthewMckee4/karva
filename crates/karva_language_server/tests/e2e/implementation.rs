@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidChangeTextDocumentNotification, DidChangeTextDocumentParams,
@@ -15,18 +16,25 @@ fn navigates_to_generator_and_return_fixture_implementations() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database():\n    yield object()\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database():
+                yield object()
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "import pytest\n",
-        "from karva import fixture\n\n",
-        "@fixture\n",
-        "def local(): return object()\n\n",
-        "@pytest.mark.usefixtures(\"database\")\n",
-        "def test_example(database, local, tmp_path): pass\n",
-    );
+    let source = indoc! {r#"
+        import pytest
+        from karva import fixture
+
+        @fixture
+        def local(): return object()
+
+        @pytest.mark.usefixtures("database")
+        def test_example(database, local, tmp_path): pass
+    "#};
     open(&mut server, uri.clone(), source);
 
     let parameter =
@@ -44,7 +52,12 @@ fn rejects_an_implementation_from_a_stale_document_version() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database():\n    yield object()\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database():
+                yield object()
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");

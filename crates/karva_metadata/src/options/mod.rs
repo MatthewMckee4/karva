@@ -37,7 +37,7 @@ pub struct Options {
     /// `{ value = "...", preserve = true }` to keep an existing value, or
     /// `{ unset = true }` to remove one. Karva's own variables are reserved.
     #[option(
-        default = r#"{}"#,
+        default = r"{}",
         value_type = "table",
         example = r#"
             [tool.karva.profile.default.env]
@@ -146,9 +146,9 @@ pub struct OverrideOptions {
     #[option(
         default = "null",
         value_type = "u32",
-        example = r#"
+        example = r"
             retries = 2
-        "#
+        "
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
     retries: Option<u32>,
@@ -176,9 +176,9 @@ pub struct OverrideOptions {
     #[option(
         default = "null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             timeout = 30.0
-        "#
+        "
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
     timeout: Option<TestTimeoutSecs>,
@@ -190,9 +190,9 @@ pub struct OverrideOptions {
     #[option(
         default = "null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             slow-timeout = 1.0
-        "#
+        "
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
     slow_timeout: Option<SlowTimeoutSecs>,
@@ -203,9 +203,9 @@ pub struct OverrideOptions {
     #[option(
         default = "null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             fail-slow = 10.0
-        "#
+        "
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
     fail_slow: Option<FailSlowSecs>,
@@ -257,11 +257,11 @@ pub struct SrcOptions {
     /// `.gitignore`, `.git/info/exclude`, and global `gitignore` files.
     /// Enabled by default.
     #[option(
-        default = r#"true"#,
-        value_type = r#"bool"#,
-        example = r#"
+        default = r"true",
+        value_type = r"bool",
+        example = r"
             respect-ignore-files = false
-        "#
+        "
     )]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub respect_ignore_files: Option<bool>,
@@ -278,8 +278,8 @@ pub struct SrcOptions {
     /// - `tests/**/test_*.py` matches test files below the `tests` directory
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             include = ["tests"]
         "#
@@ -308,7 +308,7 @@ pub struct TerminalOptions {
     /// Defaults to `full`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"full"#,
+        default = r"full",
         value_type = "full | concise",
         example = r#"
             output-format = "concise"
@@ -321,11 +321,11 @@ pub struct TerminalOptions {
     /// This is the output the `print` goes to etc.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"true"#,
+        default = r"true",
         value_type = "true | false",
-        example = r#"
+        example = r"
             show-python-output = false
-        "#
+        "
     )]
     pub show_python_output: Option<bool>,
 
@@ -339,7 +339,7 @@ pub struct TerminalOptions {
     /// Defaults to `pass`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"pass"#,
+        default = r"pass",
         value_type = "none | fail | retry | slow | pass | skip | all",
         example = r#"
             status-level = "fail"
@@ -355,7 +355,7 @@ pub struct TerminalOptions {
     /// Defaults to `pass`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"pass"#,
+        default = r"pass",
         value_type = "none | fail | retry | slow | pass | skip | all",
         example = r#"
             final-status-level = "fail"
@@ -388,7 +388,7 @@ pub struct TestOptions {
     /// Defaults to `test`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"test"#,
+        default = r"test",
         value_type = "string",
         example = r#"
             test-function-prefix = "test"
@@ -400,11 +400,11 @@ pub struct TestOptions {
     /// Built-in Karva tags and pytest marks remain available without registration.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
+        default = r"false",
         value_type = "true | false",
-        example = r#"
+        example = r"
             strict-tags = true
-        "#
+        "
     )]
     pub strict_tags: Option<bool>,
 
@@ -417,11 +417,11 @@ pub struct TestOptions {
     /// Defaults to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
+        default = r"false",
         value_type = "true | false",
-        example = r#"
+        example = r"
             fail-fast = true
-        "#
+        "
     )]
     pub fail_fast: Option<bool>,
 
@@ -437,9 +437,9 @@ pub struct TestOptions {
     #[option(
         default = "unlimited",
         value_type = "positive integer",
-        example = r#"
+        example = r"
             max-fail = 3
-        "#
+        "
     )]
     pub max_fail: Option<MaxFail>,
 
@@ -448,11 +448,11 @@ pub struct TestOptions {
     /// This is often slower, so it is not recommended for most projects.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
+        default = r"false",
         value_type = "true | false",
-        example = r#"
+        example = r"
             try-import-fixtures = true
-        "#
+        "
     )]
     pub try_import_fixtures: Option<bool>,
 
@@ -461,22 +461,22 @@ pub struct TestOptions {
     /// Defaults to `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
+        default = r"false",
         value_type = "true | false",
-        example = r#"
+        example = r"
             doctest-modules = true
-        "#
+        "
     )]
     pub doctest_modules: Option<bool>,
 
     /// When set, we will retry failed tests up to this number of times.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"0"#,
+        default = r"0",
         value_type = "u32",
-        example = r#"
+        example = r"
             retry = 3
-        "#
+        "
     )]
     pub retry: Option<u32>,
 
@@ -486,11 +486,11 @@ pub struct TestOptions {
     /// this only changes scheduling priority.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
+        default = r"false",
         value_type = "true | false",
-        example = r#"
+        example = r"
             failed-first = true
-        "#
+        "
     )]
     pub failed_first: Option<bool>,
 
@@ -500,11 +500,11 @@ pub struct TestOptions {
     /// run so the same order can be reproduced.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
+        default = r"false",
         value_type = "true | false",
-        example = r#"
+        example = r"
             shuffle = true
-        "#
+        "
     )]
     pub shuffle: Option<bool>,
 
@@ -514,18 +514,18 @@ pub struct TestOptions {
     /// seed does not enable shuffling by itself.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
+        default = r"null",
         value_type = "u64",
-        example = r#"
+        example = r"
             random-seed = 170938
-        "#
+        "
     )]
     pub random_seed: Option<u64>,
 
     /// Whether tests that pass only after a retry should fail the run.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"pass"#,
+        default = r"pass",
         value_type = "pass | fail",
         example = r#"
             flaky-result = "fail"
@@ -540,7 +540,7 @@ pub struct TestOptions {
     /// `warn` to always warn, or `pass` to always succeed silently.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"auto"#,
+        default = r"auto",
         value_type = "auto | pass | warn | fail",
         example = r#"
             no-tests = "warn"
@@ -558,11 +558,11 @@ pub struct TestOptions {
     /// Defaults to unset, which disables slow-test detection.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
+        default = r"null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             slow-timeout = 60.0
-        "#
+        "
     )]
     pub slow_timeout: Option<SlowTimeoutSecs>,
 
@@ -577,11 +577,11 @@ pub struct TestOptions {
     /// applied to the test.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
+        default = r"null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             timeout = 120.0
-        "#
+        "
     )]
     pub timeout: Option<TestTimeoutSecs>,
 
@@ -603,11 +603,11 @@ pub struct TestOptions {
     /// applied to the test.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
+        default = r"null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             fail-slow = 0.25
-        "#
+        "
     )]
     pub fail_slow: Option<FailSlowSecs>,
 
@@ -621,11 +621,11 @@ pub struct TestOptions {
     /// Defaults to unset, which lets the run take as long as it needs.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
+        default = r"null",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             run-timeout = 1800.0
-        "#
+        "
     )]
     pub run_timeout: Option<RunTimeoutSecs>,
 
@@ -639,11 +639,11 @@ pub struct TestOptions {
     /// Defaults to 10 seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"10.0"#,
+        default = r"10.0",
         value_type = "float (seconds)",
-        example = r#"
+        example = r"
             termination-grace-period = 10.0
-        "#
+        "
     )]
     pub termination_grace_period: Option<TerminationGracePeriodSecs>,
 }
@@ -694,8 +694,8 @@ pub struct CoverageOptions {
     /// Relative paths are resolved from the project root.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#".karva/coverage/data.json"#,
-        value_type = r#"path"#,
+        default = r".karva/coverage/data.json",
+        value_type = r"path",
         example = r#"
             data-file = ".karva/coverage/data.json"
         "#
@@ -708,8 +708,8 @@ pub struct CoverageOptions {
     /// or artifacts produced under a different CI checkout layout.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             path-aliases = ["/workspace=.", "C:/repo=."]
         "#
@@ -723,8 +723,8 @@ pub struct CoverageOptions {
     /// working directory, matching pytest-cov's bare `--cov`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             sources = ["src"]
         "#
@@ -738,8 +738,8 @@ pub struct CoverageOptions {
     /// under the configured coverage sources are included unless omitted.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             include = ["src/**"]
         "#
@@ -753,8 +753,8 @@ pub struct CoverageOptions {
     /// applied after include filters.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             omit = ["**/migrations/*"]
         "#
@@ -764,8 +764,8 @@ pub struct CoverageOptions {
     /// Regular expressions excluding matching source lines or whole clauses.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             exclude-lines = ["if TYPE_CHECKING:"]
         "#
@@ -775,8 +775,8 @@ pub struct CoverageOptions {
     /// Regular expressions marking intentionally partial branch lines.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             partial-branches = ["if platform.system"]
         "#
@@ -786,8 +786,8 @@ pub struct CoverageOptions {
     /// Static context component attached to every observation in the run.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"str"#,
+        default = r"null",
+        value_type = r"str",
         example = r#"
             context = "python=3.14"
         "#
@@ -797,8 +797,8 @@ pub struct CoverageOptions {
     /// Include execution attributed to contexts matching these regular expressions.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"list[str]"#,
+        default = r"null",
+        value_type = r"list[str]",
         example = r#"
             contexts = ["python=3\\.14", "test_checkout"]
         "#
@@ -808,22 +808,22 @@ pub struct CoverageOptions {
     /// Decimal places shown in coverage percentages.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"0"#,
-        value_type = r#"non-negative integer"#,
-        example = r#"
+        default = r"0",
+        value_type = r"non-negative integer",
+        example = r"
             precision = 2
-        "#
+        "
     )]
     pub precision: Option<CoveragePrecision>,
 
     /// Add a test run to compatible native data instead of replacing it.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
-        value_type = r#"true | false"#,
-        example = r#"
+        default = r"false",
+        value_type = r"true | false",
+        example = r"
             append = true
-        "#
+        "
     )]
     pub append: Option<bool>,
 
@@ -834,8 +834,8 @@ pub struct CoverageOptions {
     /// uncovered line numbers per file. `none` persists native data only.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"term"#,
-        value_type = r#"none | term | term-missing | xml | json | html | lcov"#,
+        default = r"term",
+        value_type = r"none | term | term-missing | xml | json | html | lcov",
         example = r#"
             report = "term-missing"
         "#
@@ -850,8 +850,8 @@ pub struct CoverageOptions {
     /// project root.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"path"#,
+        default = r"null",
+        value_type = r"path",
         example = r#"
             report-path = "build/coverage.xml"
         "#
@@ -861,11 +861,11 @@ pub struct CoverageOptions {
     /// Whether to measure branch coverage in addition to line coverage.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
-        value_type = r#"true | false"#,
-        example = r#"
+        default = r"false",
+        value_type = r"true | false",
+        example = r"
             branch = true
-        "#
+        "
     )]
     pub branch: Option<bool>,
 
@@ -877,11 +877,11 @@ pub struct CoverageOptions {
     /// already non-zero).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"float (0..=100)"#,
-        example = r#"
+        default = r"null",
+        value_type = r"float (0..=100)",
+        example = r"
             fail-under = 90
-        "#
+        "
     )]
     pub fail_under: Option<CovFailUnder>,
 
@@ -966,8 +966,8 @@ pub struct JunitOptions {
     /// When unset, no `JUnit` report is written.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"null"#,
-        value_type = r#"path"#,
+        default = r"null",
+        value_type = r"path",
         example = r#"
             path = "reports/test-results.xml"
         "#
@@ -978,7 +978,7 @@ pub struct JunitOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
         default = r#""karva-tests""#,
-        value_type = r#"string"#,
+        value_type = r"string",
         example = r#"
             report-name = "karva-tests"
         "#
@@ -988,30 +988,30 @@ pub struct JunitOptions {
     /// Whether to include captured stdout and stderr for passing tests.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"false"#,
-        value_type = r#"true | false"#,
-        example = r#"
+        default = r"false",
+        value_type = r"true | false",
+        example = r"
             store-success-output = true
-        "#
+        "
     )]
     store_success_output: Option<bool>,
 
     /// Whether to include captured stdout and stderr for failing tests.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"true"#,
-        value_type = r#"true | false"#,
-        example = r#"
+        default = r"true",
+        value_type = r"true | false",
+        example = r"
             store-failure-output = true
-        "#
+        "
     )]
     store_failure_output: Option<bool>,
 
     /// How flaky tests configured to fail are represented in `JUnit`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option(
-        default = r#"failure"#,
-        value_type = r#"failure | success"#,
+        default = r"failure",
+        value_type = r"failure | success",
         example = r#"
             flaky-fail-status = "success"
         "#
@@ -1115,6 +1115,8 @@ impl Combine for OutputFormat {
 mod tests {
     use std::num::NonZeroU32;
 
+    use indoc::{formatdoc, indoc};
+
     use insta::{assert_debug_snapshot, assert_snapshot};
     use karva_combine::Combine;
     use rstest::rstest;
@@ -1172,8 +1174,11 @@ mod tests {
 
     #[test]
     fn parse_profile_doctest_modules() {
-        let config = Config::from_toml_str("[profile.default.test]\ndoctest-modules = true\n")
-            .expect("parse");
+        let config = Config::from_toml_str(indoc! {r"
+            [profile.default.test]
+            doctest-modules = true
+        "})
+        .expect("parse");
 
         assert_eq!(
             config
@@ -1539,7 +1544,12 @@ report-path = "build/coverage.xml"
     #[test]
     fn coverage_precision_rejects_unrepresentable_digits() {
         let requested = CoveragePrecision::MAX + 1;
-        let toml = format!("[profile.default.coverage]\nprecision = {requested}\n");
+        let toml = formatdoc!(
+            r"
+                [profile.default.coverage]
+                precision = {requested}
+            "
+        );
 
         let error = Config::from_toml_str(&toml).expect_err("reject excessive precision");
         let message = error.to_string();

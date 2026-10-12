@@ -1,12 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use indoc::indoc;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use insta_cmd::assert_cmd_snapshot;
 use karva_coverage::native::{CoverageMode, NativeCoverage, NativeFileCoverage, SourceFingerprint};
 
 use crate::common::TestContext;
 
-const SOURCE: &str = "first = 1\nsecond = 2\n";
+const SOURCE: &str = indoc! {r"
+    first = 1
+    second = 2
+"};
 
 fn write_coverage(context: &TestContext, path: &Utf8Path) {
     write_coverage_lines(context, path, BTreeSet::from([1]));

@@ -671,6 +671,8 @@ fn check_cancelled(cancellation: &RequestCancellationToken) -> Result<(), Source
 mod tests {
     use std::fs;
 
+    use indoc::indoc;
+
     use karva_ide::{SourceAnalysisSettings, fixture_definition};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::TextSize;
@@ -764,11 +766,19 @@ mod tests {
         let fixture = Fixture::new();
         fixture.write(
             "conftest.py",
-            "import pytest\n@pytest.fixture\ndef root(): pass\n",
+            indoc! {r"
+                import pytest
+                @pytest.fixture
+                def root(): pass
+            "},
         );
         fixture.write(
             "tests/conftest.py",
-            "import pytest\n@pytest.fixture\ndef nested(): pass\n",
+            indoc! {r"
+                import pytest
+                @pytest.fixture
+                def nested(): pass
+            "},
         );
         let test = fixture.write(
             "tests/unit/test_sample.py",
@@ -854,7 +864,11 @@ mod tests {
         let fixture = Fixture::new();
         let conftest = fixture.write(
             "conftest.py",
-            "from karva import fixture\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "},
         );
         let open = fixture.write("tests/unit/test_open.py", "def test_open(database): pass\n");
         let unrelated = fixture.write("tests/test_unrelated.py", "def test_unrelated(): pass\n");
@@ -876,7 +890,12 @@ mod tests {
         let conftest = fixture.root.join("tests/package/conftest.py");
         let open_sources = BTreeMap::from([(
             conftest.clone(),
-            "from karva import fixture\n@fixture\ndef database(): pass\n".to_owned(),
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "}
+            .to_owned(),
         )]);
 
         let index = fixture.build(Vec::new(), open_sources);
@@ -928,7 +947,11 @@ mod tests {
         fixture.write(".gitignore", "conftest.py\n");
         let conftest = fixture.write(
             "conftest.py",
-            "from karva import fixture\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "},
         );
         fixture.write("tests/test_sample.py", "def test_example(database): pass\n");
 
@@ -943,7 +966,11 @@ mod tests {
         fixture.write(".gitignore", "conftest.py\n");
         let conftest = fixture.write(
             "conftest.py",
-            "from karva import fixture\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "},
         );
         fixture.write("tests/test_sample.py", "def test_example(database): pass\n");
 
@@ -1139,7 +1166,11 @@ mod tests {
         let conftest = fixture.write("conftest.py", "from support import database\n");
         let provider_path = fixture.write(
             "support.py",
-            "from karva import fixture\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "},
         );
         let cache = SourceIndexCache::default();
         let prepare = |cache| {

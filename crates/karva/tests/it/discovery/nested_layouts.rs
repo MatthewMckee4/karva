@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -136,15 +137,27 @@ fn shared_ancestors_preserve_sibling_fixture_overrides() {
     let context = TestContext::with_files([
         (
             "conftest.py",
-            "from karva import fixture\n@fixture\ndef root(): return 10\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def root(): return 10
+            "},
         ),
         (
             "tests/conftest.py",
-            "from karva import fixture\n@fixture\ndef value(root): return root + 1\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def value(root): return root + 1
+            "},
         ),
         (
             "tests/nested/conftest.py",
-            "from karva import fixture\n@fixture\ndef value(root): return root + 2\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def value(root): return root + 2
+            "},
         ),
         (
             "tests/test_a.py",

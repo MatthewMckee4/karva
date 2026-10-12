@@ -883,6 +883,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "2.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a37b2691796cffeb8a8cd305ac66e65841559f147f4e63231d0eafa4db5384d1"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "inotify"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -998,6 +1007,7 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "dunce",
+ "indoc",
  "insta",
  "insta-cmd",
  "karva_cache",
@@ -1036,6 +1046,7 @@ dependencies = [
  "camino",
  "clap",
  "fs-err",
+ "indoc",
  "insta",
  "karva_cache",
  "karva_cli",
@@ -1088,6 +1099,7 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "fs-err",
+ "indoc",
  "karva_python_semantic",
  "ruff_python_ast",
  "ruff_python_parser",
@@ -1156,6 +1168,7 @@ dependencies = [
  "annotate-snippets",
  "camino",
  "colored",
+ "indoc",
  "insta",
  "karva_logging",
  "karva_python_semantic",
@@ -1174,6 +1187,7 @@ name = "karva_ide"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "indoc",
  "karva_collector",
  "karva_python_semantic",
  "rstest",
@@ -1209,6 +1223,7 @@ dependencies = [
  "crossbeam-channel",
  "gen-lsp-types",
  "ignore",
+ "indoc",
  "insta",
  "karva_collector",
  "karva_ide",
@@ -1265,6 +1280,7 @@ dependencies = [
  "camino",
  "fs-err",
  "globset",
+ "indoc",
  "insta",
  "karva_combine",
  "karva_logging",
@@ -1314,6 +1330,7 @@ name = "karva_python_semantic"
 version = "0.0.0"
 dependencies = [
  "camino",
+ "indoc",
  "pyo3",
  "ruff_python_ast",
  "ruff_python_parser",
@@ -1332,6 +1349,7 @@ dependencies = [
  "ctrlc",
  "fastrand",
  "ignore",
+ "indoc",
  "karva_cache",
  "karva_cli",
  "karva_collector",
@@ -1363,6 +1381,7 @@ dependencies = [
  "colored",
  "console",
  "fs-err",
+ "indoc",
  "insta",
  "regex",
  "similar 3.1.1",
@@ -1381,6 +1400,7 @@ dependencies = [
  "camino",
  "dunce",
  "fs-err",
+ "indoc",
  "karva_collector",
  "karva_coverage",
  "karva_diagnostic",

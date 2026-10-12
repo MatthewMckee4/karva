@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use karva_static::EnvVars;
 
@@ -91,7 +92,10 @@ fn failed_first_runs_cached_failure_before_other_tests() {
 
 #[test]
 fn failed_first_uses_profile_configuration() {
-    let context = priority_context(Some("[profile.ci.test]\nfailed-first = true\n"));
+    let context = priority_context(Some(indoc! {r"
+        [profile.ci.test]
+        failed-first = true
+    "}));
     seed_failed_test(&context);
 
     assert_cmd_snapshot!(context.command_no_parallel().args(["--profile=ci", "--status-level=none"]), @"
@@ -341,7 +345,7 @@ def test_b():
 
     context.write_file("fixed", "");
     context.write_file("order", "");
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--failed-first", "--status-level=none"]), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--failed-first", "--status-level=none"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -349,7 +353,7 @@ def test_b():
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
 
     let order = context.read_file("order");
     let events = order.lines().collect::<Vec<_>>();

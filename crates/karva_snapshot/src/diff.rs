@@ -243,6 +243,8 @@ impl Style {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     fn settings() -> insta::Settings {
@@ -264,7 +266,10 @@ mod tests {
     #[test]
     fn addition() {
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff("a\n", "a\nb\n"), @"
+            insta::assert_snapshot!(format_diff("a\n", indoc! {r"
+                a
+                b
+            "}), @"
             1 │  a
             2 │ +b
             ");
@@ -274,7 +279,10 @@ mod tests {
     #[test]
     fn deletion() {
         settings().bind(|| {
-            insta::assert_snapshot!(format_diff("a\nb\n", "a\n"), @"
+            insta::assert_snapshot!(format_diff(indoc! {r"
+                a
+                b
+            "}, "a\n"), @"
             1 │  a
             2 │ -b
             ");
@@ -367,8 +375,15 @@ mod tests {
 
     #[test]
     fn trailing_newline_difference_is_ignored() {
-        let old = "{\n  \"a\": 1\n}\n";
-        let new = "{\n  \"a\": 1\n}";
+        let old = indoc! {r#"
+            {
+              "a": 1
+            }
+        "#};
+        let new = indoc! {r#"
+            {
+              "a": 1
+            }"#};
         assert!(
             format_diff(old, new).is_empty(),
             "trailing-newline-only difference should produce no diff",
@@ -377,8 +392,20 @@ mod tests {
 
     #[test]
     fn one_sided_trailing_newline_in_real_change() {
-        let old = "{\n  \"roles\": [\n    \"user\"\n  ]\n}\n";
-        let new = "{\n  \"roles\": [\n    \"user\",\n    \"hr\"\n  ]\n}";
+        let old = indoc! {r#"
+            {
+              "roles": [
+                "user"
+              ]
+            }
+        "#};
+        let new = indoc! {r#"
+            {
+              "roles": [
+                "user",
+                "hr"
+              ]
+            }"#};
         settings().bind(|| {
             insta::assert_snapshot!(format_diff(old, new), @r#"
             1 │  {

@@ -180,6 +180,8 @@ fn add_call(calls: &mut Vec<FixtureHierarchyCall>, item: FixtureHierarchyItem, r
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::Utf8Path;
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::TextSize;
@@ -219,15 +221,27 @@ mod tests {
         let index = index(&[
             (
                 "conftest.py",
-                "from karva import fixture\n@fixture\ndef database(): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(): pass
+                "},
             ),
             (
                 "pkg/conftest.py",
-                "from karva import fixture\n@fixture\ndef database(database): pass\n",
+                indoc! {r"
+                    from karva import fixture
+                    @fixture
+                    def database(database): pass
+                "},
             ),
             (
                 "test_root.py",
-                "import pytest\n@pytest.mark.usefixtures('database')\ndef test_root(database): pass\n",
+                indoc! {r"
+                    import pytest
+                    @pytest.mark.usefixtures('database')
+                    def test_root(database): pass
+                "},
             ),
             ("pkg/test_nested.py", "def test_nested(database): pass\n"),
         ]);
@@ -267,7 +281,18 @@ mod tests {
     fn cycles_are_direct_edges_and_ordinary_python_calls_are_excluded() {
         let index = index(&[(
             "test_cycle.py",
-            "from karva import fixture\n@fixture\ndef first(second):\n    return second\n@fixture\ndef second(first):\n    first()\n    return first\ndef test_example(first):\n    second()\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def first(second):
+                    return second
+                @fixture
+                def second(first):
+                    first()
+                    return first
+                def test_example(first):
+                    second()
+            "},
         )]);
         let first = target(&index, "test_cycle.py", "first(");
         let item = fixture_hierarchy_provider(&index, &first).expect("first provider");
@@ -290,7 +315,16 @@ mod tests {
     fn custom_names_and_builtin_or_rejected_dependencies() {
         let index = index(&[(
             "test_example.py",
-            "from karva import fixture\n@fixture(name='данные')\ndef provider(): pass\n@fixture(scope='invalid')\ndef rejected(): pass\n@fixture\ndef wrapper(данные, tmp_path, rejected, missing): pass\ndef test_example(wrapper): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture(name='данные')
+                def provider(): pass
+                @fixture(scope='invalid')
+                def rejected(): pass
+                @fixture
+                def wrapper(данные, tmp_path, rejected, missing): pass
+                def test_example(wrapper): pass
+            "},
         )]);
         let wrapper = target(&index, "test_example.py", "wrapper(");
         let outgoing = fixture_outgoing_calls(

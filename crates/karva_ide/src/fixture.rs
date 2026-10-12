@@ -1461,6 +1461,8 @@ fn builtin(name: &str) -> Option<BuiltinFixture> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
 
@@ -1517,9 +1519,14 @@ mod tests {
     #[test]
     fn resolves_local_and_builtin_fixtures() {
         assert!(
-            analyze(
-                "from karva import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database, tmp_path): pass\n"
-            )
+            analyze(indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+
+                def test_example(database, tmp_path): pass
+            "})
             .diagnostics
             .is_empty()
         );
@@ -1527,9 +1534,15 @@ mod tests {
 
     #[test]
     fn reports_duplicate_fixture_names() {
-        let analysis = analyze(
-            "from karva import fixture\n\n@fixture\ndef first(): pass\n\n@fixture(name=\"first\")\ndef second(): pass\n",
-        );
+        let analysis = analyze(indoc! {r#"
+            from karva import fixture
+
+            @fixture
+            def first(): pass
+
+            @fixture(name="first")
+            def second(): pass
+        "#});
 
         assert_eq!(
             analysis
@@ -1544,9 +1557,12 @@ mod tests {
 
     #[test]
     fn reports_invalid_literal_scope() {
-        let analysis = analyze(
-            "from karva import fixture\n\n@fixture(scope=\"forever\")\ndef database(): pass\n",
-        );
+        let analysis = analyze(indoc! {r#"
+            from karva import fixture
+
+            @fixture(scope="forever")
+            def database(): pass
+        "#});
 
         assert_eq!(analysis.diagnostics[0].code, DiagnosticCode::InvalidFixture);
         assert_eq!(
@@ -1558,9 +1574,12 @@ mod tests {
     #[test]
     fn dynamic_scope_remains_unknown() {
         assert!(
-            analyze(
-                "from karva import fixture\n\n@fixture(scope=choose_scope)\ndef database(missing): pass\n"
-            )
+            analyze(indoc! {r"
+                from karva import fixture
+
+                @fixture(scope=choose_scope)
+                def database(missing): pass
+            "})
             .diagnostics
             .iter()
             .all(|diagnostic| diagnostic.code != DiagnosticCode::FixtureScopeMismatch)
@@ -1569,26 +1588,45 @@ mod tests {
 
     #[test]
     fn reports_dependency_cycle() {
-        assert!(diagnostic_codes(
-            "from karva import fixture\n\n@fixture\ndef first(second): pass\n\n@fixture\ndef second(first): pass\n"
-        )
-        .contains(&DiagnosticCode::FixtureCycle));
+        assert!(
+            diagnostic_codes(indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def first(second): pass
+
+                @fixture
+                def second(first): pass
+            "})
+            .contains(&DiagnosticCode::FixtureCycle)
+        );
     }
 
     #[test]
     fn reports_scope_mismatch() {
-        assert!(diagnostic_codes(
-            "from karva import fixture\n\n@fixture\ndef narrow(): pass\n\n@fixture(scope=\"session\")\ndef broad(narrow): pass\n"
-        )
-        .contains(&DiagnosticCode::FixtureScopeMismatch));
+        assert!(
+            diagnostic_codes(indoc! {r#"
+                from karva import fixture
+
+                @fixture
+                def narrow(): pass
+
+                @fixture(scope="session")
+                def broad(narrow): pass
+            "#})
+            .contains(&DiagnosticCode::FixtureScopeMismatch)
+        );
     }
 
     #[test]
     fn parametrized_arguments_are_not_fixtures() {
         assert!(
-            analyze(
-                "import pytest\n\n@pytest.mark.parametrize(\"value\", [1])\ndef test_example(value, tmp_path): pass\n"
-            )
+            analyze(indoc! {r#"
+                import pytest
+
+                @pytest.mark.parametrize("value", [1])
+                def test_example(value, tmp_path): pass
+            "#})
             .diagnostics
             .is_empty()
         );
@@ -1599,7 +1637,14 @@ mod tests {
         let analysis = analyze_source(
             &Utf8PathBuf::from("/project/conftest.py"),
             Utf8Path::new("/project"),
-            "from support import external\nfrom karva import fixture\n\n@fixture\ndef local(external): pass\n".to_owned(),
+            indoc! {r"
+                from support import external
+                from karva import fixture
+
+                @fixture
+                def local(external): pass
+            "}
+            .to_owned(),
             &SourceAnalysisSettings {
                 python_version: PythonVersion::PY312,
                 test_function_prefix: "test".to_owned(),
@@ -1615,11 +1660,23 @@ mod tests {
     fn same_name_fixture_uses_nearest_parent_when_overridden() {
         let parent = module(
             "/project/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+            "},
         );
         let current = module(
             "/project/test_example.py",
-            "from karva import fixture\n\n@fixture\ndef database(database): pass\n\ndef test_example(database): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(database): pass
+
+                def test_example(database): pass
+            "},
         );
         let analysis = analyze_sources(current, &[parent], &settings());
 
@@ -1634,15 +1691,32 @@ mod tests {
     fn same_name_fixture_uses_nearest_parent_across_multiple_levels() {
         let root = module(
             "/project/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+            "},
         );
         let nearest = module(
             "/project/pkg/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+            "},
         );
         let current = module(
             "/project/pkg/test_example.py",
-            "from karva import fixture\n\n@fixture\ndef database(database): pass\n\ndef test_example(database): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(database): pass
+
+                def test_example(database): pass
+            "},
         );
         let analysis = analyze_sources(current, &[root, nearest], &settings());
 
@@ -1657,11 +1731,21 @@ mod tests {
     fn cross_file_scope_mismatch_has_related_parent_location() {
         let parent = module(
             "/project/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+            "},
         );
         let current = module(
             "/project/test_example.py",
-            "from karva import fixture\n\n@fixture(scope=\"session\")\ndef shared(database): pass\n",
+            indoc! {r#"
+                from karva import fixture
+
+                @fixture(scope="session")
+                def shared(database): pass
+            "#},
         );
         let analysis = analyze_sources(current, &[parent], &settings());
 
@@ -1683,11 +1767,21 @@ mod tests {
     fn cross_file_cycle_reports_both_source_paths() {
         let parent = module(
             "/project/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef parent(child): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def parent(child): pass
+            "},
         );
         let current = module(
             "/project/test_example.py",
-            "from karva import fixture\n\n@fixture\ndef child(parent): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def child(parent): pass
+            "},
         );
         let analysis = analyze_sources(current, &[parent], &settings());
 
@@ -1712,11 +1806,23 @@ mod tests {
     fn rejected_fixture_blocks_parent_fallback() {
         let parent = module(
             "/project/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+            "},
         );
         let current = module(
             "/project/test_example.py",
-            "from karva import fixture\n\n@fixture(scope=\"invalid\")\ndef database(): pass\n\ndef test_example(database): pass\n",
+            indoc! {r#"
+                from karva import fixture
+
+                @fixture(scope="invalid")
+                def database(): pass
+
+                def test_example(database): pass
+            "#},
         );
         let analysis = analyze_sources(current, &[parent], &settings());
 
@@ -1735,9 +1841,14 @@ mod tests {
 
     #[test]
     fn unknown_fixture_decorator_suppresses_false_missing_error() {
-        let analysis = analyze(
-            "from custom import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database): pass\n",
-        );
+        let analysis = analyze(indoc! {r"
+            from custom import fixture
+
+            @fixture
+            def database(): pass
+
+            def test_example(database): pass
+        "});
 
         assert!(analysis.fixture_model.local().is_empty());
         assert!(analysis.diagnostics.is_empty());
@@ -1745,9 +1856,14 @@ mod tests {
 
     #[test]
     fn known_fixture_import_produces_a_provider() {
-        let analysis = analyze(
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(database): pass\n",
-        );
+        let analysis = analyze(indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+
+            def test_example(database): pass
+        "});
 
         assert_eq!(analysis.fixture_model.local()[0].name, "database");
         assert!(analysis.diagnostics.is_empty());
@@ -1756,9 +1872,12 @@ mod tests {
     #[test]
     fn reports_unsupported_fixture_argument() {
         assert_eq!(
-            diagnostic_codes(
-                "from karva import fixture\n\n@fixture(reuse=True)\ndef database(): pass\n"
-            ),
+            diagnostic_codes(indoc! {r"
+                from karva import fixture
+
+                @fixture(reuse=True)
+                def database(): pass
+            "}),
             [DiagnosticCode::InvalidFixture]
         );
     }
@@ -1766,9 +1885,12 @@ mod tests {
     #[test]
     fn karva_parametrized_arguments_are_not_fixtures() {
         assert!(
-            analyze(
-                "import karva\n\n@karva.tags.parametrize(\"value\", [1])\ndef test_example(value, tmp_path): pass\n"
-            )
+            analyze(indoc! {r#"
+                import karva
+
+                @karva.tags.parametrize("value", [1])
+                def test_example(value, tmp_path): pass
+            "#})
             .diagnostics
             .is_empty()
         );
@@ -1776,10 +1898,15 @@ mod tests {
 
     #[test]
     fn unknown_parametrize_decorator_suppresses_false_missing_error() {
-        assert!(diagnostic_codes(
-            "import custom\n\n@custom.parametrize(\"value\", [1])\ndef test_example(value): pass\n"
-        )
-        .is_empty());
+        assert!(
+            diagnostic_codes(indoc! {r#"
+                import custom
+
+                @custom.parametrize("value", [1])
+                def test_example(value): pass
+            "#})
+            .is_empty()
+        );
     }
 
     fn settings() -> SourceAnalysisSettings {

@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
@@ -13,11 +14,19 @@ fn highlights_fixture_declarations_reads_nested_providers_and_unsupported_target
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "tests/pkg/conftest.py",
-        "from karva import fixture\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "tests/pkg/test_nested.py",
@@ -26,7 +35,12 @@ fn highlights_fixture_declarations_reads_nested_providers_and_unsupported_target
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
 
     let custom_uri = workspace.uri("custom.py");
-    let custom_source = "from karva import fixture\n@fixture(name=\"данные\")\ndef provider(): pass\ndef test_example(данные): pass\n";
+    let custom_source = indoc! {r#"
+        from karva import fixture
+        @fixture(name="данные")
+        def provider(): pass
+        def test_example(данные): pass
+    "#};
     open(&mut server, custom_uri.clone(), custom_source);
     let custom = server
         .request::<DocumentHighlightRequest>(highlight_params(custom_uri, Position::new(3, 18)));

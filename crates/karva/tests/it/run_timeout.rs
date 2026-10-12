@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 #[cfg(unix)]
@@ -192,7 +193,13 @@ def test_slow():
     }
 
     assert_snapshot!(format!(
-        "success: {}\nexit_code: {}\n----- stdout -----\n{}\n----- stderr -----\n{}",
+        indoc! {r"
+            success: {}
+            exit_code: {}
+            ----- stdout -----
+            {}
+            ----- stderr -----
+            {}"},
         status.success(),
         status.code().map_or_else(|| "none".to_string(), |code| code.to_string()),
         String::from_utf8_lossy(&output.stdout),

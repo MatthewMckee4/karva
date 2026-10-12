@@ -36,6 +36,8 @@ pub fn fixture_definition(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::{TextRange, TextSize};
@@ -81,7 +83,12 @@ mod tests {
 
     #[test]
     fn resolves_test_parameter_fixture_to_function_name() {
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+            def test_example(database): pass
+        "};
         let target = fixture_definition(&analysis(source), offset(source, "database):"))
             .expect("definition target");
         assert_eq!(target.path, "/project/test_example.py");
@@ -90,8 +97,17 @@ mod tests {
 
     #[test]
     fn resolves_fixture_dependency_to_parent_provider() {
-        let parent_source = "from karva import fixture\n@fixture\ndef database(): pass\n";
-        let source = "from karva import fixture\n@fixture\ndef wrapper(database): pass\ndef test_example(wrapper): pass\n";
+        let parent_source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "};
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def wrapper(database): pass
+            def test_example(wrapper): pass
+        "};
         let parent = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),
             parent_source.to_owned(),
@@ -111,7 +127,14 @@ mod tests {
 
     #[test]
     fn resolves_use_fixtures_and_custom_name() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture(name=\"database\")\ndef provider(): pass\n@pytest.mark.usefixtures(\"database\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import pytest
+            from karva import fixture
+            @fixture(name="database")
+            def provider(): pass
+            @pytest.mark.usefixtures("database")
+            def test_example(): pass
+        "#};
         let target = fixture_definition(&analysis(source), offset_last(source, "database\""))
             .expect("definition target");
         assert_eq!(target.path, "/project/test_example.py");
@@ -120,7 +143,14 @@ mod tests {
 
     #[test]
     fn resolves_karva_use_fixtures_and_unicode() {
-        let source = "import karva\nfrom karva import fixture\n@fixture\ndef δεδομενα(): pass\n@karva.tags.use_fixtures(\"δεδομενα\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import karva
+            from karva import fixture
+            @fixture
+            def δεδομενα(): pass
+            @karva.tags.use_fixtures("δεδομενα")
+            def test_example(): pass
+        "#};
         let target = fixture_definition(
             &analysis(source),
             offset(source, "δεδομενα\"")
@@ -139,7 +169,14 @@ mod tests {
         let unknown = "def test_example(missing): pass\n";
         assert!(fixture_definition(&analysis(unknown), offset(unknown, "missing")).is_none());
 
-        let rejected = "from karva import fixture\n@fixture\ndef duplicate(): pass\n@fixture\ndef duplicate(): pass\ndef test_example(duplicate): pass\n";
+        let rejected = indoc! {r"
+            from karva import fixture
+            @fixture
+            def duplicate(): pass
+            @fixture
+            def duplicate(): pass
+            def test_example(duplicate): pass
+        "};
         assert!(fixture_definition(&analysis(rejected), offset(rejected, "duplicate):")).is_none());
     }
 }

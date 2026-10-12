@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use karva_static::EnvVars;
 
@@ -2959,7 +2960,13 @@ def test_always_fails(): assert False
 /// machinery accidentally firing on non-retried tests.
 #[test]
 fn test_no_retry_run_unchanged_output() {
-    let context = TestContext::with_file("test.py", "def test_a(): pass\ndef test_b(): pass\n");
+    let context = TestContext::with_file(
+        "test.py",
+        indoc! {r"
+            def test_a(): pass
+            def test_b(): pass
+        "},
+    );
 
     assert_cmd_snapshot!(context.command_no_parallel().args(["--retry=2"]), @"
     success: true
@@ -3853,7 +3860,10 @@ def test_typeerror():
 fn rejects_unsupported_class_method_selector() {
     let context = TestContext::with_file(
         "test.py",
-        "class TestCheckout:\n    def test_total(self): assert True\n",
+        indoc! {r"
+            class TestCheckout:
+                def test_total(self): assert True
+        "},
     );
     assert_cmd_snapshot!(context.command().arg("test.py::TestCheckout::test_total"), @"
     success: false
@@ -3870,7 +3880,10 @@ fn rejects_unsupported_class_method_selector() {
 fn rejects_unsupported_class_method_selector_with_case_index() {
     let context = TestContext::with_file(
         "test.py",
-        "class TestCheckout:\n    def test_total(self): assert True\n",
+        indoc! {r"
+            class TestCheckout:
+                def test_total(self): assert True
+        "},
     );
     assert_cmd_snapshot!(context.command().arg("test.py::TestCheckout::test_total[0]"), @"
     success: false

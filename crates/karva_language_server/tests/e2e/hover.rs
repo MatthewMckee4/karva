@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
@@ -13,18 +14,25 @@ fn hovers_unsaved_fixture_with_metadata_and_dependencies() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef parent(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def parent(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "from karva import fixture\n\n",
-        "@fixture(name=\"database\", scope=\"module\", autouse=True)\n",
-        "def local_database(parent):\n",
-        "    \"\"\"Local database fixture.\"\"\"\n",
-        "    pass\n\n",
-        "def test_example(database): pass\n",
-    );
+    let source = indoc! {r#"
+        from karva import fixture
+
+        @fixture(name="database", scope="module", autouse=True)
+        def local_database(parent):
+            """Local database fixture."""
+            pass
+
+        def test_example(database): pass
+    "#};
     open(&mut server, uri.clone(), source);
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(7, 19)));
@@ -54,14 +62,16 @@ fn hovers_explicit_fixture_value_type() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "from typing import Iterator\n",
-        "from karva import fixture\n\n",
-        "@fixture\n",
-        "def client() -> Iterator[Client]:\n",
-        "    yield Client()\n\n",
-        "def test_example(client): pass\n",
-    );
+    let source = indoc! {r"
+        from typing import Iterator
+        from karva import fixture
+
+        @fixture
+        def client() -> Iterator[Client]:
+            yield Client()
+
+        def test_example(client): pass
+    "};
     open(&mut server, uri.clone(), source);
 
     let response = server
@@ -136,15 +146,21 @@ fn hovers_pytest_usefixtures_string() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "import pytest\n\n",
-        "@pytest.mark.usefixtures(\"database\")\n",
-        "def test_example(): pass\n",
-    );
+    let source = indoc! {r#"
+        import pytest
+
+        @pytest.mark.usefixtures("database")
+        def test_example(): pass
+    "#};
     open(&mut server, uri.clone(), source);
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(2, 30)));
@@ -174,11 +190,21 @@ fn hovers_nearest_nested_fixture_provider() {
     let workspace = Workspace::new();
     workspace.write(
         "conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     workspace.write(
         "package/conftest.py",
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("package/test_example.py");
@@ -193,7 +219,13 @@ fn hovers_nearest_nested_fixture_provider() {
 
     assert_eq!(
         response["contents"]["value"],
-        "def database():\n\nKarva fixture: database\nScope: function\nAutouse: false\nProvider: /project/package/conftest.py"
+        indoc! {r"
+            def database():
+
+            Karva fixture: database
+            Scope: function
+            Autouse: false
+            Provider: /project/package/conftest.py"}
     );
 }
 
@@ -202,13 +234,15 @@ fn returns_no_hover_for_dynamic_fixture_provider() {
     let workspace = Workspace::new();
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri("test_example.py");
-    let source = concat!(
-        "from karva import fixture\n\n",
-        "fixture_name = get_fixture_name()\n",
-        "@fixture(name=fixture_name)\n",
-        "def dynamic(): pass\n\n",
-        "def test_example(dynamic): pass\n",
-    );
+    let source = indoc! {r"
+        from karva import fixture
+
+        fixture_name = get_fixture_name()
+        @fixture(name=fixture_name)
+        def dynamic(): pass
+
+        def test_example(dynamic): pass
+    "};
     open(&mut server, uri.clone(), source);
 
     let response = server.request::<HoverRequest>(hover_params(uri, Position::new(6, 19)));

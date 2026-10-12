@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_snapshot;
 use insta_cmd::assert_cmd_snapshot;
 use serde_json::Value;
@@ -927,7 +928,10 @@ fn expected_failures_remain_distinct_in_reports_and_cache() {
     let context = TestContext::with_files([
         (
             "karva.toml",
-            "[profile.default.junit]\npath = 'reports/results.xml'\n",
+            indoc! {r"
+                [profile.default.junit]
+                path = 'reports/results.xml'
+            "},
         ),
         (
             "test_expected.py",

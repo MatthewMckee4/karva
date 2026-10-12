@@ -400,6 +400,8 @@ fn is_test_function_to_collect(name: &str, explicit_names: &HashSet<&str>, prefi
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::Utf8PathBuf;
     use ruff_python_ast::PythonVersion;
 
@@ -434,9 +436,11 @@ mod tests {
     fn collect_file_collects_prefixed_tests() {
         let (_temp_dir, root, path) = python_file(
             "test_sample.py",
-            "def helper(): pass\n\
-             def test_first(): pass\n\
-             def test_second(): pass\n",
+            indoc! {r"
+                def helper(): pass
+                def test_first(): pass
+                def test_second(): pass
+            "},
         );
 
         let module = collect_file(&path, &root, &settings(), &[])
@@ -454,9 +458,11 @@ mod tests {
     fn collect_file_collects_explicit_function_names() {
         let (_temp_dir, root, path) = python_file(
             "test_sample.py",
-            "def helper(): pass\n\
-             def test_first(): pass\n\
-             def test_second(): pass\n",
+            indoc! {r"
+                def helper(): pass
+                def test_first(): pass
+                def test_second(): pass
+            "},
         );
 
         let module = collect_file(&path, &root, &settings(), &["helper".to_string()])
@@ -470,7 +476,11 @@ mod tests {
     fn explicit_selection_preserves_source_order_and_ignores_duplicates() {
         let (_temp_dir, root, path) = python_file(
             "test_sample.py",
-            "def helper(): pass\ndef test_excluded(): pass\ndef test_last(): pass\n",
+            indoc! {r"
+                def helper(): pass
+                def test_excluded(): pass
+                def test_last(): pass
+            "},
         );
         let names = [
             "test_last".to_string(),
@@ -546,10 +556,12 @@ async def test_metadata(a: int, b: int) -> None:
     fn collect_file_collects_fixtures_when_enabled() {
         let (_temp_dir, root, path) = python_file(
             "test_sample.py",
-            "from karva import fixture\n\
-             @fixture\n\
-             def db(): pass\n\
-             def test_uses_db(): pass\n",
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def db(): pass
+                def test_uses_db(): pass
+            "},
         );
         let settings = CollectionSettings {
             collect_fixtures: true,
@@ -681,7 +693,10 @@ class Thing:
         assert!(!is_doctest_prompt(">>> # comment"));
         assert!(!is_doctest_prompt(">>>value"));
 
-        let source = "\"\"\"Mention >>> inline.\n>>> value\n\"\"\"";
+        let source = indoc! {r#"
+            """Mention >>> inline.
+            >>> value
+            """"#};
         let range = TextRange::new(
             TextSize::default(),
             TextSize::try_from(source.len()).expect("source length should fit"),
@@ -790,7 +805,11 @@ class Thing:
     #[test]
     fn collect_source_recovers_from_syntax_errors() {
         let (_temp_dir, root, path) = python_file("test_sample.py", "");
-        let source_text = "broken =\ndef test_after_error(): pass\n".to_string();
+        let source_text = indoc! {r"
+            broken =
+            def test_after_error(): pass
+        "}
+        .to_string();
 
         let module = collect_source(&path, &root, source_text, &settings(), &[])
             .expect("module should collect");
@@ -804,7 +823,11 @@ class Thing:
     #[test]
     fn collect_source_respects_configured_prefix() {
         let (_temp_dir, root, path) = python_file("test_sample.py", "");
-        let source_text = "def test_default(): pass\ndef spec_custom(): pass\n".to_string();
+        let source_text = indoc! {r"
+            def test_default(): pass
+            def spec_custom(): pass
+        "}
+        .to_string();
         let settings = CollectionSettings {
             test_function_prefix: "spec_",
             ..settings()
@@ -819,7 +842,12 @@ class Thing:
     #[test]
     fn collect_source_collects_fixtures() {
         let (_temp_dir, root, path) = python_file("test_sample.py", "");
-        let source_text = "from karva import fixture\n@fixture\ndef database(): pass\n".to_string();
+        let source_text = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+        "}
+        .to_string();
         let settings = CollectionSettings {
             collect_fixtures: true,
             ..settings()
@@ -834,7 +862,20 @@ class Thing:
     #[test]
     fn collect_source_resolves_fixture_aliases_and_shadowing() {
         let (_temp_dir, root, path) = python_file("test_sample.py", "");
-        let source_text = "from karva import fixture as resource\n\n@resource\ndef first(): pass\n\nresource = custom\n\n@resource\ndef second(): pass\n\n@other.fixture\ndef third(): pass\n";
+        let source_text = indoc! {r"
+            from karva import fixture as resource
+
+            @resource
+            def first(): pass
+
+            resource = custom
+
+            @resource
+            def second(): pass
+
+            @other.fixture
+            def third(): pass
+        "};
         let settings = CollectionSettings {
             collect_fixtures: true,
             ..settings()

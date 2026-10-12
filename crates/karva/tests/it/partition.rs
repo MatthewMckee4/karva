@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
@@ -445,7 +446,10 @@ fn module_and_function_parametrize_cases_are_not_dropped(
     let context = TestContext::with_files([
         (
             "marks.py",
-            "import pytest\npytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])\n",
+            indoc! {r"
+                import pytest
+                pytestmark = pytest.mark.parametrize('module_value', [1, 2, 3])
+            "},
         ),
         (
             "test_mod.py",

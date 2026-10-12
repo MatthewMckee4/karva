@@ -23,6 +23,7 @@ ruff_python_stdlib = { workspace = true }
 ruff_text_size = { workspace = true }
 
 [dev-dependencies]
+indoc = { workspace = true }
 rstest = { workspace = true }
 
 [lints]

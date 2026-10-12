@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -180,11 +181,16 @@ def test_lines():
 fn test_inline_snapshot_multiline_matches() {
     let context = TestContext::with_file(
         "test.py",
-        "
-import karva
+        indoc! {r#"
 
-def test_lines():
-    karva.assert_snapshot(\"line 1\\nline 2\", inline=\"\"\"\\\n        line 1\n        line 2\n        \"\"\")\n",
+            import karva
+
+            def test_lines():
+                karva.assert_snapshot("line 1\nline 2", inline="""\
+                    line 1
+                    line 2
+                    """)
+        "#},
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @"
@@ -582,7 +588,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -757,7 +766,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -930,7 +942,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1090,7 +1105,10 @@ def test_second():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1366,7 +1384,10 @@ def test_third():
     ----- stderr -----
     "#);
 
-    assert_cmd_snapshot!(context.snapshot("review").pass_stdin("a\ns\n"), @"
+    assert_cmd_snapshot!(context.snapshot("review").pass_stdin(indoc! {r"
+        a
+        s
+    "}), @"
     success: true
     exit_code: 0
     ----- stdout -----

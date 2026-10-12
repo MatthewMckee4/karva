@@ -203,6 +203,8 @@ fn python_file_types() -> Result<Types> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     use ruff_python_ast::PythonVersion;
@@ -228,7 +230,15 @@ mod tests {
         let test_path = root.join("test_sample.py");
         std::fs::write(
             &test_path,
-            "\"\"\"Example.\n\n>>> 1 + 1\n2\n\"\"\"\nvalue = 1\ndef test_sample(): assert value == 1\n",
+            indoc! {r#"
+                """Example.
+
+                >>> 1 + 1
+                2
+                """
+                value = 1
+                def test_sample(): assert value == 1
+            "#},
         )
         .expect("write test file");
         let mut settings = collection_settings();

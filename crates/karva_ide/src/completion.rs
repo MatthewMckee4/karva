@@ -204,6 +204,8 @@ fn size(value: usize) -> Option<TextSize> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
     use ruff_text_size::TextSize;
@@ -237,7 +239,14 @@ mod tests {
 
     #[test]
     fn completes_local_and_builtin_fixtures_in_test_parameters() {
-        let source = "from karva import fixture\n\n@fixture\ndef database(): pass\n\ndef test_example(dat): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+
+            def test_example(dat): pass
+        "};
         let analysis = analysis(source);
         let marker = source.rfind("dat").expect("test parameter");
         let completions = complete_fixtures(
@@ -264,9 +273,24 @@ mod tests {
     fn parent_override_and_rejected_fixtures_follow_runtime_visibility() {
         let parent = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n@fixture\ndef parent_only(): pass\n".to_owned(),
+            indoc! {r"
+                from karva import fixture
+
+                @fixture
+                def database(): pass
+                @fixture
+                def parent_only(): pass
+            "}
+            .to_owned(),
         );
-        let source = "from karva import fixture\n\n@fixture(scope=\"invalid\")\ndef database(): pass\n\ndef test_example(pa): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+
+            @fixture(scope="invalid")
+            def database(): pass
+
+            def test_example(pa): pass
+        "#};
         let current = SourceDocument::new(
             Utf8PathBuf::from("/project/test_example.py"),
             source.to_owned(),
@@ -294,7 +318,14 @@ mod tests {
 
     #[test]
     fn rejected_fixture_name_blocks_builtin_completion() {
-        let source = "from karva import fixture\n\n@fixture(scope=\"invalid\")\ndef tmp_path(): pass\n\ndef test_example(tmp): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+
+            @fixture(scope="invalid")
+            def tmp_path(): pass
+
+            def test_example(tmp): pass
+        "#};
         let analysis = analysis(source);
         let marker = source.rfind("tmp").expect("test parameter");
         let completions = complete_fixtures(
@@ -312,7 +343,14 @@ mod tests {
 
     #[test]
     fn replaces_unicode_parameter_prefix() {
-        let source = "from karva import fixture\n\n@fixture\ndef δεδομενα(): pass\n\ndef test_example(δε): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def δεδομενα(): pass
+
+            def test_example(δε): pass
+        "};
         let analysis = analysis(source);
         let marker = source.rfind("δε").expect("test parameter");
         let completions =
@@ -331,7 +369,19 @@ mod tests {
 
     #[test]
     fn completes_fixture_parameters_and_use_fixtures_strings() {
-        let source = "from karva import fixture\nimport karva\n\n@fixture\ndef database(): pass\n\n@karva.tags.use_fixtures(\"dat\")\ndef test_example(): pass\n\n@fixture\ndef wrapper(dat): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+            import karva
+
+            @fixture
+            def database(): pass
+
+            @karva.tags.use_fixtures("dat")
+            def test_example(): pass
+
+            @fixture
+            def wrapper(dat): pass
+        "#};
         let analysis = analysis(source);
         let first = source.find("\"dat\"").expect("use_fixtures argument") + 1;
         assert!(
@@ -385,7 +435,16 @@ mod tests {
 
     #[test]
     fn shadowed_pytest_name_is_not_a_usefixtures_context() {
-        let source = "import other as pytest\nfrom karva import fixture\n\n@fixture\ndef database(): pass\n\n@pytest.mark.usefixtures(\"dat\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import other as pytest
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+
+            @pytest.mark.usefixtures("dat")
+            def test_example(): pass
+        "#};
         let marker = source.find("\"dat\"").expect("decorator argument") + 1;
 
         assert!(

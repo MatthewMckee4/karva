@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -112,7 +113,10 @@ async def test_failure(expected):
 fn assertion_identity_reports_distinct_objects() {
     let context = TestContext::with_file(
         "test_assertion_identity.py",
-        "def test_identity():\n    assert object() is object()\n",
+        indoc! {r"
+            def test_identity():
+                assert object() is object()
+        "},
     );
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
@@ -193,7 +197,10 @@ def test_safe_repr():
 fn assertion_membership_preserves_native_failure() {
     let context = TestContext::with_file(
         "test_assertion_membership.py",
-        "def test_membership():\n    assert \"needle\" in (\"haystack\",)\n",
+        indoc! {r#"
+            def test_membership():
+                assert "needle" in ("haystack",)
+        "#},
     );
     assert_cmd_snapshot!(context.command_no_parallel(), @r#"
     success: false
@@ -228,7 +235,10 @@ fn assertion_membership_preserves_native_failure() {
 fn assertion_truthiness_preserves_native_failure() {
     let context = TestContext::with_file(
         "test_assertion_truthiness.py",
-        "def test_truthiness():\n    assert []\n",
+        indoc! {r"
+            def test_truthiness():
+                assert []
+        "},
     );
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
@@ -340,7 +350,10 @@ fn assertion_loader_preserves_resources_and_imports() {
         ("helpers/data.txt", "payload\n"),
         (
             "helpers/import_assertion.py",
-            "value = 1\nassert value == 2\n",
+            indoc! {r"
+                value = 1
+                assert value == 2
+            "},
         ),
         (
             "test_assertion_loader.py",
@@ -1173,7 +1186,10 @@ def test_hostile_metadata():
 fn optimized_assertions_remove_cleanup_with_assertions() {
     let context = TestContext::with_file(
         "test_optimized_assertions.py",
-        "def test_optimized_assertion():\n    assert False\n",
+        indoc! {r"
+            def test_optimized_assertion():
+                assert False
+        "},
     );
 
     assert_cmd_snapshot!(
@@ -1198,7 +1214,11 @@ fn optimized_assertions_remove_cleanup_with_assertions() {
 fn assertion_cache_reuses_code_and_invalidates_safely() {
     let context = TestContext::with_file(
         "test_cached_assertion.py",
-        "def test_cached_assertion():\n    value = 1\n    assert value == 2\n",
+        indoc! {r"
+            def test_cached_assertion():
+                value = 1
+                assert value == 2
+        "},
     );
     context.write_file(
         "sitecustomize.py",
@@ -1329,7 +1349,11 @@ if os.environ.get("KARVA_CACHE_PARSE_GUARD"):
 
     context.write_file(
         "test_cached_assertion.py",
-        "def test_cached_assertion():\n    value = 3\n    assert value == 2\n",
+        indoc! {r"
+            def test_cached_assertion():
+                value = 3
+                assert value == 2
+        "},
     );
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
@@ -1366,7 +1390,11 @@ if os.environ.get("KARVA_CACHE_PARSE_GUARD"):
 fn assertion_cache_respects_dont_write_bytecode() {
     let context = TestContext::with_file(
         "test_no_assertion_cache.py",
-        "def test_no_assertion_cache():\n    value = 1\n    assert value == 2\n",
+        indoc! {r"
+            def test_no_assertion_cache():
+                value = 1
+                assert value == 2
+        "},
     );
 
     assert_cmd_snapshot!(
@@ -1425,7 +1453,16 @@ fn assertion_cache_respects_dont_write_bytecode() {
 fn multiline_assertion_keeps_focused_difference() {
     let context = TestContext::with_file(
         "test_multiline_assertion.py",
-        "def test_multiline_assertion():\n    value = [1, 3]\n    assert (\n        value == [\n            1,\n            2,\n        ]\n    )\n",
+        indoc! {r"
+            def test_multiline_assertion():
+                value = [1, 3]
+                assert (
+                    value == [
+                        1,
+                        2,
+                    ]
+                )
+        "},
     );
 
     assert_cmd_snapshot!(context.command_no_parallel(), @"

@@ -575,6 +575,8 @@ pub fn remove_snapshot(path: &Utf8Path) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
 
     /// Normalize path separators for cross-platform snapshot stability.
@@ -711,7 +713,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).expect("utf8");
         let source_path = dir_path.join("test.py");
-        let source = "def test_first():\n    assert_snapshot('first', inline='old')\n\ndef test_second():\n    assert_snapshot('second', inline='old')\n";
+        let source = indoc! {r"
+            def test_first():
+                assert_snapshot('first', inline='old')
+
+            def test_second():
+                assert_snapshot('second', inline='old')
+        "};
         std::fs::write(&source_path, source).expect("write source");
 
         let snapshots = [
@@ -960,7 +968,14 @@ mod tests {
         let snap_dir = dir_path.join("snapshots");
         std::fs::create_dir_all(&snap_dir).expect("mkdir");
 
-        std::fs::write(dir_path.join("test.py"), "def test_other():\n    pass\n").expect("write");
+        std::fs::write(
+            dir_path.join("test.py"),
+            indoc! {r"
+                def test_other():
+                    pass
+            "},
+        )
+        .expect("write");
 
         let snapshot = SnapshotFile {
             metadata: crate::format::SnapshotMetadata {
@@ -1009,7 +1024,14 @@ mod tests {
         let snap_dir = dir_path.join("snapshots");
         std::fs::create_dir_all(&snap_dir).expect("mkdir");
 
-        std::fs::write(dir_path.join("test.py"), "def test_foo():\n    pass\n").expect("write");
+        std::fs::write(
+            dir_path.join("test.py"),
+            indoc! {r"
+                def test_foo():
+                    pass
+            "},
+        )
+        .expect("write");
 
         let snapshot = SnapshotFile {
             metadata: crate::format::SnapshotMetadata {

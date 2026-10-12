@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta::assert_json_snapshot;
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentNotification, DidOpenTextDocumentParams,
@@ -8,14 +9,16 @@ use lsp_types::{
 
 use super::{TestServer, Workspace};
 
-const SOURCE: &str = concat!(
-    "import pytest\n",
-    "from karva import fixture\n\n",
-    "@fixture(name=\"данные\")\n",
-    "def provider(): pass\n\n",
-    "@pytest.mark.parametrize(\"value\", [1, 2])\n",
-    "def test_example(value): pass\n",
-);
+const SOURCE: &str = indoc! {r#"
+    import pytest
+    from karva import fixture
+
+    @fixture(name="данные")
+    def provider(): pass
+
+    @pytest.mark.parametrize("value", [1, 2])
+    def test_example(value): pass
+"#};
 
 #[test]
 fn returns_hierarchical_symbols_for_unsaved_karva_source() {
@@ -97,11 +100,19 @@ fn analyzes_unsaved_documents_in_nonexistent_directories(#[values("", "nested/")
     let workspace = Workspace::new();
     workspace.write(
         &format!("{project}karva.toml"),
-        "[profile.default.test]\ntest-function-prefix = 'check'\n",
+        indoc! {r"
+            [profile.default.test]
+            test-function-prefix = 'check'
+        "},
     );
     workspace.write(
         &format!("{project}conftest.py"),
-        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        indoc! {r"
+            from karva import fixture
+
+            @fixture
+            def database(): pass
+        "},
     );
     let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
     let uri = workspace.uri(&format!("{project}new/package/test_example.py"));

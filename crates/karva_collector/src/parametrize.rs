@@ -110,6 +110,8 @@ fn is_module_tag_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use ruff_python_ast::{Mod, Stmt};
     use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
@@ -141,86 +143,111 @@ mod tests {
 
     #[test]
     fn unrelated_decorator_returns_none() {
-        let f = parse_function("@my_decorator\ndef test_x(): pass\n");
+        let f = parse_function(indoc! {r"
+            @my_decorator
+            def test_x(): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 
     #[test]
     fn unrelated_parametrize_attribute_returns_none() {
-        let f = parse_function("@custom.parametrize('x', [1, 2])\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @custom.parametrize('x', [1, 2])
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 
     #[test]
     fn pytest_mark_parametrize_list() {
-        let f = parse_function("@pytest.mark.parametrize('x', [1, 2, 3])\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @pytest.mark.parametrize('x', [1, 2, 3])
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(3));
     }
 
     #[test]
     fn karva_tags_parametrize_list_of_tuples() {
-        let f = parse_function(
-            "@karva.tags.parametrize('a, b', [(1, 2), (3, 4)])\ndef test_x(a, b): pass\n",
-        );
+        let f = parse_function(indoc! {r"
+            @karva.tags.parametrize('a, b', [(1, 2), (3, 4)])
+            def test_x(a, b): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(2));
     }
 
     #[test]
     fn bare_parametrize_name() {
-        let f = parse_function("@parametrize('x', [1, 2])\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @parametrize('x', [1, 2])
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(2));
     }
 
     #[test]
     fn keyword_argvalues() {
-        let f = parse_function(
-            "@pytest.mark.parametrize(argnames='x', argvalues=[1, 2, 3, 4])\ndef test_x(x): pass\n",
-        );
+        let f = parse_function(indoc! {r"
+            @pytest.mark.parametrize(argnames='x', argvalues=[1, 2, 3, 4])
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(4));
     }
 
     #[test]
     fn stacked_decorators_multiply() {
-        let f = parse_function(
-            "@pytest.mark.parametrize('a', [1, 2, 3])\n\
-             @pytest.mark.parametrize('b', [4, 5])\n\
-             def test_x(a, b): pass\n",
-        );
+        let f = parse_function(indoc! {r"
+            @pytest.mark.parametrize('a', [1, 2, 3])
+            @pytest.mark.parametrize('b', [4, 5])
+            def test_x(a, b): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(6));
     }
 
     #[test]
     fn tuple_argvalues_counts_outer_elements() {
-        let f =
-            parse_function("@parametrize('x', ((1, 2), (3, 4), (5, 6)))\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @parametrize('x', ((1, 2), (3, 4), (5, 6)))
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), Some(3));
     }
 
     #[test]
     fn dynamic_argvalues_returns_none() {
-        let f = parse_function("@parametrize('x', load_cases())\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @parametrize('x', load_cases())
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 
     #[test]
     fn list_comprehension_argvalues_returns_none() {
-        let f = parse_function("@parametrize('x', [v for v in values()])\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @parametrize('x', [v for v in values()])
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 
     #[test]
     fn missing_argvalues_returns_none() {
-        let f = parse_function("@parametrize('x')\ndef test_x(x): pass\n");
+        let f = parse_function(indoc! {r"
+            @parametrize('x')
+            def test_x(x): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 
     #[test]
     fn dynamic_decorator_propagates_none() {
-        let f = parse_function(
-            "@parametrize('a', [1, 2])\n\
-             @parametrize('b', dynamic_values())\n\
-             def test_x(a, b): pass\n",
-        );
+        let f = parse_function(indoc! {r"
+            @parametrize('a', [1, 2])
+            @parametrize('b', dynamic_values())
+            def test_x(a, b): pass
+        "});
         assert_eq!(count_parametrize_cases(&f), None);
     }
 }

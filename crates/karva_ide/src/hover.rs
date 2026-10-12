@@ -287,6 +287,8 @@ fn use_fixtures_reference(
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use camino::{Utf8Path, Utf8PathBuf};
     use rstest::rstest;
     use ruff_python_ast::PythonVersion;
@@ -321,7 +323,18 @@ mod tests {
 
     #[test]
     fn hovers_local_fixture_with_signature_docstring_and_dependencies() {
-        let source = "from karva import fixture\n\n@fixture(scope=\"module\")\ndef database():\n    \"\"\"Open test database.\"\"\"\n\n@fixture\ndef wrapper(database): pass\n\ndef test_example(wrapper): pass\n";
+        let source = indoc! {r#"
+            from karva import fixture
+
+            @fixture(scope="module")
+            def database():
+                """Open test database."""
+
+            @fixture
+            def wrapper(database): pass
+
+            def test_example(wrapper): pass
+        "#};
         let result = hover_fixture(
             &analysis(source),
             at(source, "wrapper):") + TextSize::from(2),
@@ -351,9 +364,20 @@ mod tests {
     fn hovers_parent_override_provider() {
         let parent = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),
-            "from karva import fixture\n@fixture\ndef database(): pass\n".to_owned(),
+            indoc! {r"
+                from karva import fixture
+                @fixture
+                def database(): pass
+            "}
+            .to_owned(),
         );
-        let source = "from karva import fixture\n@fixture\ndef database(): pass\n\ndef test_example(database): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def database(): pass
+
+            def test_example(database): pass
+        "};
         let current = SourceDocument::new(
             Utf8PathBuf::from("/project/test_example.py"),
             source.to_owned(),
@@ -374,13 +398,13 @@ mod tests {
     fn hovers_inherited_fixture_value_type() {
         let parent = SourceDocument::new(
             Utf8PathBuf::from("/project/conftest.py"),
-            concat!(
-                "from typing import Iterator\n",
-                "from karva import fixture\n",
-                "@fixture\n",
-                "def client() -> Iterator[Client]:\n",
-                "    yield Client()\n",
-            )
+            indoc! {r"
+                from typing import Iterator
+                from karva import fixture
+                @fixture
+                def client() -> Iterator[Client]:
+                    yield Client()
+            "}
             .to_owned(),
         );
         let source = "def test_example(client): pass\n";
@@ -399,19 +423,22 @@ mod tests {
 
     #[test]
     fn hovers_imported_fixture_value_type() {
-        let source = "from support import client\ndef test_example(client): pass\n";
+        let source = indoc! {r"
+            from support import client
+            def test_example(client): pass
+        "};
         let index = WorkspaceSourceIndex::from_documents(
             Utf8PathBuf::from("/project"),
             [
                 SourceDocument::new(
                     Utf8PathBuf::from("/project/support.py"),
-                    concat!(
-                        "from collections.abc import Generator\n",
-                        "from karva import fixture\n",
-                        "@fixture\n",
-                        "def client() -> Generator[Client, None, None]:\n",
-                        "    yield Client()\n",
-                    )
+                    indoc! {r"
+                        from collections.abc import Generator
+                        from karva import fixture
+                        @fixture
+                        def client() -> Generator[Client, None, None]:
+                            yield Client()
+                    "}
                     .to_owned(),
                 ),
                 SourceDocument::new(
@@ -435,7 +462,11 @@ mod tests {
 
     #[test]
     fn hovers_builtin_and_suppresses_unknown_fixture() {
-        let source = "def test_example(tmp_path): pass\n\ndef test_unknown(missing): pass\n";
+        let source = indoc! {r"
+            def test_example(tmp_path): pass
+
+            def test_unknown(missing): pass
+        "};
         let result = hover_fixture(
             &analysis(source),
             at(source, "tmp_path):") + TextSize::from(2),
@@ -454,7 +485,14 @@ mod tests {
 
     #[test]
     fn hovers_use_fixtures_string() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.usefixtures(\"database\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.usefixtures("database")
+            def test_example(): pass
+        "#};
         let result = hover_fixture(
             &analysis(source),
             at(source, "database\"") + TextSize::from(2),
@@ -472,7 +510,14 @@ mod tests {
 
     #[test]
     fn hovers_escaped_use_fixtures_string() {
-        let source = "import pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.usefixtures(\"data\\x62ase\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.usefixtures("data\x62ase")
+            def test_example(): pass
+        "#};
         let result =
             hover_fixture(&analysis(source), at(source, "x62")).expect("escaped usefixtures hover");
 
@@ -488,7 +533,12 @@ mod tests {
 
     #[test]
     fn hovers_unicode_fixture_name_by_utf8_offset() {
-        let source = "from karva import fixture\n@fixture\ndef δεδομενα(): pass\ndef test_example(δεδομενα): pass\n";
+        let source = indoc! {r"
+            from karva import fixture
+            @fixture
+            def δεδομενα(): pass
+            def test_example(δεδομενα): pass
+        "};
         let offset =
             at(source, "δεδομενα):") + TextSize::try_from("δεδομενα".len()).expect("source fits");
         let result = hover_fixture(&analysis(source), offset).expect("unicode hover");
@@ -497,7 +547,14 @@ mod tests {
 
     #[test]
     fn shadowed_pytest_name_does_not_create_framework_hover() {
-        let source = "import other as pytest\nfrom karva import fixture\n@fixture\ndef database(): pass\n@pytest.mark.usefixtures(\"database\")\ndef test_example(): pass\n";
+        let source = indoc! {r#"
+            import other as pytest
+            from karva import fixture
+            @fixture
+            def database(): pass
+            @pytest.mark.usefixtures("database")
+            def test_example(): pass
+        "#};
         let offset = at(source, "\"database\"") + TextSize::from(3);
 
         assert!(hover_fixture(&analysis(source), offset).is_none());
@@ -518,42 +575,51 @@ mod tests {
         case: (&str, Option<&str>),
     ) {
         let (marker, expected) = case;
-        let source = concat!(
-            "from collections.abc import Iterator as Iter\n",
-            "from collections.abc import AsyncIterator as AsyncIter\n",
-            "from typing import AsyncGenerator, Generator\n\n",
-            "from karva import fixture\n",
-            "@fixture\n",
-            "def direct() -> Client: pass\n\n",
-            "@fixture\n",
-            "def yielded() -> Iter[Client]:\n",
-            "    yield Client()\n\n",
-            "@fixture\n",
-            "def generated() -> Generator[Client, None, None]:\n",
-            "    yield Client()\n\n",
-            "@fixture\n",
-            "async def async_yielded() -> AsyncGenerator[Client, None]:\n",
-            "    yield Client()\n\n",
-            "@fixture\n",
-            "async def async_iterated() -> AsyncIter[Client]:\n",
-            "    yield Client()\n\n",
-            "@fixture\n",
-            "def malformed_iterator() -> Iter[Client, None]:\n",
-            "    yield Client()\n\n",
-            "@fixture\n",
-            "def malformed_generator() -> Generator[Client, None]:\n",
-            "    yield Client()\n\n",
-            "@fixture\n",
-            "def unknown(): pass\n\n",
-            "def test_example(direct): pass\n",
-            "def test_yielded(yielded): pass\n",
-            "def test_generated(generated): pass\n",
-            "def test_async(async_yielded): pass\n",
-            "def test_async_iterated(async_iterated): pass\n",
-            "def test_malformed_iterator(malformed_iterator): pass\n",
-            "def test_malformed_generator(malformed_generator): pass\n",
-            "def test_unknown(unknown): pass\n",
-        );
+        let source = indoc! {r"
+            from collections.abc import Iterator as Iter
+            from collections.abc import AsyncIterator as AsyncIter
+            from typing import AsyncGenerator, Generator
+
+            from karva import fixture
+            @fixture
+            def direct() -> Client: pass
+
+            @fixture
+            def yielded() -> Iter[Client]:
+                yield Client()
+
+            @fixture
+            def generated() -> Generator[Client, None, None]:
+                yield Client()
+
+            @fixture
+            async def async_yielded() -> AsyncGenerator[Client, None]:
+                yield Client()
+
+            @fixture
+            async def async_iterated() -> AsyncIter[Client]:
+                yield Client()
+
+            @fixture
+            def malformed_iterator() -> Iter[Client, None]:
+                yield Client()
+
+            @fixture
+            def malformed_generator() -> Generator[Client, None]:
+                yield Client()
+
+            @fixture
+            def unknown(): pass
+
+            def test_example(direct): pass
+            def test_yielded(yielded): pass
+            def test_generated(generated): pass
+            def test_async(async_yielded): pass
+            def test_async_iterated(async_iterated): pass
+            def test_malformed_iterator(malformed_iterator): pass
+            def test_malformed_generator(malformed_generator): pass
+            def test_unknown(unknown): pass
+        "};
 
         let analyzed = analysis(source);
         let hover = hover_fixture(&analyzed, at(source, marker) + TextSize::from(2))
@@ -563,15 +629,17 @@ mod tests {
 
     #[test]
     fn does_not_unwrap_rebound_generator_aliases() {
-        let source = concat!(
-            "from typing import Iterator\n",
-            "from karva import fixture\n\n",
-            "class Iterator: pass\n",
-            "@fixture\n",
-            "def yielded() -> Iterator[Client]:\n",
-            "    yield Client()\n\n",
-            "def test_example(yielded): pass\n",
-        );
+        let source = indoc! {r"
+            from typing import Iterator
+            from karva import fixture
+
+            class Iterator: pass
+            @fixture
+            def yielded() -> Iterator[Client]:
+                yield Client()
+
+            def test_example(yielded): pass
+        "};
         let analysis = analysis(source);
         let hover = hover_fixture(&analysis, at(source, "yielded):") + TextSize::from(2))
             .expect("yielded fixture hover");

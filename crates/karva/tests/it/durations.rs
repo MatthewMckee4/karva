@@ -1,3 +1,4 @@
+use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 
 use crate::common::TestContext;
@@ -138,7 +139,16 @@ fn durations_with_failing_tests() {
     // non-deterministic across machines (especially noticeable in CI).
     let context = TestContext::with_file(
         "test_durations.py",
-        "import time\n\ndef test_pass():\n    pass\n\ndef test_fail():\n    time.sleep(0.05)\n    assert False\n",
+        indoc! {r"
+            import time
+
+            def test_pass():
+                pass
+
+            def test_fail():
+                time.sleep(0.05)
+                assert False
+        "},
     );
 
     assert_cmd_snapshot!(context.command_no_parallel().args(["--durations", "5"]), @"

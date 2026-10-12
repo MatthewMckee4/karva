@@ -52,6 +52,7 @@ fs-err = { version = "3.2.2" }
 glob = { version = "0.3.3" }
 globset = { version = "0.4" }
 ignore = { version = "0.4.25" }
+indoc = "2"
 insta = { version = "1.47.1" }
 insta-cmd = { version = "0.7.0" }
 itertools = { version = "0.15.0" }
