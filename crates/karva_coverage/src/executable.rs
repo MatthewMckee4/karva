@@ -14,7 +14,7 @@ use std::path::Path;
 use fs_err as fs;
 use regex::Regex;
 use ruff_python_ast::helpers::is_docstring_stmt;
-use ruff_python_ast::token::TokenKind;
+use ruff_python_ast::token::{TokenKind, Tokens};
 use ruff_python_ast::visitor::source_order::{
     SourceOrderVisitor, walk_decorator, walk_elif_else_clause, walk_except_handler,
     walk_match_case, walk_stmt,
@@ -27,7 +27,7 @@ use ruff_text_size::{Ranged, TextSize};
 /// Parse `path` and return the set of line numbers that contain a statement.
 #[cfg(test)]
 fn executable_lines(path: &Path) -> io::Result<HashSet<u32>> {
-    executable_lines_with_exclusions(path, &CoverageExclusions::default())
+    executable_lines_with_exclusions(path, &CoverageExclusions::default(), false)
         .map(|analysis| analysis.executable)
 }
 
@@ -70,10 +70,13 @@ pub(crate) struct SourceLines {
 pub(crate) fn executable_lines_with_exclusions(
     path: &Path,
     exclusions: &CoverageExclusions,
+    deferred_annotations: bool,
 ) -> io::Result<SourceLines> {
     let source = fs::read_to_string(path)?;
     Ok(executable_lines_for_source_with_exclusions(
-        &source, exclusions,
+        &source,
+        exclusions,
+        deferred_annotations,
     ))
 }
 
@@ -81,12 +84,14 @@ pub(crate) fn executable_lines_with_exclusions(
 /// so unit tests can avoid touching the filesystem.
 #[cfg(test)]
 fn executable_lines_for_source(source: &str) -> HashSet<u32> {
-    executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default()).executable
+    executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default(), false)
+        .executable
 }
 
 fn executable_lines_for_source_with_exclusions(
     source: &str,
     exclusions: &CoverageExclusions,
+    deferred_annotations: bool,
 ) -> SourceLines {
     let Some(parsed) = parse_unchecked(source, ParseOptions::from(Mode::Module)).try_into_module()
     else {
@@ -99,8 +104,13 @@ fn executable_lines_for_source_with_exclusions(
     let line_index = LineIndex::from_source_text(source);
     let mut excluded_head_lines = pragma_no_cover_lines(&parsed, source, &line_index);
     excluded_head_lines.extend(pattern_lines(source, &line_index, exclusions.patterns()));
-    let (executable, excluded) =
-        executable_lines_for_module(parsed.syntax(), &line_index, &excluded_head_lines);
+    let (executable, excluded) = executable_lines_for_module(
+        parsed.syntax(),
+        parsed.tokens(),
+        &line_index,
+        &excluded_head_lines,
+        deferred_annotations,
+    );
     let mut continuations = HashMap::new();
     let mut first_line = None;
     for token in parsed.tokens() {
@@ -140,14 +150,18 @@ fn executable_lines_for_source_with_exclusions(
 /// exclusions are applied here. The second result includes excluded body lines.
 pub(super) fn executable_lines_for_module(
     module: &ModModule,
+    tokens: &Tokens,
     line_index: &LineIndex,
     excluded_head_lines: &HashSet<u32>,
+    deferred_annotations: bool,
 ) -> (HashSet<u32>, HashSet<u32>) {
     let mut visitor = ExecutableLineVisitor {
         line_index,
+        tokens,
+        deferred_annotations,
         excluded_head_lines,
         builtins: true,
-        in_function: false,
+        scope: AnnotationScope::Module,
         lines: HashSet::new(),
     };
     visitor.visit_body(&module.body);
@@ -155,9 +169,11 @@ pub(super) fn executable_lines_for_module(
     let no_exclusions = HashSet::new();
     let mut baseline = ExecutableLineVisitor {
         line_index,
+        tokens,
+        deferred_annotations,
         excluded_head_lines: &no_exclusions,
         builtins: false,
-        in_function: false,
+        scope: AnnotationScope::Module,
         lines: HashSet::new(),
     };
     baseline.visit_body(&module.body);
@@ -233,13 +249,24 @@ fn is_pragma_no_cover(comment: &str) -> bool {
     body.to_ascii_lowercase().contains("pragma: no cover")
 }
 
+/// Bare name annotations emit lines in modules, never in functions, and in classes before Python 3.14.
+#[derive(Clone, Copy)]
+enum AnnotationScope {
+    Module,
+    Function,
+    Class,
+}
+
 struct ExecutableLineVisitor<'a> {
     line_index: &'a LineIndex,
+    tokens: &'a Tokens,
+
+    /// Bare class annotations stop emitting lines in Python 3.14.
+    deferred_annotations: bool,
     excluded_head_lines: &'a HashSet<u32>,
     builtins: bool,
 
-    /// Bare local annotations emit no bytecode; module and class annotations do.
-    in_function: bool,
+    scope: AnnotationScope,
 
     lines: HashSet<u32>,
 }
@@ -259,6 +286,11 @@ impl ExecutableLineVisitor<'_> {
         } else {
             false
         }
+    }
+
+    fn excluded_loop_else(&self, body: &[Stmt], orelse: &[Stmt]) -> bool {
+        loop_else_offset(body, orelse, self.tokens)
+            .is_some_and(|offset| self.line_has_pragma(offset))
     }
 
     /// Record `offset` unless its line is marked `# pragma: no cover`.
@@ -293,7 +325,8 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
     /// the head and the entire body — we skip recording and stop walking
     /// the subtree.
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
-        if self.in_function
+        if (matches!(self.scope, AnnotationScope::Function)
+            || matches!(self.scope, AnnotationScope::Class) && self.deferred_annotations)
             && let Stmt::AnnAssign(assign) = stmt
             && assign.value.is_none()
             && matches!(&*assign.target, Expr::Name(_))
@@ -309,14 +342,22 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
             _ => stmt.range().start(),
         };
         if self.record_unless_pragma(offset) {
-            let in_function = self.in_function;
+            let scope = self.scope;
             match stmt {
-                Stmt::FunctionDef(_) => self.in_function = true,
-                Stmt::ClassDef(_) => self.in_function = false,
+                Stmt::FunctionDef(_) => self.scope = AnnotationScope::Function,
+                Stmt::ClassDef(_) => self.scope = AnnotationScope::Class,
                 _ => {}
             }
-            walk_stmt(self, stmt);
-            self.in_function = in_function;
+            match stmt {
+                Stmt::For(stmt) if self.excluded_loop_else(&stmt.body, &stmt.orelse) => {
+                    self.visit_body(&stmt.body);
+                }
+                Stmt::While(stmt) if self.excluded_loop_else(&stmt.body, &stmt.orelse) => {
+                    self.visit_body(&stmt.body);
+                }
+                _ => walk_stmt(self, stmt),
+            }
+            self.scope = scope;
         }
     }
 
@@ -359,6 +400,23 @@ impl<'a> SourceOrderVisitor<'a> for ExecutableLineVisitor<'_> {
     }
 }
 
+/// Finds a loop's `else` keyword between its suites, including intervening comments.
+/// Ruff represents loop else suites as bare statement lists without a clause range.
+pub(super) fn loop_else_offset(
+    body: &[Stmt],
+    orelse: &[Stmt],
+    tokens: &Tokens,
+) -> Option<TextSize> {
+    let start = body.last()?.range().end();
+    let end = orelse.first()?.range().start();
+    let index = tokens.partition_point(|token| token.start() < start);
+    tokens[index..]
+        .iter()
+        .take_while(|token| token.start() < end)
+        .find(|token| token.kind() == TokenKind::Else)
+        .map(Ranged::start)
+}
+
 fn is_builtin_exclusion(stmt: &Stmt) -> bool {
     match stmt {
         Stmt::Expr(stmt) => matches!(&*stmt.value, Expr::EllipsisLiteral(_)),
@@ -397,7 +455,7 @@ mod tests {
             executable,
             excluded,
             ..
-        } = executable_lines_for_source_with_exclusions(source, &exclusions);
+        } = executable_lines_for_source_with_exclusions(source, &exclusions, false);
         let mut executable = executable.into_iter().collect::<Vec<_>>();
         executable.sort_unstable();
         let mut excluded = excluded.into_iter().collect::<Vec<_>>();
@@ -430,14 +488,32 @@ mod tests {
     #[rstest]
     fn continuation_lines_map_to_logical_start(
         #[values(
-            "value = (\n    first\n    or second\n)\nnext_value = 1\n",
-            "value = first \\\n    or second \\\n    or third \\\n    or fourth\nnext_value = 1\n",
-            "value = \"\"\"first\nsecond\nthird\nfourth\"\"\"\nnext_value = 1\n"
+            r"value = (
+    first
+    or second
+)
+next_value = 1
+",
+            r"value = first \
+    or second \
+    or third \
+    or fourth
+next_value = 1
+",
+            r#"value = """first
+second
+third
+fourth"""
+next_value = 1
+"#
         )]
         source: &str,
     ) {
-        let analysis =
-            executable_lines_for_source_with_exclusions(source, &CoverageExclusions::default());
+        let analysis = executable_lines_for_source_with_exclusions(
+            source,
+            &CoverageExclusions::default(),
+            false,
+        );
         assert_eq!(
             analysis.continuations,
             HashMap::from([(2, 1), (3, 1), (4, 1)])
@@ -458,7 +534,10 @@ mod tests {
 
     #[test]
     fn configured_pattern_excludes_whole_clause() {
-        let source = "if TYPE_CHECKING:\n    import unavailable\nvalue = 1\n";
+        let source = r"if TYPE_CHECKING:
+    import unavailable
+value = 1
+";
 
         assert_eq!(
             lines_with_exclusions(source, &["if TYPE_CHECKING:"]),
@@ -488,14 +567,23 @@ runtime = 2
 
     #[test]
     fn typing_qualified_type_checking_clause_is_excluded() {
-        let source = "import typing\nif typing.TYPE_CHECKING:\n    value = 1\nruntime = 2\n";
+        let source = r"import typing
+if typing.TYPE_CHECKING:
+    value = 1
+runtime = 2
+";
 
         assert_eq!(lines_with_exclusions(source, &[]), (vec![1, 4], vec![2, 3]));
     }
 
     #[test]
     fn multiline_pattern_excludes_every_matched_statement() {
-        let source = "debug = True\nif debug:\n    first = 1\n    second = 2\nvalue = 3\n";
+        let source = r"debug = True
+if debug:
+    first = 1
+    second = 2
+value = 3
+";
 
         assert_eq!(
             lines_with_exclusions(source, &["(?s)if debug:.*second = 2"]),
@@ -505,7 +593,11 @@ runtime = 2
 
     #[test]
     fn skips_bare_local_annotations_without_excluding_them() {
-        let source = "def make_value():\n    value: str\n    value = \"hello\"\n    return value\n";
+        let source = r#"def make_value():
+    value: str
+    value = "hello"
+    return value
+"#;
 
         assert_eq!(lines_with_exclusions(source, &[]), (vec![1, 3, 4], vec![]));
     }

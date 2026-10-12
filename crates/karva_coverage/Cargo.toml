@@ -31,7 +31,7 @@ tempfile = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true }
+insta = { workspace = true, features = ["json"] }
 lcov = { workspace = true }
 rstest = { workspace = true }
 

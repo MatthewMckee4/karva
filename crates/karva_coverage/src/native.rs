@@ -495,7 +495,11 @@ mod tests {
             BTreeMap::from([(
                 Utf8PathBuf::from("src/package.py"),
                 NativeFileCoverage {
-                    source_fingerprint: SourceFingerprint::from_bytes(b"if ready:\n    run()\n"),
+                    source_fingerprint: SourceFingerprint::from_bytes(
+                        br"if ready:
+    run()
+",
+                    ),
                     executable: BTreeSet::from([1, 2]),
                     excluded: BTreeSet::from([2]),
                     executed: BTreeSet::from([1]),
@@ -539,7 +543,66 @@ mod tests {
     fn artifact_schema_snapshot() {
         insta::assert_snapshot!(
             serde_json::to_string_pretty(&artifact()).expect("serialize artifact")
-        );
+        , @r#"
+        {
+          "format_version": 4,
+          "karva_version": "0.0.0",
+          "mode": "branch",
+          "source_roots": [
+            "src"
+          ],
+          "run_context": "linux-py313",
+          "files": {
+            "src/package.py": {
+              "source_fingerprint": "8198f531bcf087563f2129915ed5fd21",
+              "executable": [
+                1,
+                2
+              ],
+              "excluded": [
+                2
+              ],
+              "executed": [
+                1
+              ],
+              "line_contexts": {
+                "1": [
+                  "tests/test_package.py::test_ready"
+                ]
+              },
+              "branches": {
+                "possible": [
+                  {
+                    "from": 1,
+                    "to": 0
+                  },
+                  {
+                    "from": 1,
+                    "to": 2
+                  }
+                ],
+                "executed": [
+                  {
+                    "from": 1,
+                    "to": 2
+                  }
+                ],
+                "contexts": [
+                  {
+                    "arc": {
+                      "from": 1,
+                      "to": 2
+                    },
+                    "contexts": [
+                      "tests/test_package.py::test_ready"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+        "#);
     }
 
     #[test]
@@ -649,7 +712,13 @@ mod tests {
         let project_root =
             Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).expect("UTF-8 temp path");
         let source = project_root.join("app.py");
-        fs::write(&source, "first = 1\nsecond = 2\n").expect("write source");
+        fs::write(
+            &source,
+            r"first = 1
+second = 2
+",
+        )
+        .expect("write source");
         let first_worker = project_root.join("first-worker.json");
         let second_worker = project_root.join("second-worker.json");
         let worker = |executed, context: &str| WorkerFile {
