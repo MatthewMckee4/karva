@@ -97,10 +97,14 @@ import sys
 import time
 from pathlib import Path
 
+# Retain the handle: the controller owns cleanup after the worker exits.
+children = []
+
 
 def test_starts_child():
     worker_pid = os.getpid()
     child = subprocess.Popen([sys.executable, "child.py"])
+    children.append(child)
     Path("child_pid").write_text(str(child.pid))
     Path("worker_pid").write_text(str(worker_pid))
     while not Path("child_ready").exists():

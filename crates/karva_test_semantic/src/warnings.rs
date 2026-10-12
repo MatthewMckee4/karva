@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use crate::Context;
 
 /// An entered Python capture window that must be finished after user code.
-pub(super) struct WarningCapture(Py<PyAny>);
+pub struct WarningCapture(Py<PyAny>);
 
 impl WarningCapture {
     /// Validates filters before entering a window with isolated warning state.
@@ -47,6 +47,6 @@ impl WarningCapture {
 }
 
 /// Warning infrastructure failures must fail the run rather than hide warnings.
-pub(super) fn warning_capture_error(error: &PyErr) -> Diagnostic {
+pub fn warning_capture_error(error: &PyErr) -> Diagnostic {
     Diagnostic::new("warning-policy", Severity::Error, error.to_string())
 }

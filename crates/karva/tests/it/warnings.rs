@@ -362,16 +362,23 @@ def test_parameters(value):
     ]));
 }
 
-#[test]
-fn function_filters_override_module_filters_and_outer_decorators_win() {
+#[rstest]
+fn function_filters_override_module_filters_and_outer_decorators_win(
+    #[values(
+        "pytestmark = pytest.mark.filterwarnings(\"error\")",
+        "karva_tag = karva.tags.filter_warnings(\"error\")"
+    )]
+    module_filter: &str,
+) {
     let context = TestContext::with_file(
         "test.py",
-        r#"
+        &format!(
+            r#"
 import warnings
 import pytest
 import karva
 
-pytestmark = pytest.mark.filterwarnings("error")
+{module_filter}
 
 @pytest.mark.filterwarnings("ignore:local")
 @pytest.mark.filterwarnings("error")
@@ -382,9 +389,12 @@ def test_pytest():
 @karva.tags.filter_warnings("error")
 def test_karva():
     warnings.warn("local")
-"#,
+"#
+        ),
     );
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]));
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]));
+    }
 }
 
 #[test]
