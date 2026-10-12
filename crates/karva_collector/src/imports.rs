@@ -86,6 +86,9 @@ mod tests {
                 Utf8PathBuf::from("/project/pkg/support.py")
             ]
         );
-        assert!(paths("/project/conftest.py", "from ..support import resource").is_empty());
+        assert_eq!(
+            paths("/project/conftest.py", "from ..support import resource"),
+            [] as [Utf8PathBuf; 0]
+        );
     }
 }

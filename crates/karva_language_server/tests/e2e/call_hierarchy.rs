@@ -260,20 +260,22 @@ fn unicode_ranges_and_custom_names_use_current_overlays() {
     });
     server.receive_notification::<PublishDiagnosticsNotification>();
     // The changed function range invalidates the old item; no edges from stale coordinates.
-    assert!(
+    assert_eq!(
         server
             .request::<CallHierarchyOutgoingCallsRequest>(outgoing(wrapper))
             .expect("stale calls")
-            .is_empty()
+            .as_slice(),
+        []
     );
     let current = prepare(&mut server, uri, Position::new(5, 20))
         .expect("current wrapper")
         .remove(0);
-    assert!(
+    assert_eq!(
         server
             .request::<CallHierarchyOutgoingCallsRequest>(outgoing(current))
             .expect("builtin excluded")
-            .is_empty()
+            .as_slice(),
+        []
     );
 }
 

@@ -50,7 +50,7 @@ fn imported_custom_fixture_keeps_its_public_name_and_source_identity() {
     let analysis = index
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
     let target = crate::fixture_definition(&analysis, offset(test, "database")).expect("fixture");
     assert_eq!(target.path, Utf8Path::new("/project/support.py"));
     let source = &index
@@ -95,7 +95,7 @@ fn follows_relative_reexports_and_keeps_declared_name_through_aliases() {
     let analysis = index
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
     let target = crate::fixture_definition(&analysis, offset(test, "database")).expect("fixture");
     assert_eq!(target.path, Utf8Path::new("/project/support/provider.py"));
     let fixture = crate::fixture_target(&analysis, offset(test, "database")).expect("fixture");
@@ -147,7 +147,7 @@ fn import_cycles_and_unknown_external_exports_remain_unresolved() {
     let analysis = index
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
 }
 
@@ -174,7 +174,7 @@ fn overwritten_export_does_not_resolve_to_old_fixture() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn wildcard_import_uses_public_exports_and_fixture_metadata() {
         .expect("analysis");
     let target = crate::fixture_definition(&analysis, offset(test, "database")).expect("fixture");
     assert_eq!(target.path, Utf8Path::new("/project/support.py"));
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn wildcard_import_follows_relative_reexports_and_unknown_all_is_conservative() 
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("unknown analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -363,7 +363,7 @@ fn later_rebinding_hides_wildcard_fixture() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -427,7 +427,7 @@ fn wildcard_binding_collisions_use_source_name_for_custom_fixture_names(
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -448,7 +448,7 @@ fn dynamic_getattr_imports_remain_unknown() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -475,7 +475,7 @@ fn mutated_literal_all_is_unknown() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -506,7 +506,7 @@ fn conditional_wildcard_import_is_unknown() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -538,7 +538,7 @@ fn conditional_wildcard_reexport_remains_unknown() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -577,7 +577,7 @@ fn conflicting_wildcard_bindings_remain_unknown() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -610,7 +610,7 @@ fn wildcard_shadowing_removes_earlier_local_fixture() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -670,7 +670,7 @@ fn imported_fixture_bound_to_all_remains_navigable() {
     let definition =
         crate::fixture_definition(&analysis, offset(test, "database")).expect("fixture");
     assert_eq!(definition.path, Utf8Path::new("/project/support.py"));
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -702,7 +702,7 @@ fn all_binding_alias_invalidates_wildcard_exports() {
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
     assert!(crate::fixture_definition(&analysis, offset(test, "database")).is_none());
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[test]
@@ -801,7 +801,7 @@ fn potentially_callable_module_values_remain_visibility_barriers(
     let analysis = index
         .analyze(Utf8Path::new("/project/test_query.py"))
         .expect("analysis");
-    assert!(analysis.diagnostics.is_empty());
+    assert_eq!(analysis.diagnostics.as_slice(), []);
 }
 
 #[rstest::rstest]

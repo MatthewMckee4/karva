@@ -74,9 +74,9 @@ fn applies_versioned_local_stub_and_clears_diagnostic(#[values("\n", "\r\n")] ne
         ],
     });
     let updated = server.receive_notification::<PublishDiagnosticsNotification>();
-    assert!(updated.diagnostics.is_empty());
+    assert_eq!(updated.diagnostics.as_slice(), []);
     let stale = server.request::<CodeActionRequest>(params);
-    assert!(stale.expect("action array").is_empty());
+    assert_eq!(stale.expect("action array").as_slice(), []);
     let normalized = workspace.normalize(value);
     let mut normalized = serde_json::to_string(&normalized).expect("serialize snapshot");
     normalized = normalized.replace("\\r\\n", "\\n");
@@ -183,11 +183,12 @@ fn respects_action_filters_and_client_edit_capabilities(
         WorkDoneProgressParams::default(),
         PartialResultParams::default(),
     );
-    assert!(
+    assert_eq!(
         server
             .request::<CodeActionRequest>(params.clone())
             .expect("actions")
-            .is_empty()
+            .as_slice(),
+        []
     );
     let mut params = params;
     params.context.only = None;
@@ -258,10 +259,11 @@ fn ambiguous_or_invalid_fixes_are_suppressed(
         WorkDoneProgressParams::default(),
         PartialResultParams::default(),
     );
-    assert!(
+    assert_eq!(
         server
             .request::<CodeActionRequest>(params)
             .expect("actions")
-            .is_empty()
+            .as_slice(),
+        []
     );
 }

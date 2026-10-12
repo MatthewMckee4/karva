@@ -250,7 +250,7 @@ mod tests {
 
         assert_eq!(module.test_function_defs[0].name.as_str(), "test_sample");
         assert_eq!(module.doctests[0].name, "doctest:@module");
-        assert!(module.source_text.is_empty());
+        assert_eq!(module.source_text, "");
         assert!(module.module_body.is_empty());
     }
 
