@@ -550,6 +550,53 @@ def test_modify(value):
 }
 
 #[test]
+fn removes_registries_without_recorded_warnings() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+import types
+import warnings
+import karva
+
+existing = types.ModuleType("existing")
+sys.modules["existing"] = existing
+namespace = types.SimpleNamespace()
+sys.modules["namespace"] = namespace
+sys.modules["blocked"] = None
+
+@karva.fixture(scope="session", auto_use=True)
+def verify_restoration():
+    yield
+    assert not hasattr(existing, "__warningregistry__")
+    assert not hasattr(namespace, "__warningregistry__")
+    assert not hasattr(sys.modules["created"], "__warningregistry__")
+
+@karva.tags.parametrize("value", [1, 2])
+def test_modify(value):
+    assert not hasattr(existing, "__warningregistry__")
+    existing.__warningregistry__ = {"manual": value}
+    namespace.__warningregistry__ = {"manual": value}
+    created = types.ModuleType("created")
+    created.__warningregistry__ = {}
+    sys.modules["created"] = created
+    warnings.simplefilter("ignore")
+    warnings.warn_explicit("ignored", UserWarning, "created.py", 1,
+        module="created", registry=created.__warningregistry__)
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn dotted_categories_message_module_and_line_filters() {
     let context = TestContext::with_file(
         "categories.py",

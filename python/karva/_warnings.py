@@ -5,7 +5,6 @@ from __future__ import annotations
 import builtins
 import importlib
 import re
-import sys
 import warnings
 from typing import Any, Literal
 
@@ -71,22 +70,16 @@ class WarningCapture:
     retries. Modules imported within the window lose only their warning registry.
     """
 
-    def __init__(self, filters: list[str]) -> None:
+    def __init__(self, filters: list[str], registries: Any) -> None:
         self.filters = filters
         self.context = warnings.catch_warnings(record=True)
-        self.registries: list[tuple[dict[str, Any], Any, dict[Any, Any]]] = []
+        self.registries = registries
         self.once_registry: dict[Any, Any] = vars(warnings)["onceregistry"]
         self.once = self.once_registry.copy()
 
     def __enter__(self) -> None:
         self.records = self.context.__enter__()
-        for module in tuple(sys.modules.values()):
-            namespace = getattr(module, "__dict__", None)
-            if isinstance(namespace, dict):
-                registry = namespace.get("__warningregistry__")
-                if isinstance(registry, dict):
-                    self.registries.append((namespace, registry, registry.copy()))
-                    registry.clear()
+        self.registries.start()
         self.once_registry.clear()
         try:
             warnings.simplefilter("default")
@@ -99,14 +92,7 @@ class WarningCapture:
     def finish(self) -> list[tuple[str, str, str, int]]:
         """Close capture before formatting records, even if user state is broken."""
         self.context.__exit__(None, None, None)
-        for module in tuple(sys.modules.values()):
-            namespace = getattr(module, "__dict__", None)
-            if isinstance(namespace, dict):
-                namespace.pop("__warningregistry__", None)
-        for namespace, original, saved in self.registries:
-            original.clear()
-            original.update(saved)
-            namespace["__warningregistry__"] = original
+        self.registries.finish()
         self.once_registry.clear()
         self.once_registry.update(self.once)
         vars(warnings)["onceregistry"] = self.once_registry
