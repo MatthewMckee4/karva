@@ -1028,6 +1028,5 @@ def test_b_remaining():
          Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
 
     ----- stderr -----
-    native stderr before deadline
     ");
 }

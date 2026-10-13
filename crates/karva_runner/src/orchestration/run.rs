@@ -152,7 +152,7 @@ pub fn run_parallel_tests(
         worker_binary: &worker_binary,
         coverage_enabled: !project.settings().coverage().sources.is_empty(),
     };
-    let forward_stdout = printer.stream_for_test_result().is_enabled();
+    let forward_stdout = project.settings().terminal().show_python_output;
     let mut next_worker_id = partitions.len();
     let mut worker_crashed = false;
     let mut worker_manager = spawn_workers(

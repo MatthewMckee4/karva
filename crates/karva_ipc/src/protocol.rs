@@ -4,17 +4,25 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
-use karva_diagnostic::{RenderedDiagnostic, TestCaseResult};
+use karva_diagnostic::{CapturedTestOutput, RenderedDiagnostic, TestCaseResult};
 use karva_logging::{TerminalColor, VerbosityLevel};
 use karva_metadata::{Options, RunIgnoredMode};
 use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
+
+use crate::output_capture::OutputCaptureSink;
 
 /// One runtime state change sent from a worker to the controller.
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
     /// Unconsumed warning from collection, execution, or fixture cleanup.
     Warning(karva_diagnostic::TestWarning),
+
+    /// Framework tracing, kept separate from captured test stderr.
+    Log(Vec<u8>),
+
+    /// Complete status line rendered before its test's durable completion frame.
+    Status(Vec<u8>),
 
     /// Test exceeded the configured slow-test threshold.
     TestSlow,
@@ -86,6 +94,12 @@ pub enum WireMessage {
         cache_key: TestCacheKey,
     },
 
+    /// Collects an output window after ordered end markers were written to both pipes.
+    ReadCapturedOutput,
+
+    /// Controller reply carrying bounded bytes for the completed window.
+    CapturedOutput(CapturedTestOutput),
+
     /// Runtime event sent from a worker to its controller.
     Event(Box<WorkerEvent>),
 }
@@ -122,6 +136,14 @@ pub struct WorkerConfiguration {
 /// Work and configuration owned by one worker generation.
 #[derive(Serialize, Deserialize)]
 pub struct WorkerSelection {
+    /// Private nonce framing native output windows, absent in protocol-only clients.
+    #[serde(default)]
+    pub output_marker: Option<[u8; 16]>,
+
+    /// Controller-local capture state, never transferred to the worker.
+    #[serde(skip)]
+    pub output_capture: Option<Arc<OutputCaptureSink>>,
+
     /// Shared run configuration, also used by replacement workers.
     pub configuration: Arc<WorkerConfiguration>,
 

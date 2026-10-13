@@ -265,7 +265,12 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return None;
         }
 
-        match PythonOutputCapture::start(self.py) {
+        let source = self
+            .package_runner
+            .context
+            .reporter()
+            .captured_output_reader()?;
+        match PythonOutputCapture::start(self.py, source) {
             Ok(capture) => {
                 if let Err(error) = self.package_runner.ensure_python_stdin_capture(self.py) {
                     tracing::warn!("failed to start Python stdin capture: {error}");

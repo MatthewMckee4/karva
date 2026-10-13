@@ -5,6 +5,7 @@
 //! owner.
 
 use std::collections::{HashMap, HashSet};
+use std::io::Write;
 use std::process::ExitStatus;
 use std::time::Duration;
 
@@ -176,6 +177,12 @@ impl EventDispatcher {
                             "Karva worker {worker_id} reported more than one hard timeout"
                         );
                     }
+                }
+                WorkerEvent::Status(bytes) => {
+                    std::io::stdout().lock().write_all(&bytes)?;
+                }
+                WorkerEvent::Log(bytes) => {
+                    std::io::stderr().lock().write_all(&bytes)?;
                 }
                 WorkerEvent::TestFinished { cache_key, result } => {
                     let result = if let Some(history) = self.timeout_history.remove(&cache_key) {

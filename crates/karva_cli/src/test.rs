@@ -183,6 +183,11 @@ pub struct SubTestCommand {
     #[clap(short = 's', long, default_missing_value = "true", require_equals = true, num_args=0..=1, help_heading = "Reporter options")]
     pub show_output: Option<bool>,
 
+    /// Maximum bytes retained per captured stdout or stderr stream (default: 16777216).
+    /// Excess output retains its beginning and end with an omitted-byte count.
+    #[arg(long, help_heading = "Reporter options")]
+    pub max_output_bytes: Option<NonZeroUsize>,
+
     /// Test result statuses to display during the run [default: pass]
     #[arg(
         long,
@@ -503,6 +508,7 @@ impl SubTestCommand {
             terminal: Some(TerminalOptions {
                 output_format: self.output_format.map(Into::into),
                 show_python_output: self.show_output,
+                max_output_bytes: self.max_output_bytes,
                 status_level: self.status_level,
                 final_status_level: self.final_status_level,
             }),

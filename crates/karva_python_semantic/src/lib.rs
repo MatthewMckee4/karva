@@ -12,7 +12,7 @@ pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKe
 #[cfg(feature = "python-runtime")]
 use pyo3::types::PyAnyMethods;
 #[cfg(feature = "python-runtime")]
-use pyo3::{PyResult, Python};
+use pyo3::{Py, PyAny, PyResult, Python};
 #[cfg(feature = "python-runtime")]
 use ruff_python_ast::PythonVersion;
 
@@ -61,11 +61,21 @@ pub fn current_python_version() -> PythonVersion {
     }))
 }
 
-/// Enables Python traceback output for fatal signals in the current process.
+/// Enables fatal-signal tracebacks on a private duplicate of the original stderr.
+///
+/// Keep the returned stream alive while the handler is enabled: per-test descriptor
+/// redirection must not swallow crash evidence needed by controller recovery.
 #[cfg(feature = "python-runtime")]
-pub fn enable_faulthandler() -> PyResult<()> {
+pub fn enable_faulthandler() -> PyResult<Py<PyAny>> {
     Python::initialize();
-    Python::attach(|py| py.import("faulthandler")?.call_method0("enable").map(drop))
+    Python::attach(|py| {
+        let os = py.import("os")?;
+        let descriptor = os.call_method1("dup", (2,))?;
+        let stream = os.call_method1("fdopen", (descriptor, "wb", 0))?;
+        py.import("faulthandler")?
+            .call_method1("enable", (&stream,))?;
+        Ok(stream.unbind())
+    })
 }
 
 #[cfg(test)]

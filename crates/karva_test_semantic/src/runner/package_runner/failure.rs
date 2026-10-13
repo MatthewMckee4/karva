@@ -1,6 +1,6 @@
 //! Test-owned execution errors shared across runner lifecycle boundaries.
 
-use karva_diagnostic::{Diagnostic, FixtureFailure, TestExecutionOutcome};
+use karva_diagnostic::{CapturedTestOutput, Diagnostic, FixtureFailure, TestExecutionOutcome};
 
 /// Primary test error plus related diagnostics and fixture causality.
 ///
@@ -48,6 +48,12 @@ impl TestError {
         diagnostics: impl IntoIterator<Item = Diagnostic>,
     ) -> Self {
         self.related.extend(diagnostics);
+        self
+    }
+
+    /// Adds bounded output from a broader-scope fixture failure to its diagnostic.
+    pub(super) fn with_output(mut self, output: Option<&CapturedTestOutput>) -> Self {
+        super::fixture::annotate_output(&mut self.diagnostic, output);
         self
     }
 

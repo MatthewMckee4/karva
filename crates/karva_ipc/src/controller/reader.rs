@@ -24,6 +24,7 @@ pub(super) fn read_worker(
     reader_worker_id: &OnceLock<usize>,
     reader_event_count: &AtomicUsize,
 ) -> Result<()> {
+    let interrupted = reader.interrupted;
     let response_stream = reader
         .stream
         .try_clone()
@@ -69,6 +70,7 @@ pub(super) fn read_worker(
             }
         }
     };
+    let output_capture = selection.output_capture.clone();
     let mut writer = BufWriter::new(response_stream);
     let selection_result =
         serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))
@@ -105,6 +107,22 @@ pub(super) fn read_worker(
                 reader_event_count.store(event_count, Ordering::Relaxed);
                 continue;
             }
+            WireMessage::ReadCapturedOutput => {
+                let capture = output_capture
+                    .as_ref()
+                    .context("worker requested output without a registered capture")?;
+                let output = capture.take(
+                    interrupted,
+                    super::connections::connection_reader::READER_INTERRUPT_POLL_INTERVAL,
+                )?;
+                serde_json::to_writer(&mut writer, &WireMessage::CapturedOutput(output))?;
+                writer.write_all(b"\n")?;
+                writer.flush()?;
+                continue;
+            }
+            WireMessage::CapturedOutput(_) => {
+                bail!("worker sent an output reply to its controller")
+            }
             WireMessage::Event(event) => event,
             WireMessage::Hello { .. } => bail!("Karva worker sent more than one handshake"),
             WireMessage::TestSelection(_) => {
@@ -119,7 +137,11 @@ pub(super) fn read_worker(
             WorkerEvent::WorkerFinished => {
                 checkpoint.ensure_idle(worker_id)?;
             }
-            WorkerEvent::TestSlow | WorkerEvent::RunDiagnostic(_) | WorkerEvent::Warning(_) => {}
+            WorkerEvent::TestSlow
+            | WorkerEvent::RunDiagnostic(_)
+            | WorkerEvent::Warning(_)
+            | WorkerEvent::Log(_)
+            | WorkerEvent::Status(_) => {}
         }
         if sender
             .send(Incoming::Event(ControllerEvent { worker_id, event }))

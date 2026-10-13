@@ -1,11 +1,11 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use karva_diagnostic::{
-    DisplayDiagnosticConfig, IndividualTestResultKind, Reporter, TestCaseReporter,
-    TestExecutionResult,
+    CapturedOutputReader, CapturedTestOutput, DisplayDiagnosticConfig, IndividualTestResultKind,
+    Reporter, TestCaseReporter, TestExecutionResult,
 };
 use karva_ipc::{WorkerClient, WorkerEvent};
 use karva_python_semantic::{QualifiedTestName, TestCacheKey};
@@ -14,6 +14,9 @@ use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 pub struct WorkerReporter {
     /// Terminal-facing status reporter local to the worker process.
     output: TestCaseReporter,
+
+    /// Native stream framing supplied by the controller, absent for protocol-only clients.
+    output_marker: Option<[u8; 16]>,
 
     /// Shared transport for lifecycle and result frames.
     client: WorkerClient,
@@ -31,12 +34,14 @@ pub struct WorkerReporter {
 impl WorkerReporter {
     pub fn new(
         output: TestCaseReporter,
+        output_marker: Option<[u8; 16]>,
         client: WorkerClient,
         cwd: Utf8PathBuf,
         diagnostic_config: DisplayDiagnosticConfig,
     ) -> Self {
         Self {
             output,
+            output_marker,
             client,
             cwd,
             diagnostic_config,
@@ -72,7 +77,33 @@ impl WorkerReporter {
     }
 }
 
+/// Bridges semantic capture to controller storage without linking the binaries.
+struct WorkerOutputReader {
+    client: WorkerClient,
+    marker: [u8; 16],
+}
+
+impl CapturedOutputReader for WorkerOutputReader {
+    fn marker(&self) -> [u8; 16] {
+        self.marker
+    }
+    fn read(&self) -> Result<CapturedTestOutput, String> {
+        self.client
+            .read_captured_output()
+            .map_err(|error| format!("{error:#}"))
+    }
+}
+
 impl Reporter for WorkerReporter {
+    fn captured_output_reader(&self) -> Option<Arc<dyn CapturedOutputReader>> {
+        self.output_marker.map(|marker| {
+            Arc::new(WorkerOutputReader {
+                client: self.client.clone(),
+                marker,
+            }) as Arc<dyn CapturedOutputReader>
+        })
+    }
+
     fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
         self.send(WorkerEvent::Warning(warning));
     }

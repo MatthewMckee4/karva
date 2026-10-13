@@ -20,6 +20,8 @@ const BUFFERED_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn selection(test_paths: Vec<String>) -> WorkerSelection {
     WorkerSelection {
+        output_marker: None,
+        output_capture: None,
         configuration: Arc::default(),
         coverage_data_file: None,
         resume_attempts: Vec::new(),
@@ -126,6 +128,8 @@ fn closing_worker_connection_interrupts_a_blocked_selection_write() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                output_marker: None,
+                output_capture: None,
                 configuration: Arc::default(),
                 coverage_data_file: None,
                 resume_attempts: Vec::new(),
@@ -470,6 +474,8 @@ fn transfers_resume_skip_cases() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                output_marker: None,
+                output_capture: None,
                 configuration: Arc::default(),
                 coverage_data_file: None,
                 resume_attempts: Vec::new(),
@@ -647,6 +653,8 @@ fn transfers_worker_configuration_after_authentication() {
         .register_worker_selection(
             7,
             WorkerSelection {
+                output_marker: None,
+                output_capture: None,
                 configuration,
                 coverage_data_file: Some(".coverage.worker-7".into()),
                 ..selection(vec!["mod::check".to_owned()])

@@ -40,20 +40,14 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     test_finalizers,
                 },
             setup_duration,
-            mut output_capture,
+            output_capture,
             warning_capture,
         } = prepared;
         let shared_output =
             if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
                 output_capture
-                    .as_mut()
-                    .and_then(|capture| match capture.watchdog_output(self.py) {
-                        Ok(output) => Some(output),
-                        Err(error) => {
-                            tracing::warn!("failed to mirror timeout output: {error}");
-                            None
-                        }
-                    })
+                    .as_ref()
+                    .map(PythonOutputCapture::watchdog_output)
             } else {
                 None
             };

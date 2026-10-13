@@ -1,6 +1,12 @@
 //! Worker startup from process bootstrap identity and authenticated IPC configuration.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs::File;
+use std::io::Write;
+#[cfg(unix)]
+use std::os::fd::AsFd;
+#[cfg(windows)]
+use std::os::windows::io::AsHandle;
 use std::{env, io};
 
 use anyhow::Context as _;
@@ -11,7 +17,7 @@ use karva_diagnostic::{
     DiagnosticFormat, DisplayDiagnosticConfig, TestCaseReporter, render_diagnostic,
 };
 use karva_ipc::{ControllerEndpoint, WorkerClient, WorkerConfiguration, WorkerEvent};
-use karva_logging::{Printer, set_colored_override, setup_tracing};
+use karva_logging::{Printer, set_colored_override, setup_tracing_with_writer};
 use karva_metadata::filter::FiltersetSet;
 use karva_metadata::{OutputFormat, ProjectSettings};
 use karva_project::path::{TestPath, TestPathError};
@@ -64,13 +70,28 @@ fn run() -> anyhow::Result<ExitStatus> {
         .parse()
         .context("karva-worker requires KARVA_WORKER_ID to be an unsigned integer")?;
     let (client, selection) = WorkerClient::connect(&controller_endpoint, &run_id, worker_id)?;
+    let output_marker = selection.output_marker;
+    #[cfg(unix)]
+    let framework_streams = (
+        File::from(io::stdout().as_fd().try_clone_to_owned()?),
+        File::from(io::stderr().as_fd().try_clone_to_owned()?),
+    );
+    #[cfg(windows)]
+    let framework_streams = (
+        File::from(io::stdout().as_handle().try_clone_to_owned()?),
+        File::from(io::stderr().as_handle().try_clone_to_owned()?),
+    );
     let configuration = selection.configuration;
     let verbosity = configuration.verbosity;
     set_colored_override(configuration.color);
-    let _guard = setup_tracing(verbosity);
+    let log_client = client.clone();
+    let _guard = setup_tracing_with_writer(verbosity, move || WorkerLogWriter {
+        client: log_client.clone(),
+        bytes: Vec::new(),
+    });
     let cwd = cwd()?;
     let python_version = current_python_version();
-    enable_faulthandler().context("Failed to enable Python faulthandler")?;
+    let _fault_stream = enable_faulthandler().context("Failed to enable Python faulthandler")?;
     let filter = FiltersetSet::new(&configuration.filter_expressions)
         .context("invalid worker test filter expression")?;
     let mut settings = configuration
@@ -105,8 +126,20 @@ fn run() -> anyhow::Result<ExitStatus> {
         .into_iter()
         .map(|path| TestPath::new(path.as_ref()))
         .collect();
+    let status_client = client.clone();
+    let capture_enabled = !settings.terminal().show_python_output;
+    let status = TestCaseReporter::new(printer, move |bytes| {
+        if capture_enabled {
+            status_client
+                .send_event(WorkerEvent::Status(bytes.to_vec()))
+                .map_err(io::Error::other)
+        } else {
+            io::stdout().lock().write_all(bytes)
+        }
+    });
     let reporter = WorkerReporter::new(
-        TestCaseReporter::new(printer),
+        status,
+        selection.output_marker,
         client.clone(),
         cwd.clone(),
         diagnostic_config,
@@ -133,6 +166,14 @@ fn run() -> anyhow::Result<ExitStatus> {
         )))?;
     }
     drop(result);
+    if let Some(marker) = output_marker {
+        let mut end = vec![0];
+        end.extend_from_slice(&marker);
+        end.push(b'F');
+        let (mut stdout, mut stderr) = framework_streams;
+        stdout.write_all(&end)?;
+        stderr.write_all(&end)?;
+    }
     client.complete()?;
 
     Ok(ExitStatus::Success)
@@ -183,6 +224,32 @@ fn worker_coverage_config(
             .map(|pattern| pattern.as_str().to_owned())
             .collect(),
     }))
+}
+
+/// Keeps framework logs on IPC while native stderr is inside an output window.
+struct WorkerLogWriter {
+    client: WorkerClient,
+    bytes: Vec<u8>,
+}
+
+impl io::Write for WorkerLogWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Drop for WorkerLogWriter {
+    fn drop(&mut self) {
+        if !self.bytes.is_empty() {
+            let _ = self
+                .client
+                .send_event(WorkerEvent::Log(std::mem::take(&mut self.bytes)));
+        }
+    }
 }
 
 #[cfg(test)]

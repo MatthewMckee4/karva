@@ -157,7 +157,6 @@ impl Context<'_> {
         let test_case =
             TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
         let result_kind = test_case.outcome().result_kind();
-        self.reporter.report_test_completed(&cache_key, test_case);
         if let Some(attempt) = self.resume_attempts.get(&cache_key) {
             self.reporter
                 .report_test_attempt(test_case_name, *attempt, result_kind, duration);
@@ -166,6 +165,7 @@ impl Context<'_> {
                 .report_test_case_result(test_case_name, result_kind, duration);
         }
 
+        self.reporter.report_test_completed(&cache_key, test_case);
         passed
     }
 

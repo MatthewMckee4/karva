@@ -109,6 +109,7 @@ def test_c():
     exit_code: 1
     ----- stdout -----
         Starting 3 tests across 1 worker
+            PASS [TIME] test::test_a
 
     diagnostics:
 

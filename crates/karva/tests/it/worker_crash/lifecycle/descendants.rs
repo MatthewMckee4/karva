@@ -176,11 +176,11 @@ def test_pass_with_escaped_child():
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
+            PASS [TIME] test::test_pass_with_escaped_child
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
-    WARN worker output drain limit reached; final output may be incomplete worker_id=0 limit_ms=50
     ");
 }
 

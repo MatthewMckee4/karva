@@ -14,3 +14,5 @@ pub use controller::{ControllerEvent, ControllerServer, WorkerCheckpoint, Worker
 pub use protocol::{WorkerConfiguration, WorkerEvent, WorkerSelection};
 pub use transport::ControllerEndpoint;
 pub use worker::WorkerClient;
+
+pub mod output_capture;

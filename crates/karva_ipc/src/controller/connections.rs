@@ -4,7 +4,7 @@
 //! operating-system resources associated with each accepted connection:
 //! reader threads, interruptible stream clones, and reader progress counters.
 
-mod connection_reader;
+pub(super) mod connection_reader;
 
 use std::collections::HashMap;
 use std::io::ErrorKind;
