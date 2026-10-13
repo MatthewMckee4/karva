@@ -28,6 +28,9 @@ pub struct WorkerCheckpoint {
 pub(super) struct CheckpointState {
     /// Started but unfinished test, if this worker has one.
     checkpoint: Option<ActiveCheckpoint>,
+
+    /// Last declared function identity; retained across completed cases.
+    function_name: Option<String>,
 }
 
 /// Compact active identity retained until the reader disconnects.
@@ -43,6 +46,27 @@ struct ActiveCheckpoint {
 }
 
 impl CheckpointState {
+    /// Resolves connection-local function compression before recording a case.
+    pub(super) fn record_case(
+        &mut self,
+        worker_id: usize,
+        function_name: Option<String>,
+        case_index: Option<usize>,
+        parameters: Option<String>,
+    ) -> Result<()> {
+        if let Some(function_name) = function_name {
+            self.function_name = Some(function_name);
+        }
+        let Some(function_name) = self.function_name.as_deref() else {
+            bail!("Karva worker {worker_id} sent a checkpoint without a function identity");
+        };
+        let cache_key = case_index.map_or_else(
+            || TestCacheKey::function_name(function_name),
+            |index| TestCacheKey::parameter_case_name(function_name, index),
+        );
+        self.record(worker_id, parameters, cache_key)
+    }
+
     /// Stores or refines one active test without changing its start time.
     pub(super) fn record(
         &mut self,
@@ -129,6 +153,14 @@ fn display_name(cache_key: &TestCacheKey, parameters: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_undeclared_function_identity() {
+        let error = CheckpointState::default()
+            .record_case(7, None, Some(0), None)
+            .expect_err("first checkpoint must declare its function");
+        assert!(error.to_string().contains("without a function identity"));
+    }
 
     #[test]
     fn refinement_updates_name_without_resetting_start_time() {

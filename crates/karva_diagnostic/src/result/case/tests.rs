@@ -1,9 +1,35 @@
 use std::time::Duration;
 
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
+use rstest::rstest;
 use serde_json::json;
 
 use super::*;
+
+#[rstest]
+fn passing_ipc_identity_matches_semantic_result(
+    #[values("tests.test", "tests.tést::dynamic")] module_name: &str,
+) {
+    let name = QualifiedTestName::with_parameters(
+        QualifiedFunctionName::new(
+            "test::example".to_string(),
+            ModulePath::new_with_name("test.py", module_name.to_string()),
+        ),
+        "value='é::λ'".to_string(),
+    );
+    let duration = Duration::from_micros(17);
+    let expected = TestCaseResult::new(&name, TestCaseOutcome::Passed, duration, None);
+    let reconstructed = TestCaseResult::passed(
+        expected.module_name().to_string(),
+        expected.name().to_string(),
+        duration,
+    );
+    assert_eq!(reconstructed, expected);
+    assert_eq!(
+        serde_json::to_value(reconstructed).expect("serialize IPC result"),
+        serde_json::to_value(expected).expect("serialize semantic result")
+    );
+}
 
 #[test]
 fn test_case_result_uses_structured_parameterized_name() {

@@ -4,22 +4,34 @@ use karva_diagnostic::{Diagnostic, Severity, TestWarning};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyDict, PyList, PyTuple};
 
 use crate::Context;
 
 /// An entered Python capture window that must be finished after user code.
 pub struct WarningCapture(Py<PyAny>);
 
+/// Private capture implementation retained for the embedded interpreter.
+static CAPTURE_CLASS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+
 impl WarningCapture {
     /// Validates filters before entering a window with isolated warning state.
-    pub(super) fn start(py: Python<'_>, filters: &[String]) -> PyResult<Self> {
-        let capture = py
-            .import("karva._warnings")?
-            .getattr("WarningCapture")?
-            .call1((filters.to_vec(), Py::new(py, WarningRegistries::default())?))?;
-        capture.call_method0("__enter__")?;
-        Ok(Self(capture.unbind()))
+    pub(super) fn start<'a>(
+        py: Python<'_>,
+        filters: impl IntoIterator<Item = &'a String>,
+    ) -> PyResult<Self> {
+        let class = CAPTURE_CLASS.get_or_try_init(py, || {
+            Ok::<_, PyErr>(
+                py.import("karva._warnings")?
+                    .getattr("WarningCapture")?
+                    .unbind(),
+            )
+        })?;
+        let filters = PyList::new(py, filters)?;
+        let capture = class.call1(py, (filters, Py::new(py, WarningRegistries::default())?))?;
+        capture.call_method0(py, "__enter__")?;
+        Ok(Self(capture))
     }
 
     /// Restores Python state and forwards every unconsumed warning over IPC.

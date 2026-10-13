@@ -5,6 +5,7 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use karva_diagnostic::{TestCaseOutcome, TestCaseResult};
 use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use rstest::rstest;
 
@@ -76,6 +77,60 @@ fn retains_attributed_worker_checkpoint_after_disconnect() {
         TestCacheKey::function_name("mod::test")
     );
     assert_eq!(server.reader_count(), 0);
+}
+
+#[test]
+fn compressed_cases_preserve_results_and_refined_crash_identity() {
+    let mut server = ControllerServer::bind("run-id").expect("bind controller");
+    server
+        .register_worker_selection(7, selection(Vec::new()))
+        .expect("register worker");
+    let address = server.endpoint();
+    let worker = thread::spawn(move || {
+        let (client, _) = WorkerClient::connect(&address, "run-id", 7).expect("connect worker");
+        let function = QualifiedFunctionName::new(
+            "test_example".to_string(),
+            ModulePath::new_with_name("test.py", "tests.tést".to_string()),
+        );
+        let first = QualifiedTestName::with_parameters(function.clone(), "value='é'".to_string())
+            .with_case_index(Some(0));
+        client.checkpoint(&first).expect("checkpoint first case");
+        let result = TestCaseResult::new(
+            &first,
+            TestCaseOutcome::Passed,
+            Duration::from_micros(17),
+            None,
+        );
+        client
+            .send_test_finished(&first.cache_key(), &result)
+            .expect("complete first case");
+        let second = QualifiedTestName::new(function).with_case_index(Some(1));
+        client.checkpoint(&second).expect("checkpoint second case");
+        client
+            .checkpoint(&second.with_resolved_parameters("value='λ'".to_string()))
+            .expect("refine second case");
+        result
+    });
+    accept_connections(&mut server, 1);
+    let expected = worker.join().expect("join worker");
+    server.finish().expect("finish readers");
+    let event = server
+        .try_recv()
+        .expect("read completion")
+        .expect("completed event");
+    assert!(
+        matches!(*event.event, WorkerEvent::TestFinished { cache_key, result }
+        if cache_key == TestCacheKey::function_name("tests.tést::test_example[0]") && *result == expected)
+    );
+    let checkpoint = server
+        .take_worker_checkpoint(7)
+        .expect("read checkpoint")
+        .expect("active case");
+    assert_eq!(
+        checkpoint.cache_key,
+        TestCacheKey::function_name("tests.tést::test_example[1]")
+    );
+    assert_eq!(checkpoint.name, "tests.tést::test_example(value='λ')");
 }
 
 #[test]

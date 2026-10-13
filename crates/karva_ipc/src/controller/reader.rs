@@ -7,6 +7,7 @@ use std::sync::{Mutex, OnceLock};
 
 use anyhow::{Context, Result, bail};
 use crossbeam_channel::Sender;
+use karva_diagnostic::TestCaseResult;
 
 use super::checkpoint::CheckpointState;
 use super::connections::RegisteredWorkerSelection;
@@ -98,12 +99,25 @@ pub(super) fn read_worker(
         let event = match message {
             WireMessage::TestCheckpoint {
                 parameters,
-                cache_key,
+                function_name,
+                case_index,
             } => {
-                checkpoint.record(worker_id, parameters, cache_key)?;
+                checkpoint.record_case(worker_id, function_name, case_index, parameters)?;
                 event_count = event_count.saturating_add(1);
                 reader_event_count.store(event_count, Ordering::Relaxed);
                 continue;
+            }
+            WireMessage::TestPassed {
+                cache_key,
+                module_name,
+                name,
+                duration,
+            } => {
+                let result = TestCaseResult::passed(module_name, name, duration);
+                Box::new(WorkerEvent::TestFinished {
+                    cache_key,
+                    result: Box::new(result),
+                })
             }
             WireMessage::Event(event) => event,
             WireMessage::Hello { .. } => bail!("Karva worker sent more than one handshake"),
