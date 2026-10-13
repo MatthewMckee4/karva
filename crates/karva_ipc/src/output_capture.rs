@@ -238,7 +238,7 @@ impl OutputCaptureSink {
     }
 
     /// Collects one completed attempt after both ordered end markers arrive.
-    pub fn take(
+    pub(super) fn take(
         &self,
         interrupted: &AtomicBool,
         poll_interval: Duration,

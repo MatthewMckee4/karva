@@ -244,7 +244,7 @@ def test_output(output):
     os.write(2, b"native stderr\n")
     subprocess.run([sys.executable, "-c", "print('child stdout')"], check=True)
     libc = ctypes.CDLL("ucrtbase" if os.name == "nt" else None)
-    libc.printf(b"C stdout\n")
+    libc.puts(b"C stdout")
     raise ValueError("intentional failure")
 "#,
     );
