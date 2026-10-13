@@ -23,7 +23,7 @@ use karva_benchmark::{BENCHMARK_PROJECTS, BenchmarkProject};
 use karva_cache::CACHE_DIR;
 use karva_cli::{ExitStatus, OutputFormat};
 use karva_static::ToolEnvVars;
-use regex::Regex;
+use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use similar::{Algorithm, TextDiff};
 
@@ -842,6 +842,7 @@ fn normalize_diagnostic_output(output: &Output) -> String {
     )
 }
 
+/// Removes per-run identities while preserving warning content and socket configuration.
 fn normalize_diagnostic_text(text: &str) -> String {
     static DURATION: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"\[\s*\d+\.\d{3}s\]").expect("duration regex should be valid")
@@ -849,8 +850,23 @@ fn normalize_diagnostic_text(text: &str) -> String {
     static ADDRESS: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"0x[0-9a-fA-F]+").expect("address regex should be valid"));
 
+    static SOCKET: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"<socket\.socket [^>\n]*>").expect("socket regex should be valid")
+    });
+    static SOCKET_FD: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\bfd=-?\d+").expect("socket fd regex should be valid"));
+    static SOCKET_PORT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"((?:laddr|raddr)=\('[^']+', )\d+").expect("socket port regex should be valid")
+    });
+
     let text = DURATION.replace_all(text, "[TIME]");
-    ADDRESS.replace_all(&text, "0xADDR").into_owned()
+    let text = ADDRESS.replace_all(&text, "0xADDR");
+    SOCKET
+        .replace_all(&text, |captures: &Captures<'_>| {
+            let socket = SOCKET_FD.replace_all(&captures[0], "fd=FD");
+            SOCKET_PORT.replace_all(&socket, "${1}PORT").into_owned()
+        })
+        .into_owned()
 }
 
 fn diagnostic_comparison(
@@ -1184,7 +1200,7 @@ fn diagnostics_markdown_report(
             "\n<details>\n<summary><code>{}</code> diagnostic output diff</summary>\n",
             project.name
         )?;
-        body.push_str("Durations and memory addresses are normalized; concise output also ignores line order.\n\n");
+        body.push_str("Durations, memory addresses, and socket descriptors and ports are normalized; concise output also ignores line order.\n\n");
         write_code_block(&mut body, "diff", diff)?;
         writeln!(body)?;
         body.push_str("</details>\n");
@@ -1217,7 +1233,9 @@ fn write_full_diagnostic_output(
         "\n<details>\n<summary><code>{}</code> full diagnostic output</summary>\n",
         project.name
     )?;
-    body.push_str("Durations and memory addresses are normalized.\n\n");
+    body.push_str(
+        "Durations, memory addresses, and socket descriptors and ports are normalized.\n\n",
+    );
     writeln!(body, "#### Baseline: `{baseline_label}`\n")?;
     write_optional_code_block(body, diagnostics.baseline_output.as_deref())?;
     writeln!(body, "\n#### Candidate: `{candidate_label}`\n")?;
@@ -1886,7 +1904,7 @@ mod tests {
         <details>
         <summary><code>requests</code> diagnostic output diff</summary>
 
-        Durations and memory addresses are normalized; concise output also ignores line order.
+        Durations, memory addresses, and socket descriptors and ports are normalized; concise output also ignores line order.
 
         ```diff
         --- main
@@ -1903,7 +1921,7 @@ mod tests {
         <details>
         <summary><code>requests</code> full diagnostic output</summary>
 
-        Durations and memory addresses are normalized.
+        Durations, memory addresses, and socket descriptors and ports are normalized.
 
         #### Baseline: `main`
 
@@ -2025,6 +2043,54 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_comparison_normalizes_socket_identities() {
+        let baseline = normalize_diagnostic_text(
+            "ResourceWarning: unclosed <socket.socket fd=7, family=2, type=1, proto=0, laddr=('127.0.0.1', 41263)> (1 emitted)\n\
+             ResourceWarning: unclosed <socket.socket fd=8, family=10, type=1, proto=0, laddr=('::1', 54195, 0, 0), raddr=('::1', 41263, 0, 0)> (1 emitted)\n\
+             configured laddr=('127.0.0.1', 8080), fd=3\n",
+        );
+        let candidate = normalize_diagnostic_text(
+            "ResourceWarning: unclosed <socket.socket fd=9, family=2, type=1, proto=0, laddr=('127.0.0.1', 39859)> (1 emitted)\n\
+             ResourceWarning: unclosed <socket.socket fd=10, family=10, type=1, proto=0, laddr=('::1', 40451, 0, 0), raddr=('::1', 39859, 0, 0)> (1 emitted)\n\
+             configured laddr=('127.0.0.1', 8080), fd=3\n",
+        );
+        assert_eq!(baseline, candidate);
+        assert!(baseline.contains("laddr=('::1', PORT, 0, 0), raddr=('::1', PORT, 0, 0)"));
+        assert!(baseline.contains("configured laddr=('127.0.0.1', 8080), fd=3"));
+        let comparison = diagnostic_comparison(
+            Some(&baseline),
+            Some(&candidate),
+            "main",
+            "PR",
+            OutputFormat::Full,
+        )
+        .expect("diagnostics should be available");
+        assert!(comparison.diff.is_none());
+
+        let changed = candidate.replace("(1 emitted)", "(2 emitted)");
+        let comparison = diagnostic_comparison(
+            Some(&baseline),
+            Some(&changed),
+            "main",
+            "PR",
+            OutputFormat::Full,
+        )
+        .expect("diagnostics should be available");
+        assert!(comparison.diff.is_some());
+
+        let changed = candidate.replace("family=2", "family=10");
+        let comparison = diagnostic_comparison(
+            Some(&baseline),
+            Some(&changed),
+            "main",
+            "PR",
+            OutputFormat::Full,
+        )
+        .expect("diagnostics should be available");
+        assert!(comparison.diff.is_some());
+    }
+
+    #[test]
     fn diagnostic_code_blocks_expand_around_embedded_fences() {
         let mut markdown = String::new();
 
@@ -2079,7 +2145,7 @@ mod tests {
         <details>
         <summary><code>requests</code> full diagnostic output</summary>
 
-        Durations and memory addresses are normalized.
+        Durations, memory addresses, and socket descriptors and ports are normalized.
 
         #### Baseline: `main`
 
