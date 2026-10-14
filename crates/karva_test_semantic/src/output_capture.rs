@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use karva_diagnostic::CapturedTestOutput;
 use pyo3::exceptions::{PyOSError, PyRuntimeError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyCFunction, PyDict, PyString, PyTuple};
@@ -100,7 +101,7 @@ impl PythonStdinCapture {
     pub fn activate(&self, py: Python<'_>) -> PyResult<()> {
         self.sys
             .bind(py)
-            .setattr("stdin", self.captured_stdin.bind(py))
+            .setattr(intern!(py, "stdin"), self.captured_stdin.bind(py))
     }
 
     /// Restores the worker's original Python stdin stream.
@@ -183,18 +184,21 @@ impl StdinCapture {
 impl PythonOutputCapture {
     /// Redirects both Python output streams, rolling back stdout if stderr setup fails.
     pub fn start(py: Python<'_>) -> PyResult<Self> {
-        let sys = py.import("sys")?.unbind();
+        let sys = py.import(intern!(py, "sys"))?.unbind();
         let sys_bound = sys.bind(py);
-        let string_io = py.import("io")?.getattr("StringIO")?;
+        let string_io = py
+            .import(intern!(py, "io"))?
+            .getattr(intern!(py, "StringIO"))?;
 
-        let old_stdout = sys_bound.getattr("stdout")?.unbind();
-        let old_stderr = sys_bound.getattr("stderr")?.unbind();
+        let old_stdout = sys_bound.getattr(intern!(py, "stdout"))?.unbind();
+        let old_stderr = sys_bound.getattr(intern!(py, "stderr"))?.unbind();
         let stdout = string_io.call0()?.unbind();
         let stderr = string_io.call0()?.unbind();
 
-        sys_bound.setattr("stdout", stdout.bind(py))?;
-        if let Err(err) = sys_bound.setattr("stderr", stderr.bind(py)) {
-            if let Err(restore_err) = sys_bound.setattr("stdout", old_stdout.bind(py)) {
+        sys_bound.setattr(intern!(py, "stdout"), stdout.bind(py))?;
+        if let Err(err) = sys_bound.setattr(intern!(py, "stderr"), stderr.bind(py)) {
+            if let Err(restore_err) = sys_bound.setattr(intern!(py, "stdout"), old_stdout.bind(py))
+            {
                 tracing::warn!(
                     "failed to restore Python stdout after capture setup error: {restore_err}"
                 );
@@ -225,8 +229,16 @@ impl PythonOutputCapture {
         flush_current_streams(sys);
 
         let restore_result = restore_stdio(sys, &self.old_stdout, &self.old_stderr, py);
-        let stdout = self.stdout.bind(py).call_method0("getvalue")?.extract()?;
-        let stderr = self.stderr.bind(py).call_method0("getvalue")?.extract()?;
+        let stdout = self
+            .stdout
+            .bind(py)
+            .call_method0(intern!(py, "getvalue"))?
+            .extract()?;
+        let stderr = self
+            .stderr
+            .bind(py)
+            .call_method0(intern!(py, "getvalue"))?
+            .extract()?;
         restore_result?;
 
         Ok(CapturedPythonOutput { stdout, stderr })
@@ -243,10 +255,10 @@ pub struct CapturedPythonOutput {
 }
 
 fn flush_current_streams(sys: &Bound<'_, PyModule>) {
-    for stream in ["stdout", "stderr"] {
+    for stream in [intern!(sys.py(), "stdout"), intern!(sys.py(), "stderr")] {
         if let Err(err) = sys
             .getattr(stream)
-            .and_then(|stream| stream.call_method0("flush"))
+            .and_then(|stream| stream.call_method0(intern!(sys.py(), "flush")))
         {
             tracing::warn!("failed to flush captured Python {stream}: {err}");
         }
@@ -259,8 +271,8 @@ fn restore_stdio(
     stderr: &Py<PyAny>,
     py: Python<'_>,
 ) -> PyResult<()> {
-    sys.setattr("stdout", stdout.bind(py))?;
-    sys.setattr("stderr", stderr.bind(py))
+    sys.setattr(intern!(py, "stdout"), stdout.bind(py))?;
+    sys.setattr(intern!(py, "stderr"), stderr.bind(py))
 }
 
 fn restore_stdin_fd(os: &Bound<'_, PyModule>, old_fd: Option<i32>) -> PyResult<()> {
