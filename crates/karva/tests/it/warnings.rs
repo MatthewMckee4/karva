@@ -615,7 +615,15 @@ def test_replaced_category():
     assert parse_filter("ignore::categories.CustomWarning")[2] is UserWarning
 "#,
     );
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]));
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }
 
 #[test]

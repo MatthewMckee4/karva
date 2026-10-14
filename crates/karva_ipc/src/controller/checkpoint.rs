@@ -68,7 +68,7 @@ impl CheckpointState {
     }
 
     /// Stores or refines one active test without changing its start time.
-    pub(super) fn record(
+    fn record(
         &mut self,
         worker_id: usize,
         parameters: Option<String>,
