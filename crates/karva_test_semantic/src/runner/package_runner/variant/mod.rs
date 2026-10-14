@@ -1,7 +1,5 @@
 //! Orchestration and reporting for one concrete test variant.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use karva_coverage::CoveragePhase;
@@ -92,11 +90,9 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .context
             .report_test_started(&initial_test_name);
         self.package_runner.exception_capture.begin_attempt();
-        let retry_params = self.input.params.clone();
-        let first_params = std::mem::take(&mut self.input.params);
         self.begin_pending_coverage_setup();
         let output_capture = self.start_output_capture();
-        let first_attempt = self.prepare_attempt(first_params, output_capture);
+        let first_attempt = self.prepare_attempt(output_capture);
         let settings = if initial_name_is_exact {
             self.settings(
                 &first_attempt.fixtures.function_arguments,
@@ -128,7 +124,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 set_attempt_env(self.py, attempt_number, settings.retry.max_attempts);
             let prepared = prepared_attempt
                 .take()
-                .unwrap_or_else(|| self.prepare_retry(retry_params.clone(), &settings));
+                .unwrap_or_else(|| self.prepare_retry(&settings));
             self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Run);
             let attempt = self.execute_attempt(
                 &settings,
@@ -160,7 +156,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     /// Prepares fixture values and records setup duration for one attempt.
     fn prepare_attempt(
         &mut self,
-        params: HashMap<String, Arc<Py<PyAny>>>,
         output_capture: Option<PythonOutputCapture>,
     ) -> PreparedTestAttempt {
         let filters = self
@@ -187,7 +182,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             &self.input.fixtures.dependencies,
             &self.input.fixtures.use_dependencies,
             &self.input.fixtures.auto_use,
-            params,
+            &self.input.params,
         );
         PreparedTestAttempt {
             fixtures,
@@ -198,15 +193,11 @@ impl<'runner, 'context, 'settings, 'test, 'py>
     }
 
     /// Prepares a retry under its setup coverage context.
-    fn prepare_retry(
-        &mut self,
-        params: HashMap<String, Arc<Py<PyAny>>>,
-        settings: &VariantSettings,
-    ) -> PreparedTestAttempt {
+    fn prepare_retry(&mut self, settings: &VariantSettings) -> PreparedTestAttempt {
         self.package_runner.exception_capture.begin_attempt();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Setup);
         let output_capture = self.start_output_capture();
-        self.prepare_attempt(params, output_capture)
+        self.prepare_attempt(output_capture)
     }
 
     /// Returns a registered skip result when filters or skip policy exclude this variant.
