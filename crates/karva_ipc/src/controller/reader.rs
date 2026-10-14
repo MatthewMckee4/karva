@@ -149,8 +149,8 @@ pub(super) fn read_worker(
 
 /// Blocking stream read that turns an ignored socket shutdown into EOF.
 ///
-/// The operating-system timeout is hidden from serde so partial JSON frames
-/// keep their decoder state. Once interrupted, at most one in-progress read
+/// The operating-system timeout is hidden from framing so partial JSON frames
+/// remain buffered. Once interrupted, at most one in-progress read
 /// can return bytes before the next call reports EOF.
 pub(super) struct InterruptibleReader<'a, R> {
     /// Worker stream consumed by the protocol decoder.
