@@ -304,6 +304,18 @@ impl<D> TestCaseResultPayload<D> {
 }
 
 impl TestCaseResult<RenderedDiagnostic> {
+    /// Reconstructs an ordinary passing result from its lossless IPC identity.
+    pub fn passed(module_name: String, name: String, duration: Duration) -> Self {
+        Self {
+            identity: TestCaseIdentity {
+                full_name: format!("{module_name}::{name}"),
+                module_name,
+                name,
+            },
+            payload: TestCaseResultPayload::new(TestCaseOutcome::Passed, duration, None),
+        }
+    }
+
     /// Builds an attributed worker crash for controller-side attempt recovery.
     pub fn crashed(name: &str, duration: Duration, termination: &str, stderr: &str) -> Self {
         Self::from_display_name(

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result, bail};
 use karva_diagnostic::TestCaseResult;
-use karva_python_semantic::{QualifiedTestName, TestCacheKey};
+use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use serde::Serialize;
 
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
@@ -31,10 +31,18 @@ pub struct WorkerClient {
 /// Serialized transport and its periodic delivery worker.
 struct WorkerConnection {
     /// Buffered event stream protected against concurrent reporters.
-    writer: Arc<Mutex<BufWriter<ControllerStream>>>,
+    writer: Arc<Mutex<WorkerWriter>>,
 
     /// Background delivery for events buffered between synchronous flushes.
     flusher: EventFlusher,
+}
+
+/// Buffer and connection-local identity dictionary, updated under one writer lock.
+struct WorkerWriter {
+    stream: BufWriter<ControllerStream>,
+
+    /// Function declared by the last successfully written checkpoint.
+    function_name: Option<QualifiedFunctionName>,
 }
 
 impl WorkerClient {
@@ -47,7 +55,10 @@ impl WorkerClient {
         let stream = ControllerStream::connect(endpoint)?;
         stream.set_nodelay(true)?;
         let reader = stream.try_clone()?;
-        let writer = Arc::new(Mutex::new(BufWriter::new(stream)));
+        let writer = Arc::new(Mutex::new(WorkerWriter {
+            stream: BufWriter::new(stream),
+            function_name: None,
+        }));
         let flusher = EventFlusher::spawn(&writer)?;
         let client = Self {
             connection: Arc::new(WorkerConnection { writer, flusher }),
@@ -85,7 +96,18 @@ impl WorkerClient {
 
     /// Commits the active test identity before its setup or body can terminate the worker.
     pub fn checkpoint(&self, test_name: &QualifiedTestName) -> Result<()> {
-        self.write(&checkpoint(test_name), true)
+        self.check_flush_error()?;
+        let mut writer = self.lock_writer()?;
+        let include_function = writer.function_name.as_ref() != Some(test_name.function_name());
+        self.write_locked(
+            &mut writer.stream,
+            &checkpoint(test_name, include_function),
+            true,
+        )?;
+        if include_function {
+            writer.function_name = Some(test_name.function_name().clone());
+        }
+        Ok(())
     }
 
     /// Marks the worker complete and gracefully closes the connection.
@@ -98,6 +120,7 @@ impl WorkerClient {
         self.connection.flusher.finish()?;
         self.check_flush_error()?;
         self.lock_writer()?
+            .stream
             .get_ref()
             .shutdown()
             .context("failed to close Karva controller connection")
@@ -106,6 +129,15 @@ impl WorkerClient {
     fn write(&self, message: &impl Serialize, flush: bool) -> Result<()> {
         self.check_flush_error()?;
         let mut writer = self.lock_writer()?;
+        self.write_locked(&mut writer.stream, message, flush)
+    }
+
+    fn write_locked(
+        &self,
+        writer: &mut BufWriter<ControllerStream>,
+        message: &impl Serialize,
+        flush: bool,
+    ) -> Result<()> {
         serde_json::to_writer(&mut *writer, message)
             .context("failed to serialize Karva worker event")?;
         writer
@@ -127,6 +159,7 @@ impl WorkerClient {
         self.check_flush_error()?;
         let mut writer = self.lock_writer()?;
         writer
+            .stream
             .flush()
             .context("failed to send Karva worker event")?;
         self.connection.flusher.mark_flushed();
@@ -137,7 +170,7 @@ impl WorkerClient {
         self.connection.flusher.check_error()
     }
 
-    fn lock_writer(&self) -> Result<std::sync::MutexGuard<'_, BufWriter<ControllerStream>>> {
+    fn lock_writer(&self) -> Result<std::sync::MutexGuard<'_, WorkerWriter>> {
         self.connection
             .writer
             .lock()
@@ -156,7 +189,10 @@ fn read_test_selection(stream: ControllerStream) -> Result<WorkerSelection> {
     };
     match message.context("failed to read Karva worker configuration and test paths")? {
         WireMessage::TestSelection(selection) => Ok(selection),
-        WireMessage::Hello { .. } | WireMessage::TestCheckpoint { .. } | WireMessage::Event(_) => {
+        WireMessage::Hello { .. }
+        | WireMessage::TestCheckpoint { .. }
+        | WireMessage::TestPassed { .. }
+        | WireMessage::Event(_) => {
             bail!("Karva controller sent an invalid worker startup message")
         }
     }

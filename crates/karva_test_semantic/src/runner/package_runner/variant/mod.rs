@@ -113,8 +113,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         };
         self.resolve_pending_coverage_setup(&settings.identity.qualified_name);
         let function = self.input.test.py_function.clone_ref(self.py);
-        let test_name_env_result =
-            set_test_name_env(self.py, &settings.identity.qualified_test_name.to_string());
+        let test_name_env_result = set_test_name_env(self.py, &settings.identity.qualified_name);
 
         tracing::debug!("Running test `{}`", settings.identity.qualified_test_name);
         let mut attempt_number = self
@@ -171,10 +170,8 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             .test()
             .warning_filters
             .iter()
-            .chain(self.input.tags.warning_filters().iter())
-            .cloned()
-            .collect::<Vec<_>>();
-        let warning_capture = match WarningCapture::start(self.py, &filters) {
+            .chain(self.input.tags.warning_filters().iter());
+        let warning_capture = match WarningCapture::start(self.py, filters) {
             Ok(capture) => Some(capture),
             Err(error) => {
                 self.package_runner

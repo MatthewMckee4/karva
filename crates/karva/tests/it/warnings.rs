@@ -597,6 +597,36 @@ def test_modify(value):
 }
 
 #[test]
+fn cached_filter_syntax_resolves_replaced_categories() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+import types
+from karva._warnings import parse_filter
+
+categories = types.ModuleType("categories")
+sys.modules["categories"] = categories
+
+def test_replaced_category():
+    categories.CustomWarning = DeprecationWarning
+    assert parse_filter("ignore::categories.CustomWarning")[2] is DeprecationWarning
+    categories.CustomWarning = UserWarning
+    assert parse_filter("ignore::categories.CustomWarning")[2] is UserWarning
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn dotted_categories_message_module_and_line_filters() {
     let context = TestContext::with_file(
         "categories.py",

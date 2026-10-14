@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use camino::Utf8PathBuf;
 use karva_diagnostic::{RenderedDiagnostic, TestCaseResult};
@@ -77,13 +78,38 @@ pub enum WireMessage {
         /// Rendered parameter list without its function name or parentheses.
         ///
         /// The controller reconstructs the display identity from this suffix
-        /// and `cache_key`, avoiding duplicate function names on the wire.
+        /// and the connection's function identity, avoiding repeated function
+        /// names across parameter cases.
         #[serde(rename = "p", default, skip_serializing_if = "Option::is_none")]
         parameters: Option<String>,
 
-        /// Stable case identity used for completion and crash recovery.
+        /// Qualified function name, omitted when unchanged on this connection.
+        #[serde(rename = "f", default, skip_serializing_if = "Option::is_none")]
+        function_name: Option<String>,
+
+        /// Stable parameter expansion index, absent for function-level identity.
+        #[serde(rename = "i", default, skip_serializing_if = "Option::is_none")]
+        case_index: Option<usize>,
+    },
+
+    /// Ordinary passing result without repeated display identity or empty payloads.
+    #[serde(rename = "P")]
+    TestPassed {
+        /// Stable identity used to validate completion and update duration caches.
         #[serde(rename = "k")]
         cache_key: TestCacheKey,
+
+        /// Dotted module name preserved independently of display separators.
+        #[serde(rename = "m")]
+        module_name: String,
+
+        /// Module-relative display name, including resolved fixture parameters.
+        #[serde(rename = "n")]
+        name: String,
+
+        /// Full lifecycle duration, with the same precision as other results.
+        #[serde(rename = "d")]
+        duration: Duration,
     },
 
     /// Runtime event sent from a worker to its controller.

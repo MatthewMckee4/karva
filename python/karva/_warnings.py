@@ -6,6 +6,7 @@ import builtins
 import importlib
 import re
 import warnings
+from functools import cache
 from typing import Any, Literal
 
 Action = Literal["default", "error", "ignore", "always", "module", "once"]
@@ -18,17 +19,7 @@ def parse_filter(value: str) -> tuple[Action, str, type[Warning], str, int]:
     Unlike interpreter ``-W`` parsing, invalid policy is an error. Later filters
     take precedence, and categories can be built-ins or importable dotted names.
     """
-    parts = value.split(":")
-    if len(parts) > 5:
-        raise ValueError(f"invalid warning filter {value!r}: too many fields")
-    parts.extend([""] * (5 - len(parts)))
-    action, message, category_name, module, line = (part.strip() for part in parts)
-    action = action or "default"
-    if action == "all":
-        action = "always"
-    resolved_action = next((name for name in ACTIONS if name.startswith(action)), None)
-    if resolved_action is None:
-        raise ValueError(f"invalid warning filter {value!r}: unknown action {action!r}")
+    action, message, category_name, module, lineno = _filter_syntax(value)
     category: Any = Warning
     if category_name:
         module_name, _, name = category_name.rpartition(".")
@@ -45,6 +36,23 @@ def parse_filter(value: str) -> tuple[Action, str, type[Warning], str, int]:
             raise ValueError(
                 f"invalid warning filter {value!r}: {category_name!r} is not a warning category"
             )
+    return action, message, category, module, lineno
+
+
+@cache
+def _filter_syntax(value: str) -> tuple[Action, str, str, str, int]:
+    """Reuse immutable syntax; resolve mutable category bindings on every use."""
+    parts = value.split(":")
+    if len(parts) > 5:
+        raise ValueError(f"invalid warning filter {value!r}: too many fields")
+    parts.extend([""] * (5 - len(parts)))
+    action, message, category_name, module, line = (part.strip() for part in parts)
+    action = action or "default"
+    if action == "all":
+        action = "always"
+    resolved_action = next((name for name in ACTIONS if name.startswith(action)), None)
+    if resolved_action is None:
+        raise ValueError(f"invalid warning filter {value!r}: unknown action {action!r}")
     try:
         lineno = int(line or "0")
         if lineno < 0:
@@ -53,7 +61,7 @@ def parse_filter(value: str) -> tuple[Action, str, type[Warning], str, int]:
         re.compile(module)
     except (ValueError, re.error) as error:
         raise ValueError(f"invalid warning filter {value!r}: {error}") from error
-    return resolved_action, message, category, module, lineno
+    return resolved_action, message, category_name, module, lineno
 
 
 def validate_filters(filters: list[str]) -> None:
