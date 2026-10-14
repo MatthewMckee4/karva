@@ -21,8 +21,15 @@ pub(super) fn checkpoint(test_name: &QualifiedTestName) -> impl Serialize + '_ {
 pub(super) fn completion<'a>(
     cache_key: &'a TestCacheKey,
     result: &'a TestCaseResult,
+    captured_attempt: Option<u32>,
+    status: bool,
 ) -> impl Serialize + 'a {
-    BorrowedEventFrame::Event(BorrowedWorkerEvent::TestFinished { cache_key, result })
+    BorrowedEventFrame::Event(BorrowedWorkerEvent::TestFinished {
+        cache_key,
+        result,
+        captured_attempt,
+        status,
+    })
 }
 
 /// Allocation-free checkpoint frame matching the owned protocol variant.
@@ -55,6 +62,14 @@ enum BorrowedWorkerEvent<'a> {
     TestFinished {
         /// Stable identity matching this result to its start checkpoint.
         cache_key: &'a TestCacheKey,
+
+        /// Native window paired with this completion frame.
+        #[serde(rename = "c", skip_serializing_if = "Option::is_none")]
+        captured_attempt: Option<u32>,
+
+        /// Whether the controller renders live status from this result.
+        #[serde(rename = "s")]
+        status: bool,
 
         /// Transport-safe completed test result.
         result: &'a TestCaseResult,
@@ -96,6 +111,8 @@ mod tests {
     use karva_diagnostic::{TestCaseOutcome, TestCaseResult};
     use karva_python_semantic::{ModulePath, QualifiedFunctionName, QualifiedTestName};
 
+    use rstest::rstest;
+
     use super::{checkpoint, completion};
     use crate::protocol::{WireMessage, WorkerEvent};
 
@@ -120,8 +137,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn borrowed_completion_matches_owned_wire_format() {
+    #[rstest]
+    fn borrowed_completion_matches_owned_wire_format(#[values(false, true)] captured: bool) {
         let test_name = QualifiedTestName::new(QualifiedFunctionName::new(
             "test_example".to_string(),
             ModulePath::new_with_name("test.py", "tests.test".to_string()),
@@ -133,11 +150,16 @@ mod tests {
             Duration::from_millis(2),
             None,
         );
-        let borrowed = serde_json::to_value(completion(&cache_key, &result))
-            .expect("serialize borrowed completion");
+        let captured_attempt = captured.then_some(1);
+        let status = captured;
+        let borrowed =
+            serde_json::to_value(completion(&cache_key, &result, captured_attempt, status))
+                .expect("serialize borrowed completion");
         let owned = WireMessage::Event(Box::new(WorkerEvent::TestFinished {
             cache_key,
             result: Box::new(result),
+            captured_attempt,
+            status,
         }));
 
         assert_eq!(

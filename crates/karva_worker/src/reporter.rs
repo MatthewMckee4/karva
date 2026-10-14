@@ -1,3 +1,9 @@
+use std::fs::File;
+use std::io::{self, Write};
+#[cfg(unix)]
+use std::os::fd::AsFd;
+#[cfg(windows)]
+use std::os::windows::io::AsHandle;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -15,8 +21,8 @@ pub struct WorkerReporter {
     /// Terminal-facing status reporter local to the worker process.
     output: TestCaseReporter,
 
-    /// Native stream framing supplied by the controller, absent for protocol-only clients.
-    output_marker: Option<[u8; 16]>,
+    /// Private output route reused across attempts, absent for protocol-only clients.
+    output_reader: Option<Arc<WorkerOutputReader>>,
 
     /// Shared transport for lifecycle and result frames.
     client: WorkerClient,
@@ -38,15 +44,18 @@ impl WorkerReporter {
         client: WorkerClient,
         cwd: Utf8PathBuf,
         diagnostic_config: DisplayDiagnosticConfig,
-    ) -> Self {
-        Self {
+    ) -> io::Result<Self> {
+        let output_reader = output_marker
+            .map(|marker| WorkerOutputReader::new(client.clone(), marker).map(Arc::new))
+            .transpose()?;
+        Ok(Self {
             output,
-            output_marker,
+            output_reader,
             client,
             cwd,
             diagnostic_config,
             send_error: Mutex::new(None),
-        }
+        })
     }
 
     /// Returns first transport error observed by reporter callbacks.
@@ -81,11 +90,83 @@ impl WorkerReporter {
 struct WorkerOutputReader {
     client: WorkerClient,
     marker: [u8; 16],
+
+    /// Worker-lifetime routes remain valid if test code closes descriptors 1 or 2.
+    stdout: File,
+
+    /// Separate inherited stderr route for ordered capture boundaries.
+    stderr: File,
+
+    /// Normal completion metadata; a retry emits the preceding window before its begin marker.
+    pending: Mutex<PendingCompletion>,
+}
+
+/// Capture and status metadata carried by an ordinary result rather than extra frames.
+#[derive(Default)]
+struct PendingCompletion {
+    attempt: Option<u32>,
+    status: bool,
+}
+
+impl WorkerOutputReader {
+    fn take_completion(&self) -> Result<PendingCompletion, String> {
+        let mut pending = self
+            .pending
+            .lock()
+            .map_err(|_| "output completion lock poisoned")?;
+        Ok(std::mem::take(&mut *pending))
+    }
+
+    fn new(client: WorkerClient, marker: [u8; 16]) -> io::Result<Self> {
+        #[cfg(unix)]
+        let (stdout, stderr) = (
+            File::from(io::stdout().as_fd().try_clone_to_owned()?),
+            File::from(io::stderr().as_fd().try_clone_to_owned()?),
+        );
+        #[cfg(windows)]
+        let (stdout, stderr) = (
+            File::from(io::stdout().as_handle().try_clone_to_owned()?),
+            File::from(io::stderr().as_handle().try_clone_to_owned()?),
+        );
+        Ok(Self {
+            client,
+            marker,
+            stdout,
+            stderr,
+            pending: Mutex::new(PendingCompletion::default()),
+        })
+    }
 }
 
 impl CapturedOutputReader for WorkerOutputReader {
-    fn marker(&self) -> [u8; 16] {
-        self.marker
+    fn boundary(&self, tag: u8) -> Result<(), String> {
+        if tag == b'B' {
+            let previous = self
+                .pending
+                .lock()
+                .map_err(|_| "output completion lock poisoned")?
+                .attempt
+                .take();
+            if let Some(attempt) = previous {
+                self.client
+                    .defer_captured_output(attempt)
+                    .map_err(|error| format!("{error:#}"))?;
+            }
+        }
+        let mut frame = [0; 18];
+        frame[1..17].copy_from_slice(&self.marker);
+        frame[17] = tag;
+        (&self.stdout)
+            .write_all(&frame)
+            .and_then(|()| (&self.stderr).write_all(&frame))
+            .map_err(|error| error.to_string())
+    }
+    fn defer(&self, attempt: u32) -> Result<(), String> {
+        self.pending
+            .lock()
+            .map_err(|_| "output completion lock poisoned")?
+            .attempt = Some(attempt);
+        Ok(())
     }
     fn read(&self) -> Result<CapturedTestOutput, String> {
         self.client
@@ -96,12 +177,9 @@ impl CapturedOutputReader for WorkerOutputReader {
 
 impl Reporter for WorkerReporter {
     fn captured_output_reader(&self) -> Option<Arc<dyn CapturedOutputReader>> {
-        self.output_marker.map(|marker| {
-            Arc::new(WorkerOutputReader {
-                client: self.client.clone(),
-                marker,
-            }) as Arc<dyn CapturedOutputReader>
-        })
+        self.output_reader
+            .as_ref()
+            .map(|reader| Arc::clone(reader) as Arc<dyn CapturedOutputReader>)
     }
 
     fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
@@ -114,8 +192,15 @@ impl Reporter for WorkerReporter {
         result_kind: IndividualTestResultKind,
         duration: Duration,
     ) {
-        self.output
-            .report_test_case_result(test_name, result_kind, duration);
+        if let Some(reader) = &self.output_reader {
+            match reader.pending.lock() {
+                Ok(mut pending) => pending.status = true,
+                Err(_) => self.record_send_result(Err(anyhow!("output completion lock poisoned"))),
+            }
+        } else {
+            self.output
+                .report_test_case_result(test_name, result_kind, duration);
+        }
     }
 
     fn report_test_attempt(
@@ -144,7 +229,24 @@ impl Reporter for WorkerReporter {
 
     fn report_test_completed(&self, cache_key: &TestCacheKey, result: TestExecutionResult) {
         let result = result.render(&self.cwd, self.diagnostic_config);
-        self.record_send_result(self.client.send_test_finished(cache_key, &result));
+        let pending = match self
+            .output_reader
+            .as_ref()
+            .map(|reader| reader.take_completion())
+            .transpose()
+        {
+            Ok(pending) => pending.unwrap_or_default(),
+            Err(error) => {
+                self.record_send_result(Err(anyhow!(error)));
+                PendingCompletion::default()
+            }
+        };
+        self.record_send_result(self.client.send_test_finished(
+            cache_key,
+            &result,
+            pending.attempt,
+            pending.status,
+        ));
     }
 
     fn report_test_timed_out(

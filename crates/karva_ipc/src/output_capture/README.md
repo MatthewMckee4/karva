@@ -14,10 +14,23 @@ were at most 214 bytes, including the diagnostic text following each section.
 Raise the configured budget when real workloads need more output; omitted bytes
 always appear in the retained output with the budget name and requested total.
 
-On 2026-10-13, nine alternating debug-build runs of 2,000 empty tests on Apple
-Silicon with Python 3.13 had median wall times of 0.223 seconds on main (`6b19a776`) and
-0.322 seconds with controller-owned capture (about 50 microseconds more per
-test). Each run used one worker with live and final status output disabled.
-The first run of each build was cold; medians include it. This measures the
-per-attempt descriptor restoration and synchronous output collection cost,
-not throughput of tests that do useful work.
+Normal attempts pipeline their output with existing completion frames; only
+deadline and scoped-fixture collection wait for replies. Completed windows use
+the configured per-stream budget as a backpressure threshold, counting record
+sizes and allocated byte capacities. A window already in progress can finish
+before the next begin marker blocks. Empty windows therefore queue without
+allocating output buffers or requiring a reader handoff per attempt. Worker
+shutdown has one drain barrier so queued completions precede stream teardown.
+
+On 2026-10-14, release builds on Apple Silicon with Python 3.13.14 reproduced
+three benchmark-generator workloads with default workers and live status.
+Each revision ran 13 times in rotating order; medians exclude its first warmup.
+The parent collected CLI stdout and stderr, and no builds ran during timing.
+Main (`1a8a9d83`), the original capture PR (`b50dab11`), and pipelined capture
+respectively took 0.330, 0.635, and 0.369 seconds for 8,000 empty functions;
+0.657, 1.253, and 0.655 seconds for 16,807 matrix variants; and 0.381, 0.581,
+and 0.416 seconds for 16,384 tests using yield fixtures. Relative to the original
+PR this reduces wall time by about 42%, 48%, and 28%. The empty-function and
+fixture probes still show about 12% and 9% overhead against main, including
+native boundary writes and descriptor restoration. These local wall times are
+noisy and are not a substitute for the CI benchmark comparison.

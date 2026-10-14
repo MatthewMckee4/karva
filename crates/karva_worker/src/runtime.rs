@@ -131,19 +131,19 @@ fn run() -> anyhow::Result<ExitStatus> {
     let status = TestCaseReporter::new(printer, move |bytes| {
         if capture_enabled {
             status_client
-                .send_event(WorkerEvent::Status(bytes.to_vec()))
+                .send_event(WorkerEvent::Status(bytes))
                 .map_err(io::Error::other)
         } else {
-            io::stdout().lock().write_all(bytes)
+            io::stdout().lock().write_all(bytes.as_bytes())
         }
     });
     let reporter = WorkerReporter::new(
         status,
-        selection.output_marker,
+        selection.output_marker.filter(|_| capture_enabled),
         client.clone(),
         cwd.clone(),
         diagnostic_config,
-    );
+    )?;
 
     let result = karva_test_semantic::run_tests(karva_test_semantic::RunRequest {
         cwd: &cwd,
@@ -167,6 +167,7 @@ fn run() -> anyhow::Result<ExitStatus> {
     }
     drop(result);
     if let Some(marker) = output_marker {
+        client.drain_captured_output()?;
         let mut end = vec![0];
         end.extend_from_slice(&marker);
         end.push(b'F');

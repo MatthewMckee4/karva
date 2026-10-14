@@ -3,17 +3,12 @@
 //! Python owns rollback; private inherited handles delimit native bytes, allowing
 //! the deadline watchdog to collect output without acquiring Python's GIL.
 
-use std::fs::File;
-use std::io::{self, Write};
-#[cfg(unix)]
-use std::os::fd::{AsFd, AsRawFd};
-#[cfg(windows)]
-use std::os::windows::io::{AsHandle, AsRawHandle};
 use std::sync::{Arc, Mutex};
 
 use karva_diagnostic::{CapturedOutputReader, CapturedTestOutput};
 use pyo3::exceptions::{PyOSError, PyRuntimeError};
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 
 const STDIN_CAPTURE_ERROR: &str = "stdin is unavailable while test output is captured";
 
@@ -75,14 +70,19 @@ impl CapturedStdin {
 ///
 /// Callers must finish the capture before another attempt can redirect descriptors.
 pub struct PythonOutputCapture {
-    restoration: Py<PyAny>,
+    route: &'static PythonStreamRoute,
     native: Arc<NativeWindow>,
 }
 
-/// Owned duplicates allow the deadline watchdog to seal capture without the GIL.
+/// Cached Python methods and module handles for the worker's single interpreter.
+struct PythonStreamRoute {
+    start: Py<PyAny>,
+    close: Py<PyAny>,
+    sys: Py<PyModule>,
+}
+
+/// Per-attempt deadline cache; the shared route owns stable inherited handles.
 struct NativeWindow {
-    stdout: File,
-    stderr: File,
     source: Arc<dyn CapturedOutputReader>,
 
     /// Serializes watchdog and test-thread sealing; the end marker is written once.
@@ -90,12 +90,18 @@ struct NativeWindow {
 }
 
 impl NativeWindow {
-    fn boundary(&self, tag: u8) -> io::Result<()> {
-        let mut marker = vec![0];
-        marker.extend_from_slice(&self.source.marker());
-        marker.push(tag);
-        (&self.stdout).write_all(&marker)?;
-        (&self.stderr).write_all(&marker)
+    /// Seals normal output for the controller, preserving any deadline snapshot.
+    fn defer(&self, attempt: u32) -> Result<Option<CapturedTestOutput>, String> {
+        let output = self
+            .output
+            .lock()
+            .map_err(|_| "output capture lock poisoned")?;
+        if let Some(output) = output.as_ref() {
+            return Ok(Some(output.clone()));
+        }
+        self.source.boundary(b'E')?;
+        self.source.defer(attempt)?;
+        Ok(None)
     }
 
     fn collect(&self) -> Result<CapturedTestOutput, String> {
@@ -106,7 +112,7 @@ impl NativeWindow {
         if let Some(output) = output.as_ref() {
             return Ok(output.clone());
         }
-        self.boundary(b'E').map_err(|error| error.to_string())?;
+        self.source.boundary(b'E')?;
         let collected = self.source.read()?;
         *output = Some(collected.clone());
         Ok(collected)
@@ -222,44 +228,27 @@ impl StdinCapture {
 impl PythonOutputCapture {
     /// Opens an ordered window in the controller's native pipe readers.
     pub fn start(py: Python<'_>, source: Arc<dyn CapturedOutputReader>) -> PyResult<Self> {
-        #[cfg(unix)]
-        let (stdout, stderr) = (
-            File::from(io::stdout().as_fd().try_clone_to_owned()?),
-            File::from(io::stderr().as_fd().try_clone_to_owned()?),
-        );
-        #[cfg(windows)]
-        let (stdout, stderr) = (
-            File::from(io::stdout().as_handle().try_clone_to_owned()?),
-            File::from(io::stderr().as_handle().try_clone_to_owned()?),
-        );
+        static ROUTE: PyOnceLock<PythonStreamRoute> = PyOnceLock::new();
+        let route = ROUTE.get_or_try_init(py, || {
+            let capture = py
+                .import("karva._output_capture")?
+                .call_method0("create_capture")?;
+            Ok::<_, PyErr>(PythonStreamRoute {
+                start: capture.getattr("start")?.unbind(),
+                close: capture.getattr("close")?.unbind(),
+                sys: py.import("sys")?.unbind(),
+            })
+        })?;
+        route.start.bind(py).call0()?;
         let native = Arc::new(NativeWindow {
-            stdout,
-            stderr,
             source,
             output: Mutex::new(None),
         });
-        native.boundary(b'B')?;
-        #[cfg(unix)]
-        let handles = (native.stdout.as_raw_fd(), native.stderr.as_raw_fd());
-        #[cfg(windows)]
-        let handles = (
-            native.stdout.as_raw_handle() as usize,
-            native.stderr.as_raw_handle() as usize,
-        );
-        let restoration = match py
-            .import("karva._output_capture")
-            .and_then(|module| module.call_method1("redirect_output", handles))
-        {
-            Ok(value) => value.unbind(),
-            Err(error) => {
-                let _ = native.collect();
-                return Err(error);
-            }
-        };
-        Ok(Self {
-            restoration,
-            native,
-        })
+        if let Err(error) = native.source.boundary(b'B') {
+            let _ = route.close.bind(py).call0();
+            return Err(PyRuntimeError::new_err(error));
+        }
+        Ok(Self { route, native })
     }
 
     /// Shares native collection with the deadline watchdog.
@@ -267,10 +256,23 @@ impl PythonOutputCapture {
         SharedCapturedOutput(Arc::clone(&self.native))
     }
 
+    /// Restores descriptors and queues normal attempt output for controller attribution.
+    pub fn finish_deferred(
+        self,
+        py: Python<'_>,
+        attempt: u32,
+    ) -> PyResult<Option<CapturedTestOutput>> {
+        flush_current_streams(self.route.sys.bind(py));
+        let restore = self.route.close.bind(py).call0();
+        let output = self.native.defer(attempt).map_err(PyRuntimeError::new_err);
+        restore?;
+        output
+    }
+
     /// Restores descriptors and collects bytes preceding the ordered end markers.
     pub fn finish(self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
-        flush_current_streams(&py.import("sys")?);
-        let restore = self.restoration.bind(py).call_method0("close");
+        flush_current_streams(self.route.sys.bind(py));
+        let restore = self.route.close.bind(py).call0();
         let output = self.native.collect().map_err(PyRuntimeError::new_err);
         restore?;
         let output = output?;

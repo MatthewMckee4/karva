@@ -22,7 +22,7 @@ pub enum WorkerEvent {
     Log(Vec<u8>),
 
     /// Complete status line rendered before its test's durable completion frame.
-    Status(Vec<u8>),
+    Status(String),
 
     /// Test exceeded the configured slow-test threshold.
     TestSlow,
@@ -31,6 +31,14 @@ pub enum WorkerEvent {
     TestFinished {
         /// Stable identity matching this result to its start checkpoint.
         cache_key: TestCacheKey,
+
+        /// Normal attempt output sealed on the native streams, collected with this result.
+        #[serde(rename = "c", default, skip_serializing_if = "Option::is_none")]
+        captured_attempt: Option<u32>,
+
+        /// Whether the controller renders ordinary live status from this result.
+        #[serde(rename = "s", default)]
+        status: bool,
 
         /// Transport-safe completed test result.
         result: Box<TestCaseResult>,
@@ -94,8 +102,19 @@ pub enum WireMessage {
         cache_key: TestCacheKey,
     },
 
+    /// Seals a normal attempt; the controller attaches its bytes to the later result.
+    #[serde(rename = "O")]
+    CaptureFinished {
+        /// One-based attempt number, including resumed attempts after a timeout.
+        #[serde(rename = "a")]
+        attempt: u32,
+    },
+
     /// Collects an output window after ordered end markers were written to both pipes.
     ReadCapturedOutput,
+
+    /// End-of-worker barrier acknowledged after all preceding windows are collected.
+    CaptureDrained,
 
     /// Controller reply carrying bounded bytes for the completed window.
     CapturedOutput(CapturedTestOutput),

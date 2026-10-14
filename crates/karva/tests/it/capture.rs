@@ -663,6 +663,39 @@ def test_retry():
 }
 
 #[test]
+fn retried_output_unblocks_a_full_capture_queue() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+
+
+def test_retry():
+    attempt = os.environ["KARVA_ATTEMPT"]
+    os.write(1, attempt.encode() * (1024 * 1024))
+    if attempt == "1":
+        raise ValueError("retry me")
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().args([
+        "--retry=1",
+        "--max-output-bytes=32",
+        "--result-output=results.json",
+    ]));
+    let report: serde_json::Value =
+        serde_json::from_str(&context.read_file("results.json")).expect("valid report");
+    let attempts = &report["tests"][0]["attempts"];
+    assert_eq!(
+        attempts[0]["captured_output"]["stdout"],
+        "1111111111111111\n... captured output truncated: 1048544 of 1048576 bytes omitted (max-output-bytes=32) ...\n1111111111111111"
+    );
+    assert_eq!(
+        attempts[1]["captured_output"]["stdout"],
+        "2222222222222222\n... captured output truncated: 1048544 of 1048576 bytes omitted (max-output-bytes=32) ...\n2222222222222222"
+    );
+}
+
+#[test]
 fn zero_output_budget_is_rejected() {
     let context = TestContext::with_file("test.py", "def test_pass(): pass");
     assert_cmd_snapshot!(context.command().arg("--max-output-bytes=0"), @"
@@ -825,4 +858,75 @@ def test_output():
     ----- stderr -----
     native stderr
     ");
+}
+
+#[rstest]
+fn reused_capture_restores_closed_or_redirected_streams(
+    #[values("stdout", "stderr")] stream: &str,
+    #[values("python", "close", "redirect")] mutation: &str,
+) {
+    let descriptor = if stream == "stdout" { 1 } else { 2 };
+    let change = match mutation {
+        "python" => format!("sys.{stream}.close()"),
+        "close" => format!("os.close({descriptor})"),
+        _ => format!(
+            "fd = os.open(os.devnull, os.O_WRONLY); os.dup2(fd, {descriptor}); os.close(fd)"
+        ),
+    };
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import os
+import sys
+
+
+def test_a_mutates():
+    {change}
+
+
+def test_b_output():
+    print("after stdout")
+    os.write(2, b"after stderr\n")
+    raise ValueError("intentional failure")
+"#
+        ),
+    );
+    let mut settings = insta::Settings::clone_current();
+    settings.add_filter(r"(?m)^WARN failed to flush captured Python (stdout|stderr): ValueError: I/O operation on closed file\.\n?", "");
+    let _scope = settings.bind_to_scope();
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_a_mutates
+            FAIL [TIME] test::test_b_output
+
+    failures:
+
+    test::test_b_output:
+
+    error[test-failure]: Test `test_b_output` failed
+      --> test.py:10:5
+       |
+    10 | def test_b_output():
+       |     ^^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:13:5
+       |
+    13 |     raise ValueError("intentional failure")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: intentional failure
+
+    captured stdout:
+    after stdout
+    captured stderr:
+    after stderr
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
 }

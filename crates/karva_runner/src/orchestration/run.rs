@@ -162,6 +162,7 @@ pub fn run_parallel_tests(
         forward_stdout,
         scheduled_cases,
         config.result_retention,
+        printer,
     )?;
 
     let max_fail = project.settings().max_fail();

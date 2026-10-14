@@ -89,14 +89,12 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
 pub(super) fn finish_output_capture(
     py: Python<'_>,
     capture: Option<PythonOutputCapture>,
+    attempt: u32,
 ) -> Option<CapturedTestOutput> {
     let capture = capture?;
 
-    match capture.finish(py) {
-        Ok(output) => {
-            let output = CapturedTestOutput::new(output.stdout, output.stderr);
-            (!output.is_empty()).then_some(output)
-        }
+    match capture.finish_deferred(py, attempt) {
+        Ok(output) => output,
         Err(error) => {
             tracing::warn!("failed to finish Python output capture: {error}");
             None

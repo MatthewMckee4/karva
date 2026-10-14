@@ -1,0 +1,27 @@
+---
+source: crates/karva/tests/it/capture.rs
+info:
+  program: karva
+  args:
+    - test
+    - "--no-parallel"
+    - "--retry=1"
+    - "--max-output-bytes=32"
+    - "--result-output=results.json"
+  env:
+    KARVA_MAX_PARALLELISM: "1"
+    VIRTUAL_ENV: /Users/matthew/Library/Caches/karva/test-cache/shared-venv-b8d549a8c3066b93-py3.13-7585021e54784033
+---
+success: true
+exit_code: 0
+----- stdout -----
+    Starting 1 test across 1 worker
+  TRY 1 FAIL [TIME] test::test_retry
+  TRY 2 PASS [TIME] test::test_retry
+────────────
+     Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
+   FLAKY 2/2 [TIME] test::test_retry
+
+----- stderr -----
+WARN captured stdout exceeded max-output-bytes: requested=1048576 bytes, allowed=32 bytes; retained beginning and end
+WARN captured stdout exceeded max-output-bytes: requested=1048576 bytes, allowed=32 bytes; retained beginning and end

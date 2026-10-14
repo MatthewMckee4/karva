@@ -77,6 +77,11 @@ impl WorkerClient {
         Ok((client, selection))
     }
 
+    /// Flushes a retried window before the next attempt can hit pipe backpressure.
+    pub fn defer_captured_output(&self, attempt: u32) -> Result<()> {
+        self.write(&WireMessage::CaptureFinished { attempt }, true)
+    }
+
     /// Synchronously collects a window after both native streams were sealed.
     pub fn read_captured_output(&self) -> Result<CapturedTestOutput> {
         let mut reader = self
@@ -90,6 +95,22 @@ impl WorkerClient {
         match serde_json::from_str(&message)? {
             WireMessage::CapturedOutput(output) => Ok(output),
             _ => bail!("controller returned an invalid output capture reply"),
+        }
+    }
+
+    /// Waits once at worker shutdown, so stream drains never race queued capture windows.
+    pub fn drain_captured_output(&self) -> Result<()> {
+        let mut reader = self
+            .connection
+            .reader
+            .lock()
+            .map_err(|_| anyhow::anyhow!("worker reply lock poisoned"))?;
+        self.write(&WireMessage::CaptureDrained, true)?;
+        let mut message = String::new();
+        reader.read_line(&mut message)?;
+        match serde_json::from_str(&message)? {
+            WireMessage::CaptureDrained => Ok(()),
+            _ => bail!("controller returned an invalid output drain reply"),
         }
     }
 
@@ -108,9 +129,14 @@ impl WorkerClient {
         &self,
         cache_key: &TestCacheKey,
         result: &TestCaseResult,
+        captured_attempt: Option<u32>,
+        status: bool,
     ) -> Result<()> {
         let flush = result.outcome().is_non_success() || result.is_flaky_failure();
-        self.write(&completion(cache_key, result), flush)
+        self.write(
+            &completion(cache_key, result, captured_attempt, status),
+            flush,
+        )
     }
 
     /// Commits the active test identity before its setup or body can terminate the worker.
@@ -189,7 +215,9 @@ fn read_test_selection(stream: impl std::io::Read) -> Result<WorkerSelection> {
         WireMessage::Hello { .. }
         | WireMessage::TestCheckpoint { .. }
         | WireMessage::Event(_)
+        | WireMessage::CaptureFinished { .. }
         | WireMessage::ReadCapturedOutput
+        | WireMessage::CaptureDrained
         | WireMessage::CapturedOutput(_) => {
             bail!("Karva controller sent an invalid worker startup message")
         }

@@ -8,6 +8,8 @@ use karva_ipc::output_capture::OutputCaptureSink;
 use karva_ipc::{ControllerServer, WorkerSelection};
 use tempfile::NamedTempFile;
 
+use karva_logging::Printer;
+
 use crate::partition::Partition;
 use crate::worker_args::{WorkerSpawn, worker_command};
 
@@ -25,8 +27,10 @@ pub(super) fn spawn_workers(
     forward_stdout: bool,
     test_capacity: usize,
     result_retention: TestResultRetention,
+    printer: Printer,
 ) -> Result<WorkerSupervisor> {
-    let mut supervisor = WorkerSupervisor::with_test_capacity(test_capacity, result_retention);
+    let mut supervisor =
+        WorkerSupervisor::with_test_capacity(test_capacity, result_retention, printer);
 
     for (worker_id, partition) in partitions.into_iter().enumerate() {
         if partition.is_empty() {

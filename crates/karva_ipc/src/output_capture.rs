@@ -1,8 +1,9 @@
 //! Controller-owned capture buffers survive abrupt worker exit.
 //!
-//! Private stream markers delimit attempts; a synchronous IPC read waits for
-//! both end markers, never for inherited pipe EOF. Only one capture is pending
-//! per worker because the worker collects it before starting another attempt.
+//! Private stream markers delimit attempts; controller collection waits for
+//! both end markers, never for inherited pipe EOF. Completed windows share a
+//! per-stream storage budget, allowing quiet attempts to pipeline without a
+//! thread handoff for every boundary. Full queues apply pipe backpressure.
 
 use std::collections::VecDeque;
 use std::io;
@@ -52,6 +53,10 @@ impl OutputBuffer {
         }
     }
 
+    fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.head.capacity() + self.tail.capacity()
+    }
+
     fn text(&self) -> String {
         let tail = self.tail.iter().copied().collect::<Vec<_>>();
         let omitted = self
@@ -82,7 +87,7 @@ pub enum OutputStream {
     Stderr,
 }
 
-/// Tracks one pipe independently; undecided bytes are at most one frame prefix.
+/// Parses one pipe, retaining a partial frame or one chunk blocked by queue backpressure.
 #[derive(Debug)]
 struct StreamCapture {
     inside: bool,
@@ -90,8 +95,11 @@ struct StreamCapture {
     pending: Vec<u8>,
     output: OutputBuffer,
 
-    /// End marker received; the next begin marker requires collection first.
-    complete: bool,
+    /// Completed windows waiting for the ordered IPC collection frames.
+    completed: VecDeque<OutputBuffer>,
+
+    /// Allocated buffer bytes and record sizes in the completed queue.
+    queued_bytes: usize,
 }
 
 impl StreamCapture {
@@ -101,7 +109,8 @@ impl StreamCapture {
             closed: false,
             pending: Vec::new(),
             output: OutputBuffer::new(limit),
-            complete: false,
+            completed: VecDeque::new(),
+            queued_bytes: 0,
         }
     }
 
@@ -113,7 +122,7 @@ impl StreamCapture {
         }
     }
 
-    fn push(&mut self, marker: &[u8; 16], bytes: &[u8]) -> io::Result<Vec<u8>> {
+    fn push(&mut self, marker: &[u8; 16], bytes: &[u8]) -> io::Result<(Vec<u8>, bool)> {
         let mut nonce = vec![0];
         nonce.extend_from_slice(marker);
         let marker = nonce.as_slice();
@@ -130,20 +139,26 @@ impl StreamCapture {
             let bytes = self.pending.drain(..start).collect::<Vec<_>>();
             self.consume(&bytes, &mut outside);
             let tag = self.pending[marker.len()];
+            if tag == b'B' && self.queued_bytes >= self.output.limit.get() {
+                return Ok((outside, true));
+            }
             self.pending.drain(..=marker.len());
             match tag {
-                b'B' if !self.inside && !self.complete => {
+                b'B' if !self.inside => {
                     self.output = OutputBuffer::new(self.output.limit);
                     self.inside = true;
                 }
                 b'E' if self.inside => {
-                    self.complete = true;
+                    let empty = OutputBuffer::new(self.output.limit);
+                    let output = std::mem::replace(&mut self.output, empty);
+                    self.queued_bytes = self.queued_bytes.saturating_add(output.memory_size());
+                    self.completed.push_back(output);
                     self.inside = false;
                 }
                 b'F' if !self.inside => {
                     self.closed = true;
                     self.pending.clear();
-                    return Ok(outside);
+                    return Ok((outside, false));
                 }
                 _ => return Err(io::Error::other("invalid Karva output capture boundary")),
             }
@@ -155,7 +170,7 @@ impl StreamCapture {
         let ready = self.pending.len() - retained;
         let bytes = self.pending.drain(..ready).collect::<Vec<_>>();
         self.consume(&bytes, &mut outside);
-        Ok(outside)
+        Ok((outside, false))
     }
 
     fn snapshot(&self) -> String {
@@ -202,13 +217,31 @@ impl OutputCaptureSink {
             .state
             .lock()
             .map_err(|_| io::Error::other("output capture lock poisoned"))?;
-        let capture = match stream {
-            OutputStream::Stdout => &mut state.stdout,
-            OutputStream::Stderr => &mut state.stderr,
-        };
-        let result = capture.push(&self.marker, bytes);
-        self.ready.notify_all();
-        result
+        let mut input = bytes;
+        let mut outside = Vec::new();
+        loop {
+            let capture = match stream {
+                OutputStream::Stdout => &mut state.stdout,
+                OutputStream::Stderr => &mut state.stderr,
+            };
+            if capture.closed {
+                return Ok(outside);
+            }
+            let received = !input.is_empty();
+            let (ready, blocked) = capture.push(&self.marker, input)?;
+            outside.extend(ready);
+            input = &[];
+            if received || !blocked {
+                self.ready.notify_all();
+            }
+            if !blocked {
+                return Ok(outside);
+            }
+            state = self
+                .ready
+                .wait(state)
+                .map_err(|_| io::Error::other("output capture lock poisoned"))?;
+        }
     }
 
     /// Whether the worker sealed a framework stream independently of descendant EOF.
@@ -248,30 +281,40 @@ impl OutputCaptureSink {
             .lock()
             .map_err(|_| io::Error::other("output capture lock poisoned"))?;
         loop {
-            if state.stdout.complete && state.stderr.complete {
-                for (name, stream) in [("stdout", &state.stdout), ("stderr", &state.stderr)] {
-                    if stream.output.total > stream.output.limit.get() as u64 {
+            if !state.stdout.completed.is_empty() && !state.stderr.completed.is_empty() {
+                let blocked = state.stdout.queued_bytes >= state.stdout.output.limit.get()
+                    || state.stderr.queued_bytes >= state.stderr.output.limit.get();
+                let stdout = state
+                    .stdout
+                    .completed
+                    .pop_front()
+                    .ok_or_else(|| io::Error::other("missing stdout window"))?;
+                let stderr = state
+                    .stderr
+                    .completed
+                    .pop_front()
+                    .ok_or_else(|| io::Error::other("missing stderr window"))?;
+                state.stdout.queued_bytes -= stdout.memory_size();
+                state.stderr.queued_bytes -= stderr.memory_size();
+                if blocked {
+                    self.ready.notify_all();
+                }
+                drop(state);
+                for (name, stream) in [("stdout", &stdout), ("stderr", &stderr)] {
+                    if stream.total > stream.limit.get() as u64 {
                         tracing::warn!(
                             "captured {name} exceeded max-output-bytes: requested={} bytes, allowed={} bytes; retained beginning and end",
-                            stream.output.total,
-                            stream.output.limit
+                            stream.total,
+                            stream.limit
                         );
                     }
                 }
-                let stdout = state.stdout.output.text();
-                let stderr = state.stderr.output.text();
-                let State {
-                    stdout: out,
-                    stderr: err,
-                } = &mut *state;
-                for stream in [out, err] {
-                    stream.complete = false;
-                    stream.output.head.clear();
-                    stream.output.tail.clear();
-                }
-                return Ok(CapturedTestOutput::new(stdout, stderr));
+                return Ok(CapturedTestOutput::new(stdout.text(), stderr.text()));
             }
-            if state.stdout.closed || state.stderr.closed || interrupted.load(Ordering::Acquire) {
+            if (state.stdout.closed && state.stdout.completed.is_empty())
+                || (state.stderr.closed && state.stderr.completed.is_empty())
+                || interrupted.load(Ordering::Acquire)
+            {
                 return Err(io::Error::other(
                     "worker stream closed before output capture completed",
                 ));
@@ -340,6 +383,77 @@ mod tests {
             "ab\n... captured output truncated: 2 of 6 bytes omitted (max-output-bytes=4) ...\nef"
         );
         assert_eq!(output.stderr(), "");
+    }
+
+    #[test]
+    fn pipelined_windows_apply_backpressure_and_keep_attempts_separate() {
+        let marker = *b"0123456789ABCDEF";
+        let sink = std::sync::Arc::new(OutputCaptureSink::new(
+            marker,
+            NonZeroUsize::new(64).expect("positive budget"),
+        ));
+        let mut bytes = frame(&marker, b'B');
+        bytes.extend(b"first");
+        bytes.extend(frame(&marker, b'E'));
+        bytes.extend(frame(&marker, b'B'));
+        bytes.extend(b"second");
+        bytes.extend(frame(&marker, b'E'));
+        bytes.extend(frame(&marker, b'F'));
+        std::thread::scope(|scope| {
+            let stdout = scope.spawn(|| sink.push(OutputStream::Stdout, &bytes));
+            let stderr = scope.spawn(|| sink.push(OutputStream::Stderr, &bytes));
+            let first = sink
+                .take(&AtomicBool::new(false), Duration::ZERO)
+                .expect("first capture");
+            assert_eq!(first.stdout(), "first");
+            assert_eq!(first.stderr(), "first");
+            let second = sink
+                .take(&AtomicBool::new(false), Duration::ZERO)
+                .expect("second capture");
+            assert_eq!(second.stdout(), "second");
+            assert_eq!(second.stderr(), "second");
+            assert_eq!(
+                stdout
+                    .join()
+                    .expect("stdout reader")
+                    .expect("stdout capture"),
+                [] as [u8; 0]
+            );
+            assert_eq!(
+                stderr
+                    .join()
+                    .expect("stderr reader")
+                    .expect("stderr capture"),
+                [] as [u8; 0]
+            );
+        });
+    }
+
+    #[test]
+    fn quiet_windows_can_queue_without_a_per_attempt_reader_handoff() {
+        let marker = *b"0123456789ABCDEF";
+        let budget =
+            NonZeroUsize::new(std::mem::size_of::<OutputBuffer>() * 2).expect("two records");
+        let sink = OutputCaptureSink::new(marker, budget);
+        let mut bytes = frame(&marker, b'B');
+        bytes.extend(frame(&marker, b'E'));
+        bytes.extend(frame(&marker, b'B'));
+        bytes.extend(frame(&marker, b'E'));
+        bytes.extend(frame(&marker, b'F'));
+        sink.push(OutputStream::Stdout, &bytes)
+            .expect("queue stdout");
+        sink.push(OutputStream::Stderr, &bytes)
+            .expect("queue stderr");
+        assert!(
+            sink.take(&AtomicBool::new(false), Duration::ZERO)
+                .expect("first output")
+                .is_empty()
+        );
+        assert!(
+            sink.take(&AtomicBool::new(false), Duration::ZERO)
+                .expect("second output")
+                .is_empty()
+        );
     }
 
     #[test]

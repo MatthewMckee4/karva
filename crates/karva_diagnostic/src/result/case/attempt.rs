@@ -71,6 +71,10 @@ impl<D> TestCaseAttempt<D> {
         self.captured_output.as_ref()
     }
 
+    pub(super) fn set_captured_output(&mut self, output: CapturedTestOutput) {
+        self.captured_output = (!output.is_empty()).then_some(output);
+    }
+
     /// Adds stderr recovered after terminating the interpreter to this attempt.
     pub(super) fn append_captured_stderr(&mut self, stderr: &str) {
         let previous = self.captured_output.take();
