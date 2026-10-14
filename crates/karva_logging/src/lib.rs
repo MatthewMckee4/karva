@@ -26,6 +26,14 @@ pub use verbosity::VerbosityLevel;
 
 /// Installs process-global tracing and returns resources that must outlive the run.
 pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
+    setup_tracing_with_writer(level, std::io::stderr)
+}
+
+/// Installs tracing with an owned output route independent of test descriptors.
+pub fn setup_tracing_with_writer<W>(level: VerbosityLevel, writer: W) -> TracingGuard
+where
+    W: for<'a> tracing_subscriber::fmt::MakeWriter<'a> + Send + Sync + Clone + 'static,
+{
     use tracing_subscriber::prelude::*;
 
     let filter = if level.is_default() {
@@ -57,7 +65,7 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
                 .with_bracketed_fields(true)
                 .with_thread_ids(true)
                 .with_targets(true)
-                .with_writer(std::io::stderr)
+                .with_writer(writer)
                 .with_timer(tracing_tree::time::Uptime::default()),
         );
 
@@ -68,7 +76,7 @@ pub fn setup_tracing(level: VerbosityLevel) -> TracingGuard {
                 .event_format(KarvaFormat {
                     display_timestamp: level.is_extra_verbose(),
                 })
-                .with_writer(std::io::stderr),
+                .with_writer(writer),
         );
 
         subscriber.init();

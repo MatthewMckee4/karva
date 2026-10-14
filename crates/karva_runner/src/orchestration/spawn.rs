@@ -4,8 +4,11 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use karva_ipc::output_capture::OutputCaptureSink;
 use karva_ipc::{ControllerServer, WorkerSelection};
 use tempfile::NamedTempFile;
+
+use karva_logging::Printer;
 
 use crate::partition::Partition;
 use crate::worker_args::{WorkerSpawn, worker_command};
@@ -24,8 +27,10 @@ pub(super) fn spawn_workers(
     forward_stdout: bool,
     test_capacity: usize,
     result_retention: TestResultRetention,
+    printer: Printer,
 ) -> Result<WorkerSupervisor> {
-    let mut supervisor = WorkerSupervisor::with_test_capacity(test_capacity, result_retention);
+    let mut supervisor =
+        WorkerSupervisor::with_test_capacity(test_capacity, result_retention, printer);
 
     for (worker_id, partition) in partitions.into_iter().enumerate() {
         if partition.is_empty() {
@@ -55,9 +60,20 @@ pub(super) fn spawn_worker(
     forward_stdout: bool,
 ) -> Result<()> {
     let test_count = partition.test_count();
+    let marker = fastrand::u128(..).to_ne_bytes();
+    let limit = spawn
+        .configuration
+        .options
+        .terminal
+        .as_ref()
+        .and_then(|terminal| terminal.max_output_bytes)
+        .unwrap_or(karva_metadata::DEFAULT_MAX_OUTPUT_BYTES);
+    let capture = Arc::new(OutputCaptureSink::new(marker, limit));
     controller.register_worker_selection(
         worker_id,
         WorkerSelection {
+            output_marker: Some(marker),
+            output_capture: Some(Arc::clone(&capture)),
             configuration: Arc::clone(&spawn.configuration),
             coverage_data_file: spawn
                 .coverage_enabled
@@ -74,28 +90,22 @@ pub(super) fn spawn_worker(
     let mut command = worker_command(spawn, worker_id);
     command.stderr(Stdio::piped());
     process_control::configure_worker_command(&mut command);
-    command.stdout(if forward_stdout {
-        Stdio::piped()
-    } else {
-        Stdio::inherit()
-    });
+    command.stdout(Stdio::piped());
 
     let mut child =
         process_control::spawn(command).context("Failed to spawn karva-worker process")?;
-    let output = if forward_stdout {
-        process_control::take_stdout(&mut child).map(WorkerOutputForwarder::spawn)
-    } else {
-        None
-    };
+    let output = process_control::take_stdout(&mut child)
+        .map(|stdout| WorkerOutputForwarder::spawn(stdout, Arc::clone(&capture), forward_stdout));
+
     let stderr = process_control::take_stderr(&mut child)
-        .map(|stderr| WorkerStderrForwarder::spawn(stderr, stderr_file))
+        .map(|stderr| WorkerStderrForwarder::spawn(stderr, stderr_file, Arc::clone(&capture)))
         .context("Failed to capture karva-worker stderr")?;
 
     tracing::info!(target: "karva_runner::orchestration", "Worker {} spawned with {} tests", worker_id, test_count);
     supervisor.spawn(
         worker_id,
         partition,
-        WorkerResources::new(child, output, stderr, stderr_capture),
+        WorkerResources::new(child, output, stderr, stderr_capture, capture),
     );
     Ok(())
 }

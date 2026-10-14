@@ -5,10 +5,12 @@
 //! fields.
 
 use std::io;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 use std::process::ExitStatus;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use karva_ipc::output_capture::OutputCaptureSink;
 use tempfile::NamedTempFile;
 
 use crate::partition::Partition;
@@ -46,6 +48,9 @@ pub(super) struct WorkerResources {
 
     /// Temporary bounded stderr capture.
     stderr_capture: NamedTempFile,
+
+    /// Output retained in memory even if the worker exits inside an attempt.
+    capture: Arc<OutputCaptureSink>,
 }
 
 impl WorkerResources {
@@ -55,12 +60,14 @@ impl WorkerResources {
         output: Option<WorkerOutputForwarder>,
         stderr: WorkerStderrForwarder,
         stderr_capture: NamedTempFile,
+        capture: Arc<OutputCaptureSink>,
     ) -> Self {
         Self {
             child,
             output,
             stderr,
             stderr_capture,
+            capture,
         }
     }
 }
@@ -96,6 +103,9 @@ struct WorkerStreams {
 
     /// Bounded stderr retained for crash diagnostics.
     stderr_capture: NamedTempFile,
+
+    /// Output retained in memory even if the worker exits inside an attempt.
+    capture: Arc<OutputCaptureSink>,
 }
 
 /// Mutable state after a worker exits.
@@ -218,6 +228,7 @@ impl Worker {
                 output: resources.output,
                 stderr: Some(resources.stderr),
                 stderr_capture: resources.stderr_capture,
+                capture: resources.capture,
             },
             lifecycle: WorkerLifecycle::default(),
         }
@@ -248,7 +259,7 @@ impl Worker {
             return String::new();
         }
         let file = self.streams.stderr_capture.as_file_mut();
-        let output = match file.rewind().and_then(|()| {
+        let mut output = match file.rewind().and_then(|()| {
             let mut output = Vec::new();
             file.read_to_end(&mut output)?;
             Ok(output)
@@ -262,6 +273,24 @@ impl Worker {
                 String::new()
             }
         };
+        if let Some(captured) = self.streams.capture.interrupted() {
+            if !captured.stdout().is_empty() {
+                output.push_str("captured stdout:\n");
+                output.push_str(captured.stdout());
+                if !output.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+            if !captured.stderr().is_empty() {
+                let _ = std::io::stderr()
+                    .lock()
+                    .write_all(captured.stderr().as_bytes());
+                if !captured.stderr().ends_with('\n') {
+                    let _ = std::io::stderr().lock().write_all(b"\n");
+                }
+                output.push_str(captured.stderr());
+            }
+        }
         if self.lifecycle.forced_disconnect {
             let separator = if output.is_empty() || output.ends_with('\n') {
                 ""

@@ -4,17 +4,25 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
-use karva_diagnostic::{RenderedDiagnostic, TestCaseResult};
+use karva_diagnostic::{CapturedTestOutput, RenderedDiagnostic, TestCaseResult};
 use karva_logging::{TerminalColor, VerbosityLevel};
 use karva_metadata::{Options, RunIgnoredMode};
 use karva_python_semantic::TestCacheKey;
 use serde::{Deserialize, Serialize};
+
+use crate::output_capture::OutputCaptureSink;
 
 /// One runtime state change sent from a worker to the controller.
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
     /// Unconsumed warning from collection, execution, or fixture cleanup.
     Warning(karva_diagnostic::TestWarning),
+
+    /// Framework tracing, kept separate from captured test stderr.
+    Log(Vec<u8>),
+
+    /// Complete status line rendered before its test's durable completion frame.
+    Status(String),
 
     /// Test exceeded the configured slow-test threshold.
     TestSlow,
@@ -23,6 +31,14 @@ pub enum WorkerEvent {
     TestFinished {
         /// Stable identity matching this result to its start checkpoint.
         cache_key: TestCacheKey,
+
+        /// Normal attempt output sealed on the native streams, collected with this result.
+        #[serde(rename = "c", default, skip_serializing_if = "Option::is_none")]
+        captured_attempt: Option<u32>,
+
+        /// Whether the controller renders ordinary live status from this result.
+        #[serde(rename = "s", default)]
+        status: bool,
 
         /// Transport-safe completed test result.
         result: Box<TestCaseResult>,
@@ -86,6 +102,23 @@ pub enum WireMessage {
         cache_key: TestCacheKey,
     },
 
+    /// Seals a normal attempt; the controller attaches its bytes to the later result.
+    #[serde(rename = "O")]
+    CaptureFinished {
+        /// One-based attempt number, including resumed attempts after a timeout.
+        #[serde(rename = "a")]
+        attempt: u32,
+    },
+
+    /// Collects an output window after ordered end markers were written to both pipes.
+    ReadCapturedOutput,
+
+    /// End-of-worker barrier acknowledged after all preceding windows are collected.
+    CaptureDrained,
+
+    /// Controller reply carrying bounded bytes for the completed window.
+    CapturedOutput(CapturedTestOutput),
+
     /// Runtime event sent from a worker to its controller.
     Event(Box<WorkerEvent>),
 }
@@ -122,6 +155,14 @@ pub struct WorkerConfiguration {
 /// Work and configuration owned by one worker generation.
 #[derive(Serialize, Deserialize)]
 pub struct WorkerSelection {
+    /// Private nonce framing native output windows, absent in protocol-only clients.
+    #[serde(default)]
+    pub output_marker: Option<[u8; 16]>,
+
+    /// Controller-local capture state, never transferred to the worker.
+    #[serde(skip)]
+    pub output_capture: Option<Arc<OutputCaptureSink>>,
+
     /// Shared run configuration, also used by replacement workers.
     pub configuration: Arc<WorkerConfiguration>,
 

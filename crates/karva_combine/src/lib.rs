@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::hash::BuildHasher;
+use std::num::NonZeroUsize;
 
 use ruff_python_ast::PythonVersion;
 
@@ -101,6 +102,7 @@ impl_noop_combine!(PythonVersion);
 // std types
 impl_noop_combine!(bool);
 impl_noop_combine!(usize);
+impl_noop_combine!(NonZeroUsize);
 impl_noop_combine!(u8);
 impl_noop_combine!(u16);
 impl_noop_combine!(u32);

@@ -24,6 +24,7 @@ pub(super) fn read_worker(
     reader_worker_id: &OnceLock<usize>,
     reader_event_count: &AtomicUsize,
 ) -> Result<()> {
+    let interrupted = reader.interrupted;
     let response_stream = reader
         .stream
         .try_clone()
@@ -69,6 +70,7 @@ pub(super) fn read_worker(
             }
         }
     };
+    let output_capture = selection.output_capture.clone();
     let mut writer = BufWriter::new(response_stream);
     let selection_result =
         serde_json::to_writer(&mut writer, &WireMessage::TestSelection(selection))
@@ -89,13 +91,14 @@ pub(super) fn read_worker(
     }
 
     let mut event_count = 0_usize;
+    let mut captured_attempts = Vec::new();
     for message in messages {
         let message = match message {
             Ok(message) => message,
             Err(error) if error.is_eof() || is_clean_disconnect(&error) => break,
             Err(error) => return Err(error).context("failed to read Karva worker event"),
         };
-        let event = match message {
+        let mut event = match message {
             WireMessage::TestCheckpoint {
                 parameters,
                 cache_key,
@@ -105,12 +108,80 @@ pub(super) fn read_worker(
                 reader_event_count.store(event_count, Ordering::Relaxed);
                 continue;
             }
+            WireMessage::CaptureFinished { attempt } => {
+                let capture = output_capture
+                    .as_ref()
+                    .context("worker sealed output without a registered capture")?;
+                let output = capture.take(
+                    interrupted,
+                    super::connections::connection_reader::READER_INTERRUPT_POLL_INTERVAL,
+                )?;
+                captured_attempts.push((attempt, output));
+                continue;
+            }
+            WireMessage::ReadCapturedOutput => {
+                let capture = output_capture
+                    .as_ref()
+                    .context("worker requested output without a registered capture")?;
+                let output = capture.take(
+                    interrupted,
+                    super::connections::connection_reader::READER_INTERRUPT_POLL_INTERVAL,
+                )?;
+                serde_json::to_writer(&mut writer, &WireMessage::CapturedOutput(output))?;
+                writer.write_all(b"\n")?;
+                writer.flush()?;
+                continue;
+            }
+            WireMessage::CaptureDrained => {
+                serde_json::to_writer(&mut writer, &WireMessage::CaptureDrained)?;
+                writer.write_all(b"\n")?;
+                writer.flush()?;
+                continue;
+            }
+            WireMessage::CapturedOutput(_) => {
+                bail!("worker sent an output reply to its controller")
+            }
             WireMessage::Event(event) => event,
             WireMessage::Hello { .. } => bail!("Karva worker sent more than one handshake"),
             WireMessage::TestSelection(_) => {
                 bail!("Karva worker sent a test selection to its controller")
             }
         };
+        if let WorkerEvent::TestFinished {
+            captured_attempt: Some(attempt),
+            ..
+        } = event.as_ref()
+        {
+            let capture = output_capture
+                .as_ref()
+                .context("worker completed output without a registered capture")?;
+            captured_attempts.push((
+                *attempt,
+                capture.take(
+                    interrupted,
+                    super::connections::connection_reader::READER_INTERRUPT_POLL_INTERVAL,
+                )?,
+            ));
+        }
+        if let WorkerEvent::TestFinished { result, .. } | WorkerEvent::TestTimedOut { result, .. } =
+            event.as_mut()
+            && !captured_attempts.is_empty()
+        {
+            if captured_attempts.len() > result.attempts().len().max(1)
+                || (!result.attempts().is_empty()
+                    && captured_attempts.iter().any(|(number, _)| {
+                        !result
+                            .attempts()
+                            .iter()
+                            .any(|attempt| attempt.attempt() == *number)
+                    }))
+            {
+                bail!("worker capture windows do not match its completed test attempts");
+            }
+            // Attachment uses attempt numbers, so popping retains scratch capacity
+            // without changing the result's chronological output order.
+            result.attach_captured_outputs(std::iter::from_fn(|| captured_attempts.pop()));
+        }
         match event.as_ref() {
             WorkerEvent::TestFinished { cache_key, .. }
             | WorkerEvent::TestTimedOut { cache_key, .. } => {
@@ -119,7 +190,11 @@ pub(super) fn read_worker(
             WorkerEvent::WorkerFinished => {
                 checkpoint.ensure_idle(worker_id)?;
             }
-            WorkerEvent::TestSlow | WorkerEvent::RunDiagnostic(_) | WorkerEvent::Warning(_) => {}
+            WorkerEvent::TestSlow
+            | WorkerEvent::RunDiagnostic(_)
+            | WorkerEvent::Warning(_)
+            | WorkerEvent::Log(_)
+            | WorkerEvent::Status(_) => {}
         }
         if sender
             .send(Incoming::Event(ControllerEvent { worker_id, event }))

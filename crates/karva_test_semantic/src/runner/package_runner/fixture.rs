@@ -5,7 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use camino::Utf8Path;
-use karva_diagnostic::{Diagnostic, FixtureFailure, FixtureUsage, TestExecutionOutcome};
+use karva_diagnostic::{
+    CapturedTestOutput, Diagnostic, FixtureFailure, FixtureUsage, TestExecutionOutcome,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 
@@ -15,6 +17,7 @@ use crate::extensions::fixtures::{
     Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
 };
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
+use crate::output_capture::PythonOutputCapture;
 use crate::runner::FixtureArguments;
 use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::runner::scoped_storage::ScopeKey;
@@ -55,15 +58,20 @@ impl PackageRunner<'_, '_> {
         if !auto_use_fixtures.is_empty() {
             self.context.flush_test_results();
         }
+        let capture = (!auto_use_fixtures.is_empty())
+            .then(|| self.start_scope_capture(py))
+            .flatten();
         let failures =
             self.run_fixtures(py, &fixture_plan, &auto_use_fixtures, FixtureUsage::AutoUse);
-        let Some(failures) = FixtureSetupError::from_vec(failures) else {
-            return Ok(());
+        let result = if let Some(failures) = FixtureSetupError::from_vec(failures) {
+            Err(failures
+                .into_test_error(py, self.context.is_verbose())
+                .with_related(self.clean_up_scope(py, scope_key)))
+        } else {
+            Ok(())
         };
-
-        Err(failures
-            .into_test_error(py, self.context.is_verbose())
-            .with_related(self.clean_up_scope(py, scope_key)))
+        let output = finish_scope_capture(py, capture);
+        result.map_err(|error| error.with_output(output.as_ref()))
     }
 
     /// Runs function-scoped finalizers and clears their cached fixture values.
@@ -97,8 +105,36 @@ impl PackageRunner<'_, '_> {
         if self.finalizer_cache.has_finalizers(scope) || self.fixture_cache.has_values(scope) {
             self.context.flush_test_results();
         }
-        for diagnostic in self.clean_up_scope(py, scope) {
+        let capture =
+            if self.finalizer_cache.has_finalizers(scope) || self.fixture_cache.has_values(scope) {
+                self.start_scope_capture(py)
+            } else {
+                None
+            };
+        let diagnostics = self.clean_up_scope(py, scope);
+        let output = finish_scope_capture(py, capture);
+        for mut diagnostic in diagnostics {
+            annotate_output(&mut diagnostic, output.as_ref());
             self.state.add_run_diagnostic(diagnostic);
+        }
+    }
+
+    fn start_scope_capture(&mut self, py: Python<'_>) -> Option<PythonOutputCapture> {
+        if self.context.settings().terminal().show_python_output {
+            return None;
+        }
+        let source = self.context.reporter().captured_output_reader()?;
+        if let Err(error) = self.ensure_python_stdin_capture(py) {
+            tracing::warn!("failed to guard scoped stdin: {error}");
+            return None;
+        }
+        self.ensure_stdin_capture(py);
+        match PythonOutputCapture::start(py, source) {
+            Ok(capture) => Some(capture),
+            Err(error) => {
+                tracing::warn!("failed to capture scoped output: {error}");
+                None
+            }
         }
     }
 
@@ -477,5 +513,35 @@ fn get_value_and_finalizer(
         }
     } else {
         Ok((fixture_call_result, None))
+    }
+}
+
+fn finish_scope_capture(
+    py: Python<'_>,
+    capture: Option<PythonOutputCapture>,
+) -> Option<CapturedTestOutput> {
+    match capture?.finish(py) {
+        Ok(output) => Some(CapturedTestOutput::new(output.stdout, output.stderr)),
+        Err(error) => {
+            tracing::warn!("failed to collect scoped output: {error}");
+            None
+        }
+    }
+}
+
+pub(super) fn annotate_output(diagnostic: &mut Diagnostic, output: Option<&CapturedTestOutput>) {
+    if let Some(output) = output {
+        if !output.stdout().is_empty() {
+            diagnostic.info(format!(
+                "captured stdout:\n{}",
+                output.stdout().trim_end_matches('\n')
+            ));
+        }
+        if !output.stderr().is_empty() {
+            diagnostic.info(format!(
+                "captured stderr:\n{}",
+                output.stderr().trim_end_matches('\n')
+            ));
+        }
     }
 }

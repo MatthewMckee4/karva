@@ -40,20 +40,14 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     test_finalizers,
                 },
             setup_duration,
-            mut output_capture,
+            output_capture,
             warning_capture,
         } = prepared;
         let shared_output =
             if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
                 output_capture
-                    .as_mut()
-                    .and_then(|capture| match capture.watchdog_output(self.py) {
-                        Ok(output) => Some(output),
-                        Err(error) => {
-                            tracing::warn!("failed to mirror timeout output: {error}");
-                            None
-                        }
-                    })
+                    .as_ref()
+                    .map(PythonOutputCapture::watchdog_output)
             } else {
                 None
             };
@@ -127,7 +121,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 .state
                 .add_run_diagnostic(warning_capture_error(&error));
         }
-        let captured_output = finish_output_capture(self.py, output_capture);
+        let captured_output = finish_output_capture(self.py, output_capture, attempt_number);
         let events = self.package_runner.exception_capture.finish_attempt();
         // A retry must not hide an unhandled exception behind a later pass.
         let retryable = events.is_empty()

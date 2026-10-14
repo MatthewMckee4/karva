@@ -11,6 +11,8 @@ use karva_python_semantic::TestCacheKey;
 use super::config::TestResultRetention;
 use super::dispatcher::EventDispatcher;
 use super::worker::Worker;
+use karva_logging::Printer;
+
 use crate::partition::Partition;
 
 mod polling;
@@ -114,10 +116,15 @@ impl WorkerSupervisor {
     pub(super) fn with_test_capacity(
         test_capacity: usize,
         result_retention: TestResultRetention,
+        printer: Printer,
     ) -> Self {
         Self {
             workers: Vec::new(),
-            dispatcher: EventDispatcher::with_test_capacity(test_capacity, result_retention),
+            dispatcher: EventDispatcher::with_test_capacity(
+                test_capacity,
+                result_retention,
+                printer,
+            ),
         }
     }
 }

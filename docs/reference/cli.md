@@ -115,6 +115,7 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--last-failed"><a href="#karva-test--last-failed"><code>--last-failed</code></a>, <code>--lf</code></dt><dd><p>Re-run only the tests that failed in the previous run</p>
 </dd><dt id="karva-test--max-fail"><a href="#karva-test--max-fail"><code>--max-fail</code></a> <i>n</i></dt><dd><p>Stop scheduling new tests after this many failures.</p>
 <p>Accepts a positive integer such as <code>--max-fail=3</code>. <code>--max-fail=1</code> is equivalent to the legacy <code>--fail-fast</code>, and <code>--no-fail-fast</code> clears the limit. When <code>--max-fail</code> is provided alongside <code>--fail-fast</code> or <code>--no-fail-fast</code>, <code>--max-fail</code> takes precedence.</p>
+</dd><dt id="karva-test--max-output-bytes"><a href="#karva-test--max-output-bytes"><code>--max-output-bytes</code></a> <i>max-output-bytes</i></dt><dd><p>Maximum bytes retained per captured stdout or stderr stream (default: 16777216). Excess output retains its beginning and end with an omitted-byte count</p>
 </dd><dt id="karva-test--max-warnings"><a href="#karva-test--max-warnings"><code>--max-warnings</code></a> <i>count</i></dt><dd><p>Fail the completed run if emitted warnings exceed this count. Includes collection, fixture cleanup, and every retry across all workers</p>
 </dd><dt id="karva-test--no-cache"><a href="#karva-test--no-cache"><code>--no-cache</code></a> <i>no-cache</i></dt><dd><p>Disable reading the karva cache for test duration history</p>
 <p>Possible values:</p>

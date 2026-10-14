@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::sync::Arc;
 use std::time::Duration;
 
 use colored::Colorize;
@@ -8,8 +8,25 @@ use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
 use crate::result::{IndividualTestResultKind, TestExecutionResult};
 
+/// Native output collection available to a worker even when Python holds its GIL.
+pub trait CapturedOutputReader: Send + Sync {
+    /// Writes a window boundary through private copies of the inherited handles.
+    fn boundary(&self, tag: u8) -> Result<(), String>;
+
+    /// Queues collection for one attempt without waiting for a controller reply.
+    fn defer(&self, attempt: u32) -> Result<(), String>;
+
+    /// Collects one sealed window through the controller connection.
+    fn read(&self) -> Result<crate::CapturedTestOutput, String>;
+}
+
 /// A reporter for test execution time logging to the user.
 pub trait Reporter: Send + Sync {
+    /// Supplies controller-owned capture for process-durable output attribution.
+    fn captured_output_reader(&self) -> Option<Arc<dyn CapturedOutputReader>> {
+        None
+    }
+
     /// Reports one unconsumed Python warning, independent of test outcome.
     fn report_warning(&self, warning: crate::TestWarning) {
         let _ = warning;
@@ -118,14 +135,91 @@ impl Reporter for DummyReporter {
     }
 }
 
-/// A reporter that outputs test results to stdout as they complete.
+/// Formats ordinary controller-owned results with the live status policy.
+/// Returns a complete line only when that outcome is enabled.
+pub fn format_test_case_status(printer: Printer, result: &crate::TestCaseResult) -> Option<String> {
+    let kind = result.outcome().result_kind();
+    if !show_for_status_level(printer.status_level(), &kind) {
+        return None;
+    }
+    let label = ResultLabel::from(&kind);
+    let padding = label_padding(label.text().len());
+    let colored_label = label.colored();
+    let duration = format_duration_bracketed(result.duration());
+    let module = result.module_name().cyan();
+    let name = result.name();
+    let (function, parameters) = name.split_once('(').map_or((name, ""), |(function, _)| {
+        (function, &name[function.len()..])
+    });
+    let function = function.blue().bold();
+    let parameters = if parameters.is_empty() {
+        String::new()
+    } else {
+        parameters.blue().bold().to_string()
+    };
+    let suffix = match kind {
+        IndividualTestResultKind::Skipped {
+            reason: Some(reason),
+        } => format!(": {reason}"),
+        _ => String::new(),
+    };
+    Some(format!(
+        "{padding}{colored_label} {duration} {module}::{function}{parameters}{suffix}\n"
+    ))
+}
+
+type StatusWriter = dyn Fn(String) -> std::io::Result<()> + Send + Sync;
+
+/// Formats complete status lines independently of process-global test descriptors.
 pub struct TestCaseReporter {
     printer: Printer,
+    writer: Box<StatusWriter>,
 }
 
 impl TestCaseReporter {
-    pub fn new(printer: Printer) -> Self {
-        Self { printer }
+    /// Routes complete lines to the caller's terminal or IPC output path.
+    pub fn new(
+        printer: Printer,
+        writer: impl Fn(String) -> std::io::Result<()> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            printer,
+            writer: Box::new(writer),
+        }
+    }
+
+    /// Formats results emitted directly by the worker when capture is disabled.
+    fn test_case_result_line(
+        &self,
+        test_name: &QualifiedTestName,
+        result_kind: &IndividualTestResultKind,
+        duration: Duration,
+    ) -> Option<String> {
+        if !show_for_status_level(self.printer.status_level(), result_kind) {
+            return None;
+        }
+
+        let label = ResultLabel::from(result_kind);
+        let padding = label_padding(label.text().len());
+        let colored_label = label.colored();
+        let duration_str = format_duration_bracketed(duration);
+        let test_path = format_test_path(test_name);
+
+        let suffix = match result_kind {
+            IndividualTestResultKind::Skipped {
+                reason: Some(reason),
+            } => format!(": {reason}"),
+            _ => String::new(),
+        };
+
+        Some(format!(
+            "{padding}{colored_label} {duration_str} {test_path}{suffix}\n"
+        ))
+    }
+
+    fn write_line(&self, mut line: String) -> std::io::Result<()> {
+        line.push('\n');
+        (self.writer)(line)
     }
 }
 
@@ -136,27 +230,9 @@ impl Reporter for TestCaseReporter {
         result_kind: IndividualTestResultKind,
         duration: Duration,
     ) {
-        if !show_for_status_level(self.printer.status_level(), &result_kind) {
-            return;
-        }
-
-        let label = ResultLabel::from(&result_kind);
-        let padding = label_padding(label.text().len());
-        let colored_label = label.colored();
-        let duration_str = format_duration_bracketed(duration);
-        let test_path = format_test_path(test_name);
-
-        let suffix = match &result_kind {
-            IndividualTestResultKind::Skipped {
-                reason: Some(reason),
-            } => format!(": {reason}"),
-            _ => String::new(),
-        };
-
-        if let Err(err) = write_test_result_line(
-            self.printer,
-            format!("{padding}{colored_label} {duration_str} {test_path}{suffix}"),
-        ) {
+        if let Some(line) = self.test_case_result_line(test_name, &result_kind, duration)
+            && let Err(err) = (self.writer)(line)
+        {
             tracing::warn!("failed to write test result line: {err}");
         }
     }
@@ -172,10 +248,9 @@ impl Reporter for TestCaseReporter {
         let duration_str = format_duration_bracketed(duration);
         let test_path = format_test_path(test_name);
 
-        if let Err(err) = write_test_result_line(
-            self.printer,
-            format!("{padding}{colored_label} {duration_str} {test_path}"),
-        ) {
+        if let Err(err) = self.write_line(format!(
+            "{padding}{colored_label} {duration_str} {test_path}"
+        )) {
             tracing::warn!("failed to write slow test line: {err}");
         }
     }
@@ -200,10 +275,9 @@ impl Reporter for TestCaseReporter {
         let duration_str = format_duration_bracketed(duration);
         let test_path = format_test_path(test_name);
 
-        if let Err(err) = write_test_result_line(
-            self.printer,
-            format!("{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"),
-        ) {
+        if let Err(err) = self.write_line(format!(
+            "{padding}TRY {attempt} {colored_status} {duration_str} {test_path}"
+        )) {
             tracing::warn!("failed to write test attempt line: {err}");
         }
     }
@@ -215,12 +289,6 @@ const LABEL_COLUMN_WIDTH: usize = 12;
 
 fn label_padding(label_len: usize) -> String {
     " ".repeat(LABEL_COLUMN_WIDTH.saturating_sub(label_len))
-}
-
-fn write_test_result_line(printer: Printer, mut line: String) -> std::io::Result<()> {
-    line.push('\n');
-    let mut stdout = printer.stream_for_test_result().lock();
-    stdout.write_all(line.as_bytes())
 }
 
 /// Render the colored `module::function[params]` portion of a result line.

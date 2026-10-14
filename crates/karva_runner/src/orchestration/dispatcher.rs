@@ -5,12 +5,16 @@
 //! owner.
 
 use std::collections::{HashMap, HashSet};
+use std::io::{BufWriter, Write};
 use std::process::ExitStatus;
 use std::time::Duration;
 
 use anyhow::Result;
-use karva_diagnostic::{AggregatedResults, TestCaseAttempt, TestCaseResult};
+use karva_diagnostic::{
+    AggregatedResults, TestCaseAttempt, TestCaseResult, format_test_case_status,
+};
 use karva_ipc::{ControllerServer, WorkerCheckpoint, WorkerEvent};
+use karva_logging::Printer;
 use karva_python_semantic::TestCacheKey;
 
 use super::config::TestResultRetention;
@@ -34,6 +38,9 @@ pub(super) struct EventDispatcher {
 
     /// Completed case bodies retained for final report formats.
     result_retention: TestResultRetention,
+
+    /// Live status formatting stays on the controller for ordinary results.
+    printer: Printer,
 
     /// Timeout events waiting for their worker generation to be reaped.
     timed_out_workers: HashMap<usize, TimedOutWorker>,
@@ -117,6 +124,7 @@ impl EventDispatcher {
     pub(super) fn with_test_capacity(
         test_capacity: usize,
         result_retention: TestResultRetention,
+        printer: Printer,
     ) -> Self {
         let test_case_capacity = match result_retention {
             TestResultRetention::FailuresAndRetries => 0,
@@ -128,6 +136,7 @@ impl EventDispatcher {
             results: AggregatedResults::with_capacities(test_capacity, test_case_capacity),
             crashed_tests: Vec::new(),
             result_retention,
+            printer,
             timed_out_workers: HashMap::new(),
             timeout_history: HashMap::new(),
         }
@@ -142,6 +151,12 @@ impl EventDispatcher {
     pub(super) fn dispatch_pending(&mut self, server: &mut ControllerServer) -> Result<()> {
         server.accept_pending()?;
         let queued_messages = server.queued_message_count();
+        if queued_messages == 0 {
+            return Ok(());
+        }
+        // Flush each dispatch pass so progress stays visible while complete lines
+        // share terminal writes instead of paying for one system call per test.
+        let mut stdout = BufWriter::new(std::io::stdout().lock());
         for _ in 0..queued_messages {
             let Some(message) = server.try_recv()? else {
                 break;
@@ -177,7 +192,21 @@ impl EventDispatcher {
                         );
                     }
                 }
-                WorkerEvent::TestFinished { cache_key, result } => {
+                WorkerEvent::Status(bytes) => {
+                    stdout.write_all(bytes.as_bytes())?;
+                }
+                WorkerEvent::Log(bytes) => {
+                    std::io::stderr().lock().write_all(&bytes)?;
+                }
+                WorkerEvent::TestFinished {
+                    cache_key,
+                    result,
+                    status,
+                    ..
+                } => {
+                    if status && let Some(line) = format_test_case_status(self.printer, &result) {
+                        stdout.write_all(line.as_bytes())?;
+                    }
                     let result = if let Some(history) = self.timeout_history.remove(&cache_key) {
                         Box::new(result.with_previous_attempts(
                             history.attempts,
@@ -205,6 +234,7 @@ impl EventDispatcher {
                 }
             }
         }
+        stdout.flush()?;
         Ok(())
     }
 

@@ -701,6 +701,15 @@
             }
           ]
         },
+        "max-output-bytes": {
+          "description": "Maximum bytes retained for each captured stdout or stderr stream per attempt.\nLarger output retains its beginning and end with an explicit omitted-byte count.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 1
+        },
         "output-format": {
           "description": "The format to use for printing diagnostic messages.\n\nDefaults to `full`.",
           "anyOf": [

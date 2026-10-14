@@ -12,6 +12,8 @@ use std::thread::{self, JoinHandle};
 // grow the controller's per-worker spool without bound.
 const MAX_WORKER_STDERR_CAPTURE_BYTES: usize = 1024 * 1024;
 
+use karva_ipc::output_capture::{OutputCaptureSink, OutputStream};
+
 /// Background stdout drain that preserves worker output ordering.
 #[derive(Debug)]
 pub(super) struct WorkerOutputForwarder {
@@ -20,6 +22,9 @@ pub(super) struct WorkerOutputForwarder {
 
     /// Shared stop flag used after forced disconnect.
     enabled: Arc<AtomicBool>,
+
+    /// Native output windows shared with the authenticated worker connection.
+    capture: Arc<OutputCaptureSink>,
 }
 
 /// Background stderr drain that forwards output and keeps a bounded copy.
@@ -30,20 +35,37 @@ pub(super) struct WorkerStderrForwarder {
 
     /// Shared stop flag used after forced disconnect.
     enabled: Arc<AtomicBool>,
+
+    /// Native output windows shared with the authenticated worker connection.
+    capture: Arc<OutputCaptureSink>,
 }
 
 impl WorkerStderrForwarder {
-    pub(super) fn spawn(stderr: ChildStderr, captured: File) -> Self {
+    pub(super) fn spawn(
+        stderr: ChildStderr,
+        captured: File,
+        capture: Arc<OutputCaptureSink>,
+    ) -> Self {
         let enabled = Arc::new(AtomicBool::new(true));
         let forwarder_enabled = Arc::clone(&enabled);
-        let handle =
-            thread::spawn(move || forward_worker_stderr(stderr, captured, &forwarder_enabled));
-        Self { handle, enabled }
+        let reader_capture = Arc::clone(&capture);
+        let handle = thread::spawn(move || {
+            let result =
+                forward_worker_stderr(stderr, captured, &forwarder_enabled, &reader_capture);
+            let _ = reader_capture.close(OutputStream::Stderr);
+            result
+        });
+        Self {
+            handle,
+            enabled,
+            capture,
+        }
     }
 
     pub(super) fn join(self, worker_id: usize, wait: bool) {
         if !wait && !self.handle.is_finished() {
             stop_forwarding(&self.enabled);
+            let _ = self.capture.close(OutputStream::Stderr);
             return;
         }
         match self.handle.join() {
@@ -64,16 +86,31 @@ impl WorkerStderrForwarder {
 }
 
 impl WorkerOutputForwarder {
-    pub(super) fn spawn(stdout: ChildStdout) -> Self {
+    pub(super) fn spawn(
+        stdout: ChildStdout,
+        capture: Arc<OutputCaptureSink>,
+        forward: bool,
+    ) -> Self {
         let enabled = Arc::new(AtomicBool::new(true));
         let forwarder_enabled = Arc::clone(&enabled);
-        let handle = thread::spawn(move || forward_worker_stdout(stdout, &forwarder_enabled));
-        Self { handle, enabled }
+        let reader_capture = Arc::clone(&capture);
+        let handle = thread::spawn(move || {
+            let result =
+                forward_worker_stdout(stdout, &forwarder_enabled, &reader_capture, forward);
+            let _ = reader_capture.close(OutputStream::Stdout);
+            result
+        });
+        Self {
+            handle,
+            enabled,
+            capture,
+        }
     }
 
     pub(super) fn join(self, worker_id: usize, wait: bool) {
         if !wait && !self.handle.is_finished() {
             stop_forwarding(&self.enabled);
+            let _ = self.capture.close(OutputStream::Stdout);
             return;
         }
         match self.handle.join() {
@@ -99,36 +136,42 @@ fn stop_forwarding(enabled: &AtomicBool) {
     enabled.store(false, Ordering::Relaxed);
 }
 
-fn forward_worker_stdout(stdout: ChildStdout, enabled: &AtomicBool) -> std::io::Result<()> {
+fn forward_worker_stdout(
+    stdout: ChildStdout,
+    enabled: &AtomicBool,
+    capture: &OutputCaptureSink,
+    forward: bool,
+) -> std::io::Result<()> {
     let mut reader = BufReader::new(stdout);
     let mut line = Vec::new();
-
     loop {
-        line.clear();
-        let bytes_read = reader.read_until(b'\n', &mut line)?;
-        if bytes_read == 0 {
+        let bytes = reader.fill_buf()?;
+        if bytes.is_empty() {
+            line.extend(capture.close(OutputStream::Stdout)?);
+            if forward && enabled.load(Ordering::Relaxed) {
+                std::io::stdout().lock().write_all(&line)?;
+            }
             return Ok(());
         }
-
-        // Batch complete lines already buffered from the pipe. Retaining a
-        // partial final line prevents output from different workers interleaving.
-        loop {
-            let complete_bytes = {
-                let buffered = reader.fill_buf()?;
-                let Some(last_newline) = buffered.iter().rposition(|byte| *byte == b'\n') else {
-                    break;
-                };
-                line.extend_from_slice(&buffered[..=last_newline]);
-                last_newline + 1
-            };
-            reader.consume(complete_bytes);
-        }
-
+        let count = bytes.len();
         if !enabled.load(Ordering::Relaxed) {
             return Ok(());
         }
-        let mut stdout = std::io::stdout().lock();
-        stdout.write_all(&line)?;
+        let outside = capture.push(OutputStream::Stdout, bytes)?;
+        if forward {
+            line.extend(outside);
+        }
+        if let Some(end) = line.iter().rposition(|byte| *byte == b'\n') {
+            std::io::stdout().lock().write_all(&line[..=end])?;
+            line.drain(..=end);
+        }
+        reader.consume(count);
+        if capture.is_closed(OutputStream::Stdout) {
+            if forward {
+                std::io::stdout().lock().write_all(&line)?;
+            }
+            return Ok(());
+        }
     }
 }
 
@@ -136,6 +179,7 @@ fn forward_worker_stderr(
     stderr: ChildStderr,
     mut captured: File,
     enabled: &AtomicBool,
+    capture: &OutputCaptureSink,
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stderr);
     let mut capture_error = None;
@@ -144,16 +188,23 @@ fn forward_worker_stderr(
     let mut received_bytes = 0_usize;
     let mut captured_bytes = 0_usize;
     loop {
-        let bytes = reader.fill_buf()?;
-        if bytes.is_empty() {
+        let raw = reader.fill_buf()?;
+        let consumed = raw.len();
+        let bytes = if consumed == 0 {
+            capture.close(OutputStream::Stderr)?
+        } else {
+            capture.push(OutputStream::Stderr, raw)?
+        };
+        if consumed == 0 && bytes.is_empty() {
             break;
         }
-        let consumed = bytes.len();
         if !enabled.load(Ordering::Relaxed) {
             return Ok(());
         }
-        received_bytes = received_bytes.saturating_add(consumed);
-        last_byte = bytes.last().copied();
+        received_bytes = received_bytes.saturating_add(bytes.len());
+        if !bytes.is_empty() {
+            last_byte = bytes.last().copied();
+        }
         if capture_error.is_none() && captured_bytes < MAX_WORKER_STDERR_CAPTURE_BYTES {
             let remaining = MAX_WORKER_STDERR_CAPTURE_BYTES - captured_bytes;
             let capture = &bytes[..bytes.len().min(remaining)];
@@ -164,11 +215,14 @@ fn forward_worker_stderr(
             }
         }
         if forward_error.is_none()
-            && let Err(error) = std::io::stderr().lock().write_all(bytes)
+            && let Err(error) = std::io::stderr().lock().write_all(&bytes)
         {
             forward_error = Some(error);
         }
         reader.consume(consumed);
+        if consumed == 0 || capture.is_closed(OutputStream::Stderr) {
+            break;
+        }
     }
     if last_byte.is_some_and(|byte| byte != b'\n')
         && forward_error.is_none()

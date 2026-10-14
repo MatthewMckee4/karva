@@ -88,3 +88,55 @@ fn test_case_result_round_trips_retry_payload() {
         result
     );
 }
+
+#[test]
+fn deferred_capture_keeps_resumed_attempt_numbers_and_deadline_output() {
+    let name = QualifiedTestName::new(QualifiedFunctionName::new(
+        "test_example".to_string(),
+        ModulePath::new_with_name("test.py", "tests.test".to_string()),
+    ));
+    let last =
+        CapturedTestOutput::new("deadline stdout".to_string(), "deadline stderr".to_string());
+    let mut result = TestCaseResult::retried(
+        &name,
+        TestCaseOutcome::Failed {
+            diagnostic: (),
+            related: vec![],
+        },
+        Duration::ZERO,
+        TestCaseRetry::new(8, 8),
+        Some(last.clone()),
+        vec![
+            TestCaseAttempt::new(7, TestCaseOutcome::Passed, Duration::ZERO, None),
+            TestCaseAttempt::new(
+                8,
+                TestCaseOutcome::Failed {
+                    diagnostic: (),
+                    related: vec![],
+                },
+                Duration::ZERO,
+                Some(last.clone()),
+            ),
+        ],
+    );
+    result.attach_captured_outputs(vec![(
+        7,
+        CapturedTestOutput::new("earlier stdout".to_string(), "earlier stderr".to_string()),
+    )]);
+    assert_eq!(
+        result.attempts()[0]
+            .captured_output()
+            .expect("earlier output")
+            .stdout(),
+        "earlier stdout"
+    );
+    assert_eq!(result.attempts()[1].captured_output(), Some(&last));
+    assert_eq!(
+        result.captured_output().expect("combined output").stdout(),
+        "earlier stdoutdeadline stdout"
+    );
+    assert_eq!(
+        result.captured_output().expect("combined output").stderr(),
+        "earlier stderrdeadline stderr"
+    );
+}

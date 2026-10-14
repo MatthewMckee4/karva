@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use karva_combine::Combine;
@@ -638,7 +639,7 @@ fn serialize_duration_secs<S: Serializer>(
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Resolved terminal presentation settings.
 pub struct TerminalSettings {
@@ -648,11 +649,32 @@ pub struct TerminalSettings {
     /// Whether captured Python streams are printed for successful tests.
     pub show_python_output: bool,
 
+    /// Maximum bytes retained per captured stream and test attempt.
+    pub max_output_bytes: NonZeroUsize,
+
     /// Minimum status shown while tests execute.
     pub status_level: StatusLevel,
 
     /// Minimum status shown in final output.
     pub final_status_level: FinalStatusLevel,
+}
+
+/// Per-stream capture budget; see the measurement receipt in `crates/karva_ipc/src/output_capture/README.md`.
+pub const DEFAULT_MAX_OUTPUT_BYTES: NonZeroUsize = match NonZeroUsize::new(16 * 1024 * 1024) {
+    Some(value) => value,
+    None => NonZeroUsize::MIN,
+};
+
+impl Default for TerminalSettings {
+    fn default() -> Self {
+        Self {
+            output_format: OutputFormat::default(),
+            show_python_output: false,
+            max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
+            status_level: StatusLevel::default(),
+            final_status_level: FinalStatusLevel::default(),
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize)]

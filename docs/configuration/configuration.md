@@ -777,6 +777,33 @@ Defaults to `pass`.
 
 ---
 
+#### `max-output-bytes`
+
+Maximum bytes retained for each captured stdout or stderr stream per attempt.
+Larger output retains its beginning and end with an explicit omitted-byte count.
+
+**Default value**: `16777216`
+
+**Type**: `positive integer`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.terminal]
+    max-output-bytes = 16777216
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.terminal]
+    max-output-bytes = 16777216
+    ```
+
+---
+
 #### `output-format`
 
 The format to use for printing diagnostic messages.

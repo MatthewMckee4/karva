@@ -17,6 +17,7 @@ fn show_config_default_profile() {
     [terminal]
     output-format = "full"
     show-python-output = false
+    max-output-bytes = 16777216
     status-level = "pass"
     final-status-level = "pass"
 

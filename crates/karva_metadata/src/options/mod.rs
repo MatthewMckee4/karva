@@ -4,6 +4,7 @@ mod config;
 mod overrides;
 
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 
 use karva_combine::Combine;
 use karva_logging::{FinalStatusLevel, StatusLevel};
@@ -20,10 +21,10 @@ use crate::filter::{FiltersetSet, ValidatedFilter};
 use crate::max_fail::MaxFail;
 use crate::settings::{
     CovFailUnder, CoverageExcludePattern, CoveragePartialPattern, CoveragePrecision,
-    CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, FailSlowSecs, FlakyResult, JunitFlakyFailStatus,
-    JunitSettings, NoTestsMode, OverrideSettings, ProjectSettings, RunIgnoredMode, RunTimeoutSecs,
-    SlowTimeoutSecs, SrcSettings, TerminalSettings, TerminationGracePeriodSecs, TestSettings,
-    TestTimeoutSecs,
+    CoverageSettings, DEFAULT_COVERAGE_DATA_FILE, DEFAULT_MAX_OUTPUT_BYTES, FailSlowSecs,
+    FlakyResult, JunitFlakyFailStatus, JunitSettings, NoTestsMode, OverrideSettings,
+    ProjectSettings, RunIgnoredMode, RunTimeoutSecs, SlowTimeoutSecs, SrcSettings,
+    TerminalSettings, TerminationGracePeriodSecs, TestSettings, TestTimeoutSecs,
 };
 use crate::{EnvironmentVariable, EnvironmentVariableName};
 
@@ -329,6 +330,16 @@ pub struct TerminalOptions {
     )]
     pub show_python_output: Option<bool>,
 
+    /// Maximum bytes retained for each captured stdout or stderr stream per attempt.
+    /// Larger output retains its beginning and end with an explicit omitted-byte count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = "16777216",
+        value_type = "positive integer",
+        example = "max-output-bytes = 16777216"
+    )]
+    pub max_output_bytes: Option<NonZeroUsize>,
+
     /// Test result statuses to display during the run.
     ///
     /// Modeled after `cargo-nextest`'s `--status-level`. Levels are
@@ -370,6 +381,7 @@ impl TerminalOptions {
         TerminalSettings {
             output_format: self.output_format.unwrap_or_default(),
             show_python_output: self.show_python_output.unwrap_or_default(),
+            max_output_bytes: self.max_output_bytes.unwrap_or(DEFAULT_MAX_OUTPUT_BYTES),
             status_level: self.status_level.unwrap_or_default(),
             final_status_level: self.final_status_level.unwrap_or_default(),
         }

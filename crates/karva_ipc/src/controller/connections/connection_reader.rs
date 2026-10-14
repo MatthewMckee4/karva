@@ -147,7 +147,8 @@ impl ControllerReader {
 // Receipt: forced cleanup already grants five 10 ms supervisor polls for late
 // events. Matching that 50 ms window bounds an ignored socket shutdown to one
 // additional drain window while waking an idle reader at most 20 times/second.
-const READER_INTERRUPT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+pub(in crate::controller) const READER_INTERRUPT_POLL_INTERVAL: Duration =
+    Duration::from_millis(50);
 
 /// Interrupts one reader thread, tolerating a stream already closed by its peer.
 fn shutdown_reader(stream: &ControllerStream) -> Result<()> {

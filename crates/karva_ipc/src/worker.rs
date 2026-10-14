@@ -4,11 +4,11 @@
 //! checkpoints that must survive a worker crash flush synchronously; ordinary
 //! events are coalesced for the configured interval.
 
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result, bail};
-use karva_diagnostic::TestCaseResult;
+use karva_diagnostic::{CapturedTestOutput, TestCaseResult};
 use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 use serde::Serialize;
 
@@ -30,6 +30,9 @@ pub struct WorkerClient {
 
 /// Serialized transport and its periodic delivery worker.
 struct WorkerConnection {
+    /// Startup and capture replies share a single serialized receive path.
+    reader: Mutex<BufReader<ControllerStream>>,
+
     /// Buffered event stream protected against concurrent reporters.
     writer: Arc<Mutex<BufWriter<ControllerStream>>>,
 
@@ -50,7 +53,11 @@ impl WorkerClient {
         let writer = Arc::new(Mutex::new(BufWriter::new(stream)));
         let flusher = EventFlusher::spawn(&writer)?;
         let client = Self {
-            connection: Arc::new(WorkerConnection { writer, flusher }),
+            connection: Arc::new(WorkerConnection {
+                writer,
+                flusher,
+                reader: Mutex::new(BufReader::new(reader)),
+            }),
         };
         client.write(
             &WireMessage::Hello {
@@ -59,8 +66,52 @@ impl WorkerClient {
             },
             true,
         )?;
-        let selection = read_test_selection(reader)?;
+        let selection = {
+            let mut reader = client
+                .connection
+                .reader
+                .lock()
+                .map_err(|_| anyhow::anyhow!("worker reply lock poisoned"))?;
+            read_test_selection(&mut *reader)?
+        };
         Ok((client, selection))
+    }
+
+    /// Flushes a retried window before the next attempt can hit pipe backpressure.
+    pub fn defer_captured_output(&self, attempt: u32) -> Result<()> {
+        self.write(&WireMessage::CaptureFinished { attempt }, true)
+    }
+
+    /// Synchronously collects a window after both native streams were sealed.
+    pub fn read_captured_output(&self) -> Result<CapturedTestOutput> {
+        let mut reader = self
+            .connection
+            .reader
+            .lock()
+            .map_err(|_| anyhow::anyhow!("worker reply lock poisoned"))?;
+        self.write(&WireMessage::ReadCapturedOutput, true)?;
+        let mut message = String::new();
+        reader.read_line(&mut message)?;
+        match serde_json::from_str(&message)? {
+            WireMessage::CapturedOutput(output) => Ok(output),
+            _ => bail!("controller returned an invalid output capture reply"),
+        }
+    }
+
+    /// Waits once at worker shutdown, so stream drains never race queued capture windows.
+    pub fn drain_captured_output(&self) -> Result<()> {
+        let mut reader = self
+            .connection
+            .reader
+            .lock()
+            .map_err(|_| anyhow::anyhow!("worker reply lock poisoned"))?;
+        self.write(&WireMessage::CaptureDrained, true)?;
+        let mut message = String::new();
+        reader.read_line(&mut message)?;
+        match serde_json::from_str(&message)? {
+            WireMessage::CaptureDrained => Ok(()),
+            _ => bail!("controller returned an invalid output drain reply"),
+        }
     }
 
     /// Queues one ordinary runtime state change.
@@ -78,9 +129,14 @@ impl WorkerClient {
         &self,
         cache_key: &TestCacheKey,
         result: &TestCaseResult,
+        captured_attempt: Option<u32>,
+        status: bool,
     ) -> Result<()> {
         let flush = result.outcome().is_non_success() || result.is_flaky_failure();
-        self.write(&completion(cache_key, result), flush)
+        self.write(
+            &completion(cache_key, result, captured_attempt, status),
+            flush,
+        )
     }
 
     /// Commits the active test identity before its setup or body can terminate the worker.
@@ -146,7 +202,7 @@ impl WorkerClient {
 }
 
 /// Reads the controller's single startup response after worker authentication.
-fn read_test_selection(stream: ControllerStream) -> Result<WorkerSelection> {
+fn read_test_selection(stream: impl std::io::Read) -> Result<WorkerSelection> {
     let mut messages =
         serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
     let Some(message) = messages.next() else {
@@ -156,7 +212,13 @@ fn read_test_selection(stream: ControllerStream) -> Result<WorkerSelection> {
     };
     match message.context("failed to read Karva worker configuration and test paths")? {
         WireMessage::TestSelection(selection) => Ok(selection),
-        WireMessage::Hello { .. } | WireMessage::TestCheckpoint { .. } | WireMessage::Event(_) => {
+        WireMessage::Hello { .. }
+        | WireMessage::TestCheckpoint { .. }
+        | WireMessage::Event(_)
+        | WireMessage::CaptureFinished { .. }
+        | WireMessage::ReadCapturedOutput
+        | WireMessage::CaptureDrained
+        | WireMessage::CapturedOutput(_) => {
             bail!("Karva controller sent an invalid worker startup message")
         }
     }

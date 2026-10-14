@@ -1,10 +1,14 @@
+//! Worker-side descriptor restoration and controller-owned output windows.
+//!
+//! Python owns rollback; private inherited handles delimit native bytes, allowing
+//! the deadline watchdog to collect output without acquiring Python's GIL.
+
 use std::sync::{Arc, Mutex};
 
-use karva_diagnostic::CapturedTestOutput;
+use karva_diagnostic::{CapturedOutputReader, CapturedTestOutput};
 use pyo3::exceptions::{PyOSError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyCFunction, PyDict, PyString, PyTuple};
 
 const STDIN_CAPTURE_ERROR: &str = "stdin is unavailable while test output is captured";
 
@@ -62,16 +66,57 @@ impl CapturedStdin {
     }
 }
 
-/// Process-global Python stream redirection for one test attempt.
+/// Per-attempt descriptor capture with bounded native buffers.
 ///
-/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects.
-/// Callers must consume the value with [`Self::finish`] to restore both streams.
+/// Callers must finish the capture before another attempt can redirect descriptors.
 pub struct PythonOutputCapture {
+    route: &'static PythonStreamRoute,
+    native: Arc<NativeWindow>,
+}
+
+/// Cached Python methods and module handles for the worker's single interpreter.
+struct PythonStreamRoute {
+    start: Py<PyAny>,
+    close: Py<PyAny>,
     sys: Py<PyModule>,
-    old_stdout: Py<PyAny>,
-    old_stderr: Py<PyAny>,
-    stdout: Py<PyAny>,
-    stderr: Py<PyAny>,
+}
+
+/// Per-attempt deadline cache; the shared route owns stable inherited handles.
+struct NativeWindow {
+    source: Arc<dyn CapturedOutputReader>,
+
+    /// Serializes watchdog and test-thread sealing; the end marker is written once.
+    output: Mutex<Option<CapturedTestOutput>>,
+}
+
+impl NativeWindow {
+    /// Seals normal output for the controller, preserving any deadline snapshot.
+    fn defer(&self, attempt: u32) -> Result<Option<CapturedTestOutput>, String> {
+        let output = self
+            .output
+            .lock()
+            .map_err(|_| "output capture lock poisoned")?;
+        if let Some(output) = output.as_ref() {
+            return Ok(Some(output.clone()));
+        }
+        self.source.boundary(b'E')?;
+        self.source.defer(attempt)?;
+        Ok(None)
+    }
+
+    fn collect(&self) -> Result<CapturedTestOutput, String> {
+        let mut output = self
+            .output
+            .lock()
+            .map_err(|_| "output capture lock poisoned")?;
+        if let Some(output) = output.as_ref() {
+            return Ok(output.clone());
+        }
+        self.source.boundary(b'E')?;
+        let collected = self.source.read()?;
+        *output = Some(collected.clone());
+        Ok(collected)
+    }
 }
 
 /// Keeps Python's stdin guard installed for a worker's captured tests.
@@ -181,55 +226,60 @@ impl StdinCapture {
 }
 
 impl PythonOutputCapture {
-    /// Redirects both Python output streams, rolling back stdout if stderr setup fails.
-    pub fn start(py: Python<'_>) -> PyResult<Self> {
-        let sys = py.import("sys")?.unbind();
-        let sys_bound = sys.bind(py);
-        let string_io = py.import("io")?.getattr("StringIO")?;
-
-        let old_stdout = sys_bound.getattr("stdout")?.unbind();
-        let old_stderr = sys_bound.getattr("stderr")?.unbind();
-        let stdout = string_io.call0()?.unbind();
-        let stderr = string_io.call0()?.unbind();
-
-        sys_bound.setattr("stdout", stdout.bind(py))?;
-        if let Err(err) = sys_bound.setattr("stderr", stderr.bind(py)) {
-            if let Err(restore_err) = sys_bound.setattr("stdout", old_stdout.bind(py)) {
-                tracing::warn!(
-                    "failed to restore Python stdout after capture setup error: {restore_err}"
-                );
-            }
-            return Err(err);
+    /// Opens an ordered window in the controller's native pipe readers.
+    pub fn start(py: Python<'_>, source: Arc<dyn CapturedOutputReader>) -> PyResult<Self> {
+        static ROUTE: PyOnceLock<PythonStreamRoute> = PyOnceLock::new();
+        let route = ROUTE.get_or_try_init(py, || {
+            let capture = py
+                .import("karva._output_capture")?
+                .call_method0("create_capture")?;
+            Ok::<_, PyErr>(PythonStreamRoute {
+                start: capture.getattr("start")?.unbind(),
+                close: capture.getattr("close")?.unbind(),
+                sys: py.import("sys")?.unbind(),
+            })
+        })?;
+        route.start.bind(py).call0()?;
+        let native = Arc::new(NativeWindow {
+            source,
+            output: Mutex::new(None),
+        });
+        if let Err(error) = native.source.boundary(b'B') {
+            let _ = route.close.bind(py).call0();
+            return Err(PyRuntimeError::new_err(error));
         }
-        Ok(Self {
-            sys,
-            old_stdout,
-            old_stderr,
-            stdout,
-            stderr,
-        })
+        Ok(Self { route, native })
     }
 
-    /// Mirrors timed synchronous output in Rust so a watchdog can read it without the GIL.
-    /// Ordinary captures retain the existing `StringIO` path and its allocation behavior.
-    pub(super) fn watchdog_output(&mut self, py: Python<'_>) -> PyResult<SharedCapturedOutput> {
-        let sys = self.sys.bind(py);
-        let stdout = mirror_stream(py, sys, "stdout", &mut self.stdout)?;
-        let stderr = mirror_stream(py, sys, "stderr", &mut self.stderr)?;
-        Ok(SharedCapturedOutput { stdout, stderr })
+    /// Shares native collection with the deadline watchdog.
+    pub(super) fn watchdog_output(&self) -> SharedCapturedOutput {
+        SharedCapturedOutput(Arc::clone(&self.native))
     }
 
-    /// Flushes captured streams, restores their original objects, and returns captured text.
+    /// Restores descriptors and queues normal attempt output for controller attribution.
+    pub fn finish_deferred(
+        self,
+        py: Python<'_>,
+        attempt: u32,
+    ) -> PyResult<Option<CapturedTestOutput>> {
+        flush_current_streams(self.route.sys.bind(py));
+        let restore = self.route.close.bind(py).call0();
+        let output = self.native.defer(attempt).map_err(PyRuntimeError::new_err);
+        restore?;
+        output
+    }
+
+    /// Restores descriptors and collects bytes preceding the ordered end markers.
     pub fn finish(self, py: Python<'_>) -> PyResult<CapturedPythonOutput> {
-        let sys = self.sys.bind(py);
-        flush_current_streams(sys);
-
-        let restore_result = restore_stdio(sys, &self.old_stdout, &self.old_stderr, py);
-        let stdout = self.stdout.bind(py).call_method0("getvalue")?.extract()?;
-        let stderr = self.stderr.bind(py).call_method0("getvalue")?.extract()?;
-        restore_result?;
-
-        Ok(CapturedPythonOutput { stdout, stderr })
+        flush_current_streams(self.route.sys.bind(py));
+        let restore = self.route.close.bind(py).call0();
+        let output = self.native.collect().map_err(PyRuntimeError::new_err);
+        restore?;
+        let output = output?;
+        Ok(CapturedPythonOutput {
+            stdout: output.stdout().to_owned(),
+            stderr: output.stderr().to_owned(),
+        })
     }
 }
 
@@ -251,16 +301,6 @@ fn flush_current_streams(sys: &Bound<'_, PyModule>) {
             tracing::warn!("failed to flush captured Python {stream}: {err}");
         }
     }
-}
-
-fn restore_stdio(
-    sys: &Bound<'_, PyModule>,
-    stdout: &Py<PyAny>,
-    stderr: &Py<PyAny>,
-    py: Python<'_>,
-) -> PyResult<()> {
-    sys.setattr("stdout", stdout.bind(py))?;
-    sys.setattr("stderr", stderr.bind(py))
 }
 
 fn restore_stdin_fd(os: &Bound<'_, PyModule>, old_fd: Option<i32>) -> PyResult<()> {
@@ -289,90 +329,13 @@ fn is_bad_fd(os: &Bound<'_, PyModule>, error: &PyErr) -> PyResult<bool> {
     Ok(error.value(py).getattr("errno")?.extract::<i32>()? == bad_fd)
 }
 
-/// Captured text available to native deadline handling without acquiring Python.
+/// Controller-owned output available to native deadline handling without Python.
 #[derive(Clone)]
-pub struct SharedCapturedOutput {
-    stdout: Arc<Mutex<String>>,
-    stderr: Arc<Mutex<String>>,
-}
+pub struct SharedCapturedOutput(Arc<NativeWindow>);
 
 impl SharedCapturedOutput {
     pub(super) fn snapshot(&self) -> Option<CapturedTestOutput> {
-        let stdout = self.stdout.lock().ok()?.clone();
-        let stderr = self.stderr.lock().ok()?.clone();
-        let output = CapturedTestOutput::new(stdout, stderr);
+        let output = self.0.collect().ok()?;
         (!output.is_empty()).then_some(output)
     }
-}
-
-/// `StringIO` semantics are preserved; only timed calls pay for a native text mirror.
-fn mirror_stream(
-    py: Python<'_>,
-    sys: &Bound<'_, PyModule>,
-    name: &str,
-    stream: &mut Py<PyAny>,
-) -> PyResult<Arc<Mutex<String>>> {
-    static CLASS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-    let class = CLASS.get_or_try_init(py, || {
-        let code = cr"
-import io
-
-class TimeoutCapture(io.StringIO):
-    def __init__(self, initial, record):
-        super().__init__(initial)
-        self.seek(0, 2)
-        self._length = len(initial)
-        self._record = record
-
-    def write(self, text):
-        append = self.tell() == self._length
-        written = super().write(text)
-        self._length = max(self._length, self.tell())
-        self._record(text if append else self.getvalue(), not append)
-        return written
-
-    def truncate(self, size=None):
-        result = super().truncate(size)
-        self._length = len(self.getvalue())
-        self._record(self.getvalue(), True)
-        return result
-";
-        let module = PyModule::from_code(
-            py,
-            code,
-            c"karva_timeout_capture.py",
-            c"karva_timeout_capture",
-        )?;
-        Ok::<_, PyErr>(module.getattr("TimeoutCapture")?.unbind())
-    })?;
-    let initial = stream
-        .bind(py)
-        .call_method0("getvalue")?
-        .extract::<String>()?;
-    let shared = Arc::new(Mutex::new(initial.clone()));
-    let captured = Arc::clone(&shared);
-    let callback = PyCFunction::new_closure(
-        py,
-        None,
-        None,
-        move |args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<()> {
-            let text = args.get_item(0)?.cast_into::<PyString>()?;
-            let text = text.to_string_lossy();
-            let replace = args.get_item(1)?.extract::<bool>()?;
-            let mut captured = captured
-                .lock()
-                .map_err(|_| PyRuntimeError::new_err("timeout output capture lock poisoned"))?;
-            if replace {
-                captured.clear();
-            }
-            captured.push_str(&text);
-            Ok(())
-        },
-    )?;
-    let mirrored = class.bind(py).call1((initial, callback))?.unbind();
-    if sys.getattr(name)?.is(stream.bind(py)) {
-        sys.setattr(name, mirrored.bind(py))?;
-    }
-    *stream = mirrored;
-    Ok(shared)
 }

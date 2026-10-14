@@ -52,7 +52,7 @@ struct TestCaseResultPayload<D = RenderedDiagnostic> {
     /// Retry policy and attempt count, when the test was retried.
     retry: Option<TestCaseRetry>,
 
-    /// Output captured during the final attempt, when non-empty.
+    /// Combined attempt output for terminal and `JUnit` consumers, when non-empty.
     captured_output: Option<CapturedTestOutput>,
 
     /// Earlier attempts retained when retry policy reran the test.
@@ -158,6 +158,44 @@ impl<D> TestCaseResult<D> {
             self.payload.attempts.clear();
         }
         self
+    }
+
+    /// Attaches controller-collected windows to their numbered attempts.
+    ///
+    /// The IPC reader validates the attempt numbers before calling this. Deadline
+    /// output already present on an attempt is preserved, and combined output keeps
+    /// attempt order for terminal and `JUnit` consumers.
+    pub fn attach_captured_outputs(
+        &mut self,
+        outputs: impl IntoIterator<Item = (u32, CapturedTestOutput)>,
+    ) {
+        let mut outputs = outputs.into_iter();
+        if self.payload.attempts.is_empty() {
+            if let Some((_, output)) = outputs.next() {
+                self.payload.captured_output = (!output.is_empty()).then_some(output);
+            }
+            return;
+        }
+        for (number, output) in outputs {
+            if let Some(attempt) = self
+                .payload
+                .attempts
+                .iter_mut()
+                .find(|attempt| attempt.attempt() == number)
+            {
+                attempt.set_captured_output(output);
+            }
+        }
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        for attempt in &self.payload.attempts {
+            if let Some(output) = attempt.captured_output() {
+                stdout.push_str(output.stdout());
+                stderr.push_str(output.stderr());
+            }
+        }
+        let output = CapturedTestOutput::new(stdout, stderr);
+        self.payload.captured_output = (!output.is_empty()).then_some(output);
     }
 
     /// Retains fault-handler or native stderr available when a worker is forcibly stopped.
