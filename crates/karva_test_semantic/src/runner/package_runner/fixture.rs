@@ -113,7 +113,7 @@ impl PackageRunner<'_, '_> {
         fixture_dependencies: &[FixtureId],
         use_fixture_dependencies: &[FixtureId],
         auto_use_fixtures: &[FixtureId],
-        params: HashMap<String, Arc<Py<PyAny>>>,
+        params: &HashMap<String, Arc<Py<PyAny>>>,
     ) -> PreparedFixtures {
         let mut test_finalizers = Vec::new();
         let mut fixture_call_errors = self.run_fixtures(
@@ -151,10 +151,7 @@ impl PackageRunner<'_, '_> {
         ));
 
         for (key, value) in params {
-            function_arguments.insert(
-                key,
-                Arc::try_unwrap(value).unwrap_or_else(|arc| (*arc).clone_ref(py)),
-            );
+            function_arguments.insert(key.clone(), value.clone_ref(py));
         }
 
         PreparedFixtures {
