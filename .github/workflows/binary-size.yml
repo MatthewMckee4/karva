@@ -3,14 +3,21 @@ name: Binary Size
 on:
   pull_request:
     paths:
-      - ".github/workflows/binary-size*.yml"
-      - "scripts/binary_size*.py"
+      # Recheck both measurement and publishing changes.
+      - ".github/workflows/binary-size.yml"
+      - ".github/workflows/binary-size-comment.yml"
+      - "scripts/binary_size.py"
+      # Build, checkout, and package inputs for the controller and worker.
       - ".cargo/**"
+      - ".gitattributes"
       - "Cargo.lock"
       - "Cargo.toml"
       - "crates/**"
+      - "pyproject.toml"
+      - "python/**"
+      - "rust-toolchain"
       - "rust-toolchain.toml"
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
   contents: read
@@ -21,6 +28,8 @@ concurrency:
 
 jobs:
   measure:
+    # Retargeting changes the baseline; title/body edits do not need another build.
+    if: github.event.action != 'edited' || github.event.changes.base.ref != null
     runs-on: ubuntu-24.04
     env:
       CARGO_TERM_COLOR: never
