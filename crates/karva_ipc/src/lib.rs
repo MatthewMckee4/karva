@@ -6,6 +6,7 @@
 //! public surface stays small so callers do not depend on transport details.
 
 mod controller;
+mod messages;
 mod protocol;
 mod transport;
 mod worker;

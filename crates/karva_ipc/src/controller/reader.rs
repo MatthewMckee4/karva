@@ -1,7 +1,7 @@
 //! Authentication, configuration and selection transfer, and frame intake.
 
 use std::collections::HashMap;
-use std::io::{BufReader, BufWriter, ErrorKind, Read, Write};
+use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -12,6 +12,7 @@ use karva_diagnostic::TestCaseResult;
 use super::checkpoint::CheckpointState;
 use super::connections::RegisteredWorkerSelection;
 use super::{ControllerEvent, Incoming};
+use crate::messages::Messages;
 use crate::protocol::{WireMessage, WorkerEvent};
 use crate::transport::ControllerStream;
 
@@ -29,8 +30,7 @@ pub(super) fn read_worker(
         .stream
         .try_clone()
         .context("failed to write Karva worker connection")?;
-    let mut messages =
-        serde_json::Deserializer::from_reader(BufReader::new(reader)).into_iter::<WireMessage>();
+    let mut messages = Messages::new(reader);
     let Some(first) = messages.next() else {
         // The process supervisor owns diagnostics and recovery when a worker
         // exits after connecting but before identifying itself.
@@ -149,8 +149,8 @@ pub(super) fn read_worker(
 
 /// Blocking stream read that turns an ignored socket shutdown into EOF.
 ///
-/// The operating-system timeout is hidden from serde so partial JSON frames
-/// keep their decoder state. Once interrupted, at most one in-progress read
+/// The operating-system timeout is hidden from framing so partial JSON frames
+/// remain buffered. Once interrupted, at most one in-progress read
 /// can return bytes before the next call reports EOF.
 pub(super) struct InterruptibleReader<'a, R> {
     /// Worker stream consumed by the protocol decoder.

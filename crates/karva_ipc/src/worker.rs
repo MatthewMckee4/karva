@@ -4,7 +4,7 @@
 //! checkpoints that must survive a worker crash flush synchronously; ordinary
 //! events are coalesced for the configured interval.
 
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result, bail};
@@ -12,6 +12,7 @@ use karva_diagnostic::TestCaseResult;
 use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 use serde::Serialize;
 
+use crate::messages::Messages;
 use crate::protocol::{WireMessage, WorkerEvent, WorkerSelection};
 use crate::transport::{ControllerEndpoint, ControllerStream};
 
@@ -180,8 +181,7 @@ impl WorkerClient {
 
 /// Reads the controller's single startup response after worker authentication.
 fn read_test_selection(stream: ControllerStream) -> Result<WorkerSelection> {
-    let mut messages =
-        serde_json::Deserializer::from_reader(BufReader::new(stream)).into_iter::<WireMessage>();
+    let mut messages = Messages::new(stream);
     let Some(message) = messages.next() else {
         bail!(
             "Karva controller connection closed before sending worker configuration and test paths"
