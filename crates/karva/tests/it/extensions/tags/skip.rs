@@ -25,7 +25,7 @@ fn test_skip(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -56,7 +56,7 @@ fn test_skip_keyword(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -86,7 +86,7 @@ fn test_skip_functionality_no_reason(#[values("pytest", "karva")] framework: &st
     let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -116,7 +116,7 @@ fn test_skip_reason_function_call(#[values("pytest", "karva")] framework: &str) 
     let decorator = get_skip_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -146,7 +146,7 @@ fn test_skip_with_true_condition(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -177,7 +177,7 @@ fn test_skip_with_false_condition(#[values("pytest", "karva")] framework: &str) 
     let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -208,7 +208,7 @@ fn test_skip_with_expression(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 import sys
@@ -239,7 +239,7 @@ fn test_skip_with_multiple_conditions(#[values("pytest", "karva")] framework: &s
     let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -295,7 +295,7 @@ fn test_pytest_skipif_boolean_condition_without_reason_rejected(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 
@@ -329,7 +329,7 @@ fn test_skip_with_multiple_tests(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -368,7 +368,7 @@ fn test_skip_with_all_false_conditions(#[values("pytest", "karva")] framework: &
     let decorator = get_skip_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -593,7 +593,7 @@ fn test_pytest_skipif_non_string_keyword_reason_rejected(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 
@@ -628,7 +628,7 @@ fn test_pytest_skipif_false_condition_allows_non_string_reason(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 
@@ -660,7 +660,7 @@ fn test_pytest_skipif_empty_list_condition_does_not_skip(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 
@@ -692,7 +692,7 @@ fn test_pytest_skipif_string_condition_uses_module_globals(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 
@@ -726,7 +726,7 @@ fn test_pytest_skipif_true_keyword_condition(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 

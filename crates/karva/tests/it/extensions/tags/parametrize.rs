@@ -12,7 +12,7 @@ fn test_parametrize_rejects_too_few_values_before_execution(
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -63,7 +63,7 @@ fn test_parametrize_rejects_too_many_values_before_execution(
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -583,7 +583,7 @@ fn test_parametrize_rejects_duplicate_name_list(#[values("pytest", "karva")] fra
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -630,7 +630,7 @@ fn test_parametrize_rejects_duplicate_name_across_decorators(
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -678,7 +678,7 @@ fn test_parametrize_rejects_unknown_name(#[values("pytest", "karva")] framework:
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -768,7 +768,7 @@ fn test_parametrize_rejects_empty_cases(#[values("pytest", "karva")] framework: 
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -854,7 +854,7 @@ fn test_parametrize_rejects_empty_name(#[values("pytest", "karva")] framework: &
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -901,7 +901,7 @@ fn test_parametrize_rejects_invalid_name(#[values("pytest", "karva")] framework:
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -1119,7 +1119,7 @@ fn test_parametrize_accepts_generator(#[values("pytest", "karva")] framework: &s
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -1151,7 +1151,7 @@ fn test_parametrize_accepts_dict_keys(#[values("pytest", "karva")] framework: &s
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 parametrize = {parametrize}
@@ -1504,7 +1504,7 @@ fn test_parametrize_multiple_args_single_string(#[values("pytest", "karva")] fra
     let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
                 import {framework}
 
@@ -1539,7 +1539,7 @@ fn test_parametrize_with_ids(#[values("pytest", "karva")] framework: &str) {
     let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -1580,7 +1580,7 @@ fn test_parametrize_quotes_default_string_ids(#[values("pytest", "karva")] frame
     let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -1658,7 +1658,7 @@ fn test_stacked_parametrize_combines_ids(#[values("pytest", "karva")] framework:
     let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -1693,7 +1693,7 @@ fn test_parametrize_disambiguates_duplicate_ids(#[values("pytest", "karva")] fra
     let parametrize = get_parametrize_function(framework);
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -1923,7 +1923,7 @@ fn test_parametrize_with_pytest_param_false_keyword_condition(
 ) {
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import pytest
 
@@ -2175,7 +2175,7 @@ def test_list_value(length, nums):
 fn test_karva_param_skip(#[values("karva.tags.skip", "karva.tags.skip(True)")] tag: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import karva
@@ -2207,7 +2207,7 @@ fn test_karva_param_expected_failure(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import karva

@@ -405,7 +405,7 @@ fn unpacked_parametrize_cases_are_not_dropped(
 ) {
     let context = TestContext::with_file(
         "test_mod.py",
-        &format!(
+        format!(
             r#"
 import karva
 

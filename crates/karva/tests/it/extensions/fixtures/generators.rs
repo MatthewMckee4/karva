@@ -185,7 +185,7 @@ async def test_error(error_fixture):
 fn test_fixture_generator_with_second_fixture(#[values("karva", "pytest")] framework: &str) {
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -222,7 +222,7 @@ def test_fixture_generator(fixture_generator):
 fn test_fixture_generator_finalizer_order(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 import {framework}
 
@@ -271,7 +271,7 @@ fn test_independent_generator_fixtures_finalize_in_reverse_order(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 
             import {framework}
@@ -331,7 +331,7 @@ fn test_independent_generator_fixtures_finalize_in_reverse_order(
 fn test_shared_generator_dependency_finalizes_once(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -390,7 +390,7 @@ fn test_generator_dependency_finalizes_after_setup_failure(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -450,7 +450,7 @@ def test_resource(broken):
 fn test_generator_finalizes_after_test_failure(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -507,7 +507,7 @@ fn test_generator_dependency_finalizes_despite_teardown_failure(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}

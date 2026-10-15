@@ -8,7 +8,7 @@ use crate::common::TestContext;
 fn test_temp_directory_fixture(#[values("tmp_path", "temp_path", "temp_dir")] fixture_name: &str) {
     let test_context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 import pathlib
 

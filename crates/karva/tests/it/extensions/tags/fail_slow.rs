@@ -255,7 +255,7 @@ fn test_fail_slow_invalid_seconds_rejected(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import karva
 

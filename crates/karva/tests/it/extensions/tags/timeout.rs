@@ -147,7 +147,7 @@ fn test_timeout_invalid_seconds_rejected(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import karva
 
@@ -182,7 +182,7 @@ fn test_pytest_timeout_invalid_seconds_rejected(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import pytest
 
@@ -695,7 +695,7 @@ fn hard_timeout_stops_python_and_native_calls_and_preserves_output(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import karva
 import os

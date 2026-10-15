@@ -57,7 +57,7 @@ fn errors_belong_to_the_active_attempt(
 ) {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 @karva.fixture
 def resource():
@@ -172,7 +172,7 @@ def test_background(resource):
 fn retains_multiple_events_and_existing_failure() {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 def test_background():
     emit("thread")
@@ -365,7 +365,7 @@ fn unattributed_events_fail_the_run(
     };
     context.write_file(
         provider,
-        &format!(
+        format!(
             r#"{HELPERS}
 if "{phase}" == "import":
     emit("{kind}")
@@ -591,7 +591,7 @@ def test_handled():
 fn retries_cannot_hide_background_errors(#[values("thread", "unraisable")] kind: &str) {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 import os
 
@@ -849,7 +849,7 @@ def test_passes():
 fn background_errors_override_skip_and_expected_failure() {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 def test_skips():
     emit("thread")
@@ -1058,7 +1058,7 @@ def test_callback():
 fn machine_reports_retain_test_and_worker_events(#[values("json", "jsonl")] format: &str) {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 emit("thread")
 emit("unraisable")
@@ -1493,7 +1493,7 @@ def test_changes_module():
 fn errors_during_a_retry_remain_on_that_attempt(#[values("thread", "unraisable")] kind: &str) {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 import os
 
@@ -1603,7 +1603,7 @@ def test_background():
 fn fixture_value_destructors_belong_to_teardown() {
     let context = TestContext::with_file(
         "test_background.py",
-        &format!(
+        format!(
             r#"{HELPERS}
 class FixtureValue(BrokenCleanup):
     def __repr__(self):

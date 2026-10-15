@@ -21,7 +21,7 @@ fn captured_stdin_rejects_python_reads(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import sys
 
@@ -92,7 +92,7 @@ fn uncaptured_stdin_remains_available(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import os
 

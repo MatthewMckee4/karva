@@ -18,7 +18,7 @@ fn test_expect_fail_that_fails(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -129,7 +129,7 @@ fn test_expect_fail_no_reason(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -160,7 +160,7 @@ fn test_expect_fail_with_call(#[values("pytest", "karva")] framework: &str) {
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -191,7 +191,7 @@ fn test_expect_fail_with_true_condition(#[values("pytest", "karva")] framework: 
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -222,7 +222,7 @@ fn test_expect_fail_with_false_condition(#[values("pytest", "karva")] framework:
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -279,7 +279,7 @@ fn test_expect_fail_with_expression(#[values("pytest", "karva")] framework: &str
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 import sys
@@ -311,7 +311,7 @@ fn test_expect_fail_with_multiple_conditions(#[values("pytest", "karva")] framew
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -342,7 +342,7 @@ fn test_expect_fail_with_all_false_conditions(#[values("pytest", "karva")] frame
     let decorator = get_expect_fail_decorator(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -705,7 +705,7 @@ fn test_expect_fail_with_parametrize(#[values("pytest", "karva")] framework: &st
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -928,7 +928,7 @@ def test_1():
 fn expected_exception_matches_subclasses(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -961,7 +961,7 @@ def test_expected():
 fn expected_exception_matches_any_class_in_tuple(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -993,7 +993,7 @@ fn expected_failure_rejects_mismatching_exception_and_retries(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -1043,7 +1043,7 @@ fn expected_failure_does_not_absorb_fixture_setup_failure(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 from karva import fixture
@@ -1098,7 +1098,7 @@ fn expected_failure_does_not_absorb_fixture_teardown_failure(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 from karva import fixture
@@ -1147,7 +1147,7 @@ def test_expected(value):
 fn expected_failure_does_not_absorb_missing_fixture(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -1189,7 +1189,7 @@ def test_expected(value):
 fn expected_failure_does_not_absorb_non_none_return(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -1232,7 +1232,7 @@ def test_expected():
 fn expected_failure_does_not_absorb_async_timeout(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import asyncio
 import {framework}
@@ -1280,7 +1280,7 @@ fn expected_failure_does_not_absorb_background_task_exception(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import asyncio
 import {framework}
@@ -1333,7 +1333,7 @@ async def test_expected():
 fn expected_exception_policy_rejects_non_class(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -1368,7 +1368,7 @@ fn expected_exception_policy_rejects_non_exception_class(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -1403,7 +1403,7 @@ fn expected_exception_policy_rejects_tuple_with_non_class(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -1436,7 +1436,7 @@ def test_expected():
 fn expected_failure_matches_sync_body_timeout_error(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 from karva import tags
@@ -1468,7 +1468,7 @@ def test_expected():
 fn expected_failure_matches_async_body_timeout_error(#[values("karva", "pytest")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 from karva import tags

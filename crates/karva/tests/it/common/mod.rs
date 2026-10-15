@@ -121,25 +121,30 @@ impl TestContext {
         self.project_dir_path.clone()
     }
 
-    pub fn with_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
+    pub fn with_files(
+        files: impl IntoIterator<Item = (impl AsRef<Utf8Path>, impl AsRef<str>)>,
+    ) -> Self {
         let case = Self::default();
         case.write_files(files);
         case
     }
 
-    pub fn with_file(path: impl AsRef<Utf8Path>, content: &str) -> Self {
+    pub fn with_file(path: impl AsRef<Utf8Path>, content: impl AsRef<str>) -> Self {
         let case = Self::default();
         case.write_file(path, content);
         case
     }
 
-    pub fn write_files<'a>(&self, files: impl IntoIterator<Item = (&'a str, &'a str)>) {
+    pub fn write_files(
+        &self,
+        files: impl IntoIterator<Item = (impl AsRef<Utf8Path>, impl AsRef<str>)>,
+    ) {
         for (path, content) in files {
             self.write_file(path, content);
         }
     }
 
-    pub fn write_file(&self, path: impl AsRef<Utf8Path>, content: &str) {
+    pub fn write_file(&self, path: impl AsRef<Utf8Path>, content: impl AsRef<str>) {
         let path = path.as_ref();
 
         let path = self.project_dir_path.join(path);
@@ -150,9 +155,12 @@ impl TestContext {
                 .unwrap();
         }
 
-        std::fs::write(&path, &*ruff_python_trivia::textwrap::dedent(content))
-            .with_context(|| format!("Failed to write file `{path}`"))
-            .unwrap();
+        std::fs::write(
+            &path,
+            &*ruff_python_trivia::textwrap::dedent(content.as_ref()),
+        )
+        .with_context(|| format!("Failed to write file `{path}`"))
+        .unwrap();
     }
 
     fn venv_binary(&self, binary: &str) -> Utf8PathBuf {
