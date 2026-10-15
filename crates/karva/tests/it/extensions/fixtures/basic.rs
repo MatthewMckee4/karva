@@ -1,3 +1,4 @@
+use indoc::{formatdoc, indoc};
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
@@ -559,6 +560,79 @@ def test_database(database):
             PASS [TIME] nested.test_example::test_database(database='inner-outer')
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn test_same_name_fixture_overrides_continue_outward(
+    #[values("pytest", "karva")] framework: &str,
+    #[values("function", "module", "package", "session")] scope: &str,
+) {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            formatdoc! {r#"
+                from {framework} import fixture
+
+                @fixture(scope={scope:?})
+                def database():
+                    return "root"
+            "#}
+            .as_str(),
+        ),
+        (
+            "nested/conftest.py",
+            formatdoc! {r#"
+                from {framework} import fixture
+
+                @fixture(scope={scope:?})
+                def database(database):
+                    return "parent-" + database
+            "#}
+            .as_str(),
+        ),
+        (
+            "nested/inner/conftest.py",
+            formatdoc! {r#"
+                from {framework} import fixture
+
+                @fixture(scope={scope:?})
+                def database(database):
+                    return "inner-" + database
+            "#}
+            .as_str(),
+        ),
+        (
+            "nested/inner/test_local.py",
+            formatdoc! {r#"
+                from {framework} import fixture
+
+                @fixture(scope={scope:?})
+                def database(database):
+                    return "local-" + database
+
+                def test_database(database):
+                    assert database == "local-inner-parent-root"
+            "#}
+            .as_str(),
+        ),
+        (
+            "nested/inner/test_inherited.py",
+            indoc! {r#"
+                def test_database(database):
+                    assert database == "inner-parent-root"
+            "#},
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
     ");
