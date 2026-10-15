@@ -209,6 +209,10 @@ struct FixtureProvider {
 pub(super) struct FixtureModel {
     local: Vec<FixtureDefinition>,
     visible: Vec<FixtureDefinition>,
+
+    /// Outer definitions retained for dependencies of same-name overrides.
+    shadowed: Vec<FixtureDefinition>,
+
     blocked_names: HashSet<String>,
     bindings: DecoratorBindings,
     bindings_at: HashMap<TextSize, DecoratorBindings>,
@@ -242,10 +246,11 @@ impl FixtureModel {
         self.visible.iter().find(|fixture| fixture.name == name)
     }
 
-    /// Returns the visible declaration with stable identity `id`.
+    /// Returns a declaration by identity, including shadowed dependency providers.
     pub(super) fn definition(&self, id: &FixtureId) -> Option<&FixtureDefinition> {
         self.visible
             .iter()
+            .chain(&self.shadowed)
             .chain(&self.builtins)
             .find(|fixture| &fixture.id == id)
     }
@@ -549,6 +554,7 @@ impl FixtureModel {
             .first()
             .map_or_else(HashMap::new, |provider| provider.bindings_at.clone());
         let mut visible = Vec::new();
+        let mut shadowed = Vec::new();
         let mut names = HashSet::new();
         let mut blocked_names = HashSet::new();
         let mut builtins_visible = true;
@@ -564,6 +570,8 @@ impl FixtureModel {
                 }
                 if names.insert(definition.name.clone()) {
                     visible.push(definition.clone());
+                } else {
+                    shadowed.push(definition.clone());
                 }
             }
             if provider.unknown {
@@ -574,6 +582,7 @@ impl FixtureModel {
         Self {
             local,
             visible,
+            shadowed,
             blocked_names,
             bindings,
             bindings_at,
@@ -1063,7 +1072,14 @@ fn resolve_reference(
     active: Option<&FixtureDefinition>,
     name: &str,
 ) -> FixtureResolution {
+    let mut skip_override = active.filter(|fixture| fixture.name == name);
     for provider in providers {
+        if let Some(fixture) = skip_override {
+            if provider.by_name.get(name) == Some(&fixture.id) {
+                skip_override = None;
+            }
+            continue;
+        }
         if let Some(id) = provider.by_name.get(name) {
             if active.is_none_or(|fixture| fixture.id != *id) {
                 return FixtureResolution::Resolved(id.clone());
@@ -1465,6 +1481,7 @@ mod tests {
 
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
+    use ruff_text_size::TextSize;
 
     use super::FixtureResolution;
     use crate::{DiagnosticCode, SourceAnalysisSettings, analyze_source, analyze_sources};
@@ -1727,6 +1744,54 @@ mod tests {
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/pkg/conftest.py")
         );
+    }
+
+    #[test]
+    fn same_name_overrides_continue_outward_through_all_providers() {
+        let root = module(
+            "/project/conftest.py",
+            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+        );
+        let parent = module(
+            "/project/pkg/conftest.py",
+            "from karva import fixture\n\n@fixture\ndef database(database): pass\n",
+        );
+        let current = module(
+            "/project/pkg/inner/conftest.py",
+            "from karva import fixture\n\n@fixture\ndef database(database): pass\n",
+        );
+        let analysis = analyze_sources(current, &[root, parent], &settings());
+
+        assert!(
+            analysis.diagnostics.is_empty(),
+            "{:?}",
+            analysis.diagnostics
+        );
+        let dependency = &analysis.fixture_model.local()[0].dependencies[0].resolution;
+        let id = match dependency {
+            FixtureResolution::Resolved(id) => Some(id),
+            _ => None,
+        }
+        .expect("expected parent fixture");
+        assert_eq!(id.path, "/project/pkg/conftest.py");
+        let parent = analysis
+            .fixture_model
+            .definition(id)
+            .expect("parent definition");
+        assert!(matches!(
+            &parent.dependencies[0].resolution,
+            FixtureResolution::Resolved(id) if id.path == "/project/conftest.py"
+        ));
+        let offset = TextSize::try_from(
+            analysis
+                .module
+                .source_text
+                .find("database):")
+                .expect("parameter"),
+        )
+        .expect("source fits");
+        let target = crate::fixture_definition(&analysis, offset).expect("outer override target");
+        assert_eq!(target.path, "/project/pkg/conftest.py");
     }
 
     #[test]

@@ -282,6 +282,35 @@ fn resolves_nearest_fixture_across_multiple_nested_conftests() {
 }
 
 #[test]
+fn resolves_unsaved_same_name_override_dependencies_outward() {
+    let workspace = Workspace::new();
+    workspace.write(
+        "conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    workspace.write(
+        "package/conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(database): pass\n",
+    );
+    workspace.write(
+        "package/inner/conftest.py",
+        "from karva import fixture\n\n@fixture\ndef database(): pass\n",
+    );
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("package/inner/conftest.py");
+    open(
+        &mut server,
+        uri.clone(),
+        "from karva import fixture\n\n@fixture\ndef database(database): pass\n",
+    );
+
+    let response =
+        server.request::<DefinitionRequest>(definition_params(uri, Position::new(3, 18)));
+
+    assert_json_snapshot!(workspace.normalize(response));
+}
+
+#[test]
 fn goes_to_fixture_dependencies_and_usefixtures_strings() {
     let workspace = Workspace::new();
     workspace.write(

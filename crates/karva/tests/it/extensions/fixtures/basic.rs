@@ -564,6 +564,45 @@ def test_database(database):
     ");
 }
 
+#[rstest]
+fn test_same_name_fixture_overrides_continue_outward(
+    #[values("pytest", "karva")] framework: &str,
+    #[values("function", "module", "package", "session")] scope: &str,
+) {
+    let root = format!(
+        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(): return 'root'\n"
+    );
+    let parent = format!(
+        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(database): return 'parent-' + database\n"
+    );
+    let inner = format!(
+        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(database): return 'inner-' + database\n"
+    );
+    let local = format!(
+        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(database): return 'local-' + database\ndef test_database(database): assert database == 'local-inner-parent-root'\n"
+    );
+    let context = TestContext::with_files([
+        ("conftest.py", root.as_str()),
+        ("nested/conftest.py", parent.as_str()),
+        ("nested/inner/conftest.py", inner.as_str()),
+        ("nested/inner/test_local.py", local.as_str()),
+        (
+            "nested/inner/test_inherited.py",
+            "def test_database(database): assert database == 'inner-parent-root'\n",
+        ),
+    ]);
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[test]
 fn test_nested_conftest_fixture_overrides_chain_to_each_outer_fixture() {
     let context = TestContext::with_files([

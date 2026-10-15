@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn analysis_uses_root_to_nearest_conftest_precedence() {
+    fn analysis_uses_nearest_conftest_precedence() {
         let index = WorkspaceSourceIndex::from_documents(
             "/project".into(),
             [
