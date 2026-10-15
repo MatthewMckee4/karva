@@ -1,4 +1,4 @@
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyBaseException, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -39,7 +39,7 @@ impl ExceptionInfo {
 /// Matching exceptions are suppressed; unexpected exception types propagate unchanged.
 #[pyclass]
 pub struct RaisesContext {
-    expected_exception: Py<PyAny>,
+    expected_exception: Py<PyType>,
     match_pattern: Option<String>,
     check: Option<Py<PyAny>>,
     exc_info: Py<ExceptionInfo>,
@@ -67,9 +67,7 @@ impl RaisesContext {
         let expected_bound = self.expected_exception.bind(py);
 
         let exc_py_type = exc_type_bound.cast::<PyType>()?;
-        let expected_py_type = expected_bound.cast::<PyType>()?;
-
-        if !exc_py_type.is_subclass(expected_py_type)? {
+        if !exc_py_type.is_subclass(expected_bound)? {
             return Ok(false);
         }
 
@@ -121,6 +119,15 @@ pub fn raises(
     r#match: Option<String>,
     check: Option<Py<PyAny>>,
 ) -> PyResult<RaisesContext> {
+    let expected_exception = match expected_exception.into_bound(py).cast_into::<PyType>() {
+        Ok(class) if class.is_subclass_of::<PyBaseException>()? => class.unbind(),
+        _ => {
+            return Err(PyTypeError::new_err(
+                "expected_exception must be an exception class",
+            ));
+        }
+    };
+
     if let Some(check) = check.as_ref()
         && !check.bind(py).is_callable()
     {
