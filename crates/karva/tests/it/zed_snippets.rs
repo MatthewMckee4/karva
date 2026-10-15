@@ -54,11 +54,7 @@ fn zed_snippets_expand_to_runnable_karva_examples() {
         }
         files.push((format!("test_{prefix}.py"), source));
     }
-    let context = TestContext::with_files(
-        files
-            .iter()
-            .map(|(name, source)| (name.as_str(), source.as_str())),
-    );
+    let context = TestContext::with_files(files);
     assert_cmd_snapshot!(context.command_no_parallel().arg("--doctest-modules"), @"
     success: true
     exit_code: 0

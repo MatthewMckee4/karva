@@ -365,7 +365,7 @@ fn rejects_invalid_project_filters(#[case] filter: &str) {
     let context = TestContext::with_file("test.py", "def test_pass():\n    assert False\n");
     context.write_file(
         "karva.toml",
-        &format!("[profile.default.test]\nwarning-filters = [{filter:?}]\n"),
+        format!("[profile.default.test]\nwarning-filters = [{filter:?}]\n"),
     );
     let mut command = context.command_no_parallel();
     command.arg("--status-level=none");
@@ -473,7 +473,7 @@ fn rejects_invalid_local_filters(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import karva
 import pytest
@@ -684,7 +684,7 @@ fn strict_policy_applies_to_import_setup_and_teardown(
         }
     };
     let context =
-        TestContext::with_file("test.py", &format!("import warnings\nimport karva\n{body}"));
+        TestContext::with_file("test.py", format!("import warnings\nimport karva\n{body}"));
     let mut command = context.command_no_parallel();
     command.args(["--status-level=none", "-W", "error"]);
     match phase {
@@ -814,7 +814,7 @@ fn function_filters_override_module_filters_and_outer_decorators_win(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import warnings
 import pytest

@@ -280,7 +280,7 @@ def test_raise_fail_error():
 fn test_runtime_skip_pytest(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -647,7 +647,7 @@ def test_invalid_exception_type():
 fn test_runtime_skip_does_not_retry(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import {framework}
 
@@ -765,7 +765,7 @@ fn test_raises_rejects_invalid_exception_before_running_body(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import karva
 import pytest
@@ -1260,7 +1260,7 @@ fn test_raises_failed_exit_leaves_exception_info_empty(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import re
 import karva
@@ -1314,7 +1314,7 @@ fn test_approx_rejects_invalid_tolerances(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import karva
 import pytest
@@ -1351,7 +1351,7 @@ fn test_approx_non_numeric_equality_fallback(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
 import karva
 

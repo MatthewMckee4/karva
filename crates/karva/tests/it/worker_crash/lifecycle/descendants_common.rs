@@ -89,7 +89,7 @@ time.sleep(30)
     ]);
     context.write_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import os
 import subprocess

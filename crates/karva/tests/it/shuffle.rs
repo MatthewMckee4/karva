@@ -27,7 +27,7 @@ fn recording_tests(names: &[&str]) -> String {
 fn generated_seed_reproduces_single_worker_order() {
     let context = TestContext::with_file(
         "test_order.py",
-        &recording_tests(&["a", "b", "c", "d", "e", "f"]),
+        recording_tests(&["a", "b", "c", "d", "e", "f"]),
     );
 
     assert_cmd_snapshot!(
@@ -112,7 +112,7 @@ fn last_seed_requires_cache() {
 fn parallel_worker_assignment_and_order_are_reproducible() {
     let context = TestContext::with_file(
         "test_order.py",
-        &recording_tests(&["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]),
+        recording_tests(&["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]),
     );
 
     assert_cmd_snapshot!(
@@ -178,7 +178,7 @@ fn parallel_worker_assignment_and_order_are_reproducible() {
 fn filtering_precedes_seeded_ordering() {
     let context = TestContext::with_file(
         "test_order.py",
-        &recording_tests(&["drop_a", "keep_a", "drop_b", "keep_b", "drop_c", "keep_c"]),
+        recording_tests(&["drop_a", "keep_a", "drop_b", "keep_b", "drop_c", "keep_c"]),
     );
 
     assert_cmd_snapshot!(
@@ -208,7 +208,7 @@ fn filtering_precedes_seeded_ordering() {
 
     context.write_file(
         "test_order.py",
-        &recording_tests(&["keep_a", "keep_b", "keep_c"]),
+        recording_tests(&["keep_a", "keep_b", "keep_c"]),
     );
     context.write_file("order-0.txt", "");
     assert_cmd_snapshot!(
@@ -235,7 +235,7 @@ fn filtering_precedes_seeded_ordering() {
 fn partition_selection_precedes_seeded_ordering() {
     let context = TestContext::with_file(
         "test_order.py",
-        &recording_tests(&["a", "b", "c", "d", "e", "f"]),
+        recording_tests(&["a", "b", "c", "d", "e", "f"]),
     );
 
     assert_cmd_snapshot!(
@@ -267,7 +267,7 @@ fn partition_selection_precedes_seeded_ordering() {
 fn retries_stay_with_shuffled_test() {
     let context = TestContext::with_file(
         "test_order.py",
-        &format!(
+        format!(
             r#"
 {RECORDER}
 def test_a(): _record("a")

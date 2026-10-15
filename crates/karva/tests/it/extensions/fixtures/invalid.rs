@@ -1219,7 +1219,7 @@ def test_service(service):
 fn test_fixture_scope_mismatch(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework} as framework
 from pathlib import Path

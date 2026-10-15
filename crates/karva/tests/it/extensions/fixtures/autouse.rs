@@ -29,8 +29,7 @@ def test_something():
 def test_something_else():
     assert arr == [1, 2, 1]
 "#
-        )
-        .as_str(),
+        ),
     );
 
     allow_duplicates! {
@@ -56,7 +55,7 @@ fn test_module_auto_use_fixture_is_shared_and_finalized(
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -103,7 +102,7 @@ fn test_package_auto_use_fixture_is_shared_and_finalized(
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -150,7 +149,7 @@ fn test_session_auto_use_fixture_is_shared_and_finalized(
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -195,7 +194,7 @@ fn test_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
                 from {framework} import fixture
 
@@ -548,7 +547,7 @@ fn test_nearest_conftest_auto_use_fixture_shadows_outer_fixture(
     let context = TestContext::new();
     context.write_file(
         "conftest.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -560,7 +559,7 @@ def selected_fixture():
     );
     context.write_file(
         "nested/conftest.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -662,7 +661,7 @@ fn test_multiple_auto_use_fixtures(#[values("pytest", "karva")] framework: &str)
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -706,7 +705,7 @@ fn inherited_autouse_uses_non_autouse_override(
 ) {
     let context = TestContext::with_file(
         "conftest.py",
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -721,7 +720,7 @@ def selected_fixture():
     );
     context.write_file(
         override_path,
-        &format!(
+        format!(
             r#"
 from pathlib import Path
 import {framework}
@@ -751,7 +750,7 @@ def test_inherited_autouse_again():
         let source = context.read_file(override_path);
         context.write_file(
             override_path,
-            &formatdoc!(
+            formatdoc!(
                 r"
                     {source}
                     {tests}"

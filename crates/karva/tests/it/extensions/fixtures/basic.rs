@@ -10,7 +10,7 @@ use crate::extensions::{get_auto_use_kw, get_parametrize_function};
 fn test_shared_dependency_is_initialized_once(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
@@ -384,7 +384,7 @@ def x():
 fn test_dynamic_fixture_scope_session_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from {framework} import fixture
 
@@ -428,7 +428,7 @@ def test_2(x_session):
 fn test_dynamic_fixture_scope_function_scope(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 from {framework} import fixture
 
@@ -579,8 +579,7 @@ fn test_same_name_fixture_overrides_continue_outward(
                 @fixture(scope={scope:?})
                 def database():
                     return "root"
-            "#}
-            .as_str(),
+            "#},
         ),
         (
             "nested/conftest.py",
@@ -590,8 +589,7 @@ fn test_same_name_fixture_overrides_continue_outward(
                 @fixture(scope={scope:?})
                 def database(database):
                     return "parent-" + database
-            "#}
-            .as_str(),
+            "#},
         ),
         (
             "nested/inner/conftest.py",
@@ -601,8 +599,7 @@ fn test_same_name_fixture_overrides_continue_outward(
                 @fixture(scope={scope:?})
                 def database(database):
                     return "inner-" + database
-            "#}
-            .as_str(),
+            "#},
         ),
         (
             "nested/inner/test_local.py",
@@ -615,17 +612,16 @@ fn test_same_name_fixture_overrides_continue_outward(
 
                 def test_database(database):
                     assert database == "local-inner-parent-root"
-            "#}
-            .as_str(),
-        ),
-        (
-            "nested/inner/test_inherited.py",
-            indoc! {r#"
-                def test_database(database):
-                    assert database == "inner-parent-root"
             "#},
         ),
     ]);
+    context.write_file(
+        "nested/inner/test_inherited.py",
+        indoc! {r#"
+            def test_database(database):
+                assert database == "inner-parent-root"
+        "#},
+    );
 
     assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
     success: true
@@ -876,7 +872,7 @@ def test_default(configured):
 fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
                     from {framework} import fixture
 
@@ -939,7 +935,7 @@ fn test_fixture_initialization_order(#[values("pytest", "karva")] framework: &st
 fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 from {framework} import fixture
 
@@ -980,7 +976,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 from {framework} import fixture
 
@@ -1262,7 +1258,7 @@ Path(__file__).with_name('mypackage').joinpath('fixtures.py').unlink()
 fn test_fixture_basic(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 import {framework}
 
@@ -1335,7 +1331,7 @@ fn test_fixture_in_conftest(#[values("pytest", "karva")] framework: &str) {
 fn test_fixture_with_multiple_fixtures(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 import {framework}
 
@@ -1374,7 +1370,7 @@ fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &s
     let parametrize = get_parametrize_function(framework);
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 import {framework}
 
@@ -1410,7 +1406,7 @@ fn test_fixture_with_test_parametrize(#[values("pytest", "karva")] framework: &s
 fn test_fixture_with_dependency(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r"
                 import {framework}
 

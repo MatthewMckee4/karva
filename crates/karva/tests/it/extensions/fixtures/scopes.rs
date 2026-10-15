@@ -204,7 +204,7 @@ def value():
 fn test_none_fixture_value_is_cached(#[values("pytest", "karva")] framework: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import {framework}
 
