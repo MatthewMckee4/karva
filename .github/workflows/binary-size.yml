@@ -22,14 +22,14 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: binary-size-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   measure:
     # Retargeting changes the baseline; title/body edits do not need another build.
     if: github.event.action != 'edited' || github.event.changes.base.ref != null
+    # Skipped metadata edits must not cancel an active measurement.
+    concurrency:
+      group: binary-size-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     env:
       CARGO_TERM_COLOR: never
