@@ -266,6 +266,53 @@ def test_deprecated_call_context_still_matches():
 }
 
 #[test]
+fn test_warns_preserves_unmatched_warnings_when_body_raises() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+import karva
+import pytest
+
+@pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt])
+@pytest.mark.parametrize("callable_mode", [False, True])
+def test_warning_is_preserved(error_type, callable_mode):
+    error = error_type("body failed")
+
+    def body():
+        warnings.warn("matched", UserWarning)
+        warnings.warn("unmatched", RuntimeWarning)
+        raise error
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        with pytest.raises(error_type) as caught:
+            if callable_mode:
+                karva.warns(UserWarning, body)
+            else:
+                with karva.warns(UserWarning):
+                    body()
+
+    assert caught.value is error
+    assert [(warning.category, str(warning.message)) for warning in recorded] == [
+        (RuntimeWarning, "unmatched"),
+    ]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_warning_assertion_failures_and_cleanup() {
     let context = TestContext::with_file(
         "test.py",

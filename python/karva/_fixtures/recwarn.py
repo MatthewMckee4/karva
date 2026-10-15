@@ -156,12 +156,12 @@ class WarningsChecker(WarningsRecorder):
     ) -> None:
         super().__exit__(exc_type, exc_val, exc_tb)
 
-        if exc_type is not None:
-            return
-
         __tracebackhide__ = True
-        emitted = pformat([record.message for record in self], indent=2)
         try:
+            if exc_type is not None:
+                return
+
+            emitted = pformat([record.message for record in self], indent=2)
             if not any(
                 issubclass(warning.category, self.expected_warning) for warning in self
             ):
