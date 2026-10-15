@@ -765,7 +765,7 @@ fn test_raises_rejects_invalid_exception_before_running_body(
 ) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import karva
 import pytest
