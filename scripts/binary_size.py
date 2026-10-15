@@ -21,8 +21,8 @@ def change(base: int, head: int) -> str:
 def render(directory: Path, base_sha: str, head_sha: str) -> str:
     """Read measurements for both revisions and include the largest functions."""
     lines = [
-        "<!-- karva-binary-size -->",
-        "## Binary Size Comparison",
+        "<details>",
+        "<summary>Details</summary>",
         "",
         f"Base `{base_sha}` → head `{head_sha}`.",
         "",
@@ -36,8 +36,18 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
         "| Binary | Measurement | Base | Head | Change |",
         "| --- | --- | --- | --- | --- |",
     ]
+    statuses = []
     details = []
     for binary in ("karva", "karva-worker"):
+        base_size = (directory / f"base-{binary}").stat().st_size
+        head_size = (directory / f"head-{binary}").stat().st_size
+        if head_size > base_size:
+            status = "increased"
+        elif head_size < base_size:
+            status = "decreased"
+        else:
+            status = "unchanged"
+        statuses.append(f"`{binary}` {status}")
         measurements = {
             revision: json.loads((directory / f"{revision}-{binary}.json").read_text())
             for revision in ("base", "head")
@@ -45,8 +55,8 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
         for label, base, head in (
             (
                 "Stripped file",
-                (directory / f"base-{binary}").stat().st_size,
-                (directory / f"head-{binary}").stat().st_size,
+                base_size,
+                head_size,
             ),
             (
                 "`.text`",
@@ -57,11 +67,9 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
             lines.append(
                 f"| `{binary}` | {label} | {size(base)} | {size(head)} | {change(base, head)} |"
             )
-        details.extend(
-            ["", "<details>", f"<summary>{binary}: largest functions</summary>", ""]
-        )
+        details.extend(["", f"### {binary}: largest functions", ""])
         for revision in ("head", "base"):
-            details.extend([f"### {revision.title()} Branch Results", "", "<pre>"])
+            details.extend([f"#### {revision.title()} Branch Results", "", "<pre>"])
             details.append("     Bytes  Crate  Function")
             for function in measurements[revision]["functions"]:
                 details.append(
@@ -71,8 +79,17 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
                     )
                 )
             details.extend(["</pre>", ""])
-        details.append("</details>")
-    return "\n".join([*lines, *details, ""])
+    return "\n".join(
+        [
+            "<!-- karva-binary-size -->",
+            f"Binary size: {'; '.join(statuses)}.",
+            "",
+            *lines,
+            *details,
+            "</details>",
+            "",
+        ]
+    )
 
 
 def main() -> None:
