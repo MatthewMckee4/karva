@@ -119,8 +119,8 @@ pub fn raises(
     r#match: Option<String>,
     check: Option<Py<PyAny>>,
 ) -> PyResult<RaisesContext> {
-    let expected_exception = match expected_exception.bind(py).cast::<PyType>() {
-        Ok(class) if class.is_subclass_of::<PyBaseException>()? => class.clone().unbind(),
+    let expected_exception = match expected_exception.into_bound(py).cast_into::<PyType>() {
+        Ok(class) if class.is_subclass_of::<PyBaseException>()? => class.unbind(),
         _ => {
             return Err(PyTypeError::new_err(
                 "expected_exception must be an exception class",
