@@ -1,3 +1,4 @@
+use indoc::{formatdoc, indoc};
 use insta::allow_duplicates;
 use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
@@ -569,18 +570,37 @@ fn test_same_name_fixture_overrides_continue_outward(
     #[values("pytest", "karva")] framework: &str,
     #[values("function", "module", "package", "session")] scope: &str,
 ) {
-    let root = format!(
-        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(): return 'root'\n"
-    );
-    let parent = format!(
-        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(database): return 'parent-' + database\n"
-    );
-    let inner = format!(
-        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(database): return 'inner-' + database\n"
-    );
-    let local = format!(
-        "from {framework} import fixture\n@fixture(scope={scope:?})\ndef database(database): return 'local-' + database\ndef test_database(database): assert database == 'local-inner-parent-root'\n"
-    );
+    let root = formatdoc! {r#"
+        from {framework} import fixture
+
+        @fixture(scope={scope:?})
+        def database():
+            return "root"
+    "#};
+    let parent = formatdoc! {r#"
+        from {framework} import fixture
+
+        @fixture(scope={scope:?})
+        def database(database):
+            return "parent-" + database
+    "#};
+    let inner = formatdoc! {r#"
+        from {framework} import fixture
+
+        @fixture(scope={scope:?})
+        def database(database):
+            return "inner-" + database
+    "#};
+    let local = formatdoc! {r#"
+        from {framework} import fixture
+
+        @fixture(scope={scope:?})
+        def database(database):
+            return "local-" + database
+
+        def test_database(database):
+            assert database == "local-inner-parent-root"
+    "#};
     let context = TestContext::with_files([
         ("conftest.py", root.as_str()),
         ("nested/conftest.py", parent.as_str()),
@@ -588,7 +608,10 @@ fn test_same_name_fixture_overrides_continue_outward(
         ("nested/inner/test_local.py", local.as_str()),
         (
             "nested/inner/test_inherited.py",
-            "def test_database(database): assert database == 'inner-parent-root'\n",
+            indoc! {r#"
+                def test_database(database):
+                    assert database == "inner-parent-root"
+            "#},
         ),
     ]);
 
