@@ -759,6 +759,48 @@ def test_raise_skip_error():
     ");
 }
 
+#[rstest]
+fn test_raises_rejects_invalid_exception_before_running_body(
+    #[values("int", "42", "ValueError('bad')", "None", "(ValueError,)")] expected: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import karva
+import pytest
+
+def test_invalid_exception():
+    with pytest.raises(TypeError, match="expected_exception must be an exception class"):
+        karva.raises({expected})
+
+def test_body_does_not_run():
+    entered = False
+    with pytest.raises(TypeError):
+        with karva.raises({expected}):
+            entered = True
+            raise ValueError("body ran")
+    assert not entered
+"#,
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                PASS [TIME] test::test_invalid_exception
+                PASS [TIME] test::test_body_does_not_run
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 #[test]
 fn test_raises_matching_exception() {
     let context = TestContext::with_file(
