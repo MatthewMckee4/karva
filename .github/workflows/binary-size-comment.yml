@@ -1,0 +1,71 @@
+name: Binary Size Comment
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- Reads artifacts as data only; validates PR identity and commits before commenting.
+    workflows: [Binary Size]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: binary-size-comment-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      # Only read the artifact as data. Never check out or execute PR code here.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binary-size
+          path: report
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync('report/report.json', 'utf8'));
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+            if (!Number.isSafeInteger(report.pr_number) || report.pr_number <= 0) {
+              throw new Error('Invalid pull request number in binary size report');
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo, pull_number: report.pr_number,
+            });
+            if (pr.state !== 'open' || pr.head.sha !== run.head_sha ||
+                report.head_sha !== pr.head.sha || report.base_sha !== pr.base.sha ||
+                pr.head.repo.full_name !== run.head_repository.full_name) {
+              core.info('Skipping report for a stale or unrelated pull request');
+              return;
+            }
+            const marker = '<!-- karva-binary-size -->';
+            let body = fs.readFileSync('report/report.md', 'utf8');
+            if (!body.startsWith(marker)) {
+              throw new Error('Missing binary size report marker');
+            }
+            // GitHub's 65536-character issue-comment limit (issue #1106, also used by PR Benchmarks).
+            if (body.length > 65536) {
+              body = `${marker}\nBinary size report exceeds GitHub's 65536-character comment limit (${body.length} requested). [View the complete report](${run.html_url}).`;
+            }
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: pr.number,
+            });
+            const existing = comments.find(comment =>
+              comment.user.login === 'github-actions[bot]' && comment.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: pr.number, body,
+              });
+            }

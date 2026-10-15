@@ -1,0 +1,100 @@
+name: Binary Size
+
+on:
+  pull_request:
+    paths:
+      # Recheck both measurement and publishing changes.
+      - ".github/workflows/binary-size.yml"
+      - ".github/workflows/binary-size-comment.yml"
+      - "scripts/binary_size.py"
+      # Build, checkout, and package inputs for the controller and worker.
+      - ".cargo/**"
+      - ".gitattributes"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**"
+      - "pyproject.toml"
+      - "python/**"
+      - "rust-toolchain"
+      - "rust-toolchain.toml"
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binary-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    # Retargeting changes the baseline; title/body edits do not need another build.
+    if: github.event.action != 'edited' || github.event.changes.base.ref != null
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          path: head
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          path: base
+
+      - name: Install comparison toolchain
+        working-directory: head
+        run: |
+          rustup show
+          echo "RUSTUP_TOOLCHAIN=$(rustup show active-toolchain | cut -d ' ' -f 1)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: python
+        with:
+          python-version: "3.13"
+
+      - name: Install cargo-bloat
+        # renovate: datasource=crate depName=cargo-bloat
+        run: cargo install cargo-bloat --version 0.12.1 --locked
+
+      - name: Measure release binaries
+        env:
+          PYO3_PYTHON: ${{ steps.python.outputs.python-path }}
+          # Both revisions use the PR's toolchain, Python, and target directory.
+          CARGO_TARGET_DIR: ${{ runner.temp }}/binary-size-target
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/binary-size"
+          for revision in base head; do
+            for binary in karva karva-worker; do
+              (
+                cd "$revision"
+                cargo bloat --release --locked --bin "$binary" --message-format json \
+                  > "$RUNNER_TEMP/binary-size/$revision-$binary.json"
+              )
+              # Preserve symbols for cargo-bloat; measure a stripped copy for file size.
+              strip --strip-all -o "$RUNNER_TEMP/binary-size/$revision-$binary" \
+                "$CARGO_TARGET_DIR/release/$binary"
+            done
+          done
+
+      - name: Render comparison
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python head/scripts/binary_size.py "$RUNNER_TEMP/binary-size"
+          cat "$RUNNER_TEMP/binary-size/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binary-size
+          path: |
+            ${{ runner.temp }}/binary-size/*.json
+            ${{ runner.temp }}/binary-size/*.md
+          if-no-files-found: error
