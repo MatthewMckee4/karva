@@ -68,6 +68,9 @@ cache-keys = [
     { file = "crates/**/Cargo.toml" },
 ]
 
+[tool.uv.dependency-groups]
+docs = { requires-python = ">=3.11" }
+
 [tool.ruff]
 extension = { pyi = "python" }
 fix = true
