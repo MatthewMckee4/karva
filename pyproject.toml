@@ -60,7 +60,6 @@ cache-keys = [
 ]
 
 [tool.ruff]
-extension = { pyi = "python" }
 fix = true
 target-version = "py311"
 
@@ -118,6 +117,9 @@ unfixable = [
     # Prefer itertools.chain.from_iterable.
     "quadratic-list-summation",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"*.pyi" = ["overload-with-docstring"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
