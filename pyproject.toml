@@ -100,7 +100,7 @@ unfixable = [
 
 [tool.ruff.lint.per-file-ignores]
 # Stub docstrings provide editor documentation for the native extension.
-"*.pyi" = ["docstring-in-stub", "overload-with-docstring"]
+"*.pyi" = ["docstring-in-stub"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
