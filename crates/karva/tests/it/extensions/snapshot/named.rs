@@ -3,6 +3,53 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
+fn test_snapshot_named_with_windows_reserved_characters() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+def test_portable_name():
+    karva.assert_snapshot("portable", name='a<b>:c"d|e?f*g\x01')
+    karva.assert_snapshot("literal escape", name='a%3Cb')
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_portable_name
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(
+        context
+            .read_file("snapshots/test__test_portable_name--a%3Cb%3E%3Ac%22d%7Ce%3Ff%2Ag%01.snap")
+            .contains("portable")
+    );
+    assert!(
+        context
+            .read_file("snapshots/test__test_portable_name--a%253Cb.snap")
+            .contains("literal escape")
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_portable_name
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_snapshot_named_creates_correct_file() {
     let context = TestContext::with_file(
         "test.py",

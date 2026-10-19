@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::io::{self, Write};
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -22,16 +23,23 @@ fn snapshot_dir(test_file: &Utf8Path) -> Utf8PathBuf {
 /// Return the path to a snapshot file.
 ///
 /// Format: `{test_dir}/snapshots/{module_name}__{snapshot_name}.snap`
-/// Percent signs and path separators in the snapshot name are percent-escaped.
+/// Percent signs and characters forbidden in Windows filenames are percent-escaped
+/// on every platform so committed snapshots remain portable.
 /// Qualified-name separators (`::`) are replaced with `__`.
 pub fn snapshot_path(test_file: &Utf8Path, module_name: &str, snapshot_name: &str) -> Utf8PathBuf {
     let dir = snapshot_dir(test_file);
-    let snapshot_name = snapshot_name
-        .replace('%', "%25")
-        .replace('/', "%2F")
-        .replace('\\', "%5C")
-        .replace("::", "__");
-    dir.join(format!("{module_name}__{snapshot_name}.snap"))
+    let mut escaped_name = String::with_capacity(snapshot_name.len());
+    for character in snapshot_name.replace("::", "__").chars() {
+        if matches!(
+            character,
+            '\0'..='\u{1f}' | '%' | '"' | '*' | '/' | ':' | '<' | '>' | '?' | '\\' | '|'
+        ) {
+            let _ = write!(escaped_name, "%{:02X}", u32::from(character));
+        } else {
+            escaped_name.push(character);
+        }
+    }
+    dir.join(format!("{module_name}__{escaped_name}.snap"))
 }
 
 /// Return the path to a pending snapshot file (`.snap.new`).
@@ -626,6 +634,20 @@ mod tests {
         assert_ne!(backslash, underscore);
         assert_ne!(backslash, escaped);
         assert_ne!(underscore, escaped);
+    }
+
+    #[test]
+    fn snapshot_path_escapes_windows_reserved_characters() {
+        let path = snapshot_path(
+            Utf8Path::new("tests/test_example.py"),
+            "test_example",
+            "TestClass::test_foo(a<b>c:d\"e|f?g*h\0\u{1f}%3A)",
+        );
+
+        assert_eq!(
+            normalize_path(&path),
+            "tests/snapshots/test_example__TestClass__test_foo(a%3Cb%3Ec%3Ad%22e%7Cf%3Fg%2Ah%00%1F%253A).snap"
+        );
     }
 
     #[test]
