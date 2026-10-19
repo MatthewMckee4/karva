@@ -36,12 +36,7 @@ karva = "karva._karva:karva_run"
 karva-worker = "karva._karva:karva_worker_run"
 
 [dependency-groups]
-dev = [
-    "ruff>=0.16.1",
-    "ty>=0.0.65",
-]
 docs = ["zensical==0.0.67"]
-release = ["tbump"]
 
 [project.urls]
 Changelog = "https://github.com/MatthewMckee4/karva/blob/main/CHANGELOG.md"
