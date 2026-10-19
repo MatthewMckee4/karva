@@ -10,7 +10,7 @@ use crate::common::TestContext;
 
 /// Python 3.14 moved unraisable object details into `err_msg` and clears `object`.
 fn modern_unraisable() -> bool {
-    let version = std::env::var(ToolEnvVars::PYTHON_VERSION).unwrap_or_else(|_| "3.13".to_string());
+    let version = std::env::var(ToolEnvVars::PYTHON_VERSION).unwrap_or_else(|_| "3.15".to_string());
     version
         .split('.')
         .nth(1)

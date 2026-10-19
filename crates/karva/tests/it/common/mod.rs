@@ -53,7 +53,7 @@ impl TestContext {
         .expect("Path is not valid UTF-8");
 
         let python_version =
-            std::env::var(ToolEnvVars::PYTHON_VERSION).unwrap_or_else(|_| "3.13".to_string());
+            std::env::var(ToolEnvVars::PYTHON_VERSION).unwrap_or_else(|_| "3.15".to_string());
 
         let karva_wheel = karva_project::find_karva_wheel()
             .expect("Could not find karva wheel. Run `maturin build` before running tests.")
