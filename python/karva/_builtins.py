@@ -213,7 +213,7 @@ class _CapfdFixture:
 
 
 class BinaryCaptureResult(NamedTuple):
-    """Captured stdout and stderr from :fixture:`capsysbinary` / :fixture:`capfdbinary`."""
+    """Output from :fixture:`capsysbinary` / :fixture:`capfdbinary`."""
 
     out: bytes
     err: bytes
@@ -247,7 +247,7 @@ class _BinaryCaptureStream:
 
 
 class _CapsysBinaryDisabled:
-    """Context manager that temporarily restores real stdout/stderr during binary capture."""
+    """Temporarily restores real stdout/stderr during binary capture."""
 
     def __init__(
         self,

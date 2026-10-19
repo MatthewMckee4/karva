@@ -70,7 +70,7 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         import subprocess
 
-        completed_process = subprocess.run([karva, *sys.argv[1:]], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
+        completed_process = subprocess.run([karva, *sys.argv[1:]], check=True)
         sys.exit(completed_process.returncode)
     else:
-        os.execvp(karva, [karva, *sys.argv[1:]])  # ruff: ignore[start-process-with-no-shell]
+        os.execvp(karva, [karva, *sys.argv[1:]])

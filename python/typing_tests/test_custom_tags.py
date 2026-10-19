@@ -1,3 +1,5 @@
+"""Check that custom tags preserve decorated function signatures."""
+
 from typing import assert_type
 
 import karva

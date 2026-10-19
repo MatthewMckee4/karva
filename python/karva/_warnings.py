@@ -34,7 +34,8 @@ def parse_filter(value: str) -> tuple[Action, str, type[Warning], str, int]:
             ) from error
         if not isinstance(category, type) or not issubclass(category, Warning):
             raise ValueError(
-                f"invalid warning filter {value!r}: {category_name!r} is not a warning category"
+                f"invalid warning filter {value!r}: "
+                f"{category_name!r} is not a warning category"
             )
     return action, message, category, module, lineno
 

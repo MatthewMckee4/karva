@@ -167,11 +167,13 @@ class WarningsChecker(WarningsRecorder):
             ):
                 raise AssertionError(
                     "DID NOT WARN. No warnings of type "
-                    f"{self.expected_warning} were emitted.\n Emitted warnings: {emitted}."
+                    f"{self.expected_warning} were emitted.\n"
+                    f" Emitted warnings: {emitted}."
                 )
             if not any(self.matches(warning) for warning in self):
                 raise AssertionError(
-                    f"Regex pattern {self.match_expr!r} did not match any emitted warning.\n"
+                    f"Regex pattern {self.match_expr!r} "
+                    "did not match any emitted warning.\n"
                     f" Emitted warnings: {emitted}."
                 )
         finally:

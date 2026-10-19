@@ -183,7 +183,8 @@ class TempPathFactory:
                     )
                 if rootdir_stat.st_uid != uid:
                     raise OSError(
-                        f"The temporary directory {rootdir} is not owned by the current user. "
+                        f"The temporary directory {rootdir} "
+                        "is not owned by the current user. "
                         "Fix this and try again."
                     )
                 if (rootdir_stat.st_mode & 0o077) != 0:
@@ -220,7 +221,7 @@ def get_user() -> str | None:
 
 
 def _get_user_id() -> int | None:
-    """Return the current process's real user id or None if it could not be determined."""
+    """Return the real user id, or None if it could not be determined."""
     if sys.platform == "win32" or sys.platform == "emscripten":
         return None
     ERROR = -1

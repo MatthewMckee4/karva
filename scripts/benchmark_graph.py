@@ -6,7 +6,7 @@
 # ]
 # ///
 #
-# We hardcode these values from running the commands ourselves.
+"""Plot benchmark results measured by running the commands manually."""
 
 from pathlib import Path
 
