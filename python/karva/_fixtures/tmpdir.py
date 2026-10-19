@@ -50,7 +50,7 @@ class LegacyPath(PlatformPath):
 
     @property
     def strpath(self) -> str:
-        """Return the path as a string."""
+        """The path as a string."""
         return str(self)
 
     def join(self, *parts: str | os.PathLike[str]) -> LegacyPath:

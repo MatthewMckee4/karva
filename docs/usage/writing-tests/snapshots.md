@@ -9,6 +9,7 @@ Use `karva.assert_snapshot()` to capture a value as a snapshot.
 ```python title="test.py"
 import karva
 
+
 def test_greeting():
     karva.assert_snapshot("hello world")
 ```
@@ -27,6 +28,7 @@ For structured data like dicts and lists, use `karva.assert_json_snapshot()` for
 
 ```python title="test.py"
 import karva
+
 
 def test_data():
     data = {"users": ["Alice", "Bob"], "count": 2}
@@ -50,6 +52,7 @@ The snapshot stores:
 ```python title="test.py"
 import karva
 
+
 def test_inline():
     karva.assert_json_snapshot({"a": 1}, inline='{\n  "a": 1\n}')
 ```
@@ -63,6 +66,7 @@ Use `karva.Command` to capture the stdout, stderr, and exit code of an external 
 ```python title="test.py"
 import sys
 import karva
+
 
 def test_echo():
     cmd = karva.Command(sys.executable).args(["-c", "print('hello world')"])
@@ -86,6 +90,7 @@ hello world
 ```python title="test.py"
 import sys
 import karva
+
 
 def test_command():
     cmd = (
@@ -112,6 +117,7 @@ Available methods:
 import sys
 import karva
 
+
 def test_stdin():
     cmd = (
         karva.Command(sys.executable)
@@ -133,6 +139,7 @@ Command snapshots normalize CRLF line endings to LF. Other terminal-dependent fo
 import sys
 
 import karva
+
 
 def test_help():
     command = karva.Command(sys.executable).args(["-m", "app", "--help"])
@@ -156,6 +163,7 @@ Use the `name` parameter to give each snapshot a distinct name:
 ```python title="test.py"
 import karva
 
+
 def test_page():
     karva.assert_snapshot("<h1>Title</h1>", name="header")
     karva.assert_snapshot("<p>Body text</p>", name="body")
@@ -172,6 +180,7 @@ Alternatively, wrap the calls in `snapshot_settings(allow_duplicates=True)` to o
 
 ```python title="test.py"
 import karva
+
 
 def test_page():
     with karva.snapshot_settings(allow_duplicates=True):
@@ -202,6 +211,7 @@ Instead of storing expected values in separate `.snap` files, inline snapshots e
 ```python title="test.py"
 import karva
 
+
 def test_greeting():
     karva.assert_snapshot("hello world", inline="hello world")
 ```
@@ -210,6 +220,7 @@ To create a new inline snapshot, pass an empty string and run with `--snapshot-u
 
 ```python title="test.py"
 import karva
+
 
 def test_greeting():
     karva.assert_snapshot("hello world", inline="")
@@ -230,12 +241,16 @@ For multiline values, Karva generates a triple-quoted string:
 ```python title="test.py"
 import karva
 
+
 def test_lines():
-    karva.assert_snapshot("line 1\nline 2\nline 3", inline="""\
+    karva.assert_snapshot(
+        "line 1\nline 2\nline 3",
+        inline="""\
         line 1
         line 2
         line 3
-    """)
+    """,
+    )
 ```
 
 ### Accept Workflow
@@ -353,6 +368,7 @@ Snapshot testing works with parametrized tests. Each parameter combination gets 
 ```python title="test.py"
 import karva
 
+
 @karva.tags.parametrize("name", ["Alice", "Bob"])
 def test_greet(name):
     karva.assert_snapshot(f"Hello, {name}!")
@@ -367,6 +383,7 @@ Named snapshots in parametrized tests combine both:
 
 ```python title="test.py"
 import karva
+
 
 @karva.tags.parametrize("lang", ["en", "fr"])
 def test_translate(lang):
@@ -385,11 +402,14 @@ Snapshot output often contains non-deterministic values like timestamps, UUIDs, 
 ```python title="test.py"
 import karva
 
+
 def test_api_response():
-    with karva.snapshot_settings(filters=[
-        (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", "[timestamp]"),
-        (r"[0-9a-f-]{36}", "[uuid]"),
-    ]):
+    with karva.snapshot_settings(
+        filters=[
+            (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", "[timestamp]"),
+            (r"[0-9a-f-]{36}", "[uuid]"),
+        ]
+    ):
         karva.assert_snapshot(get_response())
 ```
 
@@ -402,11 +422,14 @@ When multiple filters are provided, they are applied in order. Earlier filters m
 ```python title="test.py"
 import karva
 
+
 def test_log_entry():
-    with karva.snapshot_settings(filters=[
-        (r"\d{4}-\d{2}-\d{2}", "[date]"),
-        (r"\d+ms", "[duration]"),
-    ]):
+    with karva.snapshot_settings(
+        filters=[
+            (r"\d{4}-\d{2}-\d{2}", "[date]"),
+            (r"\d+ms", "[duration]"),
+        ]
+    ):
         karva.assert_snapshot("2024-01-15: request completed in 42ms")
 ```
 
@@ -418,6 +441,7 @@ Settings can be nested. Inner filters are appended to outer filters, so all filt
 
 ```python title="test.py"
 import karva
+
 
 def test_complex_output():
     with karva.snapshot_settings(filters=[(r"\d+ms", "[duration]")]):
@@ -433,6 +457,7 @@ Filters also work with inline snapshots. The filtered value is what gets compare
 
 ```python title="test.py"
 import karva
+
 
 def test_inline_filtered():
     with karva.snapshot_settings(filters=[(r"\d{4}-\d{2}-\d{2}", "[date]")]):

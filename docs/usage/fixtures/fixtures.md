@@ -9,9 +9,11 @@ Define a fixture using the `@karva.fixture` decorator:
 ```py title="test.py"
 import karva
 
+
 @karva.fixture
 def database_connection():
     return create_connection()
+
 
 def test_query(database_connection):
     result = database_connection.execute("SELECT 1")
@@ -29,13 +31,16 @@ The fixture is created and destroyed for each test function that uses it:
 ```py title="test.py"
 import karva
 
+
 @karva.fixture
 def counter():
     return {"count": 0}
 
+
 def test_first(counter):
     counter["count"] += 1
     assert counter["count"] == 1
+
 
 def test_second(counter):
     # Fresh instance, count is 0 again
@@ -48,6 +53,7 @@ The fixture is created once per test module and shared across all tests in that 
 
 ```py title="test.py"
 import karva
+
 
 @karva.fixture(scope="module")
 def shared_resource():
@@ -73,6 +79,7 @@ tests/
 ```py title="tests/conftest.py"
 import karva
 
+
 @karva.fixture(scope="package")
 def package_resource():
     return create_resource()
@@ -87,6 +94,7 @@ The fixture is created once per worker and shared across its tests:
 ```py title="conftest.py"
 import karva
 
+
 @karva.fixture(scope="session")
 def global_config():
     return load_configuration()
@@ -100,10 +108,12 @@ The scope can be determined at runtime using a callable:
 import karva
 import os
 
+
 def determine_scope(fixture_name: str, config: object) -> str:
     if os.environ.get("CI"):
         return "session"
     return "function"
+
 
 @karva.fixture(scope=determine_scope)
 def adaptive_fixture():
@@ -119,13 +129,16 @@ Fixtures request other fixtures by argument name:
 ```py title="conftest.py"
 import karva
 
+
 @karva.fixture
 def base_url():
     return "https://api.example.com"
 
+
 @karva.fixture
 def api_client(base_url):
     return APIClient(base_url)
+
 
 @karva.fixture
 def authenticated_client(api_client):
@@ -147,11 +160,13 @@ Use generator fixtures to implement teardown logic. Code after `yield` executes 
 import karva
 import shutil
 
+
 @karva.fixture
 def database():
     db = create_database()
     yield db
     db.close()
+
 
 @karva.fixture(scope="module")
 def temp_directory():
@@ -167,6 +182,7 @@ Auto-use fixtures run for tests in their scope without being requested:
 ```py title="conftest.py"
 import karva
 import logging
+
 
 @karva.fixture(auto_use=True)
 def setup_logging():
@@ -186,6 +202,7 @@ For session setup and teardown:
 ```py title="conftest.py"
 import karva
 
+
 @karva.fixture(scope="session", auto_use=True)
 def database_migrations():
     run_migrations()
@@ -200,11 +217,13 @@ The `use_fixtures` tag explicitly declares fixture dependencies when no return v
 ```py title="conftest.py"
 import karva
 
+
 @karva.fixture
 def setup_cache():
     initialize_cache()
     yield
     clear_cache()
+
 
 @karva.fixture
 def seed_data():
@@ -213,6 +232,7 @@ def seed_data():
 
 ```py title="test.py"
 import karva
+
 
 @karva.tags.use_fixtures("setup_cache", "seed_data")
 def test_cached_query():
@@ -227,6 +247,7 @@ Fixtures can be overridden in nested directories. The overriding fixture can ref
 ```py title="conftest.py"
 import karva
 
+
 @karva.fixture
 def username():
     return "default_user"
@@ -239,6 +260,7 @@ def test_default_user(username):
 
 ```py title="admin/conftest.py"
 import karva
+
 
 @karva.fixture
 def username(username):

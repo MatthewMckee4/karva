@@ -145,8 +145,8 @@ class _CapfdFixture:
         self._real_stderr = real_stderr
         self._saved_stdout_fd = os.dup(1)
         self._saved_stderr_fd = os.dup(2)
-        self._out_file: BinaryIO = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115
-        self._err_file: BinaryIO = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115
+        self._out_file: BinaryIO = tempfile.TemporaryFile(mode="w+b")  # ruff: ignore[open-file-with-context-handler]
+        self._err_file: BinaryIO = tempfile.TemporaryFile(mode="w+b")  # ruff: ignore[open-file-with-context-handler]
         os.dup2(self._out_file.fileno(), 1)
         os.dup2(self._err_file.fileno(), 2)
         self._stdout = io.TextIOWrapper(
@@ -418,8 +418,7 @@ def _capsys_impl() -> Generator[_CapsysFixture, None, None]:
     real_stderr = sys.stderr
     saved_disable: int = logging.root.manager.disable
     logging.disable(logging.NOTSET)
-    f = _CapsysFixture(real_stdout, real_stderr)
-    yield f
+    yield _CapsysFixture(real_stdout, real_stderr)
     sys.stdout = real_stdout
     sys.stderr = real_stderr
     logging.disable(saved_disable)
@@ -448,8 +447,7 @@ def _capsysbinary_impl() -> Generator[_CapsysBinaryFixture, None, None]:
     real_stderr = sys.stderr
     saved_disable: int = logging.root.manager.disable
     logging.disable(logging.NOTSET)
-    f = _CapsysBinaryFixture(real_stdout, real_stderr)
-    yield f
+    yield _CapsysBinaryFixture(real_stdout, real_stderr)
     sys.stdout = real_stdout
     sys.stderr = real_stderr
     logging.disable(saved_disable)

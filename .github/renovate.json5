@@ -24,7 +24,7 @@
     },
     {
       "enabled": false,
-      "matchCurrentValue": "3.10",
+      "matchCurrentValue": "3.11",
       "matchDepNames": ["python"],
       "matchManagers": ["github-actions"]
     },

@@ -91,9 +91,9 @@ class WarningsRecorder(warnings.catch_warnings):
         if self._entered:
             __tracebackhide__ = True
             raise RuntimeError(f"Cannot enter {self!r} twice")
-        _list = super().__enter__()
-        assert _list is not None
-        self._list = _list
+        recorded_warnings = super().__enter__()
+        assert recorded_warnings is not None
+        self._list = recorded_warnings
         warnings.simplefilter("always")
         return self
 

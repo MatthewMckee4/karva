@@ -18,15 +18,7 @@ def find_karva_bin() -> str:
     if scripts_path.is_file():
         return str(scripts_path)
 
-    if sys.version_info >= (3, 10):
-        user_scheme = sysconfig.get_preferred_scheme("user")
-    elif os.name == "nt":
-        user_scheme = "nt_user"
-    elif sys.platform == "darwin" and sys._framework:
-        user_scheme = "osx_framework_user"
-    else:
-        user_scheme = "posix_user"
-
+    user_scheme = sysconfig.get_preferred_scheme("user")
     user_path = Path(sysconfig.get_path("scripts", scheme=user_scheme)) / karva_exe
     if user_path.is_file():
         return str(user_path)
@@ -78,7 +70,7 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         import subprocess
 
-        completed_process = subprocess.run([karva, *sys.argv[1:]], check=True)  # noqa: S603
+        completed_process = subprocess.run([karva, *sys.argv[1:]], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
         sys.exit(completed_process.returncode)
     else:
-        os.execvp(karva, [karva, *sys.argv[1:]])  # noqa: S606
+        os.execvp(karva, [karva, *sys.argv[1:]])  # ruff: ignore[start-process-with-no-shell]

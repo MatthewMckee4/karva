@@ -41,6 +41,7 @@ together on one worker:
 ```python
 values = [1, 2, 3]
 
+
 @karva.tags.parametrize("value", values)
 def test_value(value):
     pass
@@ -54,6 +55,7 @@ Give each worker its own database, port, or directory using `KARVA_WORKER_ID`:
 
 ```python
 import os
+
 
 @karva.fixture(scope="session")
 def database_url():

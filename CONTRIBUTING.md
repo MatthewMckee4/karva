@@ -20,7 +20,7 @@ reports, feature proposals, and documentation problems.
 Build the [Zensical](https://zensical.org/) documentation:
 
 ```sh
-uv run --isolated --only-group docs zensical build
+uvx zensical build
 ```
 
 Run the documentation generator after changing configuration options, CLI

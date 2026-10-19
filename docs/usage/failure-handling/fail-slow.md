@@ -11,6 +11,7 @@ import time
 
 import karva
 
+
 @karva.tags.fail_slow(0.25)
 def test_index_lookup():
     time.sleep(0.5)  # fails: exceeded its 0.25s budget

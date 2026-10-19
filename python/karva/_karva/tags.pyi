@@ -36,14 +36,14 @@ def use_fixtures(*fixture_names: str) -> Tags:
 @overload
 def skip(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
 @overload
-def skip(*conditions: bool, reason: str | None = ...) -> Tags:  # noqa: D418
+def skip(*conditions: bool, reason: str | None = ...) -> Tags:  # ruff: ignore[overload-with-docstring]
     """Skip the current test given the conditions."""
 
 
 @overload
 def expect_fail(f: Callable[_P, _T]) -> TestFunction[_P, _T]: ...
 @overload
-def expect_fail(  # noqa: D418
+def expect_fail(  # ruff: ignore[overload-with-docstring]
     *conditions: bool,
     reason: str | None = ...,
     raises: type[BaseException] | tuple[type[BaseException], ...] | None = ...,

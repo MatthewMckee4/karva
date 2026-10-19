@@ -6,6 +6,7 @@ test as a failure.
 ```python title="test.py"
 import karva
 
+
 @karva.tags.expect_fail(reason="Waiting for the export fix")
 def test_export():
     assert False  # Replace with an assertion for the known bug.
@@ -24,6 +25,7 @@ Pass boolean conditions to expect failure when any condition is true:
 ```python title="test.py"
 import sys
 import karva
+
 
 @karva.tags.expect_fail(sys.platform == "win32", reason="Known Windows bug")
 def test_export():
@@ -55,6 +57,7 @@ expected failures.
 
 ```python title="test.py"
 import pytest
+
 
 @pytest.mark.xfail(reason="Known bug")
 def test_export():

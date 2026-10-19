@@ -1,5 +1,7 @@
 Karva is available as [`karva`](https://pypi.org/project/karva/) on PyPI.
 
+Karva requires Python 3.11 or newer.
+
 Use karva directly with `uvx`:
 
 ```bash

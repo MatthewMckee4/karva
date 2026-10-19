@@ -7,8 +7,10 @@ It uses pytest's defaults: relative tolerance `1e-6` and absolute tolerance
 ```python title="test.py"
 import karva
 
+
 def test_total():
     assert 0.1 + 0.2 == karva.approx(0.3)
+
 
 def test_coordinates():
     assert [0.1000001, 0.2] == karva.approx([0.1, 0.2], rel=1e-5)
@@ -34,6 +36,7 @@ If you want to skip a test when its running, use `karva.skip()`.
 ```python title="test.py"
 import karva
 
+
 def test_function():
     karva.skip()
 ```
@@ -43,8 +46,10 @@ You can optionally provide a reason for skipping the test by passing it as an ar
 ```python title="test.py"
 import karva
 
+
 def test_function():
     karva.skip("This test is not ready yet")
+
 
 def test_function2():
     karva.skip(reason="This test is not ready yet")
@@ -63,6 +68,7 @@ import karva
 
 numpy = karva.importorskip("numpy")
 
+
 def test_array():
     assert numpy.array([1, 2]).tolist() == [1, 2]
 ```
@@ -78,6 +84,7 @@ If you want to fail a test when its running, use `karva.fail()`.
 ```python title="test.py"
 import karva
 
+
 def test_function():
     karva.fail()
 ```
@@ -87,8 +94,10 @@ You can optionally provide a reason for failing the test by passing it as an arg
 ```python title="test.py"
 import karva
 
+
 def test_function():
     karva.fail("This test is not ready yet")
+
 
 def test_function2():
     karva.fail(reason="This test is not ready yet")
@@ -105,6 +114,7 @@ If you want to assert that a block of code raises a specific exception, use `kar
 ```python title="test.py"
 import karva
 
+
 def test_function():
     with karva.raises(ValueError):
         raise ValueError("something went wrong")
@@ -114,6 +124,7 @@ You can optionally provide a `match` parameter to match a regex pattern against 
 
 ```python title="test.py"
 import karva
+
 
 def test_function():
     with karva.raises(ValueError, match="something"):
@@ -128,6 +139,7 @@ Use `check` to validate structured exception attributes after the type and
 import errno
 import karva
 
+
 def test_permission_error():
     with karva.raises(OSError, check=lambda error: error.errno == errno.EACCES):
         raise OSError(errno.EACCES, "permission denied")
@@ -137,6 +149,7 @@ You can access the exception info by using the `as` keyword. The returned object
 
 ```python title="test.py"
 import karva
+
 
 def test_function():
     with karva.raises(ValueError) as exc_info:
