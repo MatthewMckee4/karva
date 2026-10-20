@@ -146,63 +146,68 @@ impl EventDispatcher {
             let Some(message) = server.try_recv()? else {
                 break;
             };
-            let worker_id = message.worker_id;
-            if !self.expected_workers.contains(&worker_id) {
-                anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
+            self.dispatch_event(message.worker_id, *message.event)?;
+        }
+        Ok(())
+    }
+
+    /// Applies one event in reader order. Events from completed or retired
+    /// generations are rejected before they can change run state.
+    fn dispatch_event(&mut self, worker_id: usize, event: WorkerEvent) -> Result<()> {
+        if !self.expected_workers.contains(&worker_id) {
+            anyhow::bail!("unknown Karva worker {worker_id} sent a controller event");
+        }
+        if self.completed_workers.contains(&worker_id) {
+            anyhow::bail!("Karva worker {worker_id} sent an event after completing");
+        }
+        match event {
+            WorkerEvent::Warning(warning) => self.results.warnings.push(warning),
+            WorkerEvent::TestSlow => self.results.register_slow_test(),
+            WorkerEvent::TestTimedOut {
+                cache_key,
+                result,
+                fail_on_flaky,
+                junit_fail_on_flaky,
+            } => {
+                if self
+                    .timed_out_workers
+                    .insert(
+                        worker_id,
+                        TimedOutWorker {
+                            cache_key,
+                            result: *result,
+                            fail_on_flaky,
+                            junit_fail_on_flaky,
+                        },
+                    )
+                    .is_some()
+                {
+                    anyhow::bail!("Karva worker {worker_id} reported more than one hard timeout");
+                }
             }
-            match *message.event {
-                WorkerEvent::Warning(warning) => self.results.warnings.push(warning),
-                WorkerEvent::TestSlow => self.results.register_slow_test(),
-                WorkerEvent::TestTimedOut {
+            WorkerEvent::TestFinished { cache_key, result } => {
+                let result = if let Some(history) = self.timeout_history.remove(&cache_key) {
+                    Box::new(result.with_previous_attempts(
+                        history.attempts,
+                        history.next_attempt,
+                        history.max_attempts,
+                        history.fail_on_flaky,
+                        history.junit_fail_on_flaky,
+                    ))
+                } else {
+                    result
+                };
+                self.results.register_rendered_test_case(
                     cache_key,
-                    result,
-                    fail_on_flaky,
-                    junit_fail_on_flaky,
-                } => {
-                    if self
-                        .timed_out_workers
-                        .insert(
-                            worker_id,
-                            TimedOutWorker {
-                                cache_key,
-                                result: *result,
-                                fail_on_flaky,
-                                junit_fail_on_flaky,
-                            },
-                        )
-                        .is_some()
-                    {
-                        anyhow::bail!(
-                            "Karva worker {worker_id} reported more than one hard timeout"
-                        );
-                    }
-                }
-                WorkerEvent::TestFinished { cache_key, result } => {
-                    let result = if let Some(history) = self.timeout_history.remove(&cache_key) {
-                        Box::new(result.with_previous_attempts(
-                            history.attempts,
-                            history.next_attempt,
-                            history.max_attempts,
-                            history.fail_on_flaky,
-                            history.junit_fail_on_flaky,
-                        ))
-                    } else {
-                        result
-                    };
-                    self.results.register_rendered_test_case(
-                        cache_key,
-                        *result,
-                        matches!(self.result_retention, TestResultRetention::All),
-                    );
-                }
-                WorkerEvent::RunDiagnostic(diagnostic) => {
-                    self.results.add_rendered_run_diagnostic(diagnostic);
-                }
-                WorkerEvent::WorkerFinished => {
-                    if !self.completed_workers.insert(worker_id) {
-                        anyhow::bail!("Karva worker {worker_id} completed more than once");
-                    }
-                }
+                    *result,
+                    matches!(self.result_retention, TestResultRetention::All),
+                );
+            }
+            WorkerEvent::RunDiagnostic(diagnostic) => {
+                self.results.add_rendered_run_diagnostic(diagnostic);
+            }
+            WorkerEvent::WorkerFinished => {
+                self.completed_workers.insert(worker_id);
             }
         }
         Ok(())
@@ -363,11 +368,121 @@ impl EventDispatcher {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::time::Duration;
 
+    use karva_diagnostic::TestCaseResult;
+    use karva_ipc::WorkerEvent;
     use karva_python_semantic::TestCacheKey;
+    use rstest::rstest;
 
     use super::EventDispatcher;
+
+    fn passed_event(worker_id: usize) -> WorkerEvent {
+        let name = format!("test_worker_{worker_id}");
+        WorkerEvent::TestFinished {
+            cache_key: TestCacheKey::function_name(&format!("test_module::{name}")),
+            result: Box::new(TestCaseResult::passed(
+                "test_module".to_string(),
+                name,
+                Duration::from_millis(1),
+            )),
+        }
+    }
+
+    // Every interleaving of two workers, each sending a result then completion.
+    #[rstest]
+    #[case([0, 0, 1, 1])]
+    #[case([0, 1, 0, 1])]
+    #[case([0, 1, 1, 0])]
+    #[case([1, 0, 0, 1])]
+    #[case([1, 0, 1, 0])]
+    #[case([1, 1, 0, 0])]
+    fn worker_interleavings_preserve_results_and_completion(#[case] schedule: [usize; 4]) {
+        let mut dispatcher = EventDispatcher::default();
+        dispatcher.register_worker(0);
+        dispatcher.register_worker(1);
+        let mut progress = [0; 2];
+        for worker_id in schedule {
+            let event = if progress[worker_id] == 0 {
+                passed_event(worker_id)
+            } else {
+                WorkerEvent::WorkerFinished
+            };
+            dispatcher
+                .dispatch_event(worker_id, event)
+                .expect("valid event");
+            progress[worker_id] += 1;
+
+            assert_eq!(
+                dispatcher.results.stats().passed(),
+                progress.iter().filter(|&&count| count > 0).count()
+            );
+            assert_eq!(
+                dispatcher.completed_workers,
+                progress
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(id, &count)| (count == 2).then_some(id))
+                    .collect::<HashSet<_>>()
+            );
+        }
+        assert_eq!(dispatcher.completed_test_keys().len(), 2);
+    }
+
+    #[rstest]
+    fn completed_worker_cannot_change_run_state(
+        #[values(WorkerEvent::TestSlow, WorkerEvent::WorkerFinished, passed_event(0))]
+        event: WorkerEvent,
+    ) {
+        let mut dispatcher = EventDispatcher::default();
+        dispatcher.register_worker(0);
+        dispatcher.register_worker(1);
+        dispatcher
+            .dispatch_event(0, WorkerEvent::WorkerFinished)
+            .expect("complete first worker");
+        let error = dispatcher
+            .dispatch_event(0, event)
+            .expect_err("reject late event");
+
+        assert_eq!(
+            error.to_string(),
+            "Karva worker 0 sent an event after completing"
+        );
+        assert_eq!(dispatcher.results.stats().slow(), 0);
+        assert_eq!(dispatcher.results.stats().total(), 0);
+        assert!(dispatcher.completed_test_keys().is_empty());
+        assert_eq!(dispatcher.completed_workers, HashSet::from([0]));
+        dispatcher
+            .dispatch_event(1, passed_event(1))
+            .expect("other worker remains active");
+        assert_eq!(dispatcher.results.stats().passed(), 1);
+    }
+
+    #[rstest]
+    fn unknown_or_retired_worker_cannot_commit_results(#[values(false, true)] retired: bool) {
+        let mut dispatcher = EventDispatcher::default();
+        if retired {
+            dispatcher.register_worker(0);
+            dispatcher.abandon_worker(0);
+        }
+        dispatcher.register_worker(1);
+
+        let error = dispatcher
+            .dispatch_event(0, passed_event(0))
+            .expect_err("reject stale generation");
+
+        assert_eq!(
+            error.to_string(),
+            "unknown Karva worker 0 sent a controller event"
+        );
+        assert!(dispatcher.completed_test_keys().is_empty());
+        assert_eq!(dispatcher.results.stats().total(), 0);
+        dispatcher
+            .dispatch_event(1, passed_event(1))
+            .expect("replacement result");
+        assert_eq!(dispatcher.results.stats().passed(), 1);
+    }
 
     #[test]
     fn crashed_test_is_not_committed_until_recovery_finishes() {
