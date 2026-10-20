@@ -1,6 +1,78 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
 use insta_cmd::assert_cmd_snapshot;
+use karva_cache::{read_recent_durations, write_durations};
+use karva_python_semantic::TestCacheKey;
+use rstest::rstest;
 
 use crate::common::TestContext;
+
+#[rstest]
+fn focused_run_preserves_other_test_durations(#[values(false, true)] no_cache: bool) {
+    let context = TestContext::with_file(
+        "test_a.py",
+        "def test_selected(): pass\ndef test_other(): pass\n",
+    );
+    let cache_dir = context.root().join(".karva_cache");
+    let selected = TestCacheKey::function_name("test_a::test_selected");
+    let other = TestCacheKey::function_name("test_a::test_other");
+    let history = HashMap::from([
+        (selected.clone(), Duration::from_secs(100)),
+        (other.clone(), Duration::from_secs(200)),
+    ]);
+    write_durations(&cache_dir, &history).expect("seed duration history");
+
+    let mut command = context.command_no_parallel();
+    command.args(["test_a.py::test_selected", "--status-level=none"]);
+    if no_cache {
+        command.arg("--no-cache");
+    }
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+
+    let updated = read_recent_durations(&cache_dir).expect("read duration history");
+    assert_eq!(updated.len(), history.len());
+    assert_eq!(updated[&other], history[&other]);
+    if no_cache {
+        assert_eq!(updated, history);
+    } else {
+        assert_ne!(updated[&selected], history[&selected]);
+    }
+}
+
+#[test]
+fn filtered_out_tests_preserve_duration_history() {
+    let context = TestContext::with_file("test_a.py", "def test_a(): pass\n");
+    let cache_dir = context.root().join(".karva_cache");
+    let history = HashMap::from([(
+        TestCacheKey::function_name("test_a::test_a"),
+        Duration::from_secs(100),
+    )]);
+    write_durations(&cache_dir, &history).expect("seed duration history");
+
+    assert_cmd_snapshot!(context.command_no_parallel().args(["-E", "test(~missing)", "--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+
+    assert_eq!(
+        read_recent_durations(&cache_dir).expect("read duration history"),
+        history
+    );
+}
 
 #[test]
 fn prune_removes_all_but_most_recent() {
