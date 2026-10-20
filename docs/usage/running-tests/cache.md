@@ -29,6 +29,19 @@ uv run karva test --watch --last-failed
 
 If the last run had no failures, `--last-failed` runs nothing.
 
+## Running failures first
+
+Use `--failed-first` (or `--ff`) to run previous failures before the remaining
+selected tests:
+
+```bash
+uv run karva test --failed-first
+```
+
+Within each worker, cached failures with shorter durations run first to provide
+earlier feedback. The remaining tests run longest first. Tests without duration
+history lead each group, and equal durations preserve their scheduling order.
+
 ## Disabling the cache
 
 `--no-cache` disables reading and writing reusable test history for the current run. Tests are scheduled without duration hints and `--last-failed` becomes a no-op. Coverage artifacts are still written when coverage is enabled.

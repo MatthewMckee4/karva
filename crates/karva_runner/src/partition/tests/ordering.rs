@@ -103,12 +103,14 @@ fn seeded_partitioning_reproduces_worker_assignment_and_order() {
 }
 
 #[test]
-fn failed_first_preserves_unknown_duration_priority_and_equal_duration_order() {
+fn failed_first_runs_short_failures_first_and_preserves_other_priorities() {
     let mut partition = Partition::new();
     for name in [
         "test_module::test_pass_tie_b",
         "test_module::test_pass_slow",
+        "test_module::test_fail_slow",
         "test_module::test_fail_fast",
+        "test_module::test_fail_tie",
         "test_module::test_pass_unknown",
         "test_module::test_fail_unknown",
         "test_module::test_pass_tie_a",
@@ -117,9 +119,19 @@ fn failed_first_preserves_unknown_duration_priority_and_equal_duration_order() {
     }
     let failed = HashSet::from([
         TestCacheKey::function_name("test_module::test_fail_fast"),
+        TestCacheKey::function_name("test_module::test_fail_slow"),
+        TestCacheKey::function_name("test_module::test_fail_tie"),
         TestCacheKey::function_name("test_module::test_fail_unknown"),
     ]);
     let durations = HashMap::from([
+        (
+            TestCacheKey::function_name("test_module::test_fail_slow"),
+            Duration::from_millis(40),
+        ),
+        (
+            TestCacheKey::function_name("test_module::test_fail_tie"),
+            Duration::from_millis(1),
+        ),
         (
             TestCacheKey::function_name("test_module::test_pass_slow"),
             Duration::from_millis(30),
@@ -145,6 +157,8 @@ fn failed_first_preserves_unknown_duration_priority_and_equal_duration_order() {
         [
             "test_module::test_fail_unknown",
             "test_module::test_fail_fast",
+            "test_module::test_fail_tie",
+            "test_module::test_fail_slow",
             "test_module::test_pass_unknown",
             "test_module::test_pass_slow",
             "test_module::test_pass_tie_b",
