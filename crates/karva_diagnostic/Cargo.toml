@@ -10,9 +10,6 @@ repository.workspace = true
 authors.workspace = true
 license.workspace = true
 
-[features]
-traceback = ["pyo3"]
-
 [dependencies]
 annotate-snippets = { workspace = true }
 karva_logging = { workspace = true }
@@ -20,7 +17,6 @@ karva_python_semantic = { workspace = true }
 
 camino = { workspace = true }
 colored = { workspace = true }
-pyo3 = { workspace = true, optional = true }
 ruff_source_file = { workspace = true }
 ruff_text_size = { workspace = true }
 serde = { workspace = true }
@@ -28,10 +24,8 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-indoc = { workspace = true }
 insta = { workspace = true }
 rstest = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true
