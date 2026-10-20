@@ -31,8 +31,10 @@ karva_project = { path = "crates/karva_project" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
 karva_snapshot = { path = "crates/karva_snapshot" }
+karva_snapshot_review = { path = "crates/karva_snapshot_review" }
 karva_static = { path = "crates/karva_static" }
 karva_test_semantic = { path = "crates/karva_test_semantic" }
+karva_traceback = { path = "crates/karva_traceback" }
 karva_version = { path = "crates/karva_version" }
 karva_worker = { path = "crates/karva_worker" }
 

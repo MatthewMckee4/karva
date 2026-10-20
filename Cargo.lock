@@ -1023,6 +1023,7 @@ dependencies = [
  "karva_python_semantic",
  "karva_runner",
  "karva_snapshot",
+ "karva_snapshot_review",
  "karva_static",
  "karva_version",
  "lsp-server",
@@ -1201,17 +1202,14 @@ dependencies = [
  "annotate-snippets",
  "camino",
  "colored",
- "indoc",
  "insta",
  "karva_logging",
  "karva_python_semantic",
- "pyo3",
  "rstest",
  "ruff_source_file",
  "ruff_text_size",
  "serde",
  "serde_json",
- "tempfile",
  "tracing",
 ]
 
@@ -1412,7 +1410,6 @@ dependencies = [
  "annotate-snippets",
  "camino",
  "colored",
- "console",
  "fs-err",
  "indoc",
  "insta",
@@ -1420,6 +1417,17 @@ dependencies = [
  "similar 3.1.1",
  "tempfile",
  "terminal_size",
+]
+
+[[package]]
+name = "karva_snapshot_review"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "colored",
+ "console",
+ "karva_snapshot",
+ "tempfile",
 ]
 
 [[package]]
@@ -1443,6 +1451,7 @@ dependencies = [
  "karva_python_semantic",
  "karva_snapshot",
  "karva_static",
+ "karva_traceback",
  "pyo3",
  "ruff_macros",
  "ruff_python_ast",
@@ -1451,6 +1460,21 @@ dependencies = [
  "ruff_source_file",
  "ruff_text_size",
  "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "karva_traceback"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "indoc",
+ "insta",
+ "pyo3",
+ "rstest",
+ "ruff_source_file",
+ "ruff_text_size",
+ "tempfile",
  "tracing",
 ]
 
