@@ -559,7 +559,7 @@ impl Measurement {
         let deviation = self
             .median_absolute_deviation()
             .map_or_else(|| "—".to_string(), |value| metric.format_value(value));
-        format!("{} (MAD {deviation})", metric.format_value(self.median))
+        format!("{} ± {deviation}", metric.format_value(self.median))
     }
 }
 
@@ -1151,12 +1151,12 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     writeln!(body)?;
     write_project_table(&mut body, report.metric, &report.projects)?;
     writeln!(body)?;
-    writeln!(body, "</details>")?;
-    writeln!(body)?;
     writeln!(
         body,
-        "MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available."
+        "Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available."
     )?;
+    writeln!(body)?;
+    writeln!(body, "</details>")?;
 
     Ok(body)
 }
@@ -1770,11 +1770,11 @@ mod tests {
 
             |  | Mode | Benchmark | Base | Head | Change | Runs |
             | --- | --- | --- | ---: | ---: | ---: | ---: |
-            | :white_check_mark: | WallTime | `variable-project` | 2.000 s (MAD 1.000 s) | 2.000 s (MAD 0.0 ms) | +0.0% | 3 |
+            | :white_check_mark: | WallTime | `variable-project` | 2.000 s ± 1.000 s | 2.000 s ± 0.0 ms | +0.0% | 3 |
+
+            Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
             </details>
-
-            MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available.
             "),
             BenchmarkMetric::Memory => insta::assert_snapshot!(markdown, @"
             <!-- karva-memory-benchmark-comparison -->
@@ -1785,11 +1785,11 @@ mod tests {
 
             |  | Mode | Benchmark | Base | Head | Change | Runs |
             | --- | --- | --- | ---: | ---: | ---: | ---: |
-            | :white_check_mark: | Memory | `variable-project` | 2 KiB (MAD 1 KiB) | 2 KiB (MAD 0 KiB) | +0.0% | 3 |
+            | :white_check_mark: | Memory | `variable-project` | 2 KiB ± 1 KiB | 2 KiB ± 0 KiB | +0.0% | 3 |
+
+            Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
             </details>
-
-            MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available.
             "),
         }
     }
@@ -1821,21 +1821,21 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :zap: | WallTime | `faster-project` | 1.000 s (MAD —) | 940.0 ms (MAD —) | -6.0% | 21 |
-        | :x: | WallTime | `slower-project` | 1.000 s (MAD —) | 1.060 s (MAD —) | +6.0% | 15 |
+        | :zap: | WallTime | `faster-project` | 1.000 s ± — | 940.0 ms ± — | -6.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s ± — | 1.060 s ± — | +6.0% | 15 |
 
         <details>
         <summary>All benchmark scores</summary>
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :white_check_mark: | WallTime | `flat-project` | 1.000 s (MAD —) | 1.004 s (MAD —) | +0.4% | 21 |
-        | :zap: | WallTime | `faster-project` | 1.000 s (MAD —) | 940.0 ms (MAD —) | -6.0% | 21 |
-        | :x: | WallTime | `slower-project` | 1.000 s (MAD —) | 1.060 s (MAD —) | +6.0% | 15 |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s ± — | 1.004 s ± — | +0.4% | 21 |
+        | :zap: | WallTime | `faster-project` | 1.000 s ± — | 940.0 ms ± — | -6.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s ± — | 1.060 s ± — | +6.0% | 15 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
-
-        MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available.
         ");
     }
 
@@ -1854,11 +1854,11 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :white_check_mark: | WallTime | `flat-project` | 1.000 s (MAD —) | 1.004 s (MAD —) | +0.4% | 21 |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s ± — | 1.004 s ± — | +0.4% | 21 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
-
-        MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available.
         ");
     }
 
@@ -1905,18 +1905,18 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :warning: | WallTime | `expanded-project` | 1.000 s (MAD —) | 1.800 s (MAD —) | +80.0% | 7 |
+        | :warning: | WallTime | `expanded-project` | 1.000 s ± — | 1.800 s ± — | +80.0% | 7 |
 
         <details>
         <summary>All benchmark scores</summary>
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :warning: | WallTime | `expanded-project` | 1.000 s (MAD —) | 1.800 s (MAD —) | +80.0% | 7 |
+        | :warning: | WallTime | `expanded-project` | 1.000 s ± — | 1.800 s ± — | +80.0% | 7 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
-
-        MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available.
         ");
     }
 
@@ -1938,11 +1938,11 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :zap: | Memory | `memory-project` | 97.7 MiB (MAD —) | 87.9 MiB (MAD —) | -10.0% | 21 |
+        | :zap: | Memory | `memory-project` | 97.7 MiB ± — | 87.9 MiB ± — | -10.0% | 21 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
-
-        MAD is the median absolute deviation of the samples, a measure of spread, not a confidence interval. A dash means fewer than two samples are available.
         ");
     }
 
