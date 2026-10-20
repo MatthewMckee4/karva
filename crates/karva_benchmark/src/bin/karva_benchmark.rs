@@ -540,6 +540,27 @@ impl Measurement {
             values,
         }
     }
+
+    /// Unscaled median absolute deviation in the metric's native units.
+    /// A single sample cannot describe variation between process invocations.
+    fn median_absolute_deviation(&self) -> Option<f64> {
+        if self.values.len() < 2 {
+            return None;
+        }
+        let deviations = self
+            .values
+            .iter()
+            .map(|value| (value - self.median).abs())
+            .collect::<Vec<_>>();
+        Some(median(&deviations))
+    }
+
+    fn format(&self, metric: BenchmarkMetric) -> String {
+        let deviation = self
+            .median_absolute_deviation()
+            .map_or_else(|| "—".to_string(), |value| metric.format_value(value));
+        format!("{} ± {deviation}", metric.format_value(self.median))
+    }
 }
 
 fn selected_projects(names: &[String]) -> Result<Vec<&'static BenchmarkProject>> {
@@ -1130,6 +1151,11 @@ fn markdown_report(report: &ComparisonReport) -> std::result::Result<String, std
     writeln!(body)?;
     write_project_table(&mut body, report.metric, &report.projects)?;
     writeln!(body)?;
+    writeln!(
+        body,
+        "Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available."
+    )?;
+    writeln!(body)?;
     writeln!(body, "</details>")?;
 
     Ok(body)
@@ -1313,8 +1339,8 @@ fn write_project_table<'a>(
             project.trend_marker(),
             metric.mode_label(),
             project.name,
-            metric.format_value(project.baseline.median),
-            metric.format_value(project.candidate.median),
+            project.baseline.format(metric),
+            project.candidate.format(metric),
             format_percent(project.percent_change),
             project.iterations,
         )?;
@@ -1713,6 +1739,61 @@ mod tests {
         assert!(html.ends_with("</body></html>"));
     }
 
+    #[rstest]
+    #[case(vec![1.0], None)]
+    #[case(vec![2.0, 2.0, 2.0], Some(0.0))]
+    #[case(vec![4.0, 1.0, 3.0, 2.0], Some(1.0))]
+    #[case(vec![1.0, 2.0, 3.0, 1000.0, 2.0], Some(1.0))]
+    fn measurement_reports_sample_spread(#[case] values: Vec<f64>, #[case] expected: Option<f64>) {
+        assert_eq!(
+            Measurement::new(values).median_absolute_deviation(),
+            expected
+        );
+    }
+
+    #[rstest]
+    #[case(BenchmarkMetric::WallTime)]
+    #[case(BenchmarkMetric::Memory)]
+    fn markdown_report_shows_sample_variability(#[case] metric: BenchmarkMetric) {
+        let mut comparison = project("variable-project", 3, 2.0, 2.0);
+        comparison.baseline = Measurement::new(vec![1.0, 2.0, 3.0]);
+        comparison.candidate = Measurement::new(vec![2.0, 2.0, 2.0]);
+        let markdown = markdown_report(&report_with_metric(metric, vec![comparison]))
+            .expect("report should render");
+        match metric {
+            BenchmarkMetric::WallTime => insta::assert_snapshot!(markdown, @"
+            <!-- karva-benchmark-comparison -->
+            ### :white_check_mark: Merging this PR will not alter performance
+
+            <details>
+            <summary>All benchmark scores</summary>
+
+            |  | Mode | Benchmark | Base | Head | Change | Runs |
+            | --- | --- | --- | ---: | ---: | ---: | ---: |
+            | :white_check_mark: | WallTime | `variable-project` | 2.000 s ± 1.000 s | 2.000 s ± 0.0 ms | +0.0% | 3 |
+
+            Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
+
+            </details>
+            "),
+            BenchmarkMetric::Memory => insta::assert_snapshot!(markdown, @"
+            <!-- karva-memory-benchmark-comparison -->
+            ### :white_check_mark: Merging this PR will not alter memory usage
+
+            <details>
+            <summary>All benchmark scores</summary>
+
+            |  | Mode | Benchmark | Base | Head | Change | Runs |
+            | --- | --- | --- | ---: | ---: | ---: | ---: |
+            | :white_check_mark: | Memory | `variable-project` | 2 KiB ± 1 KiB | 2 KiB ± 0 KiB | +0.0% | 3 |
+
+            Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
+
+            </details>
+            "),
+        }
+    }
+
     #[test]
     fn markdown_report_renders_regressions() {
         let report = report_with_projects(vec![
@@ -1740,17 +1821,19 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :zap: | WallTime | `faster-project` | 1.000 s | 940.0 ms | -6.0% | 21 |
-        | :x: | WallTime | `slower-project` | 1.000 s | 1.060 s | +6.0% | 15 |
+        | :zap: | WallTime | `faster-project` | 1.000 s ± — | 940.0 ms ± — | -6.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s ± — | 1.060 s ± — | +6.0% | 15 |
 
         <details>
         <summary>All benchmark scores</summary>
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
-        | :zap: | WallTime | `faster-project` | 1.000 s | 940.0 ms | -6.0% | 21 |
-        | :x: | WallTime | `slower-project` | 1.000 s | 1.060 s | +6.0% | 15 |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s ± — | 1.004 s ± — | +0.4% | 21 |
+        | :zap: | WallTime | `faster-project` | 1.000 s ± — | 940.0 ms ± — | -6.0% | 21 |
+        | :x: | WallTime | `slower-project` | 1.000 s ± — | 1.060 s ± — | +6.0% | 15 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
         ");
@@ -1771,7 +1854,9 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :white_check_mark: | WallTime | `flat-project` | 1.000 s | 1.004 s | +0.4% | 21 |
+        | :white_check_mark: | WallTime | `flat-project` | 1.000 s ± — | 1.004 s ± — | +0.4% | 21 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
         ");
@@ -1820,14 +1905,16 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :warning: | WallTime | `expanded-project` | 1.000 s | 1.800 s | +80.0% | 7 |
+        | :warning: | WallTime | `expanded-project` | 1.000 s ± — | 1.800 s ± — | +80.0% | 7 |
 
         <details>
         <summary>All benchmark scores</summary>
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :warning: | WallTime | `expanded-project` | 1.000 s | 1.800 s | +80.0% | 7 |
+        | :warning: | WallTime | `expanded-project` | 1.000 s ± — | 1.800 s ± — | +80.0% | 7 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
         ");
@@ -1851,7 +1938,9 @@ mod tests {
 
         |  | Mode | Benchmark | Base | Head | Change | Runs |
         | --- | --- | --- | ---: | ---: | ---: | ---: |
-        | :zap: | Memory | `memory-project` | 97.7 MiB | 87.9 MiB | -10.0% | 21 |
+        | :zap: | Memory | `memory-project` | 97.7 MiB ± — | 87.9 MiB ± — | -10.0% | 21 |
+
+        Values are median ± median absolute deviation (MAD), which describes sample spread, not a confidence interval. A dash means fewer than two samples are available.
 
         </details>
         ");
