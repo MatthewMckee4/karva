@@ -1,11 +1,14 @@
+//! Interactive review of pending snapshots in the controller process.
+//!
+//! Depends on snapshot persistence without adding terminal review code to workers.
+
 use std::io::{self, BufRead, Write};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use colored::Colorize;
 use console::{Key, Term};
-
-use crate::diff::print_changeset;
-use crate::storage::{
+use karva_snapshot::diff::print_changeset;
+use karva_snapshot::storage::{
     PendingSnapshotInfo, accept_pending, accept_pending_batch, find_pending_snapshots,
     matches_snapshot_filter, read_snapshot, reject_pending,
 };

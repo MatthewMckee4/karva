@@ -1,3 +1,7 @@
+//! Extracts Python exception frames and source snapshots inside the worker.
+//!
+//! Diagnostic types and rendering remain independent of the embedded interpreter.
+
 use std::collections::HashMap;
 
 use camino::{Utf8Path, Utf8PathBuf};
