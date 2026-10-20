@@ -95,6 +95,7 @@ Tests can read `KARVA_ATTEMPT` (1-indexed) and `KARVA_TOTAL_ATTEMPTS` (`retries 
 ```python
 import os
 
+
 def test_eventual_consistency():
     attempt = int(os.environ["KARVA_ATTEMPT"])
     if attempt == 1:

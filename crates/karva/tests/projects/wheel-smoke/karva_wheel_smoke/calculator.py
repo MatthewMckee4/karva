@@ -1,3 +1,5 @@
+"""Example application exercised by the installed-wheel smoke tests."""
+
 from __future__ import annotations
 
 import warnings

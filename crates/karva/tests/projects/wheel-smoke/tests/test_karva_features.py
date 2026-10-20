@@ -1,3 +1,5 @@
+"""Exercise Karva's public features through an installed wheel."""
+
 from __future__ import annotations
 
 import os

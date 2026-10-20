@@ -91,9 +91,9 @@ class WarningsRecorder(warnings.catch_warnings):
         if self._entered:
             __tracebackhide__ = True
             raise RuntimeError(f"Cannot enter {self!r} twice")
-        _list = super().__enter__()
-        assert _list is not None
-        self._list = _list
+        recorded_warnings = super().__enter__()
+        assert recorded_warnings is not None
+        self._list = recorded_warnings
         warnings.simplefilter("always")
         return self
 
@@ -167,11 +167,13 @@ class WarningsChecker(WarningsRecorder):
             ):
                 raise AssertionError(
                     "DID NOT WARN. No warnings of type "
-                    f"{self.expected_warning} were emitted.\n Emitted warnings: {emitted}."
+                    f"{self.expected_warning} were emitted.\n"
+                    f" Emitted warnings: {emitted}."
                 )
             if not any(self.matches(warning) for warning in self):
                 raise AssertionError(
-                    f"Regex pattern {self.match_expr!r} did not match any emitted warning.\n"
+                    f"Regex pattern {self.match_expr!r} "
+                    "did not match any emitted warning.\n"
                     f" Emitted warnings: {emitted}."
                 )
         finally:

@@ -6,6 +6,7 @@ The `timeout` tag fails a test if it runs longer than the given number of second
 import karva
 import time
 
+
 @karva.tags.timeout(2.0)
 def test_function():
     time.sleep(5)  # Karva terminates this worker after 2 seconds

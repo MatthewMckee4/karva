@@ -32,6 +32,7 @@ class Calculator:
 ```python title="tests/test_add.py"
 from calculator import Calculator
 
+
 def test_add():
     calculator = Calculator()
     assert calculator.add(1, 2) == 3

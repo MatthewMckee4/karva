@@ -10,7 +10,7 @@ authors = [{ name = "Matthew Mckee", email = "matthewmckee04@yahoo.co.uk" }]
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.10,<3.16"
+requires-python = ">=3.11,<3.16"
 keywords = ["karva", "pytest", "rust", "testing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -19,7 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -34,14 +33,6 @@ classifiers = [
 [project.scripts]
 karva = "karva._karva:karva_run"
 karva-worker = "karva._karva:karva_worker_run"
-
-[dependency-groups]
-dev = [
-    "ruff>=0.16.1",
-    "ty>=0.0.65",
-]
-docs = ["zensical==0.0.67"]
-release = ["tbump"]
 
 [project.urls]
 Changelog = "https://github.com/MatthewMckee4/karva/blob/main/CHANGELOG.md"
@@ -69,14 +60,11 @@ cache-keys = [
 ]
 
 [tool.ruff]
-extension = { pyi = "python" }
 fix = true
 target-version = "py311"
 
 [tool.ruff.lint]
-exclude = [
-    "python/karva/__main__.py",
-]
+preview = true
 select = [
     "ARG",
     "B",
@@ -93,38 +81,26 @@ select = [
     "RUF",
     "SIM",
     "UP",
-    "PLW0127",
-    "FURB101",
-    "FURB103",
-    "PLW1510",
-]
-ignore = [
-    "D100",
-    # These are all enforced by, or incompatible with, the ruff formatter:
-    "E203",
-    "E501",
-    "W291",
-    "W293",
-    # It's often necessary to compare types instead of using isinstance()
-    "E721",
-    "RUF005",
-    # Let mypy/pyright complain about blanket type ignores or implicit optional
-    "PGH004",
-    "RUF013",
-    # Makes code slower and more verbose
-    # https://github.com/astral-sh/ruff/issues/7871
-    "UP038",
-
-    "S", "ANN401", "PYI021"
+    "self-assigning-variable",
+    "read-whole-file",
+    "write-whole-file",
+    "subprocess-run-without-check",
 ]
 unfixable = [
-    "F841",    # unused variable. ruff keeps the call, but mostly we want to get rid of it all
-    "F601",    # automatic fix might obscure issue
-    "F602",    # automatic fix might obscure issue
-    "B018",    # automatic fix might obscure issue
-    "PLW1510", # automatic fix might obscure issue
-    "RUF017",  # Ruff's fix is faster, but I prefer using itertools.chain_from_iterable
+    # Remove the entire unused expression rather than preserving its call.
+    "unused-variable",
+    # Automatic fixes might obscure the underlying issue.
+    "multi-value-repeated-key-literal",
+    "multi-value-repeated-key-variable",
+    "useless-expression",
+    "subprocess-run-without-check",
+    # Prefer itertools.chain.from_iterable.
+    "quadratic-list-summation",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Stub docstrings provide editor documentation for the native extension.
+"*.pyi" = ["docstring-in-stub"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

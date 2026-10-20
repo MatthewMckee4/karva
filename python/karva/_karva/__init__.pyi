@@ -11,10 +11,8 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _E = TypeVar("_E", bound=BaseException)
 
-
 def karva_run() -> int:
     """Run Karva using the current process arguments."""
-
 
 class FixtureFunctionMarker:
     """Mark a function as a fixture."""
@@ -25,13 +23,11 @@ class FixtureFunctionMarker:
     ) -> FixtureFunctionDefinition[_P, _T]:
         """Mark the function as a fixture."""
 
-
 class FixtureFunctionDefinition(Generic[_P, _T]):
     """Represent a registered fixture function."""
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T:
         """Call the underlying fixture function."""
-
 
 @overload
 def fixture(func: Callable[_P, _T]) -> FixtureFunctionDefinition[_P, _T]: ...
@@ -44,13 +40,11 @@ def fixture(
     auto_use: bool = ...,
 ) -> FixtureFunctionMarker: ...
 
-
 class TestFunction(Generic[_P, _T]):
     """Represent a registered test function."""
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T:
         """Call the underlying test function."""
-
 
 class Tags:
     """Decorate a test function with configured tags."""
@@ -58,14 +52,11 @@ class Tags:
     def __call__(self, f: Callable[_P, _T], /) -> Callable[_P, _T]:
         """Apply the tags to a test function."""
 
-
 def skip(reason: str | None = ...) -> NoReturn:
     """Skip the current test."""
 
-
 def fail(reason: str | None = ...) -> NoReturn:
     """Fail the current test."""
-
 
 class Param:
     """Represent values and tags for a parametrized test case."""
@@ -73,7 +64,6 @@ class Param:
     @property
     def values(self) -> list[object]:
         """The values to parameterize the test case with."""
-
 
 def param(
     *values: object,
@@ -105,7 +95,6 @@ def param(
         ```
     """
 
-
 class ExceptionInfo:
     """Stores information about a caught exception from `karva.raises`."""
 
@@ -121,7 +110,6 @@ class ExceptionInfo:
     def tb(self) -> object | None:
         """The traceback object."""
 
-
 class RaisesContext:
     """Context manager returned by `karva.raises`."""
 
@@ -135,7 +123,6 @@ class RaisesContext:
         exc_tb: types.TracebackType | None,
     ) -> bool:
         """Exit the exception assertion context."""
-
 
 def raises(
     expected_exception: type[_E],
@@ -154,7 +141,6 @@ def raises(
 
     """
 
-
 @overload
 def assert_snapshot(
     value: object,
@@ -179,7 +165,6 @@ def assert_json_snapshot(
     *,
     name: str,
 ) -> None: ...
-
 
 class Command:
     """Builder for running external commands in snapshot tests.
@@ -210,7 +195,6 @@ class Command:
     def stdin(self, data: str) -> Self:
         """Set the standard input data."""
 
-
 @overload
 def assert_cmd_snapshot(
     cmd: Command,
@@ -223,7 +207,6 @@ def assert_cmd_snapshot(
     *,
     name: str,
 ) -> None: ...
-
 
 class SnapshotSettings:
     """Context manager for scoped snapshot configuration.
@@ -251,7 +234,6 @@ class SnapshotSettings:
     ) -> bool:
         """Exit the snapshot settings context."""
 
-
 def snapshot_settings(
     *,
     filters: list[tuple[str, str]] | None = None,
@@ -266,18 +248,14 @@ def snapshot_settings(
 
     """
 
-
 class SkipError(Exception):
     """Raised when `karva.skip` is called."""
-
 
 class FailError(Exception):
     """Raised when `karva.fail` is called."""
 
-
 class SnapshotMismatchError(Exception):
     """Raised when a snapshot assertion fails."""
-
 
 class InvalidFixtureError(Exception):
     """Raised when an invalid fixture is encountered."""

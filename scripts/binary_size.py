@@ -29,7 +29,8 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
         (
             "Linux x86-64 release builds with the same Rust toolchain and Python 3.13. "
             "File size is measured after stripping symbols; `.text` is executable code "
-            "measured by cargo-bloat before stripping. Shared libraries (including Python) "
+            "measured by cargo-bloat before stripping. "
+            "Shared libraries (including Python) "
             "are excluded. Function attribution is approximate."
         ),
         "",
@@ -65,7 +66,8 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
             ),
         ):
             lines.append(
-                f"| `{binary}` | {label} | {size(base)} | {size(head)} | {change(base, head)} |"
+                f"| `{binary}` | {label} | {size(base)} | {size(head)} | "
+                f"{change(base, head)} |"
             )
         details.extend(["", f"### {binary}: largest functions", ""])
         for revision in ("head", "base"):
@@ -74,7 +76,8 @@ def render(directory: Path, base_sha: str, head_sha: str) -> str:
             for function in measurements[revision]["functions"]:
                 details.append(
                     html.escape(
-                        f"{function['size']:>10,}  {function.get('crate', '[Unknown]')}  "
+                        f"{function['size']:>10,}  "
+                        f"{function.get('crate', '[Unknown]')}  "
                         f"{function['name']}"
                     )
                 )

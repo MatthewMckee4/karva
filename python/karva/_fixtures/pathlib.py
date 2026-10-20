@@ -72,7 +72,8 @@ def on_rm_rf_error(
         if func not in (os.open,):
             warnings.warn(
                 UserWarning(
-                    f"(rm_rf) unknown function {func} when removing {path}:\n{type(exc)}: {exc}"
+                    f"(rm_rf) unknown function {func} when removing {path}:\n"
+                    f"{type(exc)}: {exc}"
                 ),
                 stacklevel=2,
             )

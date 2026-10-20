@@ -250,7 +250,8 @@ class MockEnv:
             warnings.warn(
                 UserWarning(
                     f"Value of environment variable {name} type should be str, but got "
-                    f"{value!r} (type: {type(value).__name__}); converted to str implicitly"
+                    f"{value!r} (type: {type(value).__name__}); "
+                    "converted to str implicitly"
                 ),
                 stacklevel=2,
             )

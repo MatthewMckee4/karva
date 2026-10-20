@@ -21,10 +21,15 @@ env:
   CARGO_TERM_COLOR: always
   # renovate: datasource=github-releases depName=astral-sh/hawk
   HAWK_VERSION: 0.1.15
-  # Keep this exact version preinstalled before nextest starts.
+  # Build abi3 wheels against the oldest supported Python.
+  MINIMUM_PYTHON_VERSION: "3.11"
+  # Main test interpreter; keep this exact version preinstalled before nextest starts.
   PYTHON_VERSION: "3.15.0"
   # Pin uv so CI does not depend on the mutable latest release manifest.
-  UV_VERSION: "0.13.0"
+  # renovate: datasource=pypi depName=uv
+  UV_VERSION: "0.13.2"
+  # renovate: datasource=pypi depName=zensical
+  ZENSICAL_VERSION: "0.0.71"
   RUSTUP_MAX_RETRIES: 10
   NEXTEST_PROFILE: ci
 
@@ -183,6 +188,8 @@ jobs:
 
       - name: "Install uv"
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: "Run clean Zed package smoke"
         run: |
@@ -270,7 +277,7 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: "Install integration test Python"
         run: uv python install "$PYTHON_VERSION"
@@ -280,7 +287,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: setup-python
         with:
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -323,7 +330,7 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: "Install integration test Python"
         run: uv python install "$PYTHON_VERSION"
@@ -333,7 +340,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: setup-python
         with:
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -387,7 +394,7 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: "Install integration test Python"
         run: uv python install "$PYTHON_VERSION"
@@ -397,7 +404,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: setup-python
         with:
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: "Download test archive"
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -439,7 +446,7 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -449,7 +456,7 @@ jobs:
       - name: Run wheel smoke project
         working-directory: crates/karva/tests/projects/wheel-smoke
         run: |
-          for python_version in 3.10 "$PYTHON_VERSION"; do
+          for python_version in "$MINIMUM_PYTHON_VERSION" "$PYTHON_VERSION"; do
             echo "Smoke-testing Python $python_version"
             uv venv --python "$python_version" --clear .venv
             uv pip install --python .venv/bin/python ../../../../../target/wheels/karva-*.whl
@@ -526,7 +533,7 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: "Install integration test Python"
         run: uv python install "$env:PYTHON_VERSION"
@@ -535,7 +542,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         id: setup-python
         with:
-          python-version: "3.10"
+          python-version: ${{ env.MINIMUM_PYTHON_VERSION }}
 
       - name: "Download test archive"
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -572,7 +579,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build docs
-        run: uv run --isolated --only-group docs zensical build
+        run: uvx "zensical==${ZENSICAL_VERSION}" build
 
   ci-gate:
     name: "CI gate"

@@ -32,11 +32,13 @@ The factory has two methods: `mktemp(name)` creates a fresh numbered subdirector
 ```py title="test.py"
 import karva
 
+
 @karva.fixture(scope="session")
 def shared_dir(tmp_path_factory):
     d = tmp_path_factory.mktemp("shared")
     (d / "data.txt").write_text("hello")
     return d
+
 
 def test_uses_shared_dir(shared_dir):
     assert (shared_dir / "data.txt").read_text() == "hello"
@@ -55,13 +57,16 @@ This fixture is compatible with pytest's `monkeypatch` fixture.
 ```py title="test.py"
 def test_setattr(monkeypatch):
     import os
-    monkeypatch.setattr(os, 'getcwd', lambda: '/fake/path')
-    assert os.getcwd() == '/fake/path'
+
+    monkeypatch.setattr(os, "getcwd", lambda: "/fake/path")
+    assert os.getcwd() == "/fake/path"
+
 
 def test_setenv(monkeypatch):
-    monkeypatch.setenv('MY_VAR', 'test_value')
+    monkeypatch.setenv("MY_VAR", "test_value")
     import os
-    assert os.environ['MY_VAR'] == 'test_value'
+
+    assert os.environ["MY_VAR"] == "test_value"
 ```
 
 The fixture provides all of these helper methods:

@@ -49,7 +49,8 @@ class LspClient:
             if not line:
                 self.stderr.seek(0)
                 raise RuntimeError(
-                    f"Server closed stdout: {self.stderr.read().decode(errors='replace')}"
+                    "Server closed stdout: "
+                    f"{self.stderr.read().decode(errors='replace')}"
                 )
             key, value = line.decode().split(":", 1)
             headers[key.lower()] = value.strip()
@@ -87,7 +88,7 @@ class LspClient:
 
 
 def prepare(output, server, server_args, wasm, revision):
-    """Use tracked committed extension sources, never an existing target or dev install."""
+    """Prepare the extension from tracked committed sources."""
     output.mkdir(parents=True, exist_ok=False)
     archive = subprocess.check_output(
         ["git", "archive", revision, "editors/zed", "LICENSE", "rust-toolchain.toml"]
@@ -111,7 +112,9 @@ def prepare(output, server, server_args, wasm, revision):
         '[profile.default.test]\ntest-function-prefix = "test"\n'
     )
     (workspace / "test_smoke.py").write_text(
-        "from karva import fixture\n\n@fixture\ndef sample():\n    return True\n\ndef test_smoke(sample):\n    assert sample\n"
+        "from karva import fixture\n\n"
+        "@fixture\ndef sample():\n    return True\n\n"
+        "def test_smoke(sample):\n    assert sample\n"
     )
     (workspace / ".zed/settings.json").write_text(
         json.dumps(
@@ -224,7 +227,8 @@ def main():
     )
     smoke(command, workspace)
     print(
-        f"Protocol smoke passed. Install Dev Extension: {extension}\nOpen Folder: {workspace}"
+        f"Protocol smoke passed. Install Dev Extension: {extension}\n"
+        f"Open Folder: {workspace}"
     )
 
 

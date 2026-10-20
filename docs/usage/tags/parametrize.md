@@ -7,6 +7,7 @@
 ```python title="test.py"
 import karva
 
+
 @karva.tags.parametrize("a", [1, 2, 3])
 def test_function(a: int):
     assert a > 0
@@ -21,6 +22,7 @@ Pass multiple argument names and a row of values for each case:
 ```python title="test.py"
 import karva
 
+
 @karva.tags.parametrize(("a", "b"), [(1, 4), (2, 5), (3, 6)])
 def test_function(a: int, b: int):
     assert a > 0 and b > 0
@@ -30,6 +32,7 @@ Argument names can also be comma-separated: `"a,b"`.
 
 ```python title="test.py"
 import karva
+
 
 @karva.tags.parametrize("a,b", [(1, 4), (2, 5), (3, 6)])
 def test_function(a: int, b: int):
@@ -43,9 +46,11 @@ Tests can request fixtures alongside parametrized arguments:
 ```python title="test.py"
 import karva
 
+
 @karva.fixture
 def b() -> int:
     return 1
+
 
 @karva.tags.parametrize("a", [1, 2])
 def test_function(a: int, b: int):
@@ -60,6 +65,7 @@ Stack decorators to run every combination of their values.
 
 ```python title="test.py"
 import karva
+
 
 @karva.tags.parametrize("a", [1, 2])
 @karva.tags.parametrize("b", [1, 2])
@@ -76,6 +82,7 @@ Use `ids` to give parameter sets stable, readable names:
 ```python title="test.py"
 import karva
 
+
 @karva.tags.parametrize(
     "card,expected",
     [(valid_card, "paid"), (expired_card, "declined")],
@@ -90,6 +97,7 @@ parts are joined with `-`:
 
 ```python title="test.py"
 import karva
+
 
 @karva.tags.parametrize(
     "status,expected",
@@ -107,10 +115,14 @@ Use `id` on `karva.param` when each row should carry its own name:
 ```python title="test.py"
 import karva
 
-@karva.tags.parametrize("card,expected", [
-    karva.param(valid_card, "paid", id="valid-card"),
-    karva.param(expired_card, "declined", id="expired-card"),
-])
+
+@karva.tags.parametrize(
+    "card,expected",
+    [
+        karva.param(valid_card, "paid", id="valid-card"),
+        karva.param(expired_card, "declined", id="expired-card"),
+    ],
+)
 def test_checkout(card, expected):
     assert checkout(card) == expected
 ```
@@ -128,15 +140,19 @@ You can use `karva.param` (similar to `pytest.param`) to attach tags to individu
 ```python title="test.py"
 import karva
 
-@karva.tags.parametrize("input,expected", [
-    karva.param(2, 4),
-    karva.param(4, 17, tags=(karva.tags.skip,)),
-    karva.param(5, 26, tags=(karva.tags.expect_fail,)),
-    karva.param(6, 36, tags=(karva.tags.skip(True),)),
-    karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
-])
+
+@karva.tags.parametrize(
+    "input,expected",
+    [
+        karva.param(2, 4),
+        karva.param(4, 17, tags=(karva.tags.skip,)),
+        karva.param(5, 26, tags=(karva.tags.expect_fail,)),
+        karva.param(6, 36, tags=(karva.tags.skip(True),)),
+        karva.param(7, 50, tags=(karva.tags.expect_fail(True),)),
+    ],
+)
 def test_square(input, expected):
-    assert input ** 2 == expected
+    assert input**2 == expected
 ```
 
 ## Pytest
@@ -145,6 +161,7 @@ def test_square(input, expected):
 
 ```python title="test.py"
 import pytest
+
 
 @pytest.mark.parametrize("a", [1, 2])
 def test_function(a: int):
