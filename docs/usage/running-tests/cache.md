@@ -3,6 +3,9 @@
 Karva caches test durations for scheduling and failed test names for
 `--last-failed`.
 
+Each run updates durations for the tests it executes and preserves timings for
+other tests, so focused runs retain scheduling history for the full suite.
+
 The cache lives in `.karva_cache` under the project root. Coverage runs also write per-worker coverage artifacts there.
 
 ## Re-running just the failures

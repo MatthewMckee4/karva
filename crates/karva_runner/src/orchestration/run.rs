@@ -66,7 +66,7 @@ pub fn run_parallel_tests(
 
     let cache_dir = project.cwd().join(CACHE_DIR);
 
-    let previous_durations = previous_durations(&cache_dir, config.no_cache);
+    let mut previous_durations = previous_durations(&cache_dir, config.no_cache);
 
     if !previous_durations.is_empty() {
         tracing::debug!(target: "karva_runner::orchestration",
@@ -226,7 +226,15 @@ pub fn run_parallel_tests(
 
     if !config.no_cache {
         write_last_failed(&cache_dir, &results.failed_tests);
-        if let Err(err) = write_durations(&cache_dir, &results.durations) {
+        // Partial runs retain other history; zero-duration skips are not timing samples.
+        previous_durations.extend(
+            results
+                .durations
+                .iter()
+                .filter(|(_, duration)| !duration.is_zero())
+                .map(|(key, duration)| (key.clone(), *duration)),
+        );
+        if let Err(err) = write_durations(&cache_dir, &previous_durations) {
             tracing::warn!(target: "karva_runner::orchestration", "Failed to write test durations to cache: {err}");
         }
     }
