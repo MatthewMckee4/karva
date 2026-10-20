@@ -4,12 +4,12 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 
-use crate::context::{compose_context, prefix_context};
-use crate::data::BranchArc;
-#[cfg(test)]
-use crate::data::WorkerFile;
-use crate::native::{CoverageMode, NativeCoverage, SourceFingerprint};
 use crate::report::CoverageFilters;
+use karva_coverage::context::{compose_context, prefix_context};
+use karva_coverage::data::BranchArc;
+#[cfg(test)]
+use karva_coverage::data::WorkerFile;
+use karva_coverage::native::{CoverageMode, NativeCoverage, SourceFingerprint};
 
 #[derive(Debug, Default)]
 /// Union of raw coverage observations for one normalized source path.
@@ -226,7 +226,7 @@ pub(super) fn verify_combined_sources(
 
 fn merge_line_observations(
     bucket: &mut CombinedFile,
-    file: &crate::native::NativeFileCoverage,
+    file: &karva_coverage::native::NativeFileCoverage,
     run_context: Option<&str>,
     filters: &CoverageFilters,
 ) {
@@ -248,7 +248,7 @@ fn merge_line_observations(
 
 fn merge_branch_observations(
     bucket: &mut CombinedFile,
-    branches: &crate::native::NativeBranchCoverage,
+    branches: &karva_coverage::native::NativeBranchCoverage,
     run_context: Option<&str>,
     filters: &CoverageFilters,
 ) {

@@ -27,15 +27,20 @@ const FORMAT_VERSION: u32 = 4;
 pub struct NativeCoverage {
     /// Native artifact schema version.
     format_version: u32,
+
     /// Karva version that produced this artifact.
     karva_version: String,
+
     /// Whether collection measured statements alone or statements and branches.
-    pub(super) mode: CoverageMode,
+    pub mode: CoverageMode,
+
     /// Portable project-relative source roots, or absolute roots outside the project.
     pub source_roots: BTreeSet<Utf8PathBuf>,
+
     /// User-provided context attached to the whole run.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(super) run_context: Option<String>,
+    pub run_context: Option<String>,
+
     /// Coverage keyed by `/`-separated project-relative paths.
     ///
     /// Sources outside the project retain normalized absolute paths and require
@@ -225,7 +230,7 @@ impl NativeCoverage {
     }
 
     /// Rewrites source identities and merges compatible paths that become equal.
-    pub(super) fn map_paths(mut self, map: impl Fn(&str) -> String) -> Result<Self> {
+    pub fn map_paths(mut self, map: impl Fn(&str) -> String) -> Result<Self> {
         self.source_roots = self
             .source_roots
             .iter()
@@ -406,6 +411,7 @@ fn merge_arc_contexts(current: &mut BTreeSet<NativeArcContexts>, mut incoming: N
 pub enum CoverageMode {
     /// Statement coverage only.
     Line,
+
     /// Statement and branch coverage.
     Branch,
 }
@@ -415,15 +421,20 @@ pub enum CoverageMode {
 pub struct NativeFileCoverage {
     /// Fingerprint of the source bytes used to compute executable lines.
     pub source_fingerprint: SourceFingerprint,
+
     /// Executable source lines.
     pub executable: BTreeSet<u32>,
+
     /// Executable lines removed by exclusion rules.
     pub excluded: BTreeSet<u32>,
+
     /// Source lines observed at runtime.
     pub executed: BTreeSet<u32>,
+
     /// Contexts that executed each source line.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub line_contexts: BTreeMap<u32, BTreeSet<String>>,
+
     /// Branch data, absent for statement-only collection.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branches: Option<NativeBranchCoverage>,
@@ -433,24 +444,28 @@ pub struct NativeFileCoverage {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NativeBranchCoverage {
     /// Statically discovered control-flow edges.
-    pub(super) possible: BTreeSet<BranchArc>,
+    pub possible: BTreeSet<BranchArc>,
+
     /// Control-flow edges observed at runtime.
-    pub(super) executed: BTreeSet<BranchArc>,
+    pub executed: BTreeSet<BranchArc>,
+
     /// Branch source lines whose unobserved destinations are intentional.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub(super) partial: BTreeSet<u32>,
+    pub partial: BTreeSet<u32>,
+
     /// Contexts grouped by executed edge, sorted by edge.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub(super) contexts: BTreeSet<NativeArcContexts>,
+    pub contexts: BTreeSet<NativeArcContexts>,
 }
 
 /// Contexts that traversed one branch edge.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct NativeArcContexts {
     /// Executed control-flow edge.
-    pub(super) arc: BranchArc,
+    pub arc: BranchArc,
+
     /// Context names that traversed the edge.
-    pub(super) contexts: BTreeSet<String>,
+    pub contexts: BTreeSet<String>,
 }
 
 /// Stable 128-bit fingerprint of source content.
@@ -468,12 +483,12 @@ impl SourceFingerprint {
     }
 
     /// Returns the lowercase hexadecimal fingerprint.
-    pub(super) fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Returns whether `source` has the content captured by this fingerprint.
-    pub(super) fn matches(&self, source: &[u8]) -> bool {
+    pub fn matches(&self, source: &[u8]) -> bool {
         *self == Self::from_bytes(source)
     }
 }

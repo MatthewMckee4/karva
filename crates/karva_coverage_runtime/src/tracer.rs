@@ -15,9 +15,15 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::branches::{CoveragePartials, branch_analysis_with_exclusions};
-use crate::context::{PENDING_SETUP_CONTEXT, SESSION_CONTEXT, compose_context};
-use crate::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
 use crate::executable::{CoverageExclusions, SourceLines, executable_lines_with_exclusions};
+use karva_coverage::context::compose_context;
+use karva_coverage::data::{BranchArc, BranchContextEntry, BranchEntry, FileEntry, WorkerFile};
+
+/// Context used for execution outside a concrete test lifecycle.
+const SESSION_CONTEXT: &str = "session";
+
+/// Internal context replaced once first-attempt fixture setup reveals the full test identity.
+const PENDING_SETUP_CONTEXT: &str = "\0karva-pending-setup";
 
 /// Configuration for a single worker's coverage measurement.
 #[derive(Debug, Clone)]

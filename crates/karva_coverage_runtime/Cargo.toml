@@ -1,0 +1,35 @@
+[package]
+name = "karva_coverage_runtime"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Python coverage tracing and source analysis for Karva."
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+camino = { workspace = true }
+fs-err = { workspace = true }
+karva_coverage = { workspace = true }
+pyo3 = { workspace = true }
+regex = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_python_parser = { workspace = true }
+ruff_source_file = { workspace = true }
+ruff_text_size = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+karva_coverage_report = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

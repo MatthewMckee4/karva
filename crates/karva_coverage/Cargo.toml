@@ -4,7 +4,7 @@ version = "0.0.0"
 
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "Coverage measurement and reporting for Karva."
+description = "Shared coverage payloads, artifacts, and context encoding for Karva."
 homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
@@ -14,26 +14,15 @@ license = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 camino = { workspace = true }
-colored = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
-globset = { workspace = true }
-pyo3 = { workspace = true }
-regex = { workspace = true }
-ruff_python_ast = { workspace = true }
-ruff_python_parser = { workspace = true }
-ruff_source_file = { workspace = true }
-ruff_text_size = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 siphasher = { workspace = true }
 tempfile = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
-lcov = { workspace = true }
-rstest = { workspace = true }
 
 [lints]
 workspace = true

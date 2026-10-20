@@ -1013,6 +1013,8 @@ dependencies = [
  "karva_cache",
  "karva_cli",
  "karva_coverage",
+ "karva_coverage_report",
+ "karva_coverage_runtime",
  "karva_diagnostic",
  "karva_language_server",
  "karva_logging",
@@ -1121,12 +1123,45 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
+ "fs-err",
+ "insta",
+ "serde",
+ "serde_json",
+ "siphasher",
+ "tempfile",
+]
+
+[[package]]
+name = "karva_coverage_report"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
  "colored",
  "dunce",
  "fs-err",
  "globset",
  "insta",
+ "karva_coverage",
  "lcov",
+ "pyo3",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "karva_coverage_runtime"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "fs-err",
+ "insta",
+ "karva_coverage",
+ "karva_coverage_report",
  "pyo3",
  "regex",
  "rstest",
@@ -1134,9 +1169,7 @@ dependencies = [
  "ruff_python_parser",
  "ruff_source_file",
  "ruff_text_size",
- "serde",
  "serde_json",
- "siphasher",
  "tempfile",
  "tracing",
 ]
@@ -1402,7 +1435,7 @@ dependencies = [
  "fs-err",
  "indoc",
  "karva_collector",
- "karva_coverage",
+ "karva_coverage_runtime",
  "karva_diagnostic",
  "karva_logging",
  "karva_metadata",

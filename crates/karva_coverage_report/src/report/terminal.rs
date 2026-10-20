@@ -555,8 +555,8 @@ mod tests {
     fn missing_display_includes_branch_arcs() {
         let mut branch_row = row("branch.py", 2, 1, 1, "2");
         branch_row.branch_missing = vec![
-            crate::data::BranchArc { from: 1, to: 2 },
-            crate::data::BranchArc { from: 1, to: 3 },
+            karva_coverage::data::BranchArc { from: 1, to: 2 },
+            karva_coverage::data::BranchArc { from: 1, to: 3 },
         ];
 
         assert_eq!(missing_display(&branch_row), "2, 1->2, 1->3");

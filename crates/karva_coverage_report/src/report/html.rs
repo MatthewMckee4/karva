@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Write};
 
-use crate::data::BranchArc;
+use karva_coverage::data::BranchArc;
 
 use super::shared::{CoverageTotals, FileRow, escape_html, row_percent};
 

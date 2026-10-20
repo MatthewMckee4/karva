@@ -31,7 +31,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     let settings = project.settings().coverage();
     let data_file = absolute(&settings.data_file, project.cwd());
 
-    let filters = karva_coverage::CoverageFilters::new(&settings.include, &settings.omit)?
+    let filters = karva_coverage_report::CoverageFilters::new(&settings.include, &settings.omit)?
         .with_contexts(&settings.contexts)?
         .with_path_aliases(&settings.path_aliases)?;
     match &args.action {
@@ -47,7 +47,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
     }
     let data_files = coverage_data_files(&data_file)?;
     let analysis =
-        karva_coverage::CoverageAnalysis::load_native(project.cwd(), &data_files, &filters)?
+        karva_coverage_report::CoverageAnalysis::load_native(project.cwd(), &data_files, &filters)?
             .with_context(|| format!("coverage data at `{data_file}` contains no source files"))?;
 
     let total = match &args.action {
@@ -55,26 +55,30 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
             if report.append == Some(true) && report.format != CoverageFormat::Markdown {
                 bail!("`--append` requires `--format markdown`");
             }
-            let options = karva_coverage::CoverageReportOptions {
+            let options = karva_coverage_report::CoverageReportOptions {
                 selectors: report.selectors.clone(),
                 show_missing: report.show_missing,
                 skip_covered: report.skip_covered,
                 skip_empty: report.skip_empty,
                 sort: match report.sort {
-                    CoverageSort::Name => karva_coverage::CoverageReportSort::Name,
-                    CoverageSort::Statements => karva_coverage::CoverageReportSort::Statements,
-                    CoverageSort::Misses => karva_coverage::CoverageReportSort::Misses,
-                    CoverageSort::Branches => karva_coverage::CoverageReportSort::Branches,
-                    CoverageSort::PartialBranches => {
-                        karva_coverage::CoverageReportSort::PartialBranches
+                    CoverageSort::Name => karva_coverage_report::CoverageReportSort::Name,
+                    CoverageSort::Statements => {
+                        karva_coverage_report::CoverageReportSort::Statements
                     }
-                    CoverageSort::Coverage => karva_coverage::CoverageReportSort::Coverage,
+                    CoverageSort::Misses => karva_coverage_report::CoverageReportSort::Misses,
+                    CoverageSort::Branches => karva_coverage_report::CoverageReportSort::Branches,
+                    CoverageSort::PartialBranches => {
+                        karva_coverage_report::CoverageReportSort::PartialBranches
+                    }
+                    CoverageSort::Coverage => karva_coverage_report::CoverageReportSort::Coverage,
                 },
                 precision: settings.precision.0,
                 format: match report.format {
-                    CoverageFormat::Text => karva_coverage::CoverageReportFormat::Text,
-                    CoverageFormat::Markdown => karva_coverage::CoverageReportFormat::Markdown,
-                    CoverageFormat::Total => karva_coverage::CoverageReportFormat::Total,
+                    CoverageFormat::Text => karva_coverage_report::CoverageReportFormat::Text,
+                    CoverageFormat::Markdown => {
+                        karva_coverage_report::CoverageReportFormat::Markdown
+                    }
+                    CoverageFormat::Total => karva_coverage_report::CoverageReportFormat::Total,
                 },
             };
             if let Some(output) = &report.output {
@@ -102,7 +106,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
             let output = absolute(&html.directory, project.cwd());
             analysis.write_html_with_options(
                 &output,
-                &karva_coverage::HtmlReportOptions {
+                &karva_coverage_report::HtmlReportOptions {
                     title: html.title.clone(),
                     show_contexts: html.show_contexts,
                     skip_covered: html.skip_covered,
@@ -119,7 +123,7 @@ pub fn coverage(args: &CoverageCommand) -> Result<ExitStatus> {
             let output = absolute(&json.output, project.cwd());
             analysis.write_json_with_options(
                 &output,
-                &karva_coverage::JsonReportOptions {
+                &karva_coverage_report::JsonReportOptions {
                     pretty_print: json.pretty_print,
                     show_contexts: json.show_contexts,
                 },

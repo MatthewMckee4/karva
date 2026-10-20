@@ -1,4 +1,4 @@
-use karva_coverage::CoverageSession;
+use karva_coverage_runtime::CoverageSession;
 use pyo3::Python;
 use rstest::rstest;
 
