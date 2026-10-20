@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use karva_coverage::CoveragePhase;
+use karva_coverage_runtime::CoveragePhase;
 use karva_diagnostic::TestExecutionOutcome;
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;

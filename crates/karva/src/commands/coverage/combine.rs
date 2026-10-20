@@ -6,8 +6,8 @@ use std::io::ErrorKind;
 use anyhow::{Context, Result, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_cli::CoverageCombineCommand;
-use karva_coverage::CoverageFilters;
 use karva_coverage::native::NativeCoverage;
+use karva_coverage_report::CoverageFilters;
 use karva_project::path::absolute;
 
 pub(super) fn combine(

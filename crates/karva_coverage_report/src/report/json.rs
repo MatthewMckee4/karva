@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::data::BranchArc;
+use karva_coverage::data::BranchArc;
 
 use super::shared::{CoverageTotals, FileRow, missing_lines, percent, row_percent};
 

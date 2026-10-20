@@ -4,7 +4,7 @@ use camino::Utf8PathBuf;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use karva_coverage::CoverageSession;
+use karva_coverage_runtime::CoverageSession;
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 

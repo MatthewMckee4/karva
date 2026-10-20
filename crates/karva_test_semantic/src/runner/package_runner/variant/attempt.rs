@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use karva_coverage::CoveragePhase;
+use karva_coverage_runtime::CoveragePhase;
 use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
 use pyo3::prelude::*;
 

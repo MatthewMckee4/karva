@@ -18,11 +18,11 @@ mod utils;
 mod warnings;
 
 pub(crate) use context::{Context, RunState};
-pub use karva_coverage::CoverageConfig;
+pub use karva_coverage_runtime::CoverageConfig;
 pub use python::init_module;
 
 use camino::Utf8Path;
-use karva_coverage::CoverageSession;
+use karva_coverage_runtime::CoverageSession;
 use karva_diagnostic::{Diagnostic, Reporter};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};

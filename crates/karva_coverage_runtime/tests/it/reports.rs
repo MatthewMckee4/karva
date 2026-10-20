@@ -1,4 +1,4 @@
-use karva_coverage::{
+use karva_coverage_report::{
     CoverageAnalysis, CoverageFilters, CoverageReportFormat, CoverageReportOptions,
 };
 use rstest::rstest;

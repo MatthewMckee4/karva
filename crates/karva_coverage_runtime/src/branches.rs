@@ -14,11 +14,11 @@ use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_source_file::LineIndex;
 use ruff_text_size::{Ranged, TextSize};
 
-use crate::data::BranchArc;
 use crate::executable::{
     CoverageExclusions, comment_lines_matching, executable_lines_for_module, loop_else_offset,
     pattern_lines, pragma_no_cover_lines,
 };
+use karva_coverage::data::BranchArc;
 
 #[derive(Clone, Debug, Default)]
 /// Compiled expressions identifying intentionally partial branch lines.

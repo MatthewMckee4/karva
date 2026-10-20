@@ -118,8 +118,8 @@ mod tests {
     use pyo3::types::PyAnyMethods;
 
     use super::{branch_lines, build_cobertura_xml};
-    use crate::data::BranchArc;
     use crate::report::shared::FileRow;
+    use karva_coverage::data::BranchArc;
 
     #[test]
     fn build_cobertura_xml_reports_missing_coverage_root_metadata() {

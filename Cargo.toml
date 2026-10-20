@@ -18,6 +18,8 @@ karva_cli = { path = "crates/karva_cli" }
 karva_collector = { path = "crates/karva_collector" }
 karva_combine = { path = "crates/karva_combine" }
 karva_coverage = { path = "crates/karva_coverage" }
+karva_coverage_report = { path = "crates/karva_coverage_report" }
+karva_coverage_runtime = { path = "crates/karva_coverage_runtime" }
 karva_diagnostic = { path = "crates/karva_diagnostic" }
 karva_ide = { path = "crates/karva_ide" }
 karva_ipc = { path = "crates/karva_ipc" }

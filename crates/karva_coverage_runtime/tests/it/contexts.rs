@@ -1,4 +1,5 @@
-use karva_coverage::{CoverageFilters, CoveragePhase};
+use karva_coverage_report::CoverageFilters;
+use karva_coverage_runtime::CoveragePhase;
 
 use crate::common::{TestContext, execute, report_snapshot};
 

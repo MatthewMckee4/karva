@@ -1,0 +1,33 @@
+[package]
+name = "karva_coverage_report"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Coverage analysis and report rendering for Karva."
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+camino = { workspace = true }
+colored = { workspace = true }
+dunce = { workspace = true }
+fs-err = { workspace = true }
+globset = { workspace = true }
+karva_coverage = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+lcov = { workspace = true }
+pyo3 = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

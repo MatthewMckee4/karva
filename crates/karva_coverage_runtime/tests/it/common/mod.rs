@@ -8,9 +8,8 @@ use std::sync::Mutex;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_coverage::native::{CoverageMode, NativeCoverage};
-use karva_coverage::{
-    CoverageAnalysis, CoverageConfig, CoverageFilters, CoveragePhase, CoverageSession,
-};
+use karva_coverage_report::{CoverageAnalysis, CoverageFilters};
+use karva_coverage_runtime::{CoverageConfig, CoveragePhase, CoverageSession};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::Value;

@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use anyhow::{Result, bail};
 
 use super::shared::FileRow;
-use crate::data::BranchArc;
+use karva_coverage::data::BranchArc;
 
 pub(super) fn build_lcov_report(rows: &[FileRow]) -> Result<String> {
     let mut report = String::new();
@@ -60,8 +60,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::build_lcov_report;
-    use crate::data::BranchArc;
     use crate::report::shared::FileRow;
+    use karva_coverage::data::BranchArc;
 
     #[test]
     fn report_contains_deterministic_line_and_branch_records() {

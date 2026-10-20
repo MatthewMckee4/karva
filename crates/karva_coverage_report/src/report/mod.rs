@@ -1,11 +1,11 @@
 //! Combine per-worker JSON files and produce terminal or machine-readable reports.
 
-pub(crate) mod html;
-pub(crate) mod json;
-pub(crate) mod lcov;
-pub(crate) mod shared;
+mod html;
+mod json;
+mod lcov;
+mod shared;
 mod terminal;
-pub(crate) mod xml;
+mod xml;
 
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -61,8 +61,8 @@ impl CoverageFilters {
     /// Applies configured aliases to native artifact source roots and file paths.
     pub fn map_native_paths(
         &self,
-        artifact: crate::native::NativeCoverage,
-    ) -> Result<crate::native::NativeCoverage> {
+        artifact: karva_coverage::native::NativeCoverage,
+    ) -> Result<karva_coverage::native::NativeCoverage> {
         artifact.map_paths(|path| self.map_path(path))
     }
 
@@ -282,8 +282,8 @@ mod tests {
     use fs_err as fs;
 
     use super::{CoverageAnalysis, CoverageFilters, normalize_path};
-    use crate::data::BranchArc;
-    use crate::native::{
+    use karva_coverage::data::BranchArc;
+    use karva_coverage::native::{
         CoverageMode, NativeBranchCoverage, NativeCoverage, NativeFileCoverage, SourceFingerprint,
     };
 

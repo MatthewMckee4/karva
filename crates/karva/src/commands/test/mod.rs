@@ -91,7 +91,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         .iter()
         .map(|pattern| pattern.as_str().to_owned())
         .collect::<Vec<_>>();
-    karva_coverage::executable::CoverageExclusions::new(&exclusion_patterns)?;
+    karva_coverage_runtime::executable::CoverageExclusions::new(&exclusion_patterns)?;
 
     let printer = Printer::new(
         project.settings().terminal().status_level,
@@ -188,7 +188,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     let coverage_total = if let Some(data_file) = coverage_data_file {
         let coverage = project.settings().coverage();
         let coverage_filters =
-            karva_coverage::CoverageFilters::new(&coverage.include, &coverage.omit)?
+            karva_coverage_report::CoverageFilters::new(&coverage.include, &coverage.omit)?
                 .with_contexts(&coverage.contexts)?
                 .with_path_aliases(&coverage.path_aliases)?;
         if explicit_cov_reports.is_empty()
@@ -203,7 +203,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
             )?;
         }
         let coverage_result = (|| -> Result<Option<f64>> {
-            let Some(analysis) = karva_coverage::CoverageAnalysis::load_native(
+            let Some(analysis) = karva_coverage_report::CoverageAnalysis::load_native(
                 project.cwd(),
                 std::slice::from_ref(&data_file),
                 &coverage_filters,
@@ -306,7 +306,7 @@ fn configured_coverage_report(report: CovReport, path: Option<&str>) -> CliCovRe
 }
 
 fn render_coverage_report(
-    analysis: &karva_coverage::CoverageAnalysis,
+    analysis: &karva_coverage_report::CoverageAnalysis,
     report: &CliCovReport,
     precision: usize,
     project_root: &camino::Utf8Path,
