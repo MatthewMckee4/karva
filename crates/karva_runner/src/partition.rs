@@ -136,7 +136,8 @@ impl Partition {
         self.tests.is_empty()
     }
 
-    /// Puts cached failures first, then unmeasured tests before descending durations.
+    /// Puts cached failures first, shortest measured failure first, then other
+    /// tests longest first. Unmeasured tests lead each group.
     /// Equal keys retain assignment order; cache lookups run once per test.
     fn prioritize_failures(
         &mut self,
@@ -144,10 +145,13 @@ impl Partition {
         previous_durations: &HashMap<TestCacheKey, Duration>,
     ) {
         self.tests.sort_by_cached_key(|test| {
-            (
-                Reverse(is_scheduled_failure(test, last_failed)),
-                scheduled_duration(test, previous_durations).map(Reverse),
-            )
+            let failed = is_scheduled_failure(test, last_failed);
+            let duration = scheduled_duration(test, previous_durations);
+            if failed {
+                (Reverse(failed), duration, None)
+            } else {
+                (Reverse(failed), None, duration.map(Reverse))
+            }
         });
     }
 
