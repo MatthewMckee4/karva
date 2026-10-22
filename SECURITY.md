@@ -20,6 +20,3 @@ Security fixes target the latest released version and the `main` branch.
 Use a maintained Python release with current security patches. Package
 compatibility with an older Python version does not extend that interpreter's
 security support.
-
-The [October 2026 dependency review](docs/security-review.md) records the
-advisories checked, fixes, and remaining operational responsibilities.
