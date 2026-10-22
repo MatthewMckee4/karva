@@ -71,7 +71,8 @@ repos:
         priority: 1
 
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.89
+    # v0.0.90 still pins vulnerable uv; use the upstream security fix until the next release.
+    rev: 61480a9eddba3de40a4cabde24c42e82f27e94f6
     hooks:
       - id: ty
         args: [--isolated, --no-project]

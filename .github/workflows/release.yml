@@ -11,10 +11,10 @@ on:
 
 env:
   # renovate: datasource=pypi depName=uv
-  UV_VERSION: "0.13.2"
+  UV_VERSION: "0.13.5"
   # renovate: datasource=pypi depName=zensical
   ZENSICAL_VERSION: "0.0.71"
-  PYTHON_VERSION: "3.14"
+  PYTHON_VERSION: "3.14.9"
   # renovate: datasource=github-releases depName=MatthewMckee4/seal
   SEAL_VERSION: 0.0.1-alpha.8
 

@@ -20,7 +20,7 @@ concurrency:
 
 env:
   # renovate: datasource=pypi depName=uv
-  UV_VERSION: "0.13.2"
+  UV_VERSION: "0.13.5"
   BENCHMARK_PYTHON_VERSION: "3.13"
 
 jobs:
