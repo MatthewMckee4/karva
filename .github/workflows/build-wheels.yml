@@ -26,7 +26,7 @@ permissions: {}
 env:
   PACKAGE_NAME: karva
   MODULE_NAME: karva
-  PYTHON_VERSION: "3.14"
+  PYTHON_VERSION: "3.14.9"
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always

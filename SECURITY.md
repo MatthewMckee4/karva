@@ -16,3 +16,7 @@ Please report vulnerabilities in Karva itself privately by emailing
 reproduction, and the impact you expect.
 
 Security fixes target the latest released version and the `main` branch.
+
+Use a maintained Python release with current security patches. Package
+compatibility with an older Python version does not extend that interpreter's
+security support.
