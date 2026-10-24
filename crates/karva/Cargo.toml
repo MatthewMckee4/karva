@@ -30,6 +30,7 @@ karva_project = { workspace = true }
 karva_python_semantic = { workspace = true, features = ["python-runtime"] }
 karva_runner = { workspace = true }
 karva_snapshot = { workspace = true }
+karva_snapshot_review = { workspace = true }
 karva_static = { workspace = true }
 karva_version = { workspace = true }
 
