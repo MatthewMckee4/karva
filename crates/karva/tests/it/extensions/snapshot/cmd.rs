@@ -1,6 +1,104 @@
 use insta_cmd::assert_cmd_snapshot;
+use rstest::rstest;
 
 use crate::common::TestContext;
+
+#[rstest]
+fn test_cmd_snapshot_drains_output_while_writing_stdin(#[values("stdout", "stderr")] stream: &str) {
+    let context = TestContext::with_file(
+        "test.py",
+        &format!(
+            r#"
+import sys
+
+import karva
+
+def test_bidirectional_io():
+    # Measured macOS pipe capacity: 64 KiB; this exceeds both pipe buffers.
+    size = 262144
+    script = '''
+import os
+import sys
+import threading
+
+# The round trip takes about 14 ms locally; stop a regression from hanging CI.
+watchdog = threading.Timer(10, os._exit, args=(99,))
+watchdog.daemon = True
+watchdog.start()
+size = int(sys.argv[1])
+sys.{stream}.write("o" * size + "\\n")
+sys.{stream}.flush()
+data = sys.stdin.read()
+print(len(data))
+watchdog.cancel()
+'''
+    command = karva.Command(sys.executable).args(["-c", script, str(size)]).stdin("i" * size)
+    with karva.snapshot_settings(filters=[(r"(?m)^o+$", "[payload]")]):
+        karva.assert_cmd_snapshot(command)
+"#,
+        ),
+    );
+
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] test::test_bidirectional_io
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+
+    let snapshot = context.read_file("snapshots/test__test_bidirectional_io.snap");
+    assert!(snapshot.contains("success: true\nexit_code: 0\n"));
+    assert!(snapshot.contains("[payload]"));
+    assert!(snapshot.contains("262144"));
+}
+
+#[test]
+fn test_cmd_snapshot_child_exits_without_reading_stdin() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+import karva
+
+def test_early_exit():
+    # Exceeds the measured 64 KiB pipe capacity, forcing an unfinished write.
+    command = karva.Command(sys.executable).args([
+        "-c", "import sys; print('done'); sys.exit(7)",
+    ]).stdin("i" * 262144)
+    karva.assert_cmd_snapshot(command)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_early_exit
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    insta::assert_snapshot!(context.read_file("snapshots/test__test_early_exit.snap"), @"
+    ---
+    source: test.py:11::test_early_exit
+    ---
+    success: false
+    exit_code: 7
+    ----- stdout -----
+    done
+    ----- stderr -----
+    ");
+}
 
 #[test]
 fn test_cmd_snapshot_basic_echo() {

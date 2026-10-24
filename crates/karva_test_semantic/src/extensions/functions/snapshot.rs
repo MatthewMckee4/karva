@@ -1,9 +1,10 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io;
+use std::io::{self, Write};
 use std::process;
 use std::sync::{Arc, OnceLock};
+use std::thread;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_snapshot::cmd::{CommandOutput, format_cmd_output};
@@ -189,6 +190,7 @@ impl Command {
 }
 
 /// Run a command via Rust's `std::process::Command` and return the captured output.
+/// Input is written concurrently with output draining so full pipes cannot deadlock.
 fn run_command(cmd: &mut Command) -> PyResult<CommandOutput> {
     if cmd.stdin_data.is_some() {
         cmd.inner.stdin(process::Stdio::piped());
@@ -205,16 +207,35 @@ fn run_command(cmd: &mut Command) -> PyResult<CommandOutput> {
             .spawn()
             .map_err(|e| command_error("spawn", &cmd.inner, &e))?;
 
-        if let Some(ref mut stdin_pipe) = child.stdin.take() {
-            use std::io::Write;
-            stdin_pipe
-                .write_all(stdin_data.as_bytes())
-                .map_err(|e| command_error("write to stdin for", &cmd.inner, &e))?;
-        }
-
-        child
-            .wait_with_output()
-            .map_err(|e| command_error("wait for", &cmd.inner, &e))?
+        let stdin_pipe = child.stdin.take();
+        thread::scope(|scope| {
+            let writer = match thread::Builder::new().spawn_scoped(scope, move || {
+                if let Some(mut stdin_pipe) = stdin_pipe {
+                    stdin_pipe.write_all(stdin_data.as_bytes())
+                } else {
+                    Ok(())
+                }
+            }) {
+                Ok(writer) => writer,
+                Err(error) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(command_error("start stdin writer for", &cmd.inner, &error));
+                }
+            };
+            let output = child
+                .wait_with_output()
+                .map_err(|error| command_error("wait for", &cmd.inner, &error));
+            let written = writer
+                .join()
+                .map_err(|_| PyOSError::new_err("Command stdin writer panicked"))?;
+            if let Err(error) = written
+                && error.kind() != io::ErrorKind::BrokenPipe
+            {
+                return Err(command_error("write to stdin for", &cmd.inner, &error));
+            }
+            output
+        })?
     } else {
         cmd.inner
             .output()
