@@ -8,6 +8,7 @@
 use std::collections::VecDeque;
 
 use karva_diagnostic::{ExceptionDiagnostic, ExceptionFrame};
+use pyo3::exceptions::PyBaseExceptionGroup;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
 
@@ -20,15 +21,18 @@ const NODES: usize = 512;
 const VALUE_BYTES: usize = 16 * 1024;
 const TEXT_BYTES: usize = 256 * 1024;
 
-/// Ordinary exceptions retain their existing diagnostics, including on Python 3.10.
+/// Unchained ordinary failures bypass attribute lookup and tree allocation.
 pub(super) fn extract(py: Python<'_>, error: &PyErr) -> Option<ExceptionDiagnostic> {
-    let group_type = py
-        .import("builtins")
-        .ok()?
-        .getattr("BaseExceptionGroup")
-        .ok()?;
+    if !error.is_instance_of::<PyBaseExceptionGroup>(py)
+        && error.cause(py).is_none()
+        && error.context(py).is_none()
+    {
+        return None;
+    }
+    let group_type = py.get_type::<PyBaseExceptionGroup>();
+    let group_type = group_type.as_any();
     let value = error.value(py).as_any();
-    if !contains_group(value, &group_type, &mut Vec::new()) {
+    if !contains_group(value, group_type, &mut Vec::new()) {
         return None;
     }
     // On Python 3.11 PyO3 retains the root traceback separately from its value.
@@ -41,7 +45,7 @@ pub(super) fn extract(py: Python<'_>, error: &PyErr) -> Option<ExceptionDiagnost
         notes: TOTAL_NOTES,
         ancestors: Vec::new(),
     }
-    .extract(value, &group_type, 0)
+    .extract(value, group_type, 0)
 }
 
 /// Looks only along the visible chain; group children are inspected during extraction.
@@ -329,6 +333,52 @@ def cyclic():
 #[cfg(test)]
 mod chain_tests {
     use super::*;
+
+    #[test]
+    fn finds_groups_wrapped_by_ordinary_exceptions() -> PyResult<()> {
+        Python::initialize();
+        Python::attach(|py| {
+            let module = PyModule::from_code(
+                py,
+                c"
+def wrap(explicit):
+    try:
+        raise ExceptionGroup('inner', [ValueError('leaf')])
+    except ExceptionGroup as group:
+        if explicit:
+            raise RuntimeError('wrapper') from group
+        raise RuntimeError('wrapper')
+def suppressed():
+    try:
+        raise ExceptionGroup('hidden', [ValueError('leaf')])
+    except ExceptionGroup:
+        raise RuntimeError('wrapper') from None
+",
+                c"wrapped.py",
+                c"wrapped",
+            )?;
+            let error = module.getattr("wrap")?.call1((true,)).expect_err("wrapper");
+            let explicit = extract(py, &error).expect("wrapped group");
+            assert_eq!(explicit.exception_type, "RuntimeError");
+            assert_eq!(
+                explicit.cause.expect("group cause").children[0].message,
+                "leaf"
+            );
+            let error = module
+                .getattr("wrap")?
+                .call1((false,))
+                .expect_err("wrapper");
+            let implicit = extract(py, &error).expect("wrapped group");
+            assert_eq!(
+                implicit.context.expect("group context").children[0].message,
+                "leaf"
+            );
+            let error = module.getattr("suppressed")?.call0().expect_err("wrapper");
+            assert!(extract(py, &error).is_none());
+            assert!(extract(py, &pyo3::exceptions::PyValueError::new_err("plain")).is_none());
+            Ok(())
+        })
+    }
 
     #[test]
     fn retains_context_but_respects_suppression() -> PyResult<()> {
