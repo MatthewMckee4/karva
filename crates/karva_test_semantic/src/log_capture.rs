@@ -1,34 +1,41 @@
 //! Python logging capture independent of stdout/stderr redirection.
 
 use karva_diagnostic::CapturedLog;
+use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
+use pyo3::types::PyList;
 
 /// Runner-owned handler installed for one setup/call/teardown attempt.
 pub struct LogCapture(Py<PyAny>);
 
 impl LogCapture {
     pub(super) fn start(py: Python<'_>) -> PyResult<Self> {
-        let handler = py
-            .import("karva._logging")?
-            .getattr("_LogCapture")?
-            .call0()?;
-        handler.call_method0("start")?;
+        static CLASS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        let class = CLASS.get_or_try_init(py, || {
+            Ok::<_, PyErr>(
+                py.import("karva._logging")?
+                    .getattr("_LogCapture")?
+                    .unbind(),
+            )
+        })?;
+        let handler = class.bind(py).call0()?;
         Ok(Self(handler.unbind()))
     }
 
     pub(super) fn set_phase(&self, py: Python<'_>, phase: &str) -> PyResult<()> {
-        self.0.bind(py).setattr("phase", phase)
+        self.0.bind(py).setattr(intern!(py, "phase"), phase)
     }
 
     /// Removes the handler before converting retained records to IPC data.
     pub(super) fn finish(self, py: Python<'_>, attempt: u32) -> PyResult<Vec<CapturedLog>> {
         let handler = self.0.bind(py);
-        handler.call_method0("finish")?;
+        handler.call_method0(intern!(py, "finish"))?;
         handler
-            .getattr("captured")?
-            .try_iter()?
+            .getattr(intern!(py, "captured"))?
+            .cast::<PyList>()?
+            .iter()
             .map(|record| {
-                let record = record?;
                 Ok(CapturedLog {
                     attempt,
                     phase: record.get_item(0)?.extract()?,

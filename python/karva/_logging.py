@@ -11,6 +11,7 @@ class _LogCapture(logging.Handler):
             tuple[str, str, str, int, str, str, str, int, str | None]
         ] = []
         self.phase: str = "setup"
+        self.start()
 
     def emit(self, record: logging.LogRecord) -> None:
         record.message = record.getMessage()
