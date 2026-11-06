@@ -1,20 +1,29 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use glob::MatchOptions;
+use karva_metadata::{OsProjectFileSystem, ProjectFileSystem};
 use karva_python_semantic::is_python_file;
 use thiserror::Error;
 
-fn try_convert_to_py_path(path: &Utf8Path) -> Result<Utf8PathBuf, TestPathError> {
-    if path.exists() {
+// Candidate probes retain Path::exists semantics; final metadata errors are reported.
+fn path_exists(path: &Utf8Path, file_system: &(impl ProjectFileSystem + ?Sized)) -> bool {
+    file_system.path_metadata(path).is_ok()
+}
+
+fn try_convert_to_py_path(
+    path: &Utf8Path,
+    file_system: &(impl ProjectFileSystem + ?Sized),
+) -> Result<Utf8PathBuf, TestPathError> {
+    if path_exists(path, file_system) {
         return Ok(path.to_path_buf());
     }
 
     let path_with_py = Utf8PathBuf::from(format!("{path}.py"));
-    if path_with_py.exists() {
+    if path_exists(&path_with_py, file_system) {
         return Ok(path_with_py);
     }
 
     let path_with_slash = Utf8PathBuf::from(format!("{}.py", path.to_string().replace('.', "/")));
-    if path_with_slash.exists() {
+    if path_exists(&path_with_slash, file_system) {
         return Ok(path_with_slash);
     }
 
@@ -64,7 +73,10 @@ fn parse_parametrize_suffix(value: &str) -> Result<(&str, Option<usize>), TestPa
 /// Returns `Ok(None)` when `value` does not contain a `::` separator (callers
 /// can then fall back to file/directory parsing). Any other failure—including
 /// an empty function name or a non-Python target file—is returned as `Err`.
-fn parse_function_spec(value: &str) -> Result<Option<TestPathFunction>, TestPathError> {
+fn parse_function_spec(
+    value: &str,
+    file_system: &(impl ProjectFileSystem + ?Sized),
+) -> Result<Option<TestPathFunction>, TestPathError> {
     let Some(separator_pos) = value.rfind("::") else {
         return Ok(None);
     };
@@ -85,15 +97,23 @@ fn parse_function_spec(value: &str) -> Result<Option<TestPathFunction>, TestPath
         )));
     }
 
-    let path = try_convert_to_py_path(&Utf8PathBuf::from(file_part)).map_err(|error| {
-        if file_part.contains("::") {
-            TestPathError::UnsupportedNestedSelector(value.to_owned())
-        } else {
-            error
-        }
-    })?;
+    let path =
+        try_convert_to_py_path(&Utf8PathBuf::from(file_part), file_system).map_err(|error| {
+            if file_part.contains("::") {
+                TestPathError::UnsupportedNestedSelector(value.to_owned())
+            } else {
+                error
+            }
+        })?;
 
-    if !path.is_file() {
+    if !file_system
+        .path_metadata(&path)
+        .map_err(|source| TestPathError::FileSystem {
+            path: path.clone(),
+            kind: source.kind(),
+        })?
+        .is_file()
+    {
         return Err(TestPathError::InvalidUtf8Path(path));
     }
 
@@ -135,20 +155,35 @@ pub enum TestPath {
 impl TestPath {
     /// Resolves a CLI path, accepting omitted `.py` suffixes and dotted module paths.
     pub fn new(value: &str) -> Result<Self, TestPathError> {
-        if let Some(function) = parse_function_spec(value)? {
+        Self::new_with_file_system(value, &OsProjectFileSystem)
+    }
+
+    /// Resolves a test selection through an injected filesystem.
+    pub fn new_with_file_system(
+        value: &str,
+        file_system: &(impl ProjectFileSystem + ?Sized),
+    ) -> Result<Self, TestPathError> {
+        if let Some(function) = parse_function_spec(value, file_system)? {
             return Ok(Self::Function(function));
         }
 
         let value = Utf8PathBuf::from(value);
-        let path = try_convert_to_py_path(&value)?;
+        let path = try_convert_to_py_path(&value, file_system)?;
+        let metadata =
+            file_system
+                .path_metadata(&path)
+                .map_err(|source| TestPathError::FileSystem {
+                    path: path.clone(),
+                    kind: source.kind(),
+                })?;
 
-        if path.is_file() {
+        if metadata.is_file() {
             if is_python_file(&path) {
                 Ok(Self::File(path))
             } else {
                 Err(TestPathError::WrongFileExtension(path))
             }
-        } else if path.is_dir() {
+        } else if metadata.is_dir() {
             Ok(Self::Directory(path))
         } else {
             Err(TestPathError::InvalidUtf8Path(path))
@@ -251,6 +286,14 @@ pub enum TestPathError {
     GlobWalk {
         path: std::path::PathBuf,
         error: String,
+    },
+    #[error("failed to inspect test path `{path}`: {kind}")]
+    FileSystem {
+        /// Path that could not be inspected.
+        path: Utf8PathBuf,
+
+        /// Kind of filesystem failure.
+        kind: std::io::ErrorKind,
     },
 }
 
@@ -503,7 +546,7 @@ mod tests {
         let py_path = env.create_file("test.py", "def test(): pass");
 
         let test_path = env.path("test");
-        let result = try_convert_to_py_path(&test_path);
+        let result = try_convert_to_py_path(&test_path, &OsProjectFileSystem);
         if let Ok(path) = result {
             assert_eq!(path, py_path);
         } else {
@@ -517,7 +560,7 @@ mod tests {
         let py_path = env.create_file("test/dir.py", "def test(): pass");
 
         let test_path = env.path("test/dir");
-        let result = try_convert_to_py_path(&test_path);
+        let result = try_convert_to_py_path(&test_path, &OsProjectFileSystem);
         if let Ok(path) = result {
             assert_eq!(path, py_path);
         } else {
@@ -531,7 +574,7 @@ mod tests {
         let dir_path = env.create_dir("test.dir");
 
         let test_path = env.path("test.dir");
-        let result = try_convert_to_py_path(&test_path);
+        let result = try_convert_to_py_path(&test_path, &OsProjectFileSystem);
         if let Ok(path) = result {
             assert_eq!(path, dir_path);
         } else {
@@ -543,7 +586,74 @@ mod tests {
     fn test_try_convert_to_py_path_not_found() {
         let env = TestEnv::new();
         let test_path = env.path("test/dir");
-        let result = try_convert_to_py_path(&test_path);
+        let result = try_convert_to_py_path(&test_path, &OsProjectFileSystem);
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
+    }
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+    use karva_metadata::ProjectFileMetadata;
+    use std::io::{self, ErrorKind};
+
+    struct FailedProbe(ErrorKind);
+    impl ProjectFileSystem for FailedProbe {
+        fn path_metadata(&self, _path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+            Err(io::Error::from(self.0))
+        }
+        fn read_to_string(&self, _path: &Utf8Path) -> io::Result<String> {
+            Err(io::Error::from(self.0))
+        }
+    }
+
+    #[rstest::rstest]
+    fn candidate_probe_errors_keep_the_missing_path_diagnostic(
+        #[values(
+            ErrorKind::InvalidFilename,
+            ErrorKind::NotADirectory,
+            ErrorKind::PermissionDenied
+        )]
+        kind: ErrorKind,
+    ) {
+        let path = "tests/test_*.py";
+        assert_eq!(
+            TestPath::new_with_file_system(path, &FailedProbe(kind)),
+            Err(TestPathError::NotFound(Utf8PathBuf::from(path)))
+        );
+    }
+}
+
+#[cfg(test)]
+mod final_metadata_tests {
+    use super::*;
+    use karva_metadata::ProjectFileMetadata;
+    use std::cell::Cell;
+    use std::io::{self, ErrorKind};
+
+    struct FailingFinalMetadata(Cell<bool>);
+    impl ProjectFileSystem for FailingFinalMetadata {
+        fn path_metadata(&self, _path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+            if self.0.replace(true) {
+                Err(io::Error::from(ErrorKind::PermissionDenied))
+            } else {
+                Ok(ProjectFileMetadata::new(true, false))
+            }
+        }
+        fn read_to_string(&self, _path: &Utf8Path) -> io::Result<String> {
+            Err(io::Error::from(ErrorKind::PermissionDenied))
+        }
+    }
+
+    #[test]
+    fn final_metadata_failures_are_reported_after_a_successful_probe() {
+        let path = "test.py";
+        assert_eq!(
+            TestPath::new_with_file_system(path, &FailingFinalMetadata(Cell::new(false))),
+            Err(TestPathError::FileSystem {
+                path: Utf8PathBuf::from(path),
+                kind: ErrorKind::PermissionDenied
+            })
+        );
     }
 }

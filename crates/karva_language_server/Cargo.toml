@@ -37,6 +37,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+glob = { workspace = true }
 indoc = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 rstest = { workspace = true }
