@@ -1344,6 +1344,7 @@ dependencies = [
  "insta",
  "karva_metadata",
  "karva_python_semantic",
+ "rstest",
  "tempfile",
  "thiserror",
 ]

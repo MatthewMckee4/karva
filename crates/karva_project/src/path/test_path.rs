@@ -4,33 +4,26 @@ use karva_metadata::{OsProjectFileSystem, ProjectFileSystem};
 use karva_python_semantic::is_python_file;
 use thiserror::Error;
 
-fn path_exists(
-    path: &Utf8Path,
-    file_system: &(impl ProjectFileSystem + ?Sized),
-) -> Result<bool, TestPathError> {
-    file_system
-        .path_exists(path)
-        .map_err(|source| TestPathError::FileSystem {
-            path: path.to_path_buf(),
-            kind: source.kind(),
-        })
+// Candidate probes retain Path::exists semantics; final metadata errors are reported.
+fn path_exists(path: &Utf8Path, file_system: &(impl ProjectFileSystem + ?Sized)) -> bool {
+    file_system.path_metadata(path).is_ok()
 }
 
 fn try_convert_to_py_path(
     path: &Utf8Path,
     file_system: &(impl ProjectFileSystem + ?Sized),
 ) -> Result<Utf8PathBuf, TestPathError> {
-    if path_exists(path, file_system)? {
+    if path_exists(path, file_system) {
         return Ok(path.to_path_buf());
     }
 
     let path_with_py = Utf8PathBuf::from(format!("{path}.py"));
-    if path_exists(&path_with_py, file_system)? {
+    if path_exists(&path_with_py, file_system) {
         return Ok(path_with_py);
     }
 
     let path_with_slash = Utf8PathBuf::from(format!("{}.py", path.to_string().replace('.', "/")));
-    if path_exists(&path_with_slash, file_system)? {
+    if path_exists(&path_with_slash, file_system) {
         return Ok(path_with_slash);
     }
 
@@ -595,5 +588,72 @@ mod tests {
         let test_path = env.path("test/dir");
         let result = try_convert_to_py_path(&test_path, &OsProjectFileSystem);
         assert!(matches!(result, Err(TestPathError::NotFound(_))));
+    }
+}
+
+#[cfg(test)]
+mod probe_tests {
+    use super::*;
+    use karva_metadata::ProjectFileMetadata;
+    use std::io::{self, ErrorKind};
+
+    struct FailedProbe(ErrorKind);
+    impl ProjectFileSystem for FailedProbe {
+        fn path_metadata(&self, _path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+            Err(io::Error::from(self.0))
+        }
+        fn read_to_string(&self, _path: &Utf8Path) -> io::Result<String> {
+            Err(io::Error::from(self.0))
+        }
+    }
+
+    #[rstest::rstest]
+    fn candidate_probe_errors_keep_the_missing_path_diagnostic(
+        #[values(
+            ErrorKind::InvalidFilename,
+            ErrorKind::NotADirectory,
+            ErrorKind::PermissionDenied
+        )]
+        kind: ErrorKind,
+    ) {
+        let path = "tests/test_*.py";
+        assert_eq!(
+            TestPath::new_with_file_system(path, &FailedProbe(kind)),
+            Err(TestPathError::NotFound(Utf8PathBuf::from(path)))
+        );
+    }
+}
+
+#[cfg(test)]
+mod final_metadata_tests {
+    use super::*;
+    use karva_metadata::ProjectFileMetadata;
+    use std::cell::Cell;
+    use std::io::{self, ErrorKind};
+
+    struct FailingFinalMetadata(Cell<bool>);
+    impl ProjectFileSystem for FailingFinalMetadata {
+        fn path_metadata(&self, _path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+            if self.0.replace(true) {
+                Err(io::Error::from(ErrorKind::PermissionDenied))
+            } else {
+                Ok(ProjectFileMetadata::new(true, false))
+            }
+        }
+        fn read_to_string(&self, _path: &Utf8Path) -> io::Result<String> {
+            Err(io::Error::from(ErrorKind::PermissionDenied))
+        }
+    }
+
+    #[test]
+    fn final_metadata_failures_are_reported_after_a_successful_probe() {
+        let path = "test.py";
+        assert_eq!(
+            TestPath::new_with_file_system(path, &FailingFinalMetadata(Cell::new(false))),
+            Err(TestPathError::FileSystem {
+                path: Utf8PathBuf::from(path),
+                kind: ErrorKind::PermissionDenied
+            })
+        );
     }
 }

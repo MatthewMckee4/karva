@@ -5,8 +5,11 @@ use std::io;
 use std::path::PathBuf;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use ignore::WalkBuilder;
-use karva_metadata::{ProjectFileMetadata, ProjectFileSystem};
+use ignore::{
+    WalkBuilder,
+    types::{Types, TypesBuilder},
+};
+use karva_metadata::{OsProjectFileSystem, ProjectFileMetadata, ProjectFileSystem};
 use thiserror::Error;
 
 /// File kind needed while selecting workspace sources.
@@ -67,7 +70,7 @@ impl DirectoryEntry {
 /// Directory-walk behavior required by source discovery.
 #[derive(Clone, Copy, Debug)]
 pub struct WalkOptions {
-    /// Honor project ignore rules; hidden entries and symlinks remain excluded.
+    /// Honor project ignore rules; hidden directories and symlinks remain excluded.
     pub respect_ignore_files: bool,
 
     /// Maximum depth below the root, or an unrestricted recursive walk.
@@ -101,8 +104,9 @@ pub trait System: ProjectFileSystem + Debug + Send + Sync {
     /// Inspects the entry itself, without following a symlink.
     fn symlink_path_metadata(&self, path: &Utf8Path) -> io::Result<FileType>;
 
-    /// Lazily enumerates owned entries so callers can cancel between filesystem operations.
-    fn walk_directory(
+    /// Lazily enumerates regular Python files, preserving the CLI type-filter rules.
+    /// Callers can cancel between filesystem operations; directory entries are skipped.
+    fn walk_python_files(
         &self,
         root: &Utf8Path,
         options: WalkOptions,
@@ -115,12 +119,11 @@ pub struct OsSystem;
 
 impl ProjectFileSystem for OsSystem {
     fn path_metadata(&self, path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
-        std::fs::metadata(path)
-            .map(|metadata| ProjectFileMetadata::new(metadata.is_file(), metadata.is_dir()))
+        OsProjectFileSystem.path_metadata(path)
     }
 
     fn read_to_string(&self, path: &Utf8Path) -> io::Result<String> {
-        std::fs::read_to_string(path)
+        OsProjectFileSystem.read_to_string(path)
     }
 }
 
@@ -133,16 +136,10 @@ impl System for OsSystem {
     }
 
     fn read_directory(&self, path: &Utf8Path) -> io::Result<Vec<Utf8PathBuf>> {
-        std::fs::read_dir(path)?
-            .map(|entry| {
-                Utf8PathBuf::from_path_buf(entry?.path()).map_err(|path| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("path is not UTF-8: {}", path.display()),
-                    )
-                })
-            })
-            .collect()
+        Ok(std::fs::read_dir(path)?
+            .flatten()
+            .filter_map(|entry| Utf8PathBuf::from_path_buf(entry.path()).ok())
+            .collect())
     }
 
     fn current_directory(&self) -> io::Result<PathBuf> {
@@ -153,7 +150,7 @@ impl System for OsSystem {
         std::fs::symlink_metadata(path).map(|metadata| metadata.file_type().into())
     }
 
-    fn walk_directory(
+    fn walk_python_files(
         &self,
         root: &Utf8Path,
         options: WalkOptions,
@@ -162,6 +159,14 @@ impl System for OsSystem {
             respect_ignore_files,
             max_depth,
         } = options;
+        let types = match python_file_types() {
+            Ok(types) => types,
+            Err(error) => {
+                return Box::new(std::iter::once(Err(SystemError::Io(io::Error::other(
+                    error,
+                )))));
+            }
+        };
         let mut builder = WalkBuilder::new(root);
         builder
             .standard_filters(true)
@@ -170,16 +175,37 @@ impl System for OsSystem {
             .git_global(false)
             .require_git(false)
             .follow_links(false)
-            .max_depth(max_depth);
-        let entries = builder.build().map(|entry| {
-            let entry = entry.map_err(|source| SystemError::Io(io::Error::other(source)))?;
-            let file_type = entry.file_type().map_or(FileType::Other, FileType::from);
-            let path =
-                Utf8PathBuf::from_path_buf(entry.into_path()).map_err(SystemError::NonUtf8Path)?;
-            Ok(DirectoryEntry { path, file_type })
+            .max_depth(max_depth)
+            .types(types);
+        let entries = builder.build().filter_map(|entry| {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(source) => return Some(Err(SystemError::Io(io::Error::other(source)))),
+            };
+            if !entry
+                .file_type()
+                .is_some_and(|file_type| file_type.is_file())
+            {
+                return None;
+            }
+            Some(
+                Utf8PathBuf::from_path_buf(entry.into_path())
+                    .map_err(SystemError::NonUtf8Path)
+                    .map(|path| DirectoryEntry {
+                        path,
+                        file_type: FileType::File,
+                    }),
+            )
         });
         Box::new(entries)
     }
+}
+
+fn python_file_types() -> Result<Types, ignore::Error> {
+    let mut types = TypesBuilder::new();
+    types.add("python", "*.py")?;
+    types.select("python");
+    types.build()
 }
 
 #[cfg(test)]
@@ -375,7 +401,7 @@ mod memory {
                 .ok_or_else(|| Self::error(io::ErrorKind::NotFound, &path))
         }
 
-        fn walk_directory(
+        fn walk_python_files(
             &self,
             root: &Utf8Path,
             options: WalkOptions,
@@ -405,16 +431,23 @@ mod memory {
                 let Some(relative) = relative.ok() else {
                     continue;
                 };
-                let is_hidden = relative.components().any(|component| {
-                    component
-                        .as_str()
-                        .strip_prefix('.')
-                        .is_some_and(|name| !name.is_empty())
+                if !file_type.is_file() || path.extension() != Some("py") {
+                    continue;
+                }
+                let is_hidden = relative.parent().is_some_and(|parent| {
+                    parent
+                        .components()
+                        .any(|component| component.as_str().starts_with('.'))
                 });
+                let is_symlink = path
+                    .ancestors()
+                    .skip(1)
+                    .take_while(|ancestor| ancestor.starts_with(&root))
+                    .any(|ancestor| self.entries.get(ancestor) == Some(&FileType::Symlink));
                 let exceeds_depth = max_depth.is_some_and(|maximum| {
                     path.components().count().saturating_sub(root_depth) > maximum
                 });
-                if is_hidden || exceeds_depth {
+                if is_hidden || is_symlink || exceeds_depth {
                     continue;
                 }
                 entries.push(Ok(DirectoryEntry {
@@ -424,5 +457,81 @@ mod memory {
             }
             Box::new(entries.into_iter())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[rstest::rstest]
+    fn python_type_matches_keep_hidden_files_but_not_hidden_directories(
+        #[values(false, true)] memory: bool,
+    ) -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let root = Utf8PathBuf::from_path_buf(temporary.path().to_path_buf()).expect("UTF-8 root");
+        let mut virtual_files = MemorySystem::new(root.clone());
+        for relative in [
+            ".test_hidden.py",
+            "visible.py",
+            ".hidden/ignored.py",
+            "image.svg",
+        ] {
+            let path = root.join(relative);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, "")?;
+            virtual_files.add_file(&path, "");
+        }
+        let system: &dyn System = if memory { &virtual_files } else { &OsSystem };
+        let entries = system
+            .walk_python_files(
+                &root,
+                WalkOptions {
+                    respect_ignore_files: true,
+                    max_depth: None,
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut paths = entries
+            .iter()
+            .map(|entry| entry.path().strip_prefix(&root).map(Utf8Path::as_str))
+            .collect::<Result<Vec<_>, _>>()?;
+        paths.sort_unstable();
+        assert_eq!(paths, [".test_hidden.py", "visible.py"]);
+        Ok(())
+    }
+
+    // APFS rejects this fixture at creation; Linux accepts arbitrary filename bytes.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn non_python_files_and_directories_need_not_have_utf8_names() -> anyhow::Result<()> {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        let temporary = tempfile::tempdir()?;
+        let root = Utf8PathBuf::from_path_buf(temporary.path().to_path_buf()).expect("UTF-8 root");
+        let directory = temporary
+            .path()
+            .join(OsString::from_vec(b"directory-\xff".to_vec()));
+        std::fs::create_dir(&directory)?;
+        std::fs::write(directory.join("image.png"), "")?;
+        std::fs::write(
+            temporary
+                .path()
+                .join(OsString::from_vec(b"image-\xff.png".to_vec())),
+            "",
+        )?;
+        let entries = OsSystem
+            .walk_python_files(
+                &root,
+                WalkOptions {
+                    respect_ignore_files: true,
+                    max_depth: None,
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(entries, []);
+        Ok(())
     }
 }

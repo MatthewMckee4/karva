@@ -450,7 +450,7 @@ pub(super) fn discover_directory(
     cancellation: &RequestCancellationToken,
     paths: &mut BTreeSet<Utf8PathBuf>,
 ) -> Result<(), SourceIndexError> {
-    let walker = system.walk_directory(
+    let walker = system.walk_python_files(
         root,
         WalkOptions {
             respect_ignore_files,
@@ -529,7 +529,7 @@ fn is_discoverable_file(
     let Some(parent) = path.parent() else {
         return Ok(false);
     };
-    let walker = system.walk_directory(
+    let walker = system.walk_python_files(
         parent,
         WalkOptions {
             respect_ignore_files,
@@ -1506,8 +1506,9 @@ mod memory_tests {
                 path
             }
             "metadata" => {
-                system.fail_metadata(&root, ErrorKind::PermissionDenied);
-                root
+                let conftest = root.join("conftest.py");
+                system.fail_metadata(&conftest, ErrorKind::PermissionDenied);
+                conftest
             }
             _ => {
                 system.fail_walk(&root, ErrorKind::PermissionDenied);
@@ -1517,12 +1518,17 @@ mod memory_tests {
         let error = prepared(system, BTreeMap::new())
             .build(&RequestCancellationToken::default())
             .expect_err("injected failure");
-        let message = error.to_string();
-        assert!(message.contains(expected_path.as_str()), "{message}");
-        assert!(
-            message.contains("permission") || message.contains("Permission"),
-            "{message}"
-        );
+        let (path, kind) = match &error {
+            SourceIndexError::ReadSource { path, source }
+            | SourceIndexError::Metadata { path, source } => (Some(path), Some(source.kind())),
+            SourceIndexError::Walk {
+                root,
+                source: SystemError::Io(source),
+            } => (Some(root), Some(source.kind())),
+            _ => (None, None),
+        };
+        assert_eq!(path, Some(&expected_path));
+        assert_eq!(kind, Some(ErrorKind::PermissionDenied));
     }
 
     #[test]

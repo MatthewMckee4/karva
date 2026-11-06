@@ -38,7 +38,7 @@ use crate::pyproject::PyProject;
 /// Language-server callers can provide an in-memory implementation so project
 /// discovery does not need to touch the host filesystem.
 pub trait ProjectFileSystem {
-    /// Returns metadata for `path`.
+    /// Returns metadata for `path`, following symlinks like native metadata.
     fn path_metadata(&self, path: &Utf8Path) -> io::Result<ProjectFileMetadata>;
 
     /// Reads UTF-8 text from `path`.
@@ -202,19 +202,11 @@ impl ProjectMetadata {
     ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Searching for a project in '{path}'");
 
-        match file_system.path_metadata(path) {
-            Ok(metadata) if metadata.is_dir() => {}
-            Ok(_) => return Err(ProjectMetadataError::NotADirectory(path.to_path_buf())),
-            Err(source) if source.kind() == io::ErrorKind::NotFound => {
-                return Err(ProjectMetadataError::NotADirectory(path.to_path_buf()));
-            }
-            Err(source) => {
-                return Err(ProjectMetadataError::FileSystem {
-                    operation: "inspect project directory",
-                    path: path.to_path_buf(),
-                    source,
-                });
-            }
+        if !file_system
+            .path_metadata(path)
+            .is_ok_and(ProjectFileMetadata::is_dir)
+        {
+            return Err(ProjectMetadataError::NotADirectory(path.to_path_buf()));
         }
 
         let mut closest_project: Option<Self> = None;
@@ -267,13 +259,7 @@ impl ProjectMetadata {
             // Stop walking up at a `.git` boundary to avoid escaping the current
             // repository and picking up a parent project's configuration.
             let git_path = project_root.join(".git");
-            if file_system.path_exists(&git_path).map_err(|source| {
-                ProjectMetadataError::FileSystem {
-                    operation: "inspect git boundary",
-                    path: git_path,
-                    source,
-                }
-            })? {
+            if file_system.path_exists(&git_path).unwrap_or(false) {
                 tracing::debug!(
                     "Stopping project discovery at git boundary '{}'",
                     project_root
@@ -393,6 +379,7 @@ mod tests {
     struct InMemoryFileSystem {
         files: BTreeMap<Utf8PathBuf, String>,
         directories: BTreeSet<Utf8PathBuf>,
+        metadata_errors: BTreeMap<Utf8PathBuf, ErrorKind>,
     }
 
     impl InMemoryFileSystem {
@@ -407,6 +394,9 @@ mod tests {
 
     impl ProjectFileSystem for InMemoryFileSystem {
         fn path_metadata(&self, path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+            if let Some(kind) = self.metadata_errors.get(path) {
+                return Err(io::Error::from(*kind));
+            }
             if self.directories.contains(path) {
                 return Ok(ProjectFileMetadata::new(false, true));
             }
@@ -491,6 +481,19 @@ mod tests {
             matches!(error, ProjectMetadataError::NotADirectory(path) if path == Utf8Path::new("/missing"))
         );
     }
+
+    #[test]
+    fn git_marker_probe_errors_preserve_default_project_discovery() {
+        let root = Utf8Path::new("/workspace");
+        let mut file_system = InMemoryFileSystem::default();
+        file_system.directory(root);
+        file_system
+            .metadata_errors
+            .insert(root.join(".git"), ErrorKind::PermissionDenied);
+        let metadata = ProjectMetadata::discover_with(root, PythonVersion::default(), &file_system)
+            .expect("a failed marker probe must not fail discovery");
+        assert_eq!(metadata.root(), root);
+    }
 }
 
 /// Returns `true` if the pyproject contains a `[tool.karva]` section.
@@ -513,20 +516,6 @@ pub enum ProjectMetadataError {
     /// Discovery started from a path that is not a directory.
     #[error("project path '{0}' is not a directory")]
     NotADirectory(Utf8PathBuf),
-
-    /// A project path could not be inspected during discovery.
-    #[error("failed to {operation} at '{path}': {source}")]
-    FileSystem {
-        /// Filesystem operation being performed.
-        operation: &'static str,
-
-        /// Path being inspected.
-        path: Utf8PathBuf,
-
-        /// Underlying filesystem failure.
-        #[source]
-        source: io::Error,
-    },
 
     /// A discovered `pyproject.toml` could not be loaded.
     #[error("{path} is not a valid `pyproject.toml`")]

@@ -94,16 +94,10 @@ fn discover_project_with_system(
     if metadata.root() == directory
         && !system
             .path_exists(&directory.join("karva.toml"))
-            .map_err(|source| workspace::WorkspaceError::ReadMetadata {
-                path: directory.to_path_buf(),
-                source,
-            })?
+            .unwrap_or(false)
         && !system
             .path_exists(&directory.join("pyproject.toml"))
-            .map_err(|source| workspace::WorkspaceError::ReadMetadata {
-                path: directory.to_path_buf(),
-                source,
-            })?
+            .unwrap_or(false)
     {
         let fallback_root = directory
             .ancestors()
