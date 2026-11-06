@@ -37,6 +37,14 @@ def test_variants(mocker):
         def value(self):
             return 1
 
+    class Holder:
+        client = Service()
+
+    client = mocker.patch.object(Holder, "client", autospec=True)
+    client.read("key")
+    mocker.resetall()
+    client.read.assert_not_called()
+
     patched = mocker.patch.object(Service, "read", autospec=True, return_value=42)
     service = Service()
     assert service.read("key") == 42
@@ -288,13 +296,15 @@ def test_retry(mocker, case):
         .arg("--retry=1");
     // Worker completion order is intentionally unspecified.
     command.args(["--status-level=none", "--final-status-level=none"]);
-    assert_cmd_snapshot!(command, @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(command, @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
 
-    ----- stderr -----
-    ");
+        ----- stderr -----
+        ");
+    }
     assert_eq!(context.read_file("case-1.txt"), "retried");
     assert_eq!(context.read_file("case-2.txt"), "retried");
 }

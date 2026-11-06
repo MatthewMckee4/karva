@@ -86,10 +86,10 @@ class MockerFixture:
 
     @staticmethod
     def _reset(result: Any, *, return_value: bool, side_effect: bool) -> None:
-        if isinstance(result, mock.Mock):
+        if isinstance(result, mock.NonCallableMock):
             result.reset_mock(return_value=return_value, side_effect=side_effect)
         elif inspect.isfunction(result) and isinstance(
-            getattr(result, "mock", None), mock.Mock
+            getattr(result, "mock", None), mock.NonCallableMock
         ):
             # Autospecced functions keep effective settings on their wrapper,
             # whose reset method accepts no keyword flags.
