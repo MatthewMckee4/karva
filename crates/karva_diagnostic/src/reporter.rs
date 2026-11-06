@@ -10,6 +10,16 @@ use crate::result::{IndividualTestResultKind, TestExecutionResult};
 
 /// A reporter for test execution time logging to the user.
 pub trait Reporter: Send + Sync {
+    /// Whether lifecycle timing should allocate and publish observations.
+    fn collect_timings(&self) -> bool {
+        false
+    }
+
+    /// Reports one measured invocation; ordinary test runs never call this.
+    fn report_timing(&self, timing: crate::LifecycleTiming) {
+        let _ = timing;
+    }
+
     /// Reports one unconsumed Python warning, independent of test outcome.
     fn report_warning(&self, warning: crate::TestWarning) {
         let _ = warning;
