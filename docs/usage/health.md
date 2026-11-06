@@ -38,6 +38,8 @@ in the same module or class. Both locations are shown. Definitions in mutually
 exclusive branches are excluded; uncertain execution produces
 `possibly-shadowed-definition` with warning severity. These checks cover code
 that runtime collection can no longer see, including duplicate test methods.
+Duplicate fixtures use `duplicate-fixture` alone; ignoring that rule suppresses
+the defect without producing a second shadowing finding.
 
 `duplicate-parameter-case` and `duplicate-parameter-id` are warnings for repeated
 literal inputs or explicit IDs within one parameter dimension. Nested containers
@@ -72,3 +74,29 @@ names, wall time, and time spent serializing and sending observations. That
 reporting overhead excludes clocks and source-coordinate construction. There is
 no universal definition of slow or fixed ranking cutoff. Runtime failures remain
 visible and make the command fail, independently of advisory severity.
+
+Probe for observed instability and order dependence explicitly:
+
+```sh
+uv run karva health --probe 3 --probe-seed 42
+```
+
+The probe repeats stable order and each requested seeded order the specified
+number of times in fresh workers. At least two repetitions per order are needed
+for comparison. Omit the seed to generate and record one; repeat `--probe-seed`
+to inspect more orders. Probes disable configured fail-fast and default retries
+so a failing test cannot hide the comparison population. Test-local retry
+attempts are retained in the evidence.
+
+`unstable-test` requires conflicting outcomes within repeated observations under
+the same order. `order-dependent-test` requires each observed order to repeat
+consistently while different orders disagree. Timing changes, consistently failing
+tests, and consistently passing tests do not produce either finding. Missing
+cases are not compared. Stable expansion indices distinguish parametrized cases
+even when fixture display values change.
+
+Findings include reproduction command arguments. JSON records the working
+directory, seeds, repetition count, actual completion sequence, stable case keys,
+and observed outcomes for every run. Reproduction requires the same project and
+external state; the probe cannot restore files, databases, or remote services
+changed by tests. Duration measurement and probes are separate execution modes.

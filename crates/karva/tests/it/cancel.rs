@@ -73,7 +73,7 @@ def test_slow():
     ");
 }
 
-fn wait_for_file(path: &Utf8Path, timeout: Duration) -> Result<(), String> {
+pub fn wait_for_file(path: &Utf8Path, timeout: Duration) -> Result<(), String> {
     let start = Instant::now();
 
     while start.elapsed() < timeout {

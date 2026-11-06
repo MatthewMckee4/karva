@@ -44,6 +44,9 @@ use crate::unhandled_exceptions::UnhandledExceptionCapture;
 /// `test_paths` is consumed by discovery. Coverage startup failures become run
 /// diagnostics; persistence failures are traced without discarding results.
 pub struct RunRequest<'a> {
+    /// Whether controller assignment order must survive source collection.
+    pub preserve_test_order: bool,
+
     /// Current working directory used to resolve paths and render diagnostics.
     pub cwd: &'a Utf8Path,
 

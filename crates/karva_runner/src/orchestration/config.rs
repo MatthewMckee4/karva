@@ -39,6 +39,9 @@ pub struct ParallelTestConfig {
 
     /// Which completed test case bodies the controller retains.
     pub result_retention: TestResultRetention,
+
+    /// Collect exclusive lifecycle timings for an explicit health analysis.
+    pub health_timings: bool,
 }
 
 /// Controls whether the run selects the complete suite or cached failures.
@@ -100,6 +103,9 @@ impl From<bool> for FailurePriority {
 /// Controls whether successful non-retried case bodies remain in memory.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TestResultRetention {
+    /// Retain stable outcome observations and failures for controlled health probes.
+    Observations,
+
     /// Retain failures and retries needed for terminal reporting.
     #[default]
     FailuresAndRetries,
@@ -110,6 +116,9 @@ pub enum TestResultRetention {
 
 /// Aggregated outputs of a parallel test run.
 pub struct RunOutput {
+    /// Whether a user interrupt stopped this run; repeated analyses must not restart it.
+    pub cancelled: bool,
+
     /// Test results merged across all workers.
     pub results: AggregatedResults,
 

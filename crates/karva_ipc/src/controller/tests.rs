@@ -696,6 +696,7 @@ fn transfers_worker_configuration_after_authentication() {
         run_ignored: karva_metadata::RunIgnoredMode::All,
         coverage_test_contexts: true,
         health_timings: false,
+        preserve_test_order: true,
     });
     let expected = Arc::clone(&configuration);
     let mut server = ControllerServer::bind("run-id").expect("bind controller");

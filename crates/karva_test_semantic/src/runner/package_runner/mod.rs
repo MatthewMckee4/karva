@@ -491,7 +491,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         session: &DiscoveredPackage,
         test_plans: &mut CompiledTestPlans,
     ) -> bool {
-        let contexts = if self.context.settings().test().failed_first {
+        let contexts = if self.context.preserve_test_order() {
             Self::ordered_test_contexts(session)
         } else {
             let mut contexts = Vec::new();
