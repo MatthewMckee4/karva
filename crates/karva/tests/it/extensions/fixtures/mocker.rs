@@ -406,7 +406,7 @@ def test_restored():
              Summary [TIME] 2 tests run: 1 passed, 1 error, 0 skipped
 
         ----- stderr -----
-        "#)
+        "#);
         }
         _ => assert_cmd_snapshot!(context.command_no_parallel().env("FAIL_PHASE", phase), @"
         success: false
