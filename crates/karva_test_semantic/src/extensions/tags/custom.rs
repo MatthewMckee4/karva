@@ -9,13 +9,25 @@ use pyo3::types::{PyDict, PyTuple};
 #[derive(Debug, Clone)]
 pub struct CustomTag {
     name: String,
-    #[expect(dead_code)]
     args: Vec<Arc<Py<PyAny>>>,
-    #[expect(dead_code)]
     kwargs: Vec<(String, Arc<Py<PyAny>>)>,
 }
 
 impl CustomTag {
+    /// Copies benchmark keyword controls; positional metadata is unsupported.
+    pub(super) fn benchmark_options<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        if !self.args.is_empty() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "benchmark tag accepts keyword options only",
+            ));
+        }
+        let options = PyDict::new(py);
+        for (key, value) in &self.kwargs {
+            options.set_item(key, value.bind(py))?;
+        }
+        Ok(options)
+    }
+
     pub(super) fn name(&self) -> &str {
         &self.name
     }

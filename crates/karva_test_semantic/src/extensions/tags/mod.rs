@@ -157,6 +157,7 @@ impl Tag {
         Self::TIMEOUT_NAME,
         Self::FAIL_SLOW_NAME,
         Self::FILTER_WARNINGS_NAME,
+        "benchmark",
     ];
 
     const PYTEST_BUILTIN_NAMES: &'static [&'static str] = &[
@@ -167,6 +168,7 @@ impl Tag {
         Self::PYTEST_USE_FIXTURES_NAME,
         Self::PYTEST_EXPECT_FAIL_NAME,
         "filterwarnings",
+        "benchmark",
     ];
 
     fn name(&self) -> &str {
@@ -375,6 +377,8 @@ pub struct Tags {
 /// Runtime tag policy compiled from decorators and parameter-specific marks.
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeTags {
+    /// Benchmark controls in tag priority order, including inherited metadata.
+    benchmarks: Vec<CustomTag>,
     skip: SkipPolicy,
     expect_fail: Option<ExpectFailTag>,
     timeout: Option<TimeoutTag>,
@@ -392,6 +396,20 @@ enum SkipPolicy {
 }
 
 impl RuntimeTags {
+    /// Whether any benchmark policy was attached to this test.
+    pub(crate) fn has_benchmark(&self) -> bool {
+        !self.benchmarks.is_empty()
+    }
+
+    /// Merges inherited controls with higher-priority local values winning.
+    pub(crate) fn benchmark_options<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let options = PyDict::new(py);
+        for tag in self.benchmarks.iter().rev() {
+            options.update(tag.benchmark_options(py)?.as_mapping())?;
+        }
+        Ok(options)
+    }
+
     fn from_tags(tags: &Tags) -> Self {
         let mut runtime = Self::default();
         runtime.extend(tags);
@@ -410,6 +428,9 @@ impl RuntimeTags {
                 }
                 Tag::FilterWarnings(filters) => {
                     self.warning_filters.extend(filters.iter().cloned());
+                }
+                Tag::Custom(custom) if custom.name() == "benchmark" => {
+                    self.benchmarks.push(custom.clone());
                 }
                 Tag::Timeout(timeout) if self.timeout.is_none() => self.timeout = Some(*timeout),
                 Tag::FailSlow(fail_slow) if self.fail_slow.is_none() => {
@@ -554,7 +575,9 @@ impl Tags {
         let mut unknown = Vec::new();
         for tag in &self.inner {
             match tag {
-                Tag::Custom(custom) if !registered.contains_key(custom.name()) => {
+                Tag::Custom(custom)
+                    if custom.name() != "benchmark" && !registered.contains_key(custom.name()) =>
+                {
                     unknown.push(custom.name());
                 }
                 Tag::Parametrize(parametrize) => {

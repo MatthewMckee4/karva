@@ -27,6 +27,7 @@ pub(super) fn completion<'a>(
         && result.retry().is_none()
         && result.captured_output().is_none()
         && result.attempts().is_empty()
+        && result.benchmarks().is_empty()
     {
         BorrowedEventFrame::TestPassed {
             cache_key,

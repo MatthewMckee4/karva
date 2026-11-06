@@ -27,6 +27,14 @@ pub struct FixturePlan {
 }
 
 impl FixturePlan {
+    /// Whether the selected fixture graph contains the built-in benchmark.
+    pub(crate) fn uses_benchmark(&self) -> bool {
+        self.fixtures.iter().any(|fixture| {
+            fixture.function_name() == "benchmark"
+                && fixture.name().module_path().module_name() == "karva._builtins"
+        })
+    }
+
     pub(crate) fn new(fixtures: Vec<NormalizedFixture>) -> Self {
         Self { fixtures }
     }

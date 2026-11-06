@@ -43,6 +43,10 @@ struct SerializedTestCaseResult<D> {
     /// Earlier attempts retained when retry policy reran the test.
     #[serde(default)]
     attempts: Vec<TestCaseAttempt<D>>,
+
+    /// Callable measurements retained with the final test outcome.
+    #[serde(default)]
+    benchmarks: Vec<crate::BenchmarkResult>,
 }
 
 impl<D: Serialize> Serialize for TestCaseResult<D> {
@@ -52,7 +56,8 @@ impl<D: Serialize> Serialize for TestCaseResult<D> {
     {
         let optional_fields = usize::from(self.payload.retry.is_some())
             + usize::from(self.payload.captured_output.is_some())
-            + usize::from(!self.payload.attempts.is_empty());
+            + usize::from(!self.payload.attempts.is_empty())
+            + usize::from(!self.payload.benchmarks.is_empty());
         let mut result = serializer.serialize_struct("TestCaseResult", 5 + optional_fields)?;
         result.serialize_field("module_name", &self.identity.module_name)?;
         result.serialize_field("name", &self.identity.name)?;
@@ -67,6 +72,9 @@ impl<D: Serialize> Serialize for TestCaseResult<D> {
         }
         if !self.payload.attempts.is_empty() {
             result.serialize_field("attempts", &self.payload.attempts)?;
+        }
+        if !self.payload.benchmarks.is_empty() {
+            result.serialize_field("benchmarks", &self.payload.benchmarks)?;
         }
         result.end()
     }
@@ -90,6 +98,7 @@ impl<'de, D: Deserialize<'de>> Deserialize<'de> for TestCaseResult<D> {
                 retry: result.retry,
                 captured_output: result.captured_output,
                 attempts: result.attempts,
+                benchmarks: result.benchmarks,
             },
         })
     }

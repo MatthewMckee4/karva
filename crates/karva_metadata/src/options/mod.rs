@@ -381,6 +381,15 @@ impl TerminalOptions {
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 /// Controls test selection, retries, timeouts, and failure policies.
 pub struct TestOptions {
+    /// Invoke benchmark callables once without warmup, calibration, or sampling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option(
+        default = "false",
+        value_type = "bool",
+        example = "benchmark-disable = true"
+    )]
+    pub benchmark_disable: Option<bool>,
+
     /// Ordered Python `action:message:category:module:line` warning filters.
     /// Message and module fields are regular expressions. Later entries win.
     /// Named profiles replace the default profile's list; CLI filters replace
@@ -681,6 +690,7 @@ pub struct TestOptions {
 /// Keep new fields in this implementation using their normal merge behavior.
 impl Combine for TestOptions {
     fn combine_with(&mut self, other: Self) {
+        self.benchmark_disable.combine_with(other.benchmark_disable);
         if self.warning_filters.is_none() {
             self.warning_filters = other.warning_filters;
         }
@@ -717,6 +727,7 @@ impl TestOptions {
             .unwrap_or_default();
 
         TestSettings {
+            benchmark_disable: self.benchmark_disable.unwrap_or_default(),
             warning_filters: self
                 .warning_filters
                 .clone()
