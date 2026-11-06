@@ -361,12 +361,22 @@ def test_case(value):
 #[case("ignore::::-1")]
 #[case("ignore::::x")]
 #[case("ignore::::1:extra")]
-fn rejects_invalid_project_filters(#[case] filter: &str) {
+fn rejects_invalid_project_filters(
+    #[case] filter: &str,
+    #[values(false, true)] pytest_config: bool,
+) {
     let context = TestContext::with_file("test.py", "def test_pass():\n    assert False\n");
-    context.write_file(
-        "karva.toml",
-        format!("[profile.default.test]\nwarning-filters = [{filter:?}]\n"),
-    );
+    if pytest_config {
+        context.write_file(
+            "pyproject.toml",
+            format!("[tool.pytest.ini_options]\nfilterwarnings = [{filter:?}]\n"),
+        );
+    } else {
+        context.write_file(
+            "karva.toml",
+            format!("[profile.default.test]\nwarning-filters = [{filter:?}]\n"),
+        );
+    }
     let mut command = context.command_no_parallel();
     command.arg("--status-level=none");
     match filter {
@@ -882,6 +892,125 @@ fn cli_overrides_profile_warning_budget() {
     warnings:
       test.py:3: UserWarning: budget warning (1 emitted)
 
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn pytest_filterwarnings_turns_warnings_into_errors(
+    #[values(1, 2)] workers: usize,
+    #[values(false, true)] karva_config: bool,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+def test_caught():
+    try:
+        warnings.warn("caught", UserWarning)
+    except UserWarning:
+        return
+    assert False, "warning was not an error"
+
+def test_uncaught():
+    warnings.warn("uncaught", UserWarning)
+
+def test_ignored():
+    warnings.warn("allowed", UserWarning)
+"#,
+    );
+    context.write_file(
+        "pyproject.toml",
+        "[tool.pytest.ini_options]\nfilterwarnings = [\"error\", \"ignore:allowed:UserWarning\"]\n",
+    );
+    if karva_config {
+        context.write_file("karva.toml", "[profile.default.test]\nretry = 0\n");
+    }
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command().args([
+            &format!("--num-workers={workers}"), "--status-level=none",
+        ]), @r#"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+
+        failures:
+
+        test::test_uncaught:
+
+        error[test-failure]: Test `test_uncaught` failed
+          --> test.py:11:5
+           |
+        11 | def test_uncaught():
+           |     ^^^^^^^^^^^^^
+        info: Test failed here
+          --> test.py:12:5
+           |
+        12 |     warnings.warn("uncaught", UserWarning)
+           |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        info: uncaught
+
+        ────────────
+             Summary [TIME] 3 tests run: 2 passed, 1 failed, 0 skipped
+
+        ----- stderr -----
+        "#);
+    }
+}
+
+#[rstest]
+#[case(
+    "pyproject.toml",
+    "[tool.karva.profile.default.test]\nwarning-filters = [\"ignore\"]",
+    None
+)]
+#[case(
+    "karva.toml",
+    "[profile.default.test]\nwarning-filters = [\"ignore\"]",
+    None
+)]
+#[case("karva.toml", "[profile.default.test]\nwarning-filters = []", None)]
+#[case(
+    "pyproject.toml",
+    "[tool.karva.profile.ci.test]\nwarning-filters = [\"ignore\"]",
+    Some("--profile=ci")
+)]
+#[case("pyproject.toml", "", Some("--warning-filter=ignore"))]
+fn pytest_filterwarnings_yields_to_explicit_karva_policy(
+    #[case] config_file: &str,
+    #[case] config: &str,
+    #[case] arg: Option<&str>,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import warnings
+
+def test_warning():
+    with warnings.catch_warnings(record=True):
+        warnings.warn("allowed", DeprecationWarning)
+"#,
+    );
+    let mut pyproject = "[tool.pytest.ini_options]\nfilterwarnings = [\"error\"]\n".to_string();
+    if config_file == "pyproject.toml" {
+        pyproject.push_str(config);
+    } else {
+        context.write_file(config_file, config);
+    }
+    context.write_file("pyproject.toml", pyproject);
+    let mut command = context.command_no_parallel();
+    command.arg("--status-level=none");
+    if let Some(arg) = arg {
+        command.arg(arg);
+    }
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
