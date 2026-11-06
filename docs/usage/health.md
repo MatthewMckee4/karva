@@ -44,3 +44,11 @@ literal inputs or explicit IDs within one parameter dimension. Nested containers
 are compared structurally, ignoring formatting. Dynamic expressions and cases
 with distinct marks are skipped. Repeated inputs can be intentional; suppress the
 rule when they exercise repeated execution on purpose.
+
+`unused-fixture` warns when no test, automatic fixture, import, export, or ordinary
+Python use reaches a fixture through the source dependency graph. Inherited and
+shadowed providers retain distinct identities. Dynamic lookup, unknown provider
+resolution, or dynamic parameter names prevent this check. Modules declaring
+`__all__`, and fixture-only modules other than `conftest.py`, are treated as public fixture APIs. Plugin and built-in providers are
+not reported. Explicit path selections skip this rule; run without paths to
+inspect the full configured suite.
