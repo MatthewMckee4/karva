@@ -15,6 +15,7 @@ mod document;
 mod runtime;
 mod server;
 mod session;
+mod system;
 mod workspace;
 
 pub use document::{PositionEncoding, TextDocument};
@@ -24,6 +25,7 @@ const SERVER_NAME: &str = "karva";
 /// Owned inputs for resolving one document's Karva project off the event loop.
 #[derive(Clone, Debug)]
 struct PreparedProjectDiscovery {
+    system: Arc<dyn system::System>,
     path: Utf8PathBuf,
     workspace_root: Utf8PathBuf,
     python_version: PythonVersion,
@@ -35,7 +37,8 @@ struct PreparedProjectDiscovery {
 impl PreparedProjectDiscovery {
     /// Reads project configuration and applies initialization overrides.
     fn discover(self) -> Result<Arc<Project>, workspace::WorkspaceError> {
-        let project = discover_project(
+        let project = discover_project_with_system(
+            self.system.as_ref(),
             &self.path,
             &self.workspace_root,
             self.python_version,
@@ -49,7 +52,24 @@ impl PreparedProjectDiscovery {
     }
 }
 
+#[cfg(test)]
 fn discover_project(
+    path: &Utf8Path,
+    workspace_root: &Utf8Path,
+    python_version: PythonVersion,
+    profile: Option<&str>,
+) -> Result<Project, workspace::WorkspaceError> {
+    discover_project_with_system(
+        &system::OsSystem,
+        path,
+        workspace_root,
+        python_version,
+        profile,
+    )
+}
+
+fn discover_project_with_system(
+    system: &dyn system::System,
     path: &Utf8Path,
     workspace_root: &Utf8Path,
     python_version: PythonVersion,
@@ -60,28 +80,37 @@ fn discover_project(
         .ok_or_else(|| workspace::WorkspaceError::MissingParent(path.to_path_buf()))?;
     // Unsaved documents can live beneath directories that the editor has not created yet.
     // Discover configuration from their nearest existing ancestor without changing the URI.
-    while !directory
-        .try_exists()
-        .map_err(|source| workspace::WorkspaceError::ReadMetadata {
+    while !system.path_exists(directory).map_err(|source| {
+        workspace::WorkspaceError::ReadMetadata {
             path: directory.to_path_buf(),
             source,
-        })?
-    {
+        }
+    })? {
         directory = directory
             .parent()
             .ok_or_else(|| workspace::WorkspaceError::MissingParent(path.to_path_buf()))?;
     }
-    let mut metadata = ProjectMetadata::discover(directory, python_version)?;
+    let mut metadata = ProjectMetadata::discover_with(directory, python_version, system)?;
     if metadata.root() == directory
-        && !directory.join("karva.toml").exists()
-        && !directory.join("pyproject.toml").exists()
+        && !system
+            .path_exists(&directory.join("karva.toml"))
+            .map_err(|source| workspace::WorkspaceError::ReadMetadata {
+                path: directory.to_path_buf(),
+                source,
+            })?
+        && !system
+            .path_exists(&directory.join("pyproject.toml"))
+            .map_err(|source| workspace::WorkspaceError::ReadMetadata {
+                path: directory.to_path_buf(),
+                source,
+            })?
     {
         let fallback_root = directory
             .ancestors()
             .take_while(|ancestor| ancestor.starts_with(workspace_root))
-            .find(|ancestor| ancestor.join(".git").exists())
+            .find(|ancestor| system.path_exists(&ancestor.join(".git")).unwrap_or(false))
             .unwrap_or(workspace_root);
-        metadata = ProjectMetadata::discover(fallback_root, python_version)?;
+        metadata = ProjectMetadata::discover_with(fallback_root, python_version, system)?;
     }
     metadata.apply_overrides(
         &ProjectOptionsOverrides::new(None, Options::default())

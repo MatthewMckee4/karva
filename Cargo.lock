@@ -1254,6 +1254,7 @@ dependencies = [
  "camino",
  "crossbeam-channel",
  "gen-lsp-types",
+ "glob",
  "ignore",
  "indoc",
  "insta",

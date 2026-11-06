@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::system::{OsSystem, System};
 use camino::{Utf8Path, Utf8PathBuf};
 use karva_metadata::{ProjectMetadataError, UnknownProfile};
 use karva_project::Project;
@@ -88,6 +89,7 @@ impl Workspace {
 /// Independent project caches for every editor workspace folder.
 #[derive(Clone, Debug)]
 pub struct Workspaces {
+    system: Arc<dyn System>,
     folders: Vec<WorkspaceFolder>,
     profile: Option<String>,
     python_version: PythonVersion,
@@ -100,14 +102,31 @@ impl Workspaces {
         python_version: PythonVersion,
         profile: Option<String>,
     ) -> Result<Self, WorkspaceError> {
-        Self::new_with_current_directory(folders, python_version, profile, || {
-            std::env::current_dir()
-                .map_err(WorkspaceError::CurrentDirectory)
-                .and_then(|path| {
-                    Utf8PathBuf::from_path_buf(path)
-                        .map_err(WorkspaceError::NonUtf8CurrentDirectory)
-                })
-        })
+        Self::new_with_system(folders, python_version, profile, Arc::new(OsSystem))
+    }
+
+    pub(super) fn new_with_system(
+        folders: Vec<WorkspaceFolder>,
+        python_version: PythonVersion,
+        profile: Option<String>,
+        system: Arc<dyn System>,
+    ) -> Result<Self, WorkspaceError> {
+        let mut workspaces =
+            Self::new_with_current_directory(folders, python_version, profile, || {
+                system
+                    .current_directory()
+                    .map_err(WorkspaceError::CurrentDirectory)
+                    .and_then(|path| {
+                        Utf8PathBuf::from_path_buf(path)
+                            .map_err(WorkspaceError::NonUtf8CurrentDirectory)
+                    })
+            })?;
+        workspaces.system = system;
+        Ok(workspaces)
+    }
+
+    pub(super) fn system(&self) -> &Arc<dyn System> {
+        &self.system
     }
 
     fn new_with_current_directory(
@@ -127,6 +146,7 @@ impl Workspaces {
             roots
         };
         Ok(Self {
+            system: Arc::new(OsSystem),
             folders,
             profile,
             python_version,
@@ -205,6 +225,7 @@ impl Workspaces {
             .or_else(|| path.parent().map(Utf8Path::to_path_buf))
             .ok_or_else(|| WorkspaceError::MissingParent(path.clone()))?;
         Ok(crate::PreparedProjectDiscovery {
+            system: Arc::clone(&self.system),
             path,
             workspace_root,
             python_version: self.python_version,
@@ -638,5 +659,51 @@ mod tests {
         assert_eq!(prefix(&before), "before_");
         assert_eq!(prefix(&after), "after_");
         assert!(!Arc::ptr_eq(&before, &after));
+    }
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use super::*;
+    use crate::system::MemorySystem;
+    use std::io::ErrorKind;
+
+    fn root() -> Utf8PathBuf {
+        Utf8PathBuf::from(if cfg!(windows) {
+            "C:/virtual-karva"
+        } else {
+            "/virtual-karva"
+        })
+    }
+
+    #[test]
+    fn virtual_project_configuration_is_discovered_above_missing_parents() -> anyhow::Result<()> {
+        let root = root();
+        let mut system = MemorySystem::new(root.clone());
+        system.add_directory(&root);
+        system.add_file(
+            &root.join("karva.toml"),
+            "[profile.default.test]\ntest-function-prefix = 'check'\n",
+        );
+        let workspaces =
+            Workspaces::new_with_system(vec![], PythonVersion::PY313, None, Arc::new(system))?;
+        let path = root.join("missing/parents/test_unsaved.py");
+        let uri = Uri::from_file_path(path.as_std_path()).expect("virtual file URI");
+        let project = workspaces.prepare_project_discovery(&uri)?.discover()?;
+        assert_eq!(project.cwd(), &root);
+        assert_eq!(project.settings().test().test_function_prefix, "check");
+        Ok(())
+    }
+
+    #[test]
+    fn injected_current_directory_error_is_reported() {
+        let mut system = MemorySystem::new(root());
+        system.fail_current_directory(ErrorKind::PermissionDenied);
+        let error =
+            Workspaces::new_with_system(vec![], PythonVersion::PY313, None, Arc::new(system))
+                .expect_err("injected cwd failure");
+        assert!(
+            matches!(error, WorkspaceError::CurrentDirectory(error) if error.kind() == ErrorKind::PermissionDenied)
+        );
     }
 }
