@@ -674,9 +674,13 @@ pub struct TestOptions {
     pub termination_grace_period: Option<TerminationGracePeriodSecs>,
 }
 
+/// Uses a manual merge because derived `Combine` appends vectors, while a
+/// supplied warning policy must replace the lower-precedence list. Otherwise
+/// an inherited `"error"` filter survives an empty list or a selective ignore.
+/// `None` inherits the policy; `Some`, including an empty list, replaces it.
+/// Keep new fields in this implementation using their normal merge behavior.
 impl Combine for TestOptions {
     fn combine_with(&mut self, other: Self) {
-        // A supplied policy replaces the lower-precedence list, even when empty.
         if self.warning_filters.is_none() {
             self.warning_filters = other.warning_filters;
         }
