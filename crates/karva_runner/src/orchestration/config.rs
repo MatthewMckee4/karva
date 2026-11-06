@@ -39,6 +39,9 @@ pub struct ParallelTestConfig {
 
     /// Which completed test case bodies the controller retains.
     pub result_retention: TestResultRetention,
+
+    /// Collect exclusive lifecycle timings for an explicit health analysis.
+    pub health_timings: bool,
 }
 
 /// Controls whether the run selects the complete suite or cached failures.

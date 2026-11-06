@@ -150,6 +150,7 @@ pub fn run_parallel_tests(
                     config.test_ordering,
                     crate::TestOrdering::Stable | crate::TestOrdering::SeededShuffle(_)
                 ),
+            config.health_timings,
         ),
         project,
         artifacts: &artifacts,

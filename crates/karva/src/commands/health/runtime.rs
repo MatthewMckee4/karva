@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use anyhow::Result;
-use karva_cli::{HealthTimings, SubTestCommand};
+use karva_cli::SubTestCommand;
 use karva_diagnostic::{AggregatedResults, LifecycleTiming};
 use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
 use karva_project::Project;
@@ -82,12 +82,37 @@ impl RuntimeReport {
                 .total_cmp(&a.duration_seconds)
                 .then_with(|| a.name.cmp(&b.name))
         });
-        ranked.into_iter().enumerate().filter(|(_, timing)| timing.duration_seconds > median).map(|(rank,timing)| Finding {
-            rule: "duration-hotspot", severity: "info",
-            location: Location { path: timing.path.as_str().replace('\\', "/"), line: timing.line, column: timing.column, start: timing.start, end: timing.end },
-            evidence: format!("{} {}: {:.6}s; rank {} of {}; above measured median {:.6}s; measured phase total {:.6}s; scope {}; dependencies: {}", timing.name, timing.phase.as_str(), timing.duration_seconds, rank + 1, self.measurements.len(), median, total, timing.scope.as_deref().unwrap_or("test"), timing.dependencies.join(", ")),
-            reproduction: None, related: Vec::new(), action: "Inspect this measured phase and its dependencies before optimizing; shared fixture invocations are counted once.",
-        }).collect()
+        ranked
+            .into_iter()
+            .enumerate()
+            .filter(|(_, timing)| timing.duration_seconds > median)
+            .map(|(rank, timing)| Finding {
+                rule: "duration-hotspot",
+                severity: "info",
+                location: Location {
+                    path: timing.path.as_str().replace('\\', "/"),
+                    line: timing.line,
+                    column: timing.column,
+                    start: timing.start,
+                    end: timing.end,
+                },
+                evidence: format!(
+                    "{} {}: {:.6}s; rank {} of {}; above measured median {:.6}s; measured phase total {:.6}s; scope {}; dependencies: {}",
+                    timing.name,
+                    timing.phase.as_str(),
+                    timing.duration_seconds,
+                    rank + 1,
+                    self.measurements.len(),
+                    median,
+                    total,
+                    timing.scope.as_deref().unwrap_or("test"),
+                    timing.dependencies.join(", "),
+                ),
+                reproduction: None,
+                related: Vec::new(),
+                action: "Inspect this measured phase and its dependencies before optimizing; shared fixture invocations are counted once.",
+            })
+            .collect()
     }
 }
 
@@ -97,15 +122,9 @@ pub(super) fn run(
     health_timings: bool,
     ordering: TestOrdering,
 ) -> Result<RunOutput> {
-    let args = SubTestCommand {
-        health_timings: if health_timings {
-            HealthTimings::Enabled
-        } else {
-            HealthTimings::Disabled
-        },
-        ..SubTestCommand::default()
-    };
+    let args = SubTestCommand::default();
     let config = ParallelTestConfig {
+        health_timings,
         num_workers: 1,
         no_cache: true,
         create_ctrlc_handler: true,
@@ -115,7 +134,7 @@ pub(super) fn run(
         partition: None,
         test_ordering: ordering,
         result_retention: if health_timings {
-            TestResultRetention::All
+            TestResultRetention::FailuresAndRetries
         } else {
             TestResultRetention::Observations
         },

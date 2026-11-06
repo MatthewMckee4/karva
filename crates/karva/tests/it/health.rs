@@ -155,16 +155,13 @@ if other:
     test_health.py:10:9: error[shadowed-definition]: Later definition `test_method` replaces the earlier test or fixture
       test_health.py:11:9: Surviving definition
       help: Rename or remove one definition so each test or fixture has a distinct name.
-    test_health.py:14:5: error[shadowed-definition]: Later definition `data` replaces the earlier test or fixture
-      test_health.py:16:5: Surviving definition
-      help: Rename or remove one definition so each test or fixture has a distinct name.
     test_health.py:16:5: error[duplicate-fixture]: Fixture `data` is defined more than once
       test_health.py:14:5: First definition is here
       help: Rename or remove the duplicate fixture.
     test_health.py:19:9: warning[possibly-shadowed-definition]: Definition `test_conditional` may replace the earlier definition if both statements execute
       test_health.py:21:9: Potential surviving definition
       help: Rename or remove one definition so each test or fixture has a distinct name.
-    6 health finding(s) (source-only; tests were not executed)
+    5 health finding(s) (source-only; tests were not executed)
 
     ----- stderr -----
     ");
@@ -524,7 +521,7 @@ def test_second(shared): time.sleep(0.01)
             "attempt": null
           },
           {
-            "name": "test_health::test_first(shared=1)",
+            "name": "test_health::test_first",
             "phase": "test-body",
             "path": "test_health.py",
             "line": 12,
@@ -537,7 +534,7 @@ def test_second(shared): time.sleep(0.01)
             "attempt": 1
           },
           {
-            "name": "test_health::test_second(shared=1)",
+            "name": "test_health::test_second",
             "phase": "test-body",
             "path": "test_health.py",
             "line": 13,
@@ -1039,4 +1036,117 @@ fn health_keeps_fixture_only_modules_as_public_apis() {
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn health_keeps_shadowing_of_renamed_fixtures_and_class_providers() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r#"
+import karva
+@karva.fixture(name="old")
+def renamed(): pass
+@karva.fixture(name="new")
+def renamed(): pass
+class Providers:
+    @karva.fixture
+    def data(self): pass
+    @karva.fixture
+    def data(self): pass
+@karva.fixture
+def replaced(): pass
+def replaced(): pass
+"#,
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test_health.py:4:5: error[shadowed-definition]: Later definition `renamed` replaces the earlier test or fixture
+      test_health.py:6:5: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:9:9: error[shadowed-definition]: Later definition `data` replaces the earlier test or fixture
+      test_health.py:11:9: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:13:5: error[shadowed-definition]: Later definition `replaced` replaces the earlier test or fixture
+      test_health.py:14:5: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    3 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_same_branch_and_conditional_class_shadowing_are_definite() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r"
+if enabled:
+    def test_same(): pass
+    def test_same(): pass
+try:
+    class Tests:
+        def test_method(self): pass
+        def test_method(self): pass
+except Exception:
+    pass
+",
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test_health.py:3:9: error[shadowed-definition]: Later definition `test_same` replaces the earlier test or fixture
+      test_health.py:4:9: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:7:13: error[shadowed-definition]: Later definition `test_method` replaces the earlier test or fixture
+      test_health.py:8:13: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    2 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_probe_keeps_observed_doctest_instability() {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            "[profile.default.test]\ndoctest-modules = true\n",
+        ),
+        (
+            "test_health.py",
+            r#""""
+>>> from pathlib import Path
+>>> counter = Path('counter')
+>>> count = int(counter.read_text()) + 1 if counter.exists() else 1
+>>> _ = counter.write_text(str(count))
+>>> assert count % 2 == 0
+"""
+"#,
+        ),
+    ]);
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).args(["health", "--probe=2", "--probe-seed=2"]), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test_health.py:2:1: warning[unstable-test]: test_health::doctest:@module has conflicting observed outcomes: stable repetition 1: failed; stable repetition 2: passed; seeded-shuffle seed 2 repetition 1: failed; seeded-shuffle seed 2 repetition 2: passed
+      help: Inspect nondeterminism or external state; repeated observations under the same order disagreed.
+      reproduce argv: ["uv","run","karva","health","--probe","2","--probe-seed","2"]
+    1 health finding(s) (probe: 4 observed run(s); seeds: [2])
+    test_health::doctest:@module: error[test-failure]: Test `doctest:@module` failed
+     --> test_health.py:6:1
+      |
+    6 | >>> assert count % 2 == 0
+      | ^^^
+    info: Unexpected exception:
+            AssertionError
+
+
+
+    ----- stderr -----
+    "#);
+    assert_eq!(context.read_file("counter"), "4");
 }

@@ -223,10 +223,14 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     );
     let mut findings = Vec::new();
     for path in selected_paths {
+        let Some(analysis) = index.analyze(&path) else {
+            continue;
+        };
         if let Some(module) = index.module(&path) {
             for diagnostic in karva_ide::shadowed_definitions(
                 module,
                 &project.settings().test().test_function_prefix,
+                &analysis.diagnostics,
             )
             .into_iter()
             .chain(karva_ide::duplicate_parameter_cases(module))
@@ -240,15 +244,13 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
                 }
             }
         }
-        if let Some(analysis) = index.analyze(&path) {
-            for diagnostic in analysis.diagnostics {
-                if !args
-                    .ignore
-                    .iter()
-                    .any(|rule| rule == diagnostic.code.as_str())
-                {
-                    findings.push(source_finding(diagnostic, &modules, project.cwd()));
-                }
+        for diagnostic in analysis.diagnostics {
+            if !args
+                .ignore
+                .iter()
+                .any(|rule| rule == diagnostic.code.as_str())
+            {
+                findings.push(source_finding(diagnostic, &modules, project.cwd()));
             }
         }
     }

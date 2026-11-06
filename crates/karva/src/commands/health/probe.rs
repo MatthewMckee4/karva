@@ -9,6 +9,7 @@ use karva_collector::CollectedModule;
 use karva_diagnostic::TestObservation;
 use karva_project::Project;
 use karva_runner::TestOrdering;
+use ruff_text_size::{TextRange, TextSize};
 use serde::Serialize;
 
 use super::runtime::{execution_errors, run, successful};
@@ -159,25 +160,37 @@ impl ProbeReport {
                 continue;
             };
             let function = test.key.test_function_name();
-            let Some((module_name, name)) = function.rsplit_once("::") else {
-                continue;
-            };
-            let Some(module) = modules
-                .iter()
-                .find(|module| module.path.module_name() == module_name)
-            else {
-                continue;
-            };
-            let Some(function) = module
-                .test_function_defs
-                .iter()
-                .find(|function| function.name.as_str() == name)
-            else {
-                continue;
-            };
+            let location = function
+                .rsplit_once("::")
+                .and_then(|(module_name, name)| {
+                    let module = modules
+                        .iter()
+                        .find(|module| module.path.module_name() == module_name)?;
+                    let range = module
+                        .test_function_defs
+                        .iter()
+                        .rfind(|function| function.name.as_str() == name)
+                        .map(|function| function.name.range)
+                        .or_else(|| {
+                            module
+                                .doctests
+                                .iter()
+                                .find(|doctest| doctest.name == name)
+                                .map(|doctest| doctest.range)
+                        })
+                        .unwrap_or_else(|| TextRange::empty(TextSize::new(0)));
+                    Some(Location::new(module.path.path(), range, modules, root))
+                })
+                .unwrap_or_else(|| Location {
+                    path: format!("<{function}>"),
+                    line: 1,
+                    column: 1,
+                    start: 0,
+                    end: 0,
+                });
             findings.push(Finding {
                 rule, severity: "warning",
-                location: Location::new(module.path.path(), function.name.range, modules, root),
+                location,
                 evidence: format!("{} has conflicting observed outcomes: {}", test.key, evidence.join("; ")),
                 related: Vec::new(),
                 action: if rule == "order-dependent-test" {
@@ -189,5 +202,78 @@ impl ProbeReport {
             });
         }
         findings
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use camino::Utf8PathBuf;
+    use karva_collector::{CollectionSettings, collect_source};
+    use karva_python_semantic::TestCacheKey;
+    use ruff_python_ast::PythonVersion;
+
+    fn observed_report(key: &str) -> ProbeReport {
+        let run = |seed: Option<u64>, repetition: u32, outcome: &str| ProbeRun {
+            ordering: if seed.is_some() {
+                "seeded-shuffle"
+            } else {
+                "stable"
+            },
+            seed,
+            repetition,
+            observations: vec![TestObservation {
+                key: TestCacheKey::function_name(key),
+                name: key.to_owned(),
+                outcomes: vec![outcome.to_owned()],
+            }],
+            errors: Vec::new(),
+        };
+        ProbeReport {
+            success: false,
+            cwd: "/project".to_owned(),
+            repetitions_per_order: 2,
+            seeds: vec![2],
+            reproduction: Vec::new(),
+            runs: vec![
+                run(None, 1, "passed"),
+                run(None, 2, "passed"),
+                run(Some(2), 1, "failed"),
+                run(Some(2), 2, "failed"),
+            ],
+        }
+    }
+
+    #[test]
+    fn missing_source_does_not_discard_observed_conflicts() {
+        let findings =
+            observed_report("dynamic::test_case").findings(&[], Utf8Path::new("/project"));
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule, "order-dependent-test");
+        assert_eq!(findings[0].location.path, "<dynamic::test_case>");
+    }
+
+    #[test]
+    fn probe_locations_use_the_surviving_definition() {
+        let root = Utf8PathBuf::from("/project");
+        let module = collect_source(
+            &root.join("test_sample.py"),
+            &root,
+            "def test_case(): pass\ndef test_case(): pass\n".to_owned(),
+            &CollectionSettings {
+                python_version: PythonVersion::latest(),
+                test_function_prefix: "test",
+                respect_ignore_files: true,
+                collect_fixtures: true,
+                collect_doctests: false,
+            },
+            &[],
+        )
+        .expect("source module");
+        let findings =
+            observed_report("test_sample::test_case").findings(&[Arc::new(module)], &root);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].location.path, "test_sample.py");
+        assert_eq!(findings[0].location.line, 2);
     }
 }

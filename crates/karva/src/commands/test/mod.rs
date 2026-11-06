@@ -132,6 +132,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     }
 
     let config = karva_runner::ParallelTestConfig {
+        health_timings: false,
         num_workers,
         no_cache,
         create_ctrlc_handler: true,
