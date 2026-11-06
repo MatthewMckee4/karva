@@ -3,7 +3,8 @@ use thiserror::Error;
 
 use camino::Utf8PathBuf;
 
-use crate::options::{Config, CoverageOptions, DEFAULT_PROFILE, TestOptions};
+use crate::options::{Config, CoverageOptions, DEFAULT_PROFILE};
+use crate::pytest::PytestOptions;
 use crate::settings::CoverageExcludePattern;
 
 /// A `pyproject.toml` as specified in PEP 517.
@@ -60,20 +61,6 @@ pub struct Tool {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
-/// Supported subset of `[tool.pytest]`; unrelated pytest options are ignored.
-struct PytestOptions {
-    /// Legacy pytest options stored in `pyproject.toml`.
-    ini_options: Option<PytestIniOptions>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
-/// Warning policy from `[tool.pytest.ini_options]`.
-struct PytestIniOptions {
-    /// Ordered Python warning filters; later matching entries win.
-    filterwarnings: Option<Vec<String>>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
 /// Supported subset of `[tool.coverage]`.
 pub struct CoveragePyOptions {
     /// Report analysis settings.
@@ -100,25 +87,10 @@ impl PyProject {
         config
     }
 
-    /// Imports pytest policy as the default profile's fallback, including when
-    /// `karva.toml` supplies native configuration. Explicit lists, even empty
-    /// ones, replace imported filters through normal profile and CLI resolution.
+    /// Applies supported pytest settings from the discovered project.
     pub(super) fn apply_pytest_warning_filters(&self, config: &mut Config) {
-        if let Some(filters) = self
-            .tool
-            .as_ref()
-            .and_then(|tool| tool.pytest.as_ref())
-            .and_then(|pytest| pytest.ini_options.as_ref())
-            .and_then(|options| options.filterwarnings.as_ref())
-        {
-            let options = config
-                .profile
-                .entry(DEFAULT_PROFILE.to_owned())
-                .or_default();
-            let test = options.test.get_or_insert_with(TestOptions::default);
-            if test.warning_filters.is_none() {
-                test.warning_filters = Some(filters.clone());
-            }
+        if let Some(pytest) = self.tool.as_ref().and_then(|tool| tool.pytest.as_ref()) {
+            pytest.apply_warning_filters(config);
         }
     }
 

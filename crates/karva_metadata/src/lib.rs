@@ -11,6 +11,7 @@ pub mod filter;
 mod max_fail;
 mod options;
 mod pyproject;
+mod pytest;
 mod settings;
 
 pub use environment::{EnvironmentVariable, EnvironmentVariableName};
