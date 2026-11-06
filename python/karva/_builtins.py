@@ -42,8 +42,11 @@ __all__ = [
     "capsys",
     "capsysbinary",
     "mocker",
+    "module_mocker",
     "monkeypatch",
+    "package_mocker",
     "recwarn",
+    "session_mocker",
     "temp_dir",
     "temp_path",
     "tmp_path",
@@ -61,8 +64,7 @@ def monkeypatch() -> Generator[MockEnv, None, None]:
     mpatch.undo()
 
 
-@fixture
-def mocker() -> Generator[MockerFixture, None, None]:
+def _mocker_impl() -> Generator[MockerFixture, None, None]:
     """Provide call-aware mocks and restore patches after each test attempt."""
     from karva._fixtures.mocker import MockerFixture
 
@@ -71,6 +73,30 @@ def mocker() -> Generator[MockerFixture, None, None]:
         yield mocks
     finally:
         mocks.stopall()
+
+
+@fixture
+def mocker() -> Generator[MockerFixture, None, None]:
+    """Provide call-aware mocks and restore patches after each test attempt."""
+    yield from _mocker_impl()
+
+
+@fixture(scope="module")
+def module_mocker() -> Generator[MockerFixture, None, None]:
+    """Own mocks and patches for one test module."""
+    yield from _mocker_impl()
+
+
+@fixture(scope="package")
+def package_mocker() -> Generator[MockerFixture, None, None]:
+    """Own mocks and patches for one test package."""
+    yield from _mocker_impl()
+
+
+@fixture(scope="session")
+def session_mocker() -> Generator[MockerFixture, None, None]:
+    """Own mocks and patches for one worker's test session."""
+    yield from _mocker_impl()
 
 
 class CaptureResult(NamedTuple):

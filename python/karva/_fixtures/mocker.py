@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Iterator
+from itertools import tee
 from typing import Any
 from unittest import mock
 
@@ -20,13 +22,15 @@ class _Patcher:
         """Patch an attribute until fixture teardown or an explicit stop."""
         return self._owner._start(mock.patch.object(*args, **kwargs))
 
+    context_manager = object
+
     def dict(self, *args: Any, **kwargs: Any) -> Any:
         """Patch a mapping and restore its original contents on teardown."""
         return self._owner._start(mock.patch.dict(*args, **kwargs), mapping=True)
 
     def multiple(self, *args: Any, **kwargs: Any) -> Any:
         """Patch several attributes, returning mocks requested with DEFAULT."""
-        return self._owner._start(mock.patch.multiple(*args, **kwargs), multiple=True)
+        return self._owner._start(mock.patch.multiple(*args, **kwargs), multiple=kwargs)
 
 
 class MockerFixture:
@@ -41,16 +45,26 @@ class MockerFixture:
     call = mock.call
     sentinel = mock.sentinel
     mock_open = staticmethod(mock.mock_open)
+    seal = staticmethod(mock.seal)
 
     def __init__(self) -> None:
         self.patch = _Patcher(self)
         self._patches: list[tuple[Any, Any, list[Any]]] = []
 
     def _start(
-        self, patcher: Any, *, mapping: bool = False, multiple: bool = False
+        self,
+        patcher: Any,
+        *,
+        mapping: bool = False,
+        multiple: dict[str, Any] | None = None,
     ) -> Any:
         result = patcher.start()
-        targets = [] if mapping else list(result.values()) if multiple else [result]
+        if mapping:
+            targets = []
+        elif multiple is not None:
+            targets = [*result.values(), *multiple.values()]
+        else:
+            targets = [result]
         self._patches.append((result, patcher, targets))
         return result
 
@@ -59,7 +73,8 @@ class MockerFixture:
         for index in range(len(self._patches) - 1, -1, -1):
             result, patcher, _ = self._patches[index]
             if result is mock:
-                patcher.stop()
+                if patcher is not None:
+                    patcher.stop()
                 del self._patches[index]
                 return
         raise ValueError("This object is not an active patch owned by this mocker")
@@ -70,7 +85,8 @@ class MockerFixture:
         while self._patches:
             _, patcher, _ = self._patches.pop()
             try:
-                patcher.stop()
+                if patcher is not None:
+                    patcher.stop()
             except Exception as error:
                 errors.append(error)
         if errors:
@@ -103,33 +119,47 @@ class MockerFixture:
             return
         if "spy_return_list" in vars(result):
             result.spy_return = None
+            result.spy_return_iter = None
             result.spy_exception = None
             result.spy_return_list.clear()
+            if side_effect:
+                result.side_effect = result._karva_spy_side_effect
 
-    def spy(self, obj: Any, name: str) -> Any:
+    def create_autospec(self, *args: Any, **kwargs: Any) -> Any:
+        """Create a signature-checking mock tracked by resetall and stopall."""
+        result = mock.create_autospec(*args, **kwargs)
+        self._patches.append((result, None, [result]))
+        return result
+
+    def spy(self, obj: Any, name: str, *, duplicate_iterators: bool = False) -> Any:
         """Record calls, results and exceptions while running the real callable."""
         original = getattr(obj, name)
 
         def invoke(*args: Any, **kwargs: Any) -> Any:
             spy.spy_return = None
+            spy.spy_return_iter = None
             spy.spy_exception = None
             try:
                 result = original(*args, **kwargs)
             except BaseException as error:
                 spy.spy_exception = error
                 raise
-            spy.spy_return = result
-            spy.spy_return_list.append(result)
-            return result
+            return record_return(result)
 
         async def async_invoke(*args: Any, **kwargs: Any) -> Any:
             spy.spy_return = None
+            spy.spy_return_iter = None
             spy.spy_exception = None
             try:
                 result = await original(*args, **kwargs)
             except BaseException as error:
                 spy.spy_exception = error
                 raise
+            return record_return(result)
+
+        def record_return(result: Any) -> Any:
+            if duplicate_iterators and isinstance(result, Iterator):
+                result, spy.spy_return_iter = tee(result)
             spy.spy_return = result
             spy.spy_return_list.append(result)
             return result
@@ -142,7 +172,9 @@ class MockerFixture:
             if inspect.iscoroutinefunction(original)
             else invoke,
         )
+        spy._karva_spy_side_effect = spy.side_effect
         spy.spy_return = None
+        spy.spy_return_iter = None
         spy.spy_exception = None
         spy.spy_return_list = []
         return spy

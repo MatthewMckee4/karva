@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use pyo3::prelude::*;
 
 use crate::discovery::models::definition::{
@@ -30,8 +30,8 @@ pub(super) struct FixturePlanCompiler<'a> {
     current: &'a (dyn HasFixtures<'a> + 'a),
     /// Package owning fixtures provided by `current`.
     current_package: &'a Utf8Path,
-    /// Definition IDs reused within this compilation pass.
-    fixture_ids: HashMap<FixtureIdentity, FixtureId>,
+    /// Definition IDs reused for the same package lifetime within this pass.
+    fixture_ids: HashMap<(&'a FixtureIdentity, &'a Utf8Path), FixtureId>,
     /// Root fixture lookup outcomes reused across validation and resolution.
     root_fixture_lookups: HashMap<String, FixtureLookup<'a>>,
 
@@ -187,7 +187,25 @@ impl<'a> FixturePlanCompiler<'a> {
     }
 
     /// Finds the package whose provider contributed `fixture`.
-    fn package_owner(&self, fixture: &DiscoveredFixture) -> &Utf8Path {
+    fn package_owner(
+        &self,
+        mut fixture: &'a DiscoveredFixture,
+        path: &FixturePath<'a>,
+    ) -> &'a Utf8Path {
+        let name = fixture.name().function_name();
+        // Built-in package fixtures belong to the requesting package rather
+        // than the synthetic framework provider attached to the session root.
+        if self.parents.iter().filter_map(|package| package.framework_module_impl()).any(|module| {
+            matches!(module.lookup_fixture(name), FixtureLookup::Found(candidate) if std::ptr::eq(candidate, fixture))
+        }) {
+            // A package consumer can be cached across child packages. Its
+            // built-in dependencies must live at least as long as it does.
+            if let Some(consumer) = path.fixtures.iter().find(|consumer| consumer.scope() == FixtureScope::Package) {
+                fixture = consumer;
+            } else {
+                return self.current_package;
+            }
+        }
         let name = fixture.name().function_name();
         if matches!(
             self.current.lookup_fixture(name),
@@ -215,15 +233,21 @@ impl<'a> FixturePlanCompiler<'a> {
 
     /// Normalizes a fixture and its dependencies recursively.
     ///
-    /// A definition is stored once per request context. Runtime scope caches still
-    /// decide when its Python value is reused.
+    /// A definition is stored once per package owner in a request context.
+    /// Runtime scope caches still decide when its Python value is reused.
     fn normalize_fixture(
         &mut self,
         py: Python,
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<FixtureId> {
-        if let Some(cached) = self.fixture_ids.get(fixture.identity()) {
+        let package_owner = if fixture.scope() == FixtureScope::Package {
+            self.package_owner(fixture, path)
+        } else {
+            Utf8Path::new("")
+        };
+        let cache_key = (fixture.identity(), package_owner);
+        if let Some(cached) = self.fixture_ids.get(&cache_key) {
             return Ok(*cached);
         }
 
@@ -237,20 +261,14 @@ impl<'a> FixturePlanCompiler<'a> {
             identity: fixture.identity().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
-            package_owner: match fixture.scope() {
-                FixtureScope::Package => self.package_owner(fixture).to_path_buf(),
-                FixtureScope::Function | FixtureScope::Module | FixtureScope::Session => {
-                    Utf8PathBuf::new()
-                }
-            },
+            package_owner: package_owner.to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
         };
 
         let fixture_id = FixtureId::new(self.fixtures.len());
         self.fixtures.push(result);
-        self.fixture_ids
-            .insert(fixture.identity().clone(), fixture_id);
+        self.fixture_ids.insert(cache_key, fixture_id);
 
         Ok(fixture_id)
     }
