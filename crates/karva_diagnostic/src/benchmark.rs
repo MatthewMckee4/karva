@@ -14,7 +14,7 @@ pub struct BenchmarkResult {
     pub group: Option<String>,
 
     /// Whether only one correctness call ran, without statistical measurement.
-    pub disabled: bool,
+    disabled: bool,
 
     /// Effective sampling controls, including defaults; time options use seconds.
     pub options: BTreeMap<String, serde_json::Value>,
@@ -41,7 +41,7 @@ pub struct BenchmarkResult {
     pub elapsed_ns: u64,
 
     /// Per-call averages for completed rounds, in execution order.
-    pub samples_ns: Vec<u64>,
+    samples_ns: Vec<u64>,
 
     /// Minimum per-call round average; absent when no round completed.
     pub min_ns: Option<u64>,

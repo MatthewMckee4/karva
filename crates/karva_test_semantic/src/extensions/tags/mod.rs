@@ -396,11 +396,6 @@ enum SkipPolicy {
 }
 
 impl RuntimeTags {
-    /// Whether any benchmark policy was attached to this test.
-    pub(crate) fn has_benchmark(&self) -> bool {
-        !self.benchmarks.is_empty()
-    }
-
     /// Merges inherited controls with higher-priority local values winning.
     pub(crate) fn benchmark_options<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let options = PyDict::new(py);
