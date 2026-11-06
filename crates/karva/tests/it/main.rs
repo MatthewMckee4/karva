@@ -14,6 +14,7 @@ mod diagnostic_svg;
 mod discovery;
 mod doctest;
 mod durations;
+mod exception_groups;
 mod extensions;
 mod failed_first;
 mod filterset;

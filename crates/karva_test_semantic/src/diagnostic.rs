@@ -14,6 +14,7 @@ use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::{OneIndexed, SourceFile};
 use ruff_text_size::{TextRange, TextSize};
 
+mod exception_group;
 mod metadata;
 
 use crate::declare_diagnostic_type;
@@ -127,6 +128,10 @@ pub fn unhandled_exception_diagnostic(
             diagnostic.info(indent_continuation_lines(context));
         }
         diagnostic.info(format!("Object: `{}`", truncate_string(object)));
+    }
+    if let Some(exception) = exception_group::extract(py, &event.error) {
+        diagnostic.set_exception(exception);
+        return diagnostic;
     }
     let traceback = match test {
         Some(test) => Traceback::from_error_with_source(py, &event.error, test.source_file()),
@@ -521,10 +526,13 @@ pub fn invalid_fixture_diagnostic(
     diagnostic
 }
 
+/// Preserves teardown groups before formatting ordinary Python failures as text.
 pub fn invalid_fixture_finalizer_diagnostic(
+    py: Python<'_>,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     reason: &str,
+    error: Option<&PyErr>,
 ) -> Diagnostic {
     let mut diagnostic = INVALID_FIXTURE_FINALIZER.diagnostic(format!(
         "Discovered an invalid fixture finalizer `{}`",
@@ -533,7 +541,15 @@ pub fn invalid_fixture_finalizer_diagnostic(
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
 
-    diagnostic.info(reason);
+    if let Some(error) = error {
+        if let Some(exception) = exception_group::extract(py, error) {
+            diagnostic.set_exception(exception);
+        } else {
+            diagnostic.info(format!("{reason}: {}", error.value(py)));
+        }
+    } else {
+        diagnostic.info(reason);
+    }
     diagnostic
 }
 
@@ -903,6 +919,11 @@ fn handle_failed_function_call(
             format!("  `{truncated_name}`: `{truncated_value}`"),
         );
         diagnostic.sub(argument);
+    }
+
+    if let Some(exception) = exception_group::extract(py, error) {
+        diagnostic.set_exception(exception);
+        return;
     }
 
     if let Some(Traceback { frames }) = Traceback::from_error_with_source(py, error, source_file) {

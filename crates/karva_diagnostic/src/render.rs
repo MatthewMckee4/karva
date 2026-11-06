@@ -38,6 +38,7 @@ pub fn render_diagnostic(
         rendered,
     )
     .with_colored_rendered(colored_rendered)
+    .with_exception(diagnostic.exception().cloned())
 }
 
 fn render(
@@ -47,7 +48,11 @@ fn render(
     color: bool,
 ) -> String {
     if format == DiagnosticFormat::Concise {
-        return render_concise(diagnostic, cwd);
+        let mut rendered = render_concise(diagnostic, cwd);
+        if let Some(exception) = diagnostic.exception() {
+            rendered.push_str(&exception.render(cwd));
+        }
+        return rendered;
     }
 
     let mut rendered = render_message(
@@ -73,6 +78,9 @@ fn render(
                 rendered.push('\n');
             }
         }
+    }
+    if let Some(exception) = diagnostic.exception() {
+        rendered.push_str(&exception.render(cwd));
     }
     rendered.push('\n');
     rendered
