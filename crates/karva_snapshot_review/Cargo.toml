@@ -1,0 +1,24 @@
+[package]
+name = "karva_snapshot_review"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Interactive snapshot review for Karva."
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+camino = { workspace = true }
+colored = { workspace = true }
+console = { workspace = true }
+karva_snapshot = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

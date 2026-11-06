@@ -4,11 +4,10 @@
 
 use camino::Utf8Path;
 use karva_collector::CollectionError;
-use karva_diagnostic::{
-    Annotation, Diagnostic, Severity, Span, SubDiagnostic, Traceback, TracebackFrame,
-};
+use karva_diagnostic::{Annotation, Diagnostic, Severity, Span, SubDiagnostic};
 use karva_logging::time::format_duration;
 use karva_python_semantic::FunctionKind;
+use karva_traceback::{Traceback, TracebackFrame};
 use pyo3::types::{PyAnyMethods, PyTypeMethods};
 use pyo3::{PyErr, Python, exceptions::PyAssertionError};
 use ruff_python_ast::{Parameters, StmtFunctionDef};

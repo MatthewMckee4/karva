@@ -102,7 +102,7 @@ pub struct PendingSnapshotInfo {
     pub pending_path: Utf8PathBuf,
 
     /// Path to the corresponding `.snap` file (may not exist yet).
-    pub(super) snap_path: Utf8PathBuf,
+    pub snap_path: Utf8PathBuf,
 }
 
 /// Recursively walk a directory tree and collect files that match a filter.
@@ -221,7 +221,7 @@ fn extract_function_name(source: Option<&str>) -> Option<&str> {
 /// For inline snapshots (with `inline_source`/`inline_line` metadata),
 /// rewrites the source file in-place and deletes the `.snap.new` file.
 /// For file-based snapshots, atomically promotes `.snap.new` to `.snap`.
-pub(crate) fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
+pub fn accept_pending(pending_path: &Utf8Path) -> io::Result<()> {
     if let Some(snapshot) = read_snapshot(pending_path)?
         && let Some(source_file) = &snapshot.metadata.inline_source
         && let Some(line) = snapshot.metadata.inline_line
