@@ -979,7 +979,17 @@ def test_ignored():
     "[tool.karva.profile.ci.test]\nwarning-filters = [\"ignore\"]",
     Some("--profile=ci")
 )]
-#[case("pyproject.toml", "", Some("--warning-filter=ignore"))]
+#[case(
+    "pyproject.toml",
+    "[tool.karva.profile.ci.test]\nwarning-filters = []",
+    Some("--profile=ci")
+)]
+#[case(
+    "pyproject.toml",
+    "[tool.karva.profile.ci.test]\nwarning-filters = [\"ignore:other\"]",
+    Some("--profile=ci")
+)]
+#[case("pyproject.toml", "", Some("--warning-filter=ignore:other"))]
 fn pytest_filterwarnings_yields_to_explicit_karva_policy(
     #[case] config_file: &str,
     #[case] config: &str,

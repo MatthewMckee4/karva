@@ -376,9 +376,7 @@ impl TerminalOptions {
     }
 }
 
-#[derive(
-    Debug, Default, Clone, Eq, PartialEq, Combine, Serialize, Deserialize, OptionsMetadata,
-)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize, OptionsMetadata)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 /// Controls test selection, retries, timeouts, and failure policies.
@@ -674,6 +672,36 @@ pub struct TestOptions {
         "
     )]
     pub termination_grace_period: Option<TerminationGracePeriodSecs>,
+}
+
+impl Combine for TestOptions {
+    fn combine_with(&mut self, other: Self) {
+        // A supplied policy replaces the lower-precedence list, even when empty.
+        if self.warning_filters.is_none() {
+            self.warning_filters = other.warning_filters;
+        }
+        self.max_warnings.combine_with(other.max_warnings);
+        self.test_function_prefix
+            .combine_with(other.test_function_prefix);
+        self.strict_tags.combine_with(other.strict_tags);
+        self.fail_fast.combine_with(other.fail_fast);
+        self.max_fail.combine_with(other.max_fail);
+        self.try_import_fixtures
+            .combine_with(other.try_import_fixtures);
+        self.doctest_modules.combine_with(other.doctest_modules);
+        self.retry.combine_with(other.retry);
+        self.failed_first.combine_with(other.failed_first);
+        self.shuffle.combine_with(other.shuffle);
+        self.random_seed.combine_with(other.random_seed);
+        self.flaky_result.combine_with(other.flaky_result);
+        self.no_tests.combine_with(other.no_tests);
+        self.slow_timeout.combine_with(other.slow_timeout);
+        self.timeout.combine_with(other.timeout);
+        self.fail_slow.combine_with(other.fail_slow);
+        self.run_timeout.combine_with(other.run_timeout);
+        self.termination_grace_period
+            .combine_with(other.termination_grace_period);
+    }
 }
 
 impl TestOptions {
