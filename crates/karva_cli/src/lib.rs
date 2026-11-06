@@ -5,6 +5,7 @@ use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 
 mod cache;
+mod check;
 mod coverage;
 mod enums;
 mod exit_status;
@@ -15,6 +16,7 @@ mod test;
 mod verbosity;
 
 pub use cache::{CacheAction, CacheCommand};
+pub use check::{CheckCommand, CheckFormat};
 pub use coverage::{
     CoverageAction, CoverageCombineCommand, CoverageCommand, CoverageFormat, CoverageHtmlCommand,
     CoverageJsonCommand, CoverageLcovCommand, CoverageReportCommand, CoverageSort,
@@ -52,6 +54,9 @@ pub struct Args {
 #[derive(Debug, clap::Subcommand)]
 /// Top-level operations supported by the `karva` executable.
 pub enum Command {
+    /// Check suite health without importing or executing Python source.
+    Check(CheckCommand),
+
     /// Run tests.
     Test(Box<TestCommand>),
 

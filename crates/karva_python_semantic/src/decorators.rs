@@ -110,6 +110,11 @@ impl DecoratorBindings {
         self.names.get(name).copied()
     }
 
+    /// Makes a parameter or other local binding hide an inherited decorator name.
+    pub fn shadow(&mut self, name: &str) {
+        self.set(name, KnownBinding::Unknown);
+    }
+
     /// Returns the known binding represented by a possibly qualified expression.
     pub fn binding_for(&self, expression: &Expr) -> Option<KnownBinding> {
         self.namespace_binding(expression)

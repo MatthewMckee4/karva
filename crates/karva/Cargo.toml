@@ -17,12 +17,15 @@ name = "karva"
 path = "src/main.rs"
 
 [dependencies]
+ignore = { workspace = true }
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
+karva_collector = { workspace = true }
 karva_coverage = { workspace = true }
 karva_coverage_report = { workspace = true }
 karva_coverage_runtime = { workspace = true }
 karva_diagnostic = { workspace = true }
+karva_ide = { workspace = true }
 karva_language_server = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
@@ -33,6 +36,8 @@ karva_snapshot = { workspace = true }
 karva_snapshot_review = { workspace = true }
 karva_static = { workspace = true }
 karva_version = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_source_file = { workspace = true }
 
 anyhow = { workspace = true }
 argfile = { workspace = true }

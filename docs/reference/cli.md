@@ -14,7 +14,8 @@ karva <COMMAND>
 
 <h3 class="cli-reference">Commands</h3>
 
-<dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
+<dl class="cli-reference"><dt><a href="#karva-check"><code>karva check</code></a></dt><dd><p>Check suite health without importing or executing Python source</p></dd>
+<dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
 <dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
 <dt><a href="#karva-coverage"><code>karva coverage</code></a></dt><dd><p>Read and report native Karva coverage data</p></dd>
 <dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
@@ -23,6 +24,34 @@ karva <COMMAND>
 <dt><a href="#karva-version"><code>karva version</code></a></dt><dd><p>Display Karva's version</p></dd>
 <dt><a href="#karva-help"><code>karva help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
 </dl>
+
+## karva check
+
+Check suite health without importing or executing Python source
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva check [OPTIONS] [PATHS]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-check--paths"><a href="#karva-check--paths"><code>PATHS</code></a></dt><dd><p>Files or directories to check; defaults to the current project</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-check--config-file"><a href="#karva-check--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-check--help"><a href="#karva-check--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
+</dd><dt id="karva-check--output-format"><a href="#karva-check--output-format"><code>--output-format</code></a> <i>output-format</i></dt><dd><p>Diagnostic output representation</p>
+<p>&#91;default: text&#93;</p><p>Possible values:</p>
+<ul>
+<li><code>text</code></li>
+<li><code>json</code></li>
+</ul></dd><dt id="karva-check--profile"><a href="#karva-check--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve.</p>
+<p>Defaults to <code>default</code>.</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
 
 ## karva test
 

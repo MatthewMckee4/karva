@@ -7,6 +7,7 @@ mod code_actions;
 mod completion;
 mod definition;
 mod fixture;
+mod health;
 mod hover;
 mod implementation;
 mod occurrences;
@@ -29,6 +30,7 @@ pub use completion::{FixtureCompletion, complete_fixtures};
 pub use definition::{FixtureDefinitionTarget, fixture_definition};
 pub use fixture::{FixtureId, FixtureScope};
 use fixture::{FixtureModel, FixtureResolution};
+pub use health::source_health;
 pub use hover::{FixtureHover, fixture_reference_hovers, hover_fixture};
 pub use implementation::{FixtureImplementationTarget, fixture_implementation};
 pub(crate) use occurrences::fixture_occurrences;
@@ -80,6 +82,9 @@ pub struct SourceAnalysisSettings {
 /// Stable identifier for a source diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiagnosticCode {
+    /// A later declaration can replace an earlier test or fixture binding.
+    ShadowedDefinition,
+
     /// Two fixtures in one module resolve to the same public name.
     DuplicateFixture,
 
@@ -100,6 +105,7 @@ impl DiagnosticCode {
     /// Returns the stable protocol code.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ShadowedDefinition => "shadowed-definition",
             Self::DuplicateFixture => "duplicate-fixture",
             Self::InvalidFixture => "invalid-fixture",
             Self::MissingFixture => "missing-fixture",

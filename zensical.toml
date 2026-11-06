@@ -22,6 +22,7 @@ nav = [
     ]},
     { "Usage" = [
         { "Overview" = "usage/index.md"},
+        { "Suite Health" = "usage/suite-health.md"},
         { "Running Tests" = [
             { "Filtering Tests" = "usage/running-tests/filtering.md"},
             { "Randomizing Test Order" = "usage/running-tests/shuffle.md"},

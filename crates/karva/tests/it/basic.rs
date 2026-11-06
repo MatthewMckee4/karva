@@ -3546,6 +3546,7 @@ fn test_no_subcommand_prints_help() {
     Usage: karva <COMMAND>
 
     Commands:
+      check        Check suite health without importing or executing Python source
       test         Run tests
       snapshot     Manage snapshots created by `karva.assert_snapshot()`
       coverage     Read and report native Karva coverage data
