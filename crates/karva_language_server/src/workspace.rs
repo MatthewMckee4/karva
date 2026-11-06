@@ -105,7 +105,7 @@ impl Workspaces {
         Self::new_with_system(folders, python_version, profile, Arc::new(OsSystem))
     }
 
-    pub(super) fn new_with_system(
+    fn new_with_system(
         folders: Vec<WorkspaceFolder>,
         python_version: PythonVersion,
         profile: Option<String>,

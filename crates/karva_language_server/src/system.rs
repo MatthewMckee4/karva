@@ -27,7 +27,7 @@ impl FileType {
     }
 
     #[cfg(test)]
-    pub const fn is_directory(self) -> bool {
+    const fn is_directory(self) -> bool {
         matches!(self, Self::Directory)
     }
 
@@ -230,7 +230,7 @@ mod memory {
     }
 
     impl MemorySystem {
-        pub fn new(current_directory: impl Into<Utf8PathBuf>) -> Self {
+        pub(crate) fn new(current_directory: impl Into<Utf8PathBuf>) -> Self {
             Self {
                 current_directory: current_directory.into(),
                 current_directory_error: None,
@@ -242,40 +242,40 @@ mod memory {
             }
         }
 
-        pub fn add_directory(&mut self, path: &Utf8Path) {
+        pub(crate) fn add_directory(&mut self, path: &Utf8Path) {
             let path = self.resolve(path);
             self.add_parent_directories(&path);
             self.entries.insert(path, FileType::Directory);
         }
 
-        pub fn add_file(&mut self, path: &Utf8Path, contents: impl Into<String>) {
+        pub(crate) fn add_file(&mut self, path: &Utf8Path, contents: impl Into<String>) {
             let path = self.resolve(path);
             self.add_parent_directories(&path);
             self.entries.insert(path.clone(), FileType::File);
             self.files.insert(path, contents.into());
         }
 
-        pub fn add_symlink(&mut self, path: &Utf8Path) {
+        pub(crate) fn add_symlink(&mut self, path: &Utf8Path) {
             let path = self.resolve(path);
             self.add_parent_directories(&path);
             self.entries.insert(path, FileType::Symlink);
         }
 
-        pub fn fail_current_directory(&mut self, kind: io::ErrorKind) {
+        pub(crate) fn fail_current_directory(&mut self, kind: io::ErrorKind) {
             self.current_directory_error = Some(kind);
         }
 
-        pub fn fail_metadata(&mut self, path: &Utf8Path, kind: io::ErrorKind) {
+        pub(crate) fn fail_metadata(&mut self, path: &Utf8Path, kind: io::ErrorKind) {
             let path = self.resolve(path);
             self.metadata_errors.insert(path, kind);
         }
 
-        pub fn fail_read(&mut self, path: &Utf8Path, kind: io::ErrorKind) {
+        pub(crate) fn fail_read(&mut self, path: &Utf8Path, kind: io::ErrorKind) {
             let path = self.resolve(path);
             self.read_errors.insert(path, kind);
         }
 
-        pub fn fail_walk(&mut self, path: &Utf8Path, kind: io::ErrorKind) {
+        pub(crate) fn fail_walk(&mut self, path: &Utf8Path, kind: io::ErrorKind) {
             let path = self.resolve(path);
             self.walk_errors.insert(path, kind);
         }
