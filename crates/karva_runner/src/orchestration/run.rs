@@ -51,12 +51,7 @@ pub fn run_parallel_tests(
 
     let total_tests = scheduled_test_count(&collected);
     let max_useful_workers = total_tests.max(1);
-    let num_workers = if !project.settings().test().benchmark_disable && collected.uses_benchmark()
-    {
-        1
-    } else {
-        config.num_workers.min(max_useful_workers)
-    };
+    let num_workers = config.num_workers.min(max_useful_workers);
 
     if num_workers < config.num_workers {
         tracing::info!(target: "karva_runner::orchestration",
@@ -86,7 +81,7 @@ pub fn run_parallel_tests(
             || (config.failed_first.is_failed_first() && !config.no_cache),
     );
 
-    let partitions = partition_collected_tests(
+    let (partitions, mut benchmark_partition) = partition_collected_tests(
         &collected,
         num_workers,
         &previous_durations,
@@ -95,15 +90,22 @@ pub fn run_parallel_tests(
         config.failed_first,
         config.partition,
         config.test_ordering,
+        !project.settings().test().benchmark_disable && num_workers > 1,
     );
     let failed_first_active = config.failed_first.is_failed_first()
         && partitions
             .iter()
+            .chain(benchmark_partition.iter())
             .any(|partition| partition.has_cached_failure(&last_failed_set));
-    let scheduled_cases: usize = partitions.iter().map(Partition::test_count).sum();
+    let scheduled_cases: usize = partitions
+        .iter()
+        .chain(benchmark_partition.iter())
+        .map(Partition::test_count)
+        .sum();
     let scheduled_tests = if config.last_failed.is_last_failed() || config.partition.is_some() {
         partitions
             .iter()
+            .chain(benchmark_partition.iter())
             .flat_map(Partition::function_roots)
             .collect::<HashSet<_>>()
             .len()
@@ -113,7 +115,8 @@ pub fn run_parallel_tests(
     let scheduled_workers = partitions
         .iter()
         .filter(|partition| !partition.is_empty())
-        .count();
+        .count()
+        .max(usize::from(benchmark_partition.is_some()));
 
     if scheduled_cases > 0 {
         let mut stdout = printer.stream_for_test_result().lock();
@@ -145,7 +148,7 @@ pub fn run_parallel_tests(
     tracing::info!(target: "karva_runner::orchestration", "Spawning {} workers", scheduled_workers);
 
     let worker_binary = find_karva_worker_binary(project.cwd())?;
-    let spawn = WorkerSpawn {
+    let mut spawn = WorkerSpawn {
         configuration: worker_configuration(project, args, failed_first_active),
         project,
         artifacts: &artifacts,
@@ -201,7 +204,27 @@ pub fn run_parallel_tests(
                     )?;
                     next_worker_id += 1;
                 }
-                if !worker_manager.has_workers() {
+            }
+            WaitOutcome::AllCompleted => {
+                if let Some(partition) = benchmark_partition.take() {
+                    if let Some(outcome) =
+                        worker_manager.stop_outcome(shutdown_rx, max_fail, run_deadline)
+                    {
+                        break outcome;
+                    }
+                    // Reuse aggregation, budgets, and recovery while isolating
+                    // measurements from every ordinary worker and its cleanup.
+                    spawn.num_workers = 1;
+                    spawn_worker(
+                        &mut worker_manager,
+                        &spawn,
+                        &mut controller,
+                        next_worker_id,
+                        partition,
+                        forward_stdout,
+                    )?;
+                    next_worker_id += 1;
+                } else {
                     break WaitOutcome::AllCompleted;
                 }
             }

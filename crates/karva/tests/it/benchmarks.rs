@@ -213,6 +213,7 @@ import karva._benchmark as sampling
 
 @{marker}.benchmark(group="parser", rounds=3, iterations=2, warmup=0)
 def test_parse(benchmark, monkeypatch):
+    assert isinstance(benchmark, karva.Benchmark)
     ticks = iter([0, 0, 20, 20, 60, 60, 120, 200])
     monkeypatch.setattr(sampling.time, "perf_counter_ns", lambda: next(ticks))
     calls = []
@@ -746,4 +747,174 @@ def test_teardown(measured, fail):
     assert_eq!(failed["samples_ns"], serde_json::json!([10]));
     assert_eq!(failed["elapsed_ns"], 20);
     assert_eq!(failed["stop_reason"], "exception");
+}
+
+#[test]
+fn ordinary_workers_finish_before_isolated_measurement() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            r"
+from pathlib import Path
+import karva
+
+@karva.fixture
+def completed():
+    paths = []
+    yield paths
+    Path(paths[0]).touch()
+",
+        ),
+        (
+            "test_a.py",
+            r#"
+import os
+import sys
+from pathlib import Path
+import karva
+
+def test_a(completed):
+    assert os.environ["KARVA_TEST_THREADS"] == "2"
+    assert "Benchmark" in dir(karva)
+    assert "karva._benchmark" not in sys.modules
+    Path("a.worker").write_text(os.environ["KARVA_WORKER_ID"])
+    completed.append("a.done")
+"#,
+        ),
+        (
+            "test_b.py",
+            r#"
+import os
+import sys
+from pathlib import Path
+
+def test_b(completed):
+    assert os.environ["KARVA_TEST_THREADS"] == "2"
+    assert "karva._benchmark" not in sys.modules
+    Path("b.worker").write_text(os.environ["KARVA_WORKER_ID"])
+    completed.append("b.done")
+"#,
+        ),
+        (
+            "test_measure.py",
+            r#"
+import os
+from pathlib import Path
+import karva
+
+@karva.tags.benchmark(rounds=1, iterations=1, warmup=0)
+def test_measure(benchmark, monkeypatch):
+    import karva._benchmark as sampling
+    assert os.environ["KARVA_TEST_THREADS"] == "1"
+    assert Path("a.done").exists()
+    assert Path("b.done").exists()
+    assert Path("a.worker").read_text() != Path("b.worker").read_text()
+    monkeypatch.setattr(sampling.time, "perf_counter_ns", lambda: 0)
+    assert benchmark(int, "42") == 42
+"#,
+        ),
+    ]);
+    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--status-level=none"]), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    benchmarks (nanoseconds per call):
+      test_measure::test_measure(benchmark, monkeypatch) [group: ungrouped]
+        min=0ns median=0ns mean=0ns stddev=0ns
+        warmup=0 calibration=0 rounds=1 iterations=1 measured=1 total=1 elapsed=0ns stop=rounds
+        options: {"disable_gc":false,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
+
+    ────────────
+         Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
+fn failure_budget_prevents_deferred_benchmarks_from_starting() {
+    let context = TestContext::with_files([
+        (
+            "test_ordinary.py",
+            r"
+def test_failure():
+    assert False
+",
+        ),
+        (
+            "test_measure.py",
+            r#"
+from pathlib import Path
+
+def test_measure(benchmark):
+    Path("measurement.started").touch()
+    benchmark(int, "42")
+"#,
+        ),
+    ]);
+    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--max-fail=1", "--status-level=none"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+
+    failures:
+
+    test_ordinary::test_failure:
+
+    error[test-failure]: Test `test_failure` failed
+     --> test_ordinary.py:2:5
+      |
+    2 | def test_failure():
+      |     ^^^^^^^^^^^^
+    info: Test failed here
+     --> test_ordinary.py:3:5
+      |
+    3 |     assert False
+      |     ^^^^^^^^^^^^
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert!(!context.root().join("measurement.started").exists());
+}
+
+#[test]
+fn skipped_benchmark_modules_preserve_ordinary_parallelism() {
+    let context = TestContext::with_files([
+        (
+            "test_ordinary.py",
+            r#"
+import os
+
+def test_a():
+    assert os.environ["KARVA_TEST_THREADS"] == "2"
+
+def test_b():
+    assert os.environ["KARVA_TEST_THREADS"] == "2"
+"#,
+        ),
+        (
+            "test_skipped.py",
+            r#"
+import pytest
+
+pytest.skip("benchmarks were not requested", allow_module_level=True)
+
+def test_measure(benchmark):
+    assert False
+"#,
+        ),
+    ]);
+    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--status-level=none"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 3 tests run: 2 passed, 1 skipped
+
+    ----- stderr -----
+    ");
 }
