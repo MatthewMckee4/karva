@@ -526,10 +526,13 @@ pub fn invalid_fixture_diagnostic(
     diagnostic
 }
 
+/// Preserves teardown groups before formatting ordinary Python failures as text.
 pub fn invalid_fixture_finalizer_diagnostic(
+    py: Python<'_>,
     source_file: SourceFile,
     stmt_function_def: &StmtFunctionDef,
     reason: &str,
+    error: Option<&PyErr>,
 ) -> Diagnostic {
     let mut diagnostic = INVALID_FIXTURE_FINALIZER.diagnostic(format!(
         "Discovered an invalid fixture finalizer `{}`",
@@ -538,7 +541,15 @@ pub fn invalid_fixture_finalizer_diagnostic(
 
     annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
 
-    diagnostic.info(reason);
+    if let Some(error) = error {
+        if let Some(exception) = exception_group::extract(py, error) {
+            diagnostic.set_exception(exception);
+        } else {
+            diagnostic.info(format!("{reason}: {}", error.value(py)));
+        }
+    } else {
+        diagnostic.info(reason);
+    }
     diagnostic
 }
 

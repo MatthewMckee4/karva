@@ -241,3 +241,104 @@ def test_large():
     assert!(xml.contains("744 children hidden"));
     assert!(xml.contains("width limit 256, depth limit 32, node limit 512"));
 }
+
+#[rstest]
+fn reports_fixture_teardown_groups(#[values("", "async ")] async_keyword: &str) {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            "[profile.default.junit]\npath = 'results.xml'\n".to_string(),
+        ),
+        (
+            "test_groups.py",
+            format!(
+                r#"
+import karva
+
+@karva.fixture
+{async_keyword}def broken():
+    yield 42
+    try:
+        raise ValueError("teardown leaf")
+    except ValueError as leaf:
+        leaf.add_note("teardown note")
+        raise ExceptionGroup("teardown group", [leaf]) from None
+
+def test_teardown(broken):
+    assert broken == 42
+"#
+            ),
+        ),
+    ]);
+    if async_keyword.is_empty() {
+        assert_cmd_snapshot!(context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=results.json",
+        ]), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+
+        failures:
+
+        test_groups::test_teardown(broken=42):
+
+        error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken`
+         --> test_groups.py:5:5
+          |
+        5 | def broken():
+          |     ^^^^^^
+        exception: ExceptionGroup: teardown group
+          at <temp_dir>/test_groups.py:11 in broken
+        exception.1: ValueError: teardown leaf
+          at <temp_dir>/test_groups.py:8 in broken
+          note: teardown note
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    } else {
+        assert_cmd_snapshot!(context.command_no_parallel().args([
+            "--status-level=none",
+            "--result-output=results.json",
+        ]), @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+
+        failures:
+
+        test_groups::test_teardown(broken=42):
+
+        error[invalid-fixture-finalizer]: Discovered an invalid fixture finalizer `broken`
+         --> test_groups.py:5:11
+          |
+        5 | async def broken():
+          |           ^^^^^^
+        exception: ExceptionGroup: teardown group
+          at <temp_dir>/test_groups.py:11 in broken
+        exception.1: ValueError: teardown leaf
+          at <temp_dir>/test_groups.py:8 in broken
+          note: teardown note
+
+        ────────────
+             Summary [TIME] 1 test run: 0 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+    let report: Value =
+        serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
+    let exception = &report["tests"][0]["diagnostic"]["exception"];
+    assert_eq!(exception["message"], "teardown group");
+    assert_eq!(exception["children"][0]["message"], "teardown leaf");
+    assert_eq!(exception["children"][0]["notes"][0], "teardown note");
+    assert_eq!(exception["children"][0]["traceback"][0]["line"], 8);
+    assert!(
+        context
+            .read_file("results.xml")
+            .contains("exception.1: ValueError: teardown leaf")
+    );
+}

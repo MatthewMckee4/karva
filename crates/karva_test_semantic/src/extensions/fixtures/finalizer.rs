@@ -7,6 +7,7 @@ use pyo3::types::PyIterator;
 use thiserror::Error;
 
 use crate::diagnostic::invalid_fixture_finalizer_diagnostic;
+use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::FixtureScope;
 use crate::utils::run_coroutine;
 
@@ -19,7 +20,7 @@ enum FinalizerError {
 
     /// Generator could not be resumed or raised during teardown.
     #[error("Failed to reset fixture: {0}")]
-    ResetFailed(String),
+    ResetFailed(PyErr),
 }
 
 /// Represents the teardown portion of a generator fixture.
@@ -62,10 +63,18 @@ impl Finalizer {
         };
 
         result.map_err(|error| {
+            let (reason, error) = match &error {
+                FinalizerError::MultipleYields => (error.to_string(), None),
+                FinalizerError::ResetFailed(error) => {
+                    ("Failed to reset fixture".to_string(), Some(error))
+                }
+            };
             invalid_fixture_finalizer_diagnostic(
+                py,
                 self.definition.source_file().clone(),
                 self.definition.statement(),
-                &error.to_string(),
+                &reason,
+                error,
             )
         })
     }
@@ -77,11 +86,11 @@ impl Finalizer {
             .clone_ref(py)
             .into_bound(py)
             .cast_into::<PyIterator>()
-            .map_err(|error| FinalizerError::ResetFailed(error.to_string()))?;
+            .map_err(|error| FinalizerError::ResetFailed(error.into()))?;
         match generator.next() {
             None => Ok(()),
             Some(Ok(_)) => Err(FinalizerError::MultipleYields),
-            Some(Err(error)) => Err(FinalizerError::ResetFailed(error.value(py).to_string())),
+            Some(Err(error)) => Err(FinalizerError::ResetFailed(error)),
         }
     }
 
@@ -91,17 +100,16 @@ impl Finalizer {
             .fixture_return
             .bind(py)
             .call_method0("__anext__")
-            .map_err(|error| FinalizerError::ResetFailed(error.value(py).to_string()))?;
+            .map_err(FinalizerError::ResetFailed)?;
         match run_coroutine(py, coroutine.unbind()) {
             Ok(_) => Err(FinalizerError::MultipleYields),
             Err(error) => {
                 if error.is_instance_of::<pyo3::exceptions::PyStopAsyncIteration>(py) {
                     Ok(())
                 } else {
-                    Err(FinalizerError::ResetFailed(error.value(py).to_string()))
+                    Err(FinalizerError::ResetFailed(error))
                 }
             }
         }
     }
 }
-use crate::discovery::models::definition::FunctionDefinition;
