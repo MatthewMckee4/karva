@@ -114,3 +114,121 @@ fn health_honors_paths_profile_and_ancestor_fixtures() {
     ----- stderr -----
     ");
 }
+
+#[test]
+fn health_shadowed_definitions() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r"
+import karva
+from karva import fixture as provider
+
+def test_lost(): pass
+def test_lost(): pass
+def test_lost(): pass
+
+class Tests:
+    def test_method(self): pass
+    def test_method(self): pass
+
+@provider
+def data(): pass
+@provider
+def data(): pass
+
+if unknown:
+    def test_conditional(): pass
+if other:
+    def test_conditional(): pass
+",
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test_health.py:5:5: error[shadowed-definition]: Later definition `test_lost` replaces the earlier test or fixture
+      test_health.py:7:5: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:6:5: error[shadowed-definition]: Later definition `test_lost` replaces the earlier test or fixture
+      test_health.py:7:5: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:10:9: error[shadowed-definition]: Later definition `test_method` replaces the earlier test or fixture
+      test_health.py:11:9: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:14:5: error[shadowed-definition]: Later definition `data` replaces the earlier test or fixture
+      test_health.py:16:5: Surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    test_health.py:16:5: error[duplicate-fixture]: Fixture `data` is defined more than once
+      test_health.py:14:5: First definition is here
+      help: Rename or remove the duplicate fixture.
+    test_health.py:19:9: warning[possibly-shadowed-definition]: Definition `test_conditional` may replace the earlier definition if both statements execute
+      test_health.py:21:9: Potential surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    6 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_exclusive_definitions_and_distinct_scopes_are_clean() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r"
+if condition:
+    def test_choice(): pass
+else:
+    def test_choice(): pass
+if False:
+    def test_static(): pass
+def test_static(): pass
+match value:
+    case 1:
+        def test_match(): pass
+    case _:
+        def test_match(): pass
+class First:
+    def test_method(self): pass
+class Second:
+    def test_method(self): pass
+",
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    0 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_uncertain_shadowing_has_warning_exit_policy() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        "def test_case(): pass\nif unknown:\n    def test_case(): pass\n",
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    test_health.py:1:5: warning[possibly-shadowed-definition]: Definition `test_case` may replace the earlier definition if both statements execute
+      test_health.py:3:9: Potential surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    1 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).args(["health", "--fail-on=warning"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test_health.py:1:5: warning[possibly-shadowed-definition]: Definition `test_case` may replace the earlier definition if both statements execute
+      test_health.py:3:9: Potential surviving definition
+      help: Rename or remove one definition so each test or fixture has a distinct name.
+    1 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
