@@ -25,6 +25,9 @@ from unittest.mock import (
     mock_open as mock_open,
 )
 from unittest.mock import (
+    seal as seal,
+)
+from unittest.mock import (
     sentinel as sentinel,
 )
 
@@ -35,6 +38,7 @@ class _Patcher:
     def object(
         self, target: builtins.object, attribute: str, *args: Any, **kwargs: Any
     ) -> Any: ...
+    context_manager = object
     def dict(self, in_dict: Any, *args: Any, **kwargs: Any) -> Any: ...
     def multiple(
         self, target: Any, *args: Any, **kwargs: Any
@@ -52,9 +56,11 @@ class MockerFixture:
     call = call
     sentinel = sentinel
     mock_open = staticmethod(mock_open)
+    seal = staticmethod(seal)
     patch: _Patcher
     def __init__(self) -> None: ...
-    def spy(self, obj: object, name: str) -> Any:
+    def create_autospec(self, spec: Any, *args: Any, **kwargs: Any) -> Any: ...
+    def spy(self, obj: object, name: str, *, duplicate_iterators: bool = False) -> Any:
         """Call the original and record results and exceptions on the spy."""
     def stub(self, name: str | None = None) -> MagicMock: ...
     def async_stub(self, name: str | None = None) -> AsyncMock: ...
