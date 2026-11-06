@@ -63,6 +63,11 @@ pub struct CollectedModule {
 }
 
 impl CollectedModule {
+    /// Whether module syntax refers to benchmark fixtures or metadata.
+    pub fn uses_benchmark(&self) -> bool {
+        self.uses_benchmark
+    }
+
     pub(super) fn new(
         path: ModulePath,
         module_type: ModuleType,
@@ -139,17 +144,6 @@ pub struct CollectedPackage {
 }
 
 impl CollectedPackage {
-    /// Conservatively identifies benchmark use before workers are started.
-    /// Imported or dynamically constructed fixtures can escape syntax detection;
-    /// the runtime rejects their measurement when multiple workers are active.
-    pub fn uses_benchmark(&self) -> bool {
-        self.modules
-            .values()
-            .chain(self.configuration_module.iter())
-            .any(|module| module.uses_benchmark)
-            || self.packages.values().any(Self::uses_benchmark)
-    }
-
     /// Creates an empty package rooted at `path`.
     pub fn new(path: Utf8PathBuf) -> Self {
         Self {
