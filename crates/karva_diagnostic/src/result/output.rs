@@ -20,6 +20,7 @@ impl CapturedTestOutput {
     }
 
     /// Attaches logging records in emission order.
+    #[must_use]
     pub fn with_logs(mut self, logs: Vec<CapturedLog>) -> Self {
         self.logs = logs;
         self

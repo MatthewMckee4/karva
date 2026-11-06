@@ -4,7 +4,7 @@ use karva_diagnostic::CapturedLog;
 use pyo3::prelude::*;
 
 /// Runner-owned handler installed for one setup/call/teardown attempt.
-pub(crate) struct LogCapture(Py<PyAny>);
+pub struct LogCapture(Py<PyAny>);
 
 impl LogCapture {
     pub(crate) fn start(py: Python<'_>) -> PyResult<Self> {

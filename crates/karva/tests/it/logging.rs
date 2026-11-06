@@ -57,7 +57,6 @@ def test_checkout(checkout):
             .map(|line| serde_json::from_str::<Value>(line).expect("JSONL record"))
             .find(|record| record["type"] == "test")
             .expect("test record")
-            .clone()
     };
     let logs = case["captured_output"]["logs"]
         .as_array()
