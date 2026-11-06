@@ -926,7 +926,16 @@ fn handle_failed_function_call(
         return;
     }
 
-    if let Some(Traceback { frames }) = Traceback::from_error_with_source(py, error, source_file) {
+    let mock_failure = error
+        .is_instance_of::<PyAssertionError>(py)
+        .then(|| crate::assertions::mock_failure(py, error))
+        .flatten();
+    if let Some(Traceback { mut frames }) =
+        Traceback::from_error_with_source(py, error, source_file)
+    {
+        if let Some(failure) = &mock_failure {
+            frames.truncate(frames.len().saturating_sub(failure.hidden_frames));
+        }
         if verbose {
             for pair in frames.windows(2) {
                 if let [caller, callee] = pair {
@@ -1006,7 +1015,9 @@ fn handle_failed_function_call(
     }
 
     if error.is_instance_of::<PyAssertionError>(py)
-        && let Some(explanation) = crate::assertions::explain(py, error)
+        && let Some(explanation) = mock_failure
+            .and_then(|failure| failure.explanation)
+            .or_else(|| crate::assertions::explain(py, error))
         && !explanation.is_empty()
     {
         let (message, body) = explanation.split_once('\n').unwrap_or((&explanation, ""));

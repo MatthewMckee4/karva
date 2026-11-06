@@ -462,13 +462,6 @@ def test_wrong_call(mocker):
     callback.assert_not_called()
 "#,
     );
-    // Library source paths and line numbers differ across Python installations.
-    let mut settings = insta::Settings::clone_current();
-    settings.add_filter(
-        r"(?s)info: Test failed here\n.*?\ninfo: ",
-        "info: Test failed in unittest.mock\ninfo: ",
-    );
-    let _guard = settings.bind_to_scope();
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: false
     exit_code: 1
@@ -487,7 +480,11 @@ def test_wrong_call(mocker):
       |     ^^^^^^^^^^^^^^^
     info: Test ran with arguments:
     info:   `mocker`: `<MockerFixture>`
-    info: Test failed in unittest.mock
+    info: Test failed here
+      --> test.py:12:5
+       |
+    12 |     callback.assert_not_called()
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     info: Expected 'mock' to not have been called. Called 1 times.
           Calls: [call('actual')].
 
