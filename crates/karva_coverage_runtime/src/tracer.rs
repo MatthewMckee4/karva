@@ -1227,7 +1227,7 @@ fn save_data(
     let parent = data_file
         .parent()
         .filter(|path| !path.as_str().is_empty())
-        .unwrap_or(Utf8Path::new("."));
+        .unwrap_or_else(|| Utf8Path::new("."));
     let mut temporary = NamedTempFile::new_in(parent)?;
     temporary.write_all(&bytes)?;
     temporary.persist(data_file).map_err(|error| error.error)?;
