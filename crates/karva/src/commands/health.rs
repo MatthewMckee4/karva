@@ -175,7 +175,10 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
             for diagnostic in karva_ide::shadowed_definitions(
                 module,
                 &project.settings().test().test_function_prefix,
-            ) {
+            )
+            .into_iter()
+            .chain(karva_ide::duplicate_parameter_cases(module))
+            {
                 if !args
                     .ignore
                     .iter()
@@ -270,7 +273,12 @@ fn source_finding(
 ) -> Finding {
     Finding {
         rule: diagnostic.code.as_str(),
-        severity: if diagnostic.code == DiagnosticCode::PossiblyShadowedDefinition {
+        severity: if matches!(
+            diagnostic.code,
+            DiagnosticCode::PossiblyShadowedDefinition
+                | DiagnosticCode::DuplicateParameterCase
+                | DiagnosticCode::DuplicateParameterId
+        ) {
             "warning"
         } else {
             "error"

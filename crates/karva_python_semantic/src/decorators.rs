@@ -44,6 +44,9 @@ pub enum KnownBinding {
     /// The `fixture` decorator.
     Fixture,
 
+    /// An explicit parameter case constructor.
+    Param,
+
     /// The `parametrize` decorator.
     Parametrize,
 
@@ -432,6 +435,7 @@ fn known_module(module: &str) -> Option<KnownBinding> {
 fn known_from_import(module: &str, name: &str) -> Option<KnownBinding> {
     match (module, name) {
         ("karva" | "karva._karva" | "pytest", "fixture") => Some(KnownBinding::Fixture),
+        ("karva" | "pytest", "param") => Some(KnownBinding::Param),
         ("karva.tags" | "pytest.mark", "parametrize") => Some(KnownBinding::Parametrize),
         ("karva.tags", "use_fixtures") | ("pytest.mark", "usefixtures") => {
             Some(KnownBinding::UseFixtures)
