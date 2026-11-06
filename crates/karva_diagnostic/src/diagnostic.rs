@@ -1,5 +1,6 @@
 //! Source-backed diagnostics produced while collecting and running tests.
 
+use crate::ExceptionDiagnostic;
 use ruff_source_file::SourceFile;
 use ruff_text_size::{TextRange, TextSize};
 use serde::{Deserialize, Serialize};
@@ -147,9 +148,10 @@ pub struct Diagnostic {
     code: &'static str,
     severity: Severity,
     message: String,
-    concise_message: Option<String>,
+    concise_message: Option<Box<str>>,
     annotations: Vec<Annotation>,
     sub_diagnostics: Vec<SubDiagnostic>,
+    exception: Option<Box<ExceptionDiagnostic>>,
 }
 
 impl Diagnostic {
@@ -161,7 +163,17 @@ impl Diagnostic {
             concise_message: None,
             annotations: Vec::new(),
             sub_diagnostics: Vec::new(),
+            exception: None,
         }
+    }
+
+    /// Retains a bounded exception tree for rendering and machine-readable reports.
+    pub fn set_exception(&mut self, exception: ExceptionDiagnostic) {
+        self.exception = Some(Box::new(exception));
+    }
+
+    pub(super) fn exception(&self) -> Option<&ExceptionDiagnostic> {
+        self.exception.as_deref()
     }
 
     pub fn annotate(&mut self, annotation: Annotation) {
@@ -177,7 +189,7 @@ impl Diagnostic {
     }
 
     pub fn set_concise_message(&mut self, message: impl Into<String>) {
-        self.concise_message = Some(message.into());
+        self.concise_message = Some(message.into().into_boxed_str());
     }
 
     pub(super) fn code(&self) -> &'static str {

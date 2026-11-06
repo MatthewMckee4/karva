@@ -1,6 +1,7 @@
 //! Test outcomes, source-backed diagnostics, and user-facing result reporting.
 
 mod diagnostic;
+mod exception;
 mod render;
 mod reporter;
 mod result;
@@ -17,3 +18,4 @@ pub use diagnostic::{
     Annotation, Diagnostic, Severity, Span, SubDiagnostic, sort_diagnostics_for_display,
 };
 pub use render::{DiagnosticFormat, DisplayDiagnosticConfig, render_diagnostic};
+pub use exception::{ExceptionDiagnostic, ExceptionFrame};

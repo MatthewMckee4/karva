@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Severity;
+use crate::{ExceptionDiagnostic, Severity};
 
 mod worker_exit;
 
@@ -13,6 +13,8 @@ pub struct RenderedDiagnostic {
     rendered: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     colored_rendered: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    exception: Option<Box<ExceptionDiagnostic>>,
 }
 
 impl RenderedDiagnostic {
@@ -29,6 +31,7 @@ impl RenderedDiagnostic {
             message: message.into(),
             rendered: rendered.into(),
             colored_rendered: None,
+            exception: None,
         }
     }
 
@@ -67,6 +70,17 @@ impl RenderedDiagnostic {
     /// Creates a run-level diagnostic when no active test can be identified.
     pub(super) fn worker_exited(summary: &str, recovery: &str, stderr: &str) -> Self {
         worker_exit::render(summary, recovery, stderr)
+    }
+
+    /// Attaches the structured exception retained by the worker.
+    pub(crate) fn with_exception(mut self, exception: Option<ExceptionDiagnostic>) -> Self {
+        self.exception = exception.map(Box::new);
+        self
+    }
+
+    /// Returns the structured exception, when this diagnostic describes a group.
+    pub fn exception(&self) -> Option<&ExceptionDiagnostic> {
+        self.exception.as_deref()
     }
 
     pub fn code(&self) -> &str {

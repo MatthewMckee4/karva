@@ -412,6 +412,8 @@ struct DiagnosticReport<'a> {
     severity: &'static str,
     message: &'a str,
     rendered: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exception: Option<&'a karva_diagnostic::ExceptionDiagnostic>,
 }
 
 impl<'a> DiagnosticReport<'a> {
@@ -421,6 +423,7 @@ impl<'a> DiagnosticReport<'a> {
             severity: diagnostic.severity_name(),
             message: diagnostic.message(),
             rendered: diagnostic.rendered(),
+            exception: diagnostic.exception(),
         }
     }
 }

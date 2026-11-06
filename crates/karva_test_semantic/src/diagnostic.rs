@@ -14,6 +14,7 @@ use ruff_python_ast::{Parameters, StmtFunctionDef};
 use ruff_source_file::{OneIndexed, SourceFile};
 use ruff_text_size::{TextRange, TextSize};
 
+mod exception_group;
 mod metadata;
 
 use crate::declare_diagnostic_type;
@@ -127,6 +128,10 @@ pub fn unhandled_exception_diagnostic(
             diagnostic.info(indent_continuation_lines(context));
         }
         diagnostic.info(format!("Object: `{}`", truncate_string(object)));
+    }
+    if let Some(exception) = exception_group::extract(py, &event.error) {
+        diagnostic.set_exception(exception);
+        return diagnostic;
     }
     let traceback = match test {
         Some(test) => Traceback::from_error_with_source(py, &event.error, test.source_file()),
@@ -903,6 +908,11 @@ fn handle_failed_function_call(
             format!("  `{truncated_name}`: `{truncated_value}`"),
         );
         diagnostic.sub(argument);
+    }
+
+    if let Some(exception) = exception_group::extract(py, error) {
+        diagnostic.set_exception(exception);
+        return;
     }
 
     if let Some(Traceback { frames }) = Traceback::from_error_with_source(py, error, source_file) {
