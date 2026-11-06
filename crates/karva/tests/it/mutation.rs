@@ -1175,3 +1175,201 @@ fn baseline_cancellation_does_not_report_a_test_failure() {
     ");
     assert!(!context.root().join(".karva/mutation/results.json").exists());
 }
+
+fn project_with_multiple_operators() -> TestContext {
+    TestContext::with_files([
+        (
+            "pyproject.toml",
+            "[tool.karva.profile.default.mutation]\nsources = ['.']\noperators = ['literal', 'arithmetic', 'comparison', 'return']\nworkers = 1\n",
+        ),
+        ("app.py", "def enabled(value):\n    return value + 1 > 0\n"),
+        ("other.py", "def other():\n    return True\n"),
+        (
+            "tests/test_app.py",
+            "from app import enabled\nfrom other import other\n\ndef test_enabled():\n    assert enabled(1) is True\n    assert enabled(-1) is False\n    assert enabled(0) is True\n    assert other() is True\n",
+        ),
+    ])
+}
+
+#[test]
+fn narrowed_runs_preserve_unselected_operator_and_file_results() {
+    let context = project_with_multiple_operators();
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2a224aa779d2868d43c412b445aa0cc5 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    3a42a5cd8c610abd85544e06bdc75708 killed other.py:2 other
+      full suite: requested or source/test mapping incomplete
+    7d79666a6a6effe03e0269bbb9949a06 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    80a9e8299a1b9a7bd91d6a3d016d6e26 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    8b9b70b76b7a77d2029c226a51d93ab1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    b720be33d49680ad937c86bd5481b1c7 killed other.py:2 other
+      full suite: requested or source/test mapping incomplete
+    e8816f64edea6efd00732e3d386aa8a1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 7
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/7
+    Completed mutation 2/7
+    Completed mutation 3/7
+    Completed mutation 4/7
+    Completed mutation 5/7
+    Completed mutation 6/7
+    Completed mutation 7/7
+    ");
+    let first = results(&context);
+    assert_eq!(first.records.len(), 7);
+    let mut comparison = command(&context, "run");
+    comparison.args(["--operator", "comparison"]);
+    assert_cmd_snapshot!(comparison, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    7d79666a6a6effe03e0269bbb9949a06 killed app.py:2 enabled
+      reused: matching source, tests, dependencies, runtime, environment, and configuration
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    ");
+    let narrowed = results(&context);
+    assert_eq!(narrowed.records.len(), first.records.len());
+    assert!(
+        first
+            .records
+            .keys()
+            .all(|id| narrowed.records.contains_key(id))
+    );
+    assert_eq!(first.context_fingerprint, narrowed.context_fingerprint);
+    let mut excluded = command(&context, "run");
+    excluded.args(["--exclude", "app.py"]);
+    assert_cmd_snapshot!(excluded, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    3a42a5cd8c610abd85544e06bdc75708 killed other.py:2 other
+      reused: matching source, tests, dependencies, runtime, environment, and configuration
+    b720be33d49680ad937c86bd5481b1c7 killed other.py:2 other
+      reused: matching source, tests, dependencies, runtime, environment, and configuration
+    killed: 2
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    ");
+    let excluded = results(&context);
+    assert_eq!(excluded.records.len(), first.records.len());
+    assert!(
+        first
+            .records
+            .keys()
+            .all(|id| excluded.records.contains_key(id))
+    );
+    assert_eq!(first.context_fingerprint, excluded.context_fingerprint);
+    assert_cmd_snapshot!(command(&context, "results"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2a224aa779d2868d43c412b445aa0cc5 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    3a42a5cd8c610abd85544e06bdc75708 killed other.py:2 other
+      reused: matching source, tests, dependencies, runtime, environment, and configuration
+    7d79666a6a6effe03e0269bbb9949a06 killed app.py:2 enabled
+      reused: matching source, tests, dependencies, runtime, environment, and configuration
+    80a9e8299a1b9a7bd91d6a3d016d6e26 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    8b9b70b76b7a77d2029c226a51d93ab1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    b720be33d49680ad937c86bd5481b1c7 killed other.py:2 other
+      reused: matching source, tests, dependencies, runtime, environment, and configuration
+    e8816f64edea6efd00732e3d386aa8a1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 7
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest::rstest]
+fn empty_narrowed_runs_leave_stored_results_unchanged(
+    #[values(["--operator", "boolean"], ["--exclude", "*.py"])] arguments: [&str; 2],
+) {
+    insta::allow_duplicates! {
+    let context = project_with_multiple_operators();
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2a224aa779d2868d43c412b445aa0cc5 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    3a42a5cd8c610abd85544e06bdc75708 killed other.py:2 other
+      full suite: requested or source/test mapping incomplete
+    7d79666a6a6effe03e0269bbb9949a06 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    80a9e8299a1b9a7bd91d6a3d016d6e26 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    8b9b70b76b7a77d2029c226a51d93ab1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    b720be33d49680ad937c86bd5481b1c7 killed other.py:2 other
+      full suite: requested or source/test mapping incomplete
+    e8816f64edea6efd00732e3d386aa8a1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 7
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/7
+    Completed mutation 2/7
+    Completed mutation 3/7
+    Completed mutation 4/7
+    Completed mutation 5/7
+    Completed mutation 6/7
+    Completed mutation 7/7
+    ");
+    let original = context.read_file(".karva/mutation/results.json");
+    let mut narrowed = command(&context, "run");
+    narrowed.args(arguments);
+    assert_cmd_snapshot!(narrowed, @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: no mutations match the supplied sources and filters; check mutation.sources, --source, --path, --symbol, --operator, and --outcome
+    ");
+    assert_eq!(context.read_file(".karva/mutation/results.json"), original);
+    }
+}

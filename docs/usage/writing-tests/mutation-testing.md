@@ -49,6 +49,9 @@ repeatable `--path` and `--symbol` globs to narrow candidates, and `--outcome` t
 select prior results. Path globs are relative to the project root; symbols use
 qualified names such as `Service.validate`.
 
+CLI filters preserve stored results outside the current selection. An unfiltered
+run refreshes the candidate inventory; bulk retesting removes stale source records.
+
 Exclude an individual line with `# pragma: no mutate`. Use standalone
 `# karva: mutate off` and `# karva: mutate on` comments around a block. A mutation
 spanning any excluded line is omitted. These pragmas inside strings have no effect.
