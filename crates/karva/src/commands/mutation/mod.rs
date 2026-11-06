@@ -190,7 +190,10 @@ fn run_mutations(
     });
     let mut candidates = Vec::new();
     let mut discovered = BTreeSet::new();
-    if matches!(selection, CandidateSelection::Retest(None)) {
+    if matches!(
+        selection,
+        CandidateSelection::Retest(None) | CandidateSelection::Discover
+    ) {
         if let Some(results) = &mut previous {
             let previous_count = results.records.len();
             files::prune_stale(project.cwd(), results)?;

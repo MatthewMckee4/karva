@@ -168,7 +168,7 @@ pub(super) fn apply(root: &Utf8Path, mutant: &Mutant) -> Result<()> {
     Ok(())
 }
 
-/// Removes records whose original source changed or disappeared before a bulk retest.
+/// Removes records whose original source changed or disappeared before discovery or bulk retest.
 pub(super) fn prune_stale(root: &Utf8Path, results: &mut MutationResults) -> Result<()> {
     let mut sources = BTreeMap::new();
     for record in results.records.values() {

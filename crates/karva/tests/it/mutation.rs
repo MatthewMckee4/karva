@@ -1317,6 +1317,96 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
     ");
 }
 
+#[test]
+fn narrowed_runs_remove_changed_source_records() {
+    let context = project_with_multiple_operators();
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2a224aa779d2868d43c412b445aa0cc5 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    3a42a5cd8c610abd85544e06bdc75708 killed other.py:2 other
+      full suite: requested or source/test mapping incomplete
+    7d79666a6a6effe03e0269bbb9949a06 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    80a9e8299a1b9a7bd91d6a3d016d6e26 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    8b9b70b76b7a77d2029c226a51d93ab1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    b720be33d49680ad937c86bd5481b1c7 killed other.py:2 other
+      full suite: requested or source/test mapping incomplete
+    e8816f64edea6efd00732e3d386aa8a1 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 7
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/7
+    Completed mutation 2/7
+    Completed mutation 3/7
+    Completed mutation 4/7
+    Completed mutation 5/7
+    Completed mutation 6/7
+    Completed mutation 7/7
+    ");
+    let first = results(&context);
+    context.write_file(
+        "app.py",
+        "# moved\ndef enabled(value):\n    return value + 1 > 0\n",
+    );
+    let mut narrowed = command(&context, "run");
+    narrowed.args(["--operator", "comparison"]);
+    assert_cmd_snapshot!(narrowed, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    c37fdc64061b17f9a926c65e933540e0 killed app.py:3 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/1
+    ");
+    let updated = results(&context);
+    assert_eq!(updated.records.len(), 3);
+    for (id, record) in &first.records {
+        assert_eq!(
+            updated.records.contains_key(id),
+            record.mutant.path == "other.py"
+        );
+    }
+    let mut report = command(&context, "results");
+    report.args(["--path", "app.py"]);
+    assert_cmd_snapshot!(report, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    c37fdc64061b17f9a926c65e933540e0 killed app.py:3 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest::rstest]
 fn empty_narrowed_runs_leave_stored_results_unchanged(
     #[values(["--operator", "boolean"], ["--exclude", "*.py"])] arguments: [&str; 2],
