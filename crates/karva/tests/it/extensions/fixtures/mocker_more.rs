@@ -37,6 +37,15 @@ def test_autospec(mocker):
     callback("key")
     mocker.resetall()
     assert callback.call_count == 2
+    class Client:
+        def get(self, key):
+            return key
+
+    client = mocker.create_autospec(Client, instance=True)
+    client.get(1)
+    mocker.resetall()
+    client.get.assert_not_called()
+
     mock = mocker.Mock()
     mock.allowed = mocker.Mock(return_value=1)
     mocker.seal(mock)
@@ -347,8 +356,10 @@ def test_third({scope}_mocker):
     assert_eq!(context.read_file("restored.txt"), "restored");
 }
 
-#[test]
-fn package_mocker_dependency_lives_as_long_as_its_parent_fixture() {
+#[rstest]
+fn package_mocker_dependency_lives_as_long_as_its_parent_fixture(
+    #[values("parent", "client")] dependency: &str,
+) {
     let context = TestContext::with_files([
         ("shared.py", "value = 'original'\nparent = None\n"),
         (
@@ -376,38 +387,64 @@ def parent(package_mocker):
         ("a/__init__.py", ""),
         ("b/__init__.py", ""),
         (
-            "a/test_first.py",
+            "a/conftest.py",
             r"
-import shared
+import karva
 
 
-def test_first(package_mocker, parent):
-    assert package_mocker is not shared.parent
-    assert shared.value is parent
-    assert shared.value() == 42
+@karva.fixture(scope='package')
+def client(parent):
+    return parent
 ",
         ),
         (
-            "b/test_second.py",
+            "b/conftest.py",
             r"
-import shared
+import karva
 
 
-def test_second(parent, package_mocker):
-    assert package_mocker is not shared.parent
-    assert shared.value is parent
-    assert shared.value() == 42
+@karva.fixture(scope='package')
+def client(parent):
+    return parent
 ",
         ),
     ]);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
-    success: true
-    exit_code: 0
-    ----- stdout -----
-    ────────────
-         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+    context.write_file(
+        "a/test_first.py",
+        r"
+import shared
 
-    ----- stderr -----
-    ");
+
+def test_first(package_mocker, PARENT):
+    assert package_mocker is not shared.parent
+    assert shared.value is PARENT
+    assert shared.value() == 42
+"
+        .replace("PARENT", dependency),
+    );
+    context.write_file(
+        "b/test_second.py",
+        r"
+import shared
+
+
+def test_second(PARENT, package_mocker):
+    assert package_mocker is not shared.parent
+    assert shared.value is PARENT
+    assert shared.value() == 42
+"
+        .replace("PARENT", dependency),
+    );
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
     assert_eq!(context.read_file("restored.txt"), "restored");
 }
