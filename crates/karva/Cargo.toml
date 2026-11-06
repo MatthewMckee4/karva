@@ -23,9 +23,11 @@ karva_coverage = { workspace = true }
 karva_coverage_report = { workspace = true }
 karva_coverage_runtime = { workspace = true }
 karva_diagnostic = { workspace = true }
+karva_ipc = { workspace = true }
 karva_language_server = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
+karva_mutation = { workspace = true }
 karva_project = { workspace = true }
 karva_python_semantic = { workspace = true, features = ["python-runtime"] }
 karva_runner = { workspace = true }
@@ -40,9 +42,14 @@ camino = { workspace = true }
 clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 crossbeam-channel = { workspace = true }
+globset = { workspace = true }
+ignore = { workspace = true }
 notify-debouncer-mini = { workspace = true }
+pyo3 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+similar = { workspace = true }
+tempfile = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true, features = ["release_max_level_debug"] }
 wild = { workspace = true }
@@ -58,7 +65,6 @@ regex = { workspace = true }
 rstest = { workspace = true }
 ruff_python_trivia = { workspace = true }
 snapbox = { workspace = true }
-tempfile = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Console", "Win32_System_Threading"] }

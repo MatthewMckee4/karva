@@ -546,6 +546,7 @@ impl SubTestCommand {
                 fail_under: self.cov_fail_under.map(CovFailUnder),
                 disabled: self.no_cov.then_some(true),
             }),
+            mutation: None,
             junit: None,
             overrides: Vec::new(),
         }

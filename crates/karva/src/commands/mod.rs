@@ -5,3 +5,5 @@ pub mod show_config;
 pub mod snapshot;
 pub mod test;
 pub mod version;
+
+pub mod mutation;
