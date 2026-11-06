@@ -1517,11 +1517,14 @@ dependencies = [
  "karva_ipc",
  "karva_logging",
  "karva_metadata",
+ "karva_mutation",
  "karva_project",
  "karva_python_semantic",
  "karva_static",
  "karva_test_semantic",
+ "pyo3",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 

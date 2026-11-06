@@ -121,8 +121,12 @@ pub enum WireMessage {
 /// Both processes resolve the same merged options instead of reconstructing
 /// configuration through the user-facing CLI. Environment changes are applied
 /// at process creation and omitted here; test selectors live in the assignment.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct WorkerConfiguration {
+    /// In-memory source replacement, installed before application imports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mutation: Option<MutationSource>,
+
     /// Resolved terminal color policy for test output and diagnostics.
     pub color: Option<TerminalColor>,
 
@@ -163,4 +167,20 @@ pub struct WorkerSelection {
     /// Next one-based attempt for cases interrupted by a hard timeout.
     #[serde(default)]
     pub resume_attempts: Vec<(TestCacheKey, u32)>,
+}
+
+/// One source replacement carried over authenticated IPC, never environment or disk.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MutationSource {
+    /// Candidate identity included in worker diagnostics.
+    pub id: String,
+
+    /// Canonical absolute filename used by Python's source loader.
+    pub path: Utf8PathBuf,
+
+    /// Expected fingerprint of the checked-out original file.
+    pub original_fingerprint: String,
+
+    /// Complete replacement source compiled only in this worker.
+    pub source: String,
 }
