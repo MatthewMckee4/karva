@@ -97,6 +97,26 @@ pub enum DiagnosticCode {
 }
 
 impl DiagnosticCode {
+    /// All supported source diagnostic identifiers, for validating suppressions.
+    pub const ALL: &[Self] = &[
+        Self::DuplicateFixture,
+        Self::InvalidFixture,
+        Self::MissingFixture,
+        Self::FixtureCycle,
+        Self::FixtureScopeMismatch,
+    ];
+
+    /// Concrete next step for a source diagnostic.
+    pub const fn action(self) -> &'static str {
+        match self {
+            Self::DuplicateFixture => "Rename or remove the duplicate fixture.",
+            Self::InvalidFixture => "Correct the fixture decorator arguments.",
+            Self::MissingFixture => "Define or import the required fixture.",
+            Self::FixtureCycle => "Remove a dependency from the fixture cycle.",
+            Self::FixtureScopeMismatch => "Align the fixture and dependency scopes.",
+        }
+    }
+
     /// Returns the stable protocol code.
     pub const fn as_str(self) -> &'static str {
         match self {

@@ -19,10 +19,12 @@ path = "src/main.rs"
 [dependencies]
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
+karva_collector = { workspace = true }
 karva_coverage = { workspace = true }
 karva_coverage_report = { workspace = true }
 karva_coverage_runtime = { workspace = true }
 karva_diagnostic = { workspace = true }
+karva_ide = { workspace = true }
 karva_language_server = { workspace = true }
 karva_logging = { workspace = true }
 karva_metadata = { workspace = true }
@@ -41,6 +43,8 @@ clap = { workspace = true, features = ["wrap_help", "string", "env"] }
 colored = { workspace = true }
 crossbeam-channel = { workspace = true }
 notify-debouncer-mini = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_text_size = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

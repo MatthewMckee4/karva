@@ -8,6 +8,7 @@ mod cache;
 mod coverage;
 mod enums;
 mod exit_status;
+mod health;
 mod partition;
 mod show_config;
 mod snapshot;
@@ -24,6 +25,7 @@ pub use enums::{
     CovContext, CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored,
 };
 pub use exit_status::ExitStatus;
+pub use health::{HealthCommand, HealthFailOn, HealthFormat};
 pub use partition::PartitionSelection;
 pub use show_config::ShowConfigCommand;
 pub use snapshot::{
@@ -54,6 +56,9 @@ pub struct Args {
 pub enum Command {
     /// Run tests.
     Test(Box<TestCommand>),
+
+    /// Inspect test-suite diagnostics without importing or executing Python.
+    Health(HealthCommand),
 
     /// Manage snapshots created by `karva.assert_snapshot()`.
     Snapshot(SnapshotCommand),

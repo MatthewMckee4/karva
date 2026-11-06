@@ -2,7 +2,10 @@ use karva_collector::{
     CollectedModule, CollectedPackage, CollectionSettings, ModuleType, collect_file_for_scheduling,
 };
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::thread;
+
+use karva_collector::collect_file;
 
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -32,6 +35,95 @@ impl<'a> ParallelCollector<'a> {
     /// Creates a controller-side collector rooted at `cwd`.
     pub fn new(cwd: &'a Utf8Path, settings: CollectionSettings<'a>) -> Self {
         Self { cwd, settings }
+    }
+
+    /// Collects complete source for inspection using the runner's directory filters.
+    ///
+    /// Unlike scheduling, inspection retains modules with no runnable tests so
+    /// class and conditional definitions can still be diagnosed. No Python runs.
+    pub fn collect_sources(&self, paths: Vec<TestPath>) -> Result<Vec<CollectedModule>> {
+        let mut files: BTreeMap<Utf8PathBuf, Option<Vec<String>>> = BTreeMap::new();
+        for path in paths {
+            match path {
+                TestPath::Directory(path) => {
+                    let (tx, rx) = unbounded();
+                    self.create_parallel_walker(&path)?.run(|| {
+                        let tx = tx.clone();
+                        Box::new(move |entry| {
+                            let result = entry.map_err(anyhow::Error::from).and_then(|entry| {
+                                if entry.file_type().is_some_and(|kind| kind.is_file()) {
+                                    Utf8PathBuf::from_path_buf(entry.into_path())
+                                        .map(Some)
+                                        .map_err(|path| {
+                                            anyhow::anyhow!(
+                                                "non-Unicode source path: {}",
+                                                path.display()
+                                            )
+                                        })
+                                } else {
+                                    Ok(None)
+                                }
+                            });
+                            if tx.send(result).is_err() {
+                                return WalkState::Quit;
+                            }
+                            WalkState::Continue
+                        })
+                    });
+                    drop(tx);
+                    for result in rx {
+                        if let Some(path) = result? {
+                            files.insert(path, None);
+                        }
+                    }
+                }
+                TestPath::File(path) => {
+                    files.insert(path, None);
+                }
+                TestPath::Function(function) => {
+                    files
+                        .entry(function.path)
+                        .and_modify(|names| {
+                            if let Some(names) = names {
+                                names.push(function.function_name.clone());
+                            }
+                        })
+                        .or_insert_with(|| Some(vec![function.function_name]));
+                }
+            }
+        }
+        // Like worker discovery, selected modules inherit ancestor configuration
+        // even when an ignore pattern excludes the conftest file itself.
+        let mut visited = BTreeSet::new();
+        let selected = files.keys().cloned().collect::<Vec<_>>();
+        for path in selected {
+            for parent in path
+                .ancestors()
+                .skip(1)
+                .take_while(|path| path.starts_with(self.cwd))
+            {
+                if !visited.insert(parent.to_path_buf()) {
+                    continue;
+                }
+                let config = parent.join("conftest.py");
+                if config.is_file() && !files.contains_key(&config) {
+                    files.insert(config, None);
+                }
+            }
+        }
+        files
+            .into_iter()
+            .filter_map(|(path, names)| {
+                collect_file(
+                    &path,
+                    self.cwd,
+                    &self.settings,
+                    names.as_deref().unwrap_or_default(),
+                )
+                .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     /// Walks a directory concurrently while serializing package mutation on a receiver thread.
