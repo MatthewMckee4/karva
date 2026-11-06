@@ -1,12 +1,12 @@
 //! Source discovery, complete-input cache identity, and atomic source application.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 use anyhow::{Context, Result, bail};
 use camino::{Utf8Path, Utf8PathBuf};
-use karva_mutation::{Mutant, fingerprint, fingerprint_file};
+use karva_mutation::{Mutant, MutationResults, fingerprint, fingerprint_file};
 use karva_project::Project;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -165,5 +165,29 @@ pub(super) fn apply(root: &Utf8Path, mutant: &Mutant) -> Result<()> {
         );
     }
     temporary.persist(&path).map_err(|error| error.error)?;
+    Ok(())
+}
+
+/// Removes records whose original source changed or disappeared before a bulk retest.
+pub(super) fn prune_stale(root: &Utf8Path, results: &mut MutationResults) -> Result<()> {
+    let mut sources = BTreeMap::new();
+    for record in results.records.values() {
+        if !sources.contains_key(&record.mutant.path) {
+            let path = root.join(&record.mutant.path);
+            let identity = match std::fs::read(&path) {
+                Ok(bytes) => Some(fingerprint(&[&bytes])),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("cannot validate mutation source `{path}`"));
+                }
+            };
+            sources.insert(record.mutant.path.clone(), identity);
+        }
+    }
+    results.records.retain(|_, record| {
+        sources.get(&record.mutant.path).and_then(Option::as_deref)
+            == Some(record.mutant.source_fingerprint.as_str())
+    });
     Ok(())
 }

@@ -64,3 +64,37 @@ pub(super) fn resolve_id<'a>(
     }
     Ok(record.mutant.id.clone())
 }
+
+/// Anchors regex selection and escapes the filter delimiter independently of regex syntax.
+pub(super) fn test_filter(test: &str) -> String {
+    let escaped = regex::escape(test).replace('/', "\\/");
+    format!("test(/\\A{escaped}\\z/)")
+}
+
+#[cfg(test)]
+mod tests {
+    use karva_metadata::filter::{EvalContext, FiltersetSet};
+    use rstest::rstest;
+
+    #[rstest]
+    fn test_names_round_trip(
+        #[values(
+            "module::test(path\\value)",
+            "module::test(quote\")",
+            "module::test(line\nvalue)",
+            "ends\\",
+            "slash/"
+        )]
+        name: &str,
+    ) {
+        let filters = FiltersetSet::new(&[super::test_filter(name)]).expect("valid filter");
+        assert!(filters.matches(&EvalContext {
+            test_name: name,
+            tags: &[]
+        }));
+        assert!(!filters.matches(&EvalContext {
+            test_name: &format!("{name}extra"),
+            tags: &[]
+        }));
+    }
+}

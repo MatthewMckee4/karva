@@ -45,15 +45,18 @@ pub(super) fn results(results: &MutationResults, json: bool) -> Result<ExitStatu
         writeln!(stdout)?;
     } else {
         for record in results.records.values() {
-            writeln!(
+            write!(
                 stdout,
-                "{} {} {}:{} {}",
+                "{} {} {}:{}",
                 record.mutant.id,
                 outcome_name(record.outcome),
                 record.mutant.path,
-                record.mutant.line,
-                record.mutant.symbol
+                record.mutant.line
             )?;
+            if !record.mutant.symbol.is_empty() {
+                write!(stdout, " {}", record.mutant.symbol)?;
+            }
+            writeln!(stdout)?;
             writeln!(stdout, "  {}", record.reason)?;
             if record.context_fingerprint != results.context_fingerprint {
                 writeln!(

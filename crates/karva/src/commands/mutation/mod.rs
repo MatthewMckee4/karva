@@ -84,6 +84,11 @@ pub fn mutation(args: MutationCommand) -> Result<ExitStatus> {
             CandidateSelection::Discover,
         ),
         MutationAction::Retest(mut retest) => {
+            if !retest.run.source.is_empty() || !retest.run.exclude.is_empty() {
+                bail!(
+                    "`--source` and `--exclude` apply only to `mutate run`; use `--path` to select recorded candidates for retesting"
+                );
+            }
             retest.run.no_cache = true;
             run_mutations(
                 &project,
@@ -164,7 +169,7 @@ fn run_mutations(
     let (options, workers, explicit_timeout) = resolved_options(project, args)?;
     let discovery_filters = DiscoveryFilters::new(
         options.operators.as_deref().unwrap_or_default(),
-        &args.filters.symbol,
+        &[],
         options.exclude_symbols.as_deref().unwrap_or_default(),
         options.exclude_lines.as_deref().unwrap_or_default(),
     )?;
@@ -184,6 +189,13 @@ fn run_mutations(
         }]
     });
     let mut candidates = Vec::new();
+    let mut discovered = BTreeSet::new();
+    if matches!(selection, CandidateSelection::Retest(None)) {
+        if let Some(results) = &mut previous {
+            files::prune_stale(project.cwd(), results)?;
+            results.write(&data_path)?;
+        }
+    }
     if let CandidateSelection::Retest(prefix) = selection {
         let results = previous
             .as_ref()
@@ -224,6 +236,7 @@ fn run_mutations(
                 current_python_version(),
                 &discovery_filters,
             )? {
+                discovered.insert(mutant.id.clone());
                 let pending = MutationRecord {
                     mutant: mutant.clone(),
                     context_fingerprint: String::new(),
@@ -243,6 +256,24 @@ fn run_mutations(
             }
         }
     }
+    if matches!(selection, CandidateSelection::Discover) {
+        let roots = sources
+            .iter()
+            .map(|source| {
+                let path = files::canonical_source(project.cwd(), &project.cwd().join(source))?;
+                files::relative(project.cwd(), &path)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if let Some(results) = &mut previous {
+            results.records.retain(|id, record| {
+                !roots
+                    .iter()
+                    .any(|root| record.mutant.path.starts_with(root))
+                    || discovered.contains(id)
+            });
+            results.write(&data_path)?;
+        }
+    }
     candidates.sort_by(|left, right| {
         (&left.path, left.start, left.end, &left.id).cmp(&(
             &right.path,
@@ -259,8 +290,17 @@ fn run_mutations(
     }
     let start = Instant::now();
     let baseline = execution::baseline(project, &sources, profile.clone())?;
-    if baseline.output.cancelled
-        || baseline.output.timed_out
+    if baseline.output.cancelled {
+        if json {
+            writeln!(
+                std::io::stdout(),
+                "{}",
+                serde_json::json!({"error": "mutation baseline cancelled"})
+            )?;
+        }
+        bail!("mutation baseline cancelled; no mutants were executed");
+    }
+    if baseline.output.timed_out
         || !baseline.output.results.is_success()
         || baseline.output.results.stats.total() == 0
     {
@@ -284,9 +324,7 @@ fn run_mutations(
     // invocations measured 0.621–0.993 s. Eight invocations at concurrency four
     // measured 1.404–2.132 s (maximum ratio 3.432). A tenfold baseline budget
     // leaves headroom for process startup, instrumentation, and scheduling jitter.
-    let concurrent_baseline: f64 =
-        std::iter::repeat_n(baseline.elapsed_seconds, workers.min(candidates.len())).sum();
-    let budget_seconds = explicit_timeout.unwrap_or(concurrent_baseline * 10.0);
+    let budget_seconds = explicit_timeout.unwrap_or(baseline.elapsed_seconds * 10.0);
     let configuration = serde_json::json!({"sources": sources, "mutation": options, "workers": workers, "timeout_seconds": explicit_timeout, "profile": profile});
     let context = files::context(project, &configuration)?;
     let mut results = previous

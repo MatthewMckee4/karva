@@ -60,8 +60,7 @@ baseline stops mutation execution and preserves the original test failures.
 Each mutant gets a fresh interpreter; parallel workers never rewrite source files.
 Python rejects candidates that cannot compile before any tests execute.
 
-The default per-mutant timeout is ten times the measured baseline per concurrent
-worker, allowing for scheduling contention. Override it
+The default per-mutant timeout is ten times the measured baseline. Override it
 with `--timeout` in seconds or `mutation.timeout`. Set `--workers` or
 `mutation.workers` to control parallelism. Timeout diagnostics include the
 mutant, requested tests, measured baseline, and budget.
@@ -97,3 +96,11 @@ Add `--json` to `run` or `results` for the versioned native result object.
 same stored outcomes. Reports can include earlier execution contexts after a
 filtered retest; compare each record's `context_fingerprint` to the top-level
 value before treating it as current.
+
+Cache identity includes the complete worker environment, including terminal,
+session, and CI variables. Opening another terminal or changing CI runs can
+therefore invalidate otherwise unchanged results. This conservative policy avoids
+reusing outcomes for tests that observe those variables.
+
+`retest` selects recorded candidates with `--path`, `--symbol`, `--operator`, and
+`--outcome`. Source roots and `--exclude` apply to discovery through `run`.
