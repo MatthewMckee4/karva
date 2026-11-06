@@ -9,7 +9,7 @@ mod definition;
 mod fixture;
 mod health;
 mod hover;
-pub use health::shadowed_definitions;
+pub use health::{duplicate_parameter_cases, shadowed_definitions};
 mod implementation;
 mod occurrences;
 mod references;
@@ -82,6 +82,12 @@ pub struct SourceAnalysisSettings {
 /// Stable identifier for a source diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiagnosticCode {
+    /// Identical literal arguments occur more than once in one parameter dimension.
+    DuplicateParameterCase,
+
+    /// An explicit parameter ID is repeated in one parameter dimension.
+    DuplicateParameterId,
+
     /// A later definition replaces a test or fixture in the same Python scope.
     ShadowedDefinition,
 
@@ -107,6 +113,8 @@ pub enum DiagnosticCode {
 impl DiagnosticCode {
     /// All supported source diagnostic identifiers, for validating suppressions.
     pub const ALL: &[Self] = &[
+        Self::DuplicateParameterCase,
+        Self::DuplicateParameterId,
         Self::ShadowedDefinition,
         Self::PossiblyShadowedDefinition,
         Self::DuplicateFixture,
@@ -119,6 +127,10 @@ impl DiagnosticCode {
     /// Concrete next step for a source diagnostic.
     pub const fn action(self) -> &'static str {
         match self {
+            Self::DuplicateParameterCase => {
+                "Remove the repeated literal case, or suppress this rule if repetition is intentional."
+            }
+            Self::DuplicateParameterId => "Give each explicit case ID a distinct name.",
             Self::ShadowedDefinition | Self::PossiblyShadowedDefinition => {
                 "Rename or remove one definition so each test or fixture has a distinct name."
             }
@@ -133,6 +145,8 @@ impl DiagnosticCode {
     /// Returns the stable protocol code.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::DuplicateParameterCase => "duplicate-parameter-case",
+            Self::DuplicateParameterId => "duplicate-parameter-id",
             Self::ShadowedDefinition => "shadowed-definition",
             Self::PossiblyShadowedDefinition => "possibly-shadowed-definition",
             Self::DuplicateFixture => "duplicate-fixture",

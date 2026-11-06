@@ -38,3 +38,9 @@ in the same module or class. Both locations are shown. Definitions in mutually
 exclusive branches are excluded; uncertain execution produces
 `possibly-shadowed-definition` with warning severity. These checks cover code
 that runtime collection can no longer see, including duplicate test methods.
+
+`duplicate-parameter-case` and `duplicate-parameter-id` are warnings for repeated
+literal inputs or explicit IDs within one parameter dimension. Nested containers
+are compared structurally, ignoring formatting. Dynamic expressions and cases
+with distinct marks are skipped. Repeated inputs can be intentional; suppress the
+rule when they exercise repeated execution on purpose.
