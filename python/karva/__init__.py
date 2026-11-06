@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from karva._approx import approx
 from karva._builtins import MockEnv
+from karva._fixtures.mocker import MockerFixture
 from karva._fixtures.recwarn import deprecated_call, warns
 from karva._importorskip import importorskip
 from karva._karva import (
@@ -53,6 +54,7 @@ __all__: list[str] = [
     "ExceptionInfo",
     "FailError",
     "MockEnv",
+    "MockerFixture",
     "RaisesContext",
     "SkipError",
     "SnapshotMismatchError",
