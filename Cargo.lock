@@ -1463,6 +1463,7 @@ dependencies = [
  "ruff_python_stdlib",
  "ruff_source_file",
  "ruff_text_size",
+ "serde_json",
  "thiserror",
  "tracing",
 ]

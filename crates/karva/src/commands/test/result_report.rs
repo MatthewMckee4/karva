@@ -217,6 +217,10 @@ impl StatsReport {
 #[derive(Serialize)]
 /// Final outcome and supporting data for one collected test.
 struct TestReport<'a> {
+    /// Callable-only measurements, with times in nanoseconds.
+    #[serde(skip_serializing_if = "<[karva_diagnostic::BenchmarkResult]>::is_empty")]
+    benchmarks: &'a [karva_diagnostic::BenchmarkResult],
+
     module: &'a str,
     name: &'a str,
 
@@ -265,6 +269,7 @@ impl<'a> TestReport<'a> {
         let flaky = matches!(case.outcome(), TestCaseOutcome::Passed) && retry.is_some();
 
         Self {
+            benchmarks: case.benchmarks(),
             module: case.module_name(),
             name: case.name(),
             full_name: case.full_name(),
@@ -295,6 +300,10 @@ impl<'a> TestReport<'a> {
 #[derive(Serialize)]
 /// Outcome data for one execution attempt within a retried test.
 struct AttemptReport<'a> {
+    /// Callable-only measurements, with times in nanoseconds.
+    #[serde(skip_serializing_if = "<[karva_diagnostic::BenchmarkResult]>::is_empty")]
+    benchmarks: &'a [karva_diagnostic::BenchmarkResult],
+
     /// One-based attempt number.
     attempt: u32,
 
@@ -330,6 +339,7 @@ impl<'a> AttemptReport<'a> {
             TestCaseOutcome::Skipped { .. } => (TestStatus::Skipped, None),
         };
         Self {
+            benchmarks: attempt.benchmarks(),
             attempt: attempt.attempt(),
             status,
             expected_failure_reason: match attempt.outcome() {

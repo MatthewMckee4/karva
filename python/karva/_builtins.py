@@ -26,14 +26,17 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
 
+from karva._benchmark import Benchmark
 from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
 from karva._fixtures.tmpdir import LegacyPath, TempPathFactory
 from karva._karva import fixture
 
 __all__ = [
+    "Benchmark",
     "CaptureResult",
     "MockEnv",
+    "benchmark",
     "capfd",
     "capfdbinary",
     "caplog",
@@ -48,6 +51,12 @@ __all__ = [
     "tmpdir",
     "tmpdir_factory",
 ]
+
+
+@fixture
+def benchmark() -> Benchmark:
+    """Measure a synchronous callable, or decorate one to run it immediately."""
+    return Benchmark()
 
 
 @fixture

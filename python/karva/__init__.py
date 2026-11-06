@@ -1,6 +1,7 @@
 """Karva is a Python test framework, written in Rust."""
 
 from karva._approx import approx
+from karva._benchmark import Benchmark
 from karva._builtins import MockEnv
 from karva._fixtures.recwarn import deprecated_call, warns
 from karva._importorskip import importorskip
@@ -28,6 +29,7 @@ from karva._karva import (
 __version__ = "0.0.1-alpha.13"
 
 __all__: list[str] = [
+    "Benchmark",
     "Command",
     "ExceptionInfo",
     "FailError",

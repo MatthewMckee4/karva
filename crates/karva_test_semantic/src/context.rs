@@ -151,11 +151,21 @@ impl Context<'_> {
         duration: std::time::Duration,
         captured_output: Option<CapturedTestOutput>,
     ) -> bool {
-        let passed = !outcome.is_non_success();
+        self.register_completed_result(
+            test_case_name,
+            TestExecutionResult::new(test_case_name, outcome, duration, captured_output),
+        )
+    }
 
+    /// Reports one completed attempt, retaining any callable measurements.
+    pub(crate) fn register_completed_result(
+        &self,
+        test_case_name: &QualifiedTestName,
+        test_case: TestExecutionResult,
+    ) -> bool {
+        let passed = !test_case.outcome().is_non_success();
+        let duration = test_case.duration();
         let cache_key = test_case_name.cache_key();
-        let test_case =
-            TestExecutionResult::new(test_case_name, outcome, duration, captured_output);
         let result_kind = test_case.outcome().result_kind();
         self.reporter.report_test_completed(&cache_key, test_case);
         if let Some(attempt) = self.resume_attempts.get(&cache_key) {

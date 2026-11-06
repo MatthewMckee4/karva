@@ -57,6 +57,9 @@ struct TestCaseResultPayload<D = RenderedDiagnostic> {
 
     /// Earlier attempts retained when retry policy reran the test.
     attempts: Vec<TestCaseAttempt<D>>,
+
+    /// Callable measurements from the final attempt.
+    benchmarks: Vec<crate::BenchmarkResult>,
 }
 
 impl<D> TestCaseResult<D> {
@@ -121,12 +124,15 @@ impl<D> TestCaseResult<D> {
             .sum::<Duration>();
         let mut attempts = previous;
         if self.payload.attempts.is_empty() {
-            attempts.push(TestCaseAttempt::new(
-                current_attempt,
-                self.payload.outcome.clone(),
-                self.payload.duration,
-                self.payload.captured_output.clone(),
-            ));
+            attempts.push(
+                TestCaseAttempt::new(
+                    current_attempt,
+                    self.payload.outcome.clone(),
+                    self.payload.duration,
+                    self.payload.captured_output.clone(),
+                )
+                .with_benchmarks(self.payload.benchmarks.clone()),
+            );
         } else {
             attempts.append(&mut self.payload.attempts);
         }
@@ -231,6 +237,18 @@ impl<D> TestCaseResult<D> {
         self.payload.captured_output.as_ref()
     }
 
+    /// Attaches callable-only measurements without changing test duration.
+    #[must_use]
+    pub fn with_benchmarks(mut self, benchmarks: Vec<crate::BenchmarkResult>) -> Self {
+        self.payload.benchmarks = benchmarks;
+        self
+    }
+
+    /// Returns measurements from the final attempt, including partial failures.
+    pub fn benchmarks(&self) -> &[crate::BenchmarkResult] {
+        &self.payload.benchmarks
+    }
+
     /// Returns earlier attempts retained by retry policy.
     pub fn attempts(&self) -> &[TestCaseAttempt<D>] {
         &self.payload.attempts
@@ -284,6 +302,7 @@ impl<D> TestCaseResultPayload<D> {
             retry: None,
             captured_output,
             attempts: Vec::new(),
+            benchmarks: Vec::new(),
         }
     }
 
@@ -292,6 +311,7 @@ impl<D> TestCaseResultPayload<D> {
         TestCaseResultPayload {
             outcome: self.outcome.map_diagnostic(&mut map),
             duration: self.duration,
+            benchmarks: self.benchmarks,
             retry: self.retry,
             captured_output: self.captured_output,
             attempts: self

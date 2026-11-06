@@ -51,7 +51,12 @@ pub fn run_parallel_tests(
 
     let total_tests = scheduled_test_count(&collected);
     let max_useful_workers = total_tests.max(1);
-    let num_workers = config.num_workers.min(max_useful_workers);
+    let num_workers = if !project.settings().test().benchmark_disable && collected.uses_benchmark()
+    {
+        1
+    } else {
+        config.num_workers.min(max_useful_workers)
+    };
 
     if num_workers < config.num_workers {
         tracing::info!(target: "karva_runner::orchestration",

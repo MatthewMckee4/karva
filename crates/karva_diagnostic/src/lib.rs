@@ -1,11 +1,13 @@
 //! Test outcomes, source-backed diagnostics, and user-facing result reporting.
 
+mod benchmark;
 mod diagnostic;
 mod exception;
 mod render;
 mod reporter;
 mod result;
 
+pub use benchmark::BenchmarkResult;
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{
     AggregatedResults, CapturedTestOutput, DisplayFlakyTests, FixtureFailure, FixtureUsage,
