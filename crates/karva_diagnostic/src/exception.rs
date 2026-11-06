@@ -47,7 +47,7 @@ pub struct ExceptionFrame {
 
 impl ExceptionDiagnostic {
     /// Formats every retained node with its stable path, including chains and notes.
-    pub(crate) fn render(&self, cwd: &Utf8Path) -> String {
+    pub(super) fn render(&self, cwd: &Utf8Path) -> String {
         let mut output = String::new();
         self.write(&mut output, "exception", cwd);
         output
