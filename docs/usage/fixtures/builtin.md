@@ -440,5 +440,9 @@ Use `module_mocker`, `package_mocker`, or `session_mocker` from fixtures with
 longer lifetimes. Each owns independent patches and call history for its scope;
 `session_mocker` is local to each worker. Broader-scoped mocks retain state across
 retries. `class_mocker` requires test-class and class-scope support, which Karva
-does not yet provide. Pytest-mock configuration and enhanced assertion output
-are not provided.
+does not yet provide. Pytest-mock configuration is not provided.
+
+Failed mock assertions point to the calling test or fixture. Last-call assertion
+failures include focused differences for positional and keyword arguments,
+including nested values. The original standard-library exception text remains
+unchanged when assertions are caught by user code.
