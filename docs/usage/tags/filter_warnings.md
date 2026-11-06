@@ -44,6 +44,19 @@ Omitting `max-warnings` disables the budget. Exceeding the budget fails the run
 after teardown completes, while `error` filters raise exceptions at the warning
 site. Budget failures report both the configured limit and emitted count.
 
+Karva also reads `filterwarnings` from `[tool.pytest.ini_options]` in the discovered
+`pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+filterwarnings = ["error", "ignore:legacy API:DeprecationWarning"]
+```
+
+These filters supply the default profile's policy when Karva's `warning-filters`
+is unset. An explicit Karva list (including `[]`) in `karva.toml` or
+`[tool.karva]` replaces them. Named profiles and CLI filters keep their usual
+precedence. Explicit `--config-file` configuration does not import pytest settings.
+
 ## Test-local policy
 
 ```python

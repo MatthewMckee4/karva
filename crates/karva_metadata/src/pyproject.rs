@@ -4,6 +4,7 @@ use thiserror::Error;
 use camino::Utf8PathBuf;
 
 use crate::options::{Config, CoverageOptions, DEFAULT_PROFILE};
+use crate::pytest::PytestOptions;
 use crate::settings::CoverageExcludePattern;
 
 /// A `pyproject.toml` as specified in PEP 517.
@@ -54,6 +55,9 @@ pub struct Tool {
 
     /// coverage.py-compatible settings Karva can consume without coverage.py.
     pub coverage: Option<CoveragePyOptions>,
+
+    /// pytest settings imported when no native Karva warning policy is set.
+    pytest: Option<PytestOptions>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq)]
@@ -79,7 +83,15 @@ impl PyProject {
             .and_then(|tool| tool.karva.clone())
             .unwrap_or_default();
         self.apply_coverage_exclusions(&mut config);
+        self.apply_pytest_warning_filters(&mut config);
         config
+    }
+
+    /// Applies supported pytest settings from the discovered project.
+    pub(super) fn apply_pytest_warning_filters(&self, config: &mut Config) {
+        if let Some(pytest) = self.tool.as_ref().and_then(|tool| tool.pytest.as_ref()) {
+            pytest.apply_warning_filters(config);
+        }
     }
 
     pub(super) fn apply_coverage_exclusions(&self, config: &mut Config) {

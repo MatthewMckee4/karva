@@ -11,6 +11,7 @@ pub mod filter;
 mod max_fail;
 mod options;
 mod pyproject;
+mod pytest;
 mod settings;
 
 pub use environment::{EnvironmentVariable, EnvironmentVariableName};
@@ -151,6 +152,7 @@ impl ProjectMetadata {
 
                 if let Some(pyproject) = &pyproject {
                     pyproject.apply_coverage_exclusions(&mut config);
+                    pyproject.apply_pytest_warning_filters(&mut config);
                 }
 
                 check_required_version(&config, &project_root.join("karva.toml"))?;
