@@ -4,6 +4,7 @@
 //! frames serially so result aggregation and active-test attribution have one
 //! owner.
 
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::process::ExitStatus;
 use std::time::Duration;
@@ -169,21 +170,15 @@ impl EventDispatcher {
                 fail_on_flaky,
                 junit_fail_on_flaky,
             } => {
-                if self
-                    .timed_out_workers
-                    .insert(
-                        worker_id,
-                        TimedOutWorker {
-                            cache_key,
-                            result: *result,
-                            fail_on_flaky,
-                            junit_fail_on_flaky,
-                        },
-                    )
-                    .is_some()
-                {
+                let Entry::Vacant(entry) = self.timed_out_workers.entry(worker_id) else {
                     anyhow::bail!("Karva worker {worker_id} reported more than one hard timeout");
-                }
+                };
+                entry.insert(TimedOutWorker {
+                    cache_key,
+                    result: *result,
+                    fail_on_flaky,
+                    junit_fail_on_flaky,
+                });
             }
             WorkerEvent::TestFinished { cache_key, result } => {
                 let result = if let Some(history) = self.timeout_history.remove(&cache_key) {
@@ -371,9 +366,11 @@ mod tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
-    use karva_diagnostic::TestCaseResult;
+    use karva_diagnostic::{TestCaseAttempt, TestCaseResult, TestCaseRetry};
     use karva_ipc::WorkerEvent;
-    use karva_python_semantic::TestCacheKey;
+    use karva_python_semantic::{
+        ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey,
+    };
     use rstest::rstest;
 
     use super::EventDispatcher;
@@ -388,6 +385,92 @@ mod tests {
                 Duration::from_millis(1),
             )),
         }
+    }
+
+    fn timeout_event(name: &str, fail_on_flaky: bool) -> WorkerEvent {
+        let name = QualifiedTestName::new(QualifiedFunctionName::new(
+            name.to_string(),
+            ModulePath::new_with_name("test_module.py", "test_module".to_string()),
+        ));
+        let duration = Duration::from_millis(5);
+        let outcome = TestCaseResult::crashed(&name.to_string(), duration, "timeout", "")
+            .outcome()
+            .clone();
+        let result = TestCaseResult::retried(
+            &name,
+            outcome.clone(),
+            duration,
+            TestCaseRetry::new(1, 2),
+            None,
+            vec![TestCaseAttempt::new(1, outcome, duration, None)],
+        );
+        WorkerEvent::TestTimedOut {
+            cache_key: name.cache_key(),
+            result: Box::new(result),
+            fail_on_flaky,
+            junit_fail_on_flaky: fail_on_flaky,
+        }
+    }
+
+    #[rstest]
+    fn duplicate_timeout_preserves_original_recovery(#[values(false, true)] fail_on_flaky: bool) {
+        let mut dispatcher = EventDispatcher::default();
+        dispatcher.register_worker(0);
+        dispatcher
+            .dispatch_event(0, timeout_event("test_original", fail_on_flaky))
+            .expect("first timeout");
+        let original = dispatcher.timed_out_workers[&0].result.clone();
+
+        let error = dispatcher
+            .dispatch_event(0, timeout_event("test_duplicate", !fail_on_flaky))
+            .expect_err("duplicate timeout");
+
+        assert_eq!(
+            error.to_string(),
+            "Karva worker 0 reported more than one hard timeout"
+        );
+        assert_eq!(dispatcher.timed_out_workers.len(), 1);
+        assert_eq!(dispatcher.timed_out_workers[&0].result, original);
+        assert_eq!(
+            dispatcher.timed_out_workers[&0].fail_on_flaky,
+            fail_on_flaky
+        );
+        assert_eq!(
+            dispatcher.timed_out_workers[&0].junit_fail_on_flaky,
+            fail_on_flaky
+        );
+
+        dispatcher.abandon_worker(0);
+        let original_key = TestCacheKey::function_name("test_module::test_original");
+        assert_eq!(
+            dispatcher.recover_timeout(0, "timeout stderr"),
+            Some((original_key.clone(), Some(2)))
+        );
+        assert!(!dispatcher.worker_timed_out(0));
+        assert!(dispatcher.completed_test_keys().is_empty());
+        dispatcher.register_worker(1);
+        dispatcher
+            .dispatch_event(
+                1,
+                WorkerEvent::TestFinished {
+                    cache_key: original_key.clone(),
+                    result: Box::new(TestCaseResult::passed(
+                        "test_module".to_string(),
+                        "test_original".to_string(),
+                        Duration::from_millis(1),
+                    )),
+                },
+            )
+            .expect("successful retry in replacement worker");
+
+        let results = dispatcher.take_results();
+        assert_eq!(results.test_cases.len(), 1);
+        assert_eq!(results.durations[&original_key], Duration::from_millis(6));
+        let result = &results.test_cases[0];
+        assert_eq!(result.attempts().len(), 2);
+        assert_eq!(result.is_flaky_failure(), fail_on_flaky);
+        assert_eq!(result.is_junit_flaky_failure(), fail_on_flaky);
+        assert!(dispatcher.timeout_history.is_empty());
     }
 
     // Every interleaving of two workers, each sending a result then completion.
