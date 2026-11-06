@@ -3,7 +3,13 @@ use std::num::NonZeroUsize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread::{self, JoinHandle};
 
-use crossbeam_channel::{Receiver, Sender, unbounded};
+use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
+
+use super::SEMANTIC_STACK_BYTES;
+
+/// Receipt: a local 1,000-request stdio burst submitted in 20.5 ms and drained
+/// in 176.6 ms. Keep room for twice that entire burst, independent of CPU count.
+pub(in crate::server::schedule) const QUEUED_REQUEST_LIMIT: usize = 2048;
 
 struct Job(Box<dyn FnOnce() + Send + 'static>);
 
@@ -21,13 +27,14 @@ pub(in crate::server::schedule) struct Pool {
 
 impl Pool {
     pub(in crate::server::schedule) fn new(worker_threads: NonZeroUsize) -> io::Result<Self> {
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = bounded(QUEUED_REQUEST_LIMIT);
         let mut handles = Vec::with_capacity(worker_threads.get());
 
         for index in 0..worker_threads.get() {
             let worker_receiver = receiver.clone();
             let result = thread::Builder::new()
                 .name(format!("karva-language-server-worker-{index}"))
+                .stack_size(SEMANTIC_STACK_BYTES)
                 .spawn(move || worker_loop(&worker_receiver));
             match result {
                 Ok(handle) => handles.push(handle),
@@ -46,19 +53,20 @@ impl Pool {
         })
     }
 
-    pub(in crate::server::schedule) fn spawn<F>(&self, function: F)
+    pub(in crate::server::schedule) fn spawn<F>(&self, function: F) -> io::Result<()>
     where
         F: FnOnce() + Send + 'static,
     {
         let Some(sender) = self.sender.as_ref() else {
-            tracing::error!("language-server worker pool is closed; running task inline");
-            function();
-            return;
+            return Err(io::Error::other("language-server worker pool is closed"));
         };
-        if let Err(error) = sender.send(Job(Box::new(function))) {
-            tracing::error!("language-server worker pool stopped; running task inline");
-            error.0.run();
-        }
+        sender.try_send(Job(Box::new(function))).map_err(|error| match error {
+            TrySendError::Full(_) => io::Error::other(format!(
+                "language-server queued request budget: limit {QUEUED_REQUEST_LIMIT}, requested {}; {error}",
+                QUEUED_REQUEST_LIMIT + 1
+            )),
+            TrySendError::Disconnected(_) => io::Error::other("language-server worker pool stopped"),
+        })
     }
 }
 
@@ -101,11 +109,50 @@ mod tests {
             let completed = Arc::clone(&completed);
             pool.spawn(move || {
                 completed.fetch_add(1, Ordering::Relaxed);
-            });
+            })?;
         }
 
         drop(pool);
         assert_eq!(completed.load(Ordering::Relaxed), 3);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod saturation_tests {
+    use super::{Pool, QUEUED_REQUEST_LIMIT};
+    use crossbeam_channel::bounded;
+    use std::num::NonZeroUsize;
+
+    #[test]
+    fn saturation_rejects_without_waiting_and_other_workers_progress() -> std::io::Result<()> {
+        let pool = Pool::new(NonZeroUsize::MIN)?;
+        let (started, running) = bounded(0);
+        let (release, blocked) = bounded::<()>(0);
+        pool.spawn(move || {
+            let _ = started.send(());
+            let _ = blocked.recv();
+        })?;
+        running.recv().expect("worker running");
+        for _ in 0..QUEUED_REQUEST_LIMIT {
+            pool.spawn(|| {})?;
+        }
+        let error = pool.spawn(|| {}).expect_err("queue must be bounded");
+        assert!(error.to_string().contains(&format!(
+            "limit {QUEUED_REQUEST_LIMIT}, requested {}",
+            QUEUED_REQUEST_LIMIT + 1
+        )));
+        // Diagnostics and interactive work never share their worker or queue.
+        let latest = super::super::LatestPool::new()?;
+        let (done, completed) = bounded(0);
+        latest.spawn(move || {
+            let _ = done.send(());
+        });
+        completed
+            .recv()
+            .expect("independent worker completes despite saturation");
+        drop(release);
+        drop(pool);
         Ok(())
     }
 }

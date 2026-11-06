@@ -183,3 +183,26 @@ fn analyzes_unsaved_documents_in_nonexistent_directories(#[values("", "nested/")
     ]
     "#);
 }
+
+#[test]
+fn deep_expression_survives_diagnostics_and_request_workers() {
+    let workspace = Workspace::new();
+    let mut server = TestServer::with_workspace(ClientCapabilities::default(), workspace.folder());
+    let uri = workspace.uri("test_deep.py");
+    let text = format!(
+        "def test_deep():\n    assert {}\n",
+        vec!["1"; 2048].join(" + ")
+    );
+    server.notify::<DidOpenTextDocumentNotification>(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: LanguageKind::Python,
+            version: 1,
+            text,
+        },
+    });
+    let diagnostics = server.receive_notification::<PublishDiagnosticsNotification>();
+    assert_eq!(diagnostics.diagnostics, []);
+    let response = server.request::<DocumentSymbolRequest>(params(uri));
+    assert!(response.is_some());
+}

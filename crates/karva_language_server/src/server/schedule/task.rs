@@ -6,14 +6,13 @@ type BackgroundFunction = Box<dyn FnOnce(&Client) + Send + 'static>;
 type BackgroundFunctionBuilder = Box<dyn FnOnce(&mut Session) -> BackgroundFunction>;
 
 /// Selects worker priority for background work.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(in crate::server) enum BackgroundSchedule {
     /// Run only newest queued task on a dedicated worker.
     Latest,
 
     /// Run on regular-priority workers.
-    #[default]
-    Worker,
+    Worker(lsp_server::RequestId),
 }
 
 /// Work waiting for dispatch by [`super::Scheduler`].

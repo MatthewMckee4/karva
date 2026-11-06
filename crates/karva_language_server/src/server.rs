@@ -122,7 +122,16 @@ impl Server {
     }
 
     /// Handles client messages until the LSP shutdown sequence completes.
-    pub fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
+        std::thread::Builder::new()
+            .name("karva-language-server-event-loop".to_owned())
+            .stack_size(schedule::SEMANTIC_STACK_BYTES)
+            .spawn(move || self.run_event_loop())?
+            .join()
+            .map_err(|payload| crate::runtime::panic_error(payload.as_ref()))?
+    }
+
+    fn run_event_loop(mut self) -> anyhow::Result<()> {
         self.register_file_watchers()?;
         self.main_loop()
     }
