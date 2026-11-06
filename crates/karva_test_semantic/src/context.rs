@@ -158,7 +158,7 @@ impl Context<'_> {
     }
 
     /// Reports one completed attempt, retaining any callable measurements.
-    pub(crate) fn register_completed_result(
+    pub(super) fn register_completed_result(
         &self,
         test_case_name: &QualifiedTestName,
         test_case: TestExecutionResult,
