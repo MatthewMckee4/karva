@@ -37,6 +37,14 @@ def test_variants(mocker):
         def value(self):
             return 1
 
+    class Holder:
+        client = Service()
+
+    client = mocker.patch.object(Holder, "client", autospec=True)
+    client.read("key")
+    mocker.resetall()
+    client.read.assert_not_called()
+
     patched = mocker.patch.object(Service, "read", autospec=True, return_value=42)
     service = Service()
     assert service.read("key") == 42
