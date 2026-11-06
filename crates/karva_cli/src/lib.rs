@@ -8,6 +8,7 @@ mod cache;
 mod coverage;
 mod enums;
 mod exit_status;
+mod mutation;
 mod partition;
 mod show_config;
 mod snapshot;
@@ -24,6 +25,9 @@ pub use enums::{
     CovContext, CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored,
 };
 pub use exit_status::ExitStatus;
+pub use mutation::{
+    MutationAction, MutationCommand, MutationFilters, MutationRetestArgs, MutationRunArgs,
+};
 pub use partition::PartitionSelection;
 pub use show_config::ShowConfigCommand;
 pub use snapshot::{
@@ -54,6 +58,9 @@ pub struct Args {
 pub enum Command {
     /// Run tests.
     Test(Box<TestCommand>),
+
+    /// Test the strength of a Python suite with source mutations.
+    Mutate(MutationCommand),
 
     /// Manage snapshots created by `karva.assert_snapshot()`.
     Snapshot(SnapshotCommand),

@@ -24,6 +24,23 @@ pub fn fingerprint(parts: &[&[u8]]) -> String {
     format!("{:032x}", hash.finish128().as_u128())
 }
 
+/// Streams a file into a stable digest without retaining its contents in memory.
+pub fn fingerprint_file(path: &Utf8Path) -> std::io::Result<String> {
+    struct HashWriter(SipHasher13);
+    impl Write for HashWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.write(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut hash = HashWriter(SipHasher13::new());
+    std::io::copy(&mut std::fs::File::open(path)?, &mut hash)?;
+    Ok(format!("{:032x}", hash.0.finish128().as_u128()))
+}
+
 /// Independently selectable mutation families.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -147,6 +164,9 @@ pub enum Outcome {
     /// The complete safety check passed under the mutation.
     Survived,
 
+    /// No baseline execution or worker import reached this source; the full suite passed.
+    Uncovered,
+
     /// The measured execution budget expired.
     TimedOut,
 
@@ -162,6 +182,9 @@ pub enum Outcome {
 pub struct MutationRecord {
     /// Source-bound candidate description.
     pub mutant: Mutant,
+
+    /// Execution context under which this individual result was measured.
+    pub context_fingerprint: String,
 
     /// Most recent completed outcome, or pending work.
     pub outcome: Outcome,

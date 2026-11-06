@@ -1,7 +1,9 @@
 //! Layered configuration models before resolution into runtime settings.
 
 mod config;
+mod mutation;
 mod overrides;
+pub use mutation::MutationOptions;
 
 use std::collections::BTreeMap;
 
@@ -69,6 +71,11 @@ pub struct Options {
     #[option_group]
     pub coverage: Option<CoverageOptions>,
 
+    /// Python mutation generation and execution overrides.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[option_group]
+    pub mutation: Option<MutationOptions>,
+
     /// `JUnit` report overrides.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[option_group]
@@ -92,6 +99,7 @@ impl Combine for Options {
         Combine::combine_with(&mut self.terminal, other.terminal);
         Combine::combine_with(&mut self.test, other.test);
         Combine::combine_with(&mut self.coverage, other.coverage);
+        Combine::combine_with(&mut self.mutation, other.mutation);
         Combine::combine_with(&mut self.junit, other.junit);
         // Overrides obey "first match wins"; higher-precedence entries
         // (i.e. those from `self`) must come first, so prepend rather
@@ -111,6 +119,7 @@ impl Options {
             test: self.test.clone().unwrap_or_default().to_settings(),
             coverage: self.coverage.clone().unwrap_or_default().to_settings(),
             junit: self.junit.clone().unwrap_or_default().to_settings(),
+            mutation: self.mutation.clone(),
             overrides: self
                 .overrides
                 .iter()
