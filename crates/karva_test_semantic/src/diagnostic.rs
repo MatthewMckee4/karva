@@ -16,6 +16,7 @@ use ruff_text_size::{TextRange, TextSize};
 
 mod exception_group;
 mod metadata;
+mod mocks;
 
 use crate::declare_diagnostic_type;
 use crate::discovery::models::definition::TestDefinition;
@@ -928,7 +929,7 @@ fn handle_failed_function_call(
 
     let mock_failure = error
         .is_instance_of::<PyAssertionError>(py)
-        .then(|| crate::assertions::mock_failure(py, error))
+        .then(|| mocks::mock_failure(py, error))
         .flatten();
     if let Some(Traceback { mut frames }) =
         Traceback::from_error_with_source(py, error, source_file)
