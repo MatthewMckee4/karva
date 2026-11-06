@@ -17,7 +17,7 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
         ("test_b.py", "def test_1(): pass\n"),
     ]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         2,
         &HashMap::new(),
@@ -26,6 +26,7 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -48,7 +49,7 @@ fn literal_parametrize_cases_split_across_workers() {
         def test_value(value): pass
     "});
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         2,
         &HashMap::new(),
@@ -57,6 +58,7 @@ fn literal_parametrize_cases_split_across_workers() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(scheduled_test_count(&package), 6);
@@ -86,7 +88,7 @@ fn failed_first_places_cached_parametrize_case_first() {
     "});
     let failed = HashSet::from([TestCacheKey::function_name("test_sample::test_value[1]")]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &HashMap::new(),
@@ -95,6 +97,7 @@ fn failed_first_places_cached_parametrize_case_first() {
         FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -114,7 +117,7 @@ fn dynamic_parametrize_cases_remain_one_unit() {
         def test_value(value): pass
     "});
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         2,
         &HashMap::new(),
@@ -123,6 +126,7 @@ fn dynamic_parametrize_cases_remain_one_unit() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(scheduled_test_count(&package), 1);
@@ -143,7 +147,7 @@ fn last_failed_case_selects_opaque_dynamic_parameter_function() {
     "});
     let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_value[2]")]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &HashMap::new(),
@@ -152,6 +156,7 @@ fn last_failed_case_selects_opaque_dynamic_parameter_function() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -174,7 +179,7 @@ fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
         Duration::from_millis(10),
     )]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &durations,
@@ -183,6 +188,7 @@ fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -203,7 +209,7 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
         Duration::from_millis(60),
     )]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         2,
         &durations,
@@ -212,6 +218,7 @@ fn literal_parametrize_cases_share_legacy_function_duration() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -243,7 +250,7 @@ fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
         ),
     ]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &durations,
@@ -252,6 +259,7 @@ fn failed_first_prioritizes_cached_failures_without_filtering_tests() {
         FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -276,7 +284,7 @@ fn last_failed_and_failed_first_select_and_prioritize_together() {
         TestCacheKey::function_name("test_sample::test_c"),
     ]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &HashMap::new(),
@@ -285,6 +293,7 @@ fn last_failed_and_failed_first_select_and_prioritize_together() {
         FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -307,7 +316,7 @@ fn failed_first_keeps_partition_selection_before_priority_ordering() {
     let selection = "slice:1/2".parse().expect("valid partition selection");
     let last_failed = HashSet::from([TestCacheKey::function_name("test_sample::test_b")]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &HashMap::new(),
@@ -316,6 +325,7 @@ fn failed_first_keeps_partition_selection_before_priority_ordering() {
         FailurePriority::FailedFirst,
         Some(selection),
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -345,7 +355,7 @@ fn failed_first_reorders_across_module_groups() {
         ),
     ]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &durations,
@@ -354,6 +364,7 @@ fn failed_first_reorders_across_module_groups() {
         FailurePriority::FailedFirst,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(
@@ -382,7 +393,7 @@ fn exact_case_duration_overrides_legacy_fallback() {
         ),
     ]);
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         1,
         &durations,
@@ -391,6 +402,7 @@ fn exact_case_duration_overrides_legacy_fallback() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(partitions[0].weight(), 45_000);
@@ -408,7 +420,7 @@ fn module_marks_keep_function_parametrize_atomic() {
         @karva.tags.parametrize('value', [0, 1, 2])
         def test_value(value): pass
     "});
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         2,
         &HashMap::new(),
@@ -417,6 +429,7 @@ fn module_marks_keep_function_parametrize_atomic() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     assert_eq!(scheduled_test_count(&package), 1);

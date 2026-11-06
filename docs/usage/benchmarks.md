@@ -79,8 +79,10 @@ samples and actual invocation counts. Hard worker termination cannot preserve
 unfinished samples. `benchmark.stats` exposes the measurement inside the test.
 
 When collection finds a `benchmark` reference in test or configuration syntax,
-Karva runs the suite on one worker to avoid interference from other tests.
-This is conservative: unrelated uses of that name can also select one worker.
+Karva defers the affected modules to one worker after ordinary workers finish.
+Other modules retain parallel execution. A benchmark reference in `conftest.py`
+also isolates its descendant modules. This detection is conservative: unrelated
+uses of that name can also defer a module.
 If dynamic imports hide benchmark use from collection, run with
 `--num-workers=1`; Karva rejects measurement on multiple workers. Disabled
 measurement keeps normal parallel scheduling. Separate Karva invocations and
