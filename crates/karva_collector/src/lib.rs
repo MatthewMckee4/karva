@@ -4,7 +4,8 @@ use std::collections::HashSet;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
-use ruff_python_ast::{Expr, PythonVersion, Stmt};
+use ruff_python_ast::visitor::{Visitor, walk_expr};
+use ruff_python_ast::{Expr, Parameter, PythonVersion, Stmt};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 use thiserror::Error;
@@ -22,6 +23,33 @@ pub use parametrize::count_parametrize_cases_with_bindings;
 
 #[cfg(test)]
 use parametrize::count_parametrize_cases;
+
+/// Detects measurement references before releasing scheduling-only syntax.
+fn uses_benchmark(body: &[Stmt]) -> bool {
+    let mut visitor = BenchmarkVisitor(false);
+    visitor.visit_body(body);
+    visitor.0
+}
+
+/// Finds fixture parameters, references, and benchmark marker attributes.
+struct BenchmarkVisitor(bool);
+
+impl<'a> Visitor<'a> for BenchmarkVisitor {
+    fn visit_expr(&mut self, expression: &'a Expr) {
+        self.0 |= match expression {
+            Expr::Name(name) => name.id == "benchmark",
+            Expr::Attribute(attribute) => attribute.attr.id == "benchmark",
+            _ => false,
+        };
+        if !self.0 {
+            walk_expr(self, expression);
+        }
+    }
+
+    fn visit_parameter(&mut self, parameter: &'a Parameter) {
+        self.0 |= parameter.name.id == "benchmark";
+    }
+}
 
 #[derive(Debug, Error)]
 /// Failure to load source required for syntax collection.
@@ -136,6 +164,7 @@ fn collect_source_for_scheduling(
     let mut collected_module =
         CollectedModule::new(module_path, module_type, Box::default(), String::new());
     collected_module.has_module_tags = parametrize::has_module_tags(&module_body);
+    collected_module.uses_benchmark = uses_benchmark(&module_body);
 
     for doctest in doctests {
         if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {

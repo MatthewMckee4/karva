@@ -485,6 +485,56 @@ pub fn print_test_output(
         has_preceding_test_lines && !has_diagnostics,
     )?;
 
+    let mut benchmarks = result
+        .test_cases
+        .iter()
+        .flat_map(|case| {
+            case.benchmarks()
+                .iter()
+                .map(move |benchmark| (case.full_name(), benchmark))
+        })
+        .collect::<Vec<_>>();
+    benchmarks.sort_by_key(|(name, benchmark)| (benchmark.group.as_deref(), *name));
+    if !benchmarks.is_empty() {
+        writeln!(details, "\nbenchmarks (nanoseconds per call):")?;
+        for (name, benchmark) in benchmarks {
+            writeln!(
+                details,
+                "  {name} [group: {}]",
+                benchmark.group.as_deref().unwrap_or("ungrouped")
+            )?;
+            if let (Some(min), Some(median), Some(mean), Some(stddev)) = (
+                benchmark.min_ns,
+                benchmark.median_ns,
+                benchmark.mean_ns,
+                benchmark.stddev_ns,
+            ) {
+                writeln!(
+                    details,
+                    "    min={min}ns median={median}ns mean={mean}ns stddev={stddev}ns"
+                )?;
+            }
+            writeln!(
+                details,
+                "    warmup={} calibration={} rounds={} iterations={} measured={} total={} elapsed={}ns stop={}",
+                benchmark.warmup_calls,
+                benchmark.calibration_calls,
+                benchmark.rounds,
+                benchmark.iterations,
+                benchmark.measurement_calls,
+                benchmark.total_calls,
+                benchmark.elapsed_ns,
+                benchmark.stop_reason
+            )?;
+            writeln!(
+                details,
+                "    options: {}",
+                serde_json::to_string(&benchmark.options)?
+            )?;
+        }
+        writeln!(details)?;
+    }
+
     drop(details);
 
     let flaky_failed = result.has_flaky_failures();

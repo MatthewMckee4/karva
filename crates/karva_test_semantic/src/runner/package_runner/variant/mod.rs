@@ -175,16 +175,46 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 None
             }
         };
+        let benchmark_active =
+            self.input.tags.has_benchmark() || self.input.fixtures.plan.uses_benchmark();
+        let benchmark_setup = benchmark_active.then(|| {
+            self.input
+                .tags
+                .benchmark_options(self.py)
+                .and_then(|options| {
+                    self.py
+                        .import("karva._benchmark")?
+                        .getattr("_start")?
+                        .call1((
+                            self.package_runner
+                                .context
+                                .settings()
+                                .test()
+                                .benchmark_disable,
+                            options,
+                        ))
+                        .map(|_| ())
+                })
+        });
         let setup_start = Instant::now();
-        let fixtures = self.package_runner.prepare_test_fixtures(
-            self.py,
-            &self.input.fixtures.plan,
-            &self.input.fixtures.dependencies,
-            &self.input.fixtures.use_dependencies,
-            &self.input.fixtures.auto_use,
-            &self.input.params,
-        );
+        let fixtures = if benchmark_setup.as_ref().is_none_or(Result::is_ok) {
+            self.package_runner.prepare_test_fixtures(
+                self.py,
+                &self.input.fixtures.plan,
+                &self.input.fixtures.dependencies,
+                &self.input.fixtures.use_dependencies,
+                &self.input.fixtures.auto_use,
+                &self.input.params,
+            )
+        } else {
+            super::fixture::PreparedFixtures {
+                function_arguments: crate::runner::FixtureArguments::default(),
+                setup_result: Ok(()),
+                test_finalizers: Vec::new(),
+            }
+        };
         PreparedTestAttempt {
+            benchmark_setup,
             fixtures,
             setup_duration: setup_start.elapsed(),
             output_capture,

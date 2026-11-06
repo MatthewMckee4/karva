@@ -49,6 +49,9 @@ pub struct CollectedModule {
     /// Runtime module marks may add parameter cases beyond function decorators.
     pub(super) has_module_tags: bool,
 
+    /// Evidence retained before scheduling collection discards function bodies.
+    pub(super) uses_benchmark: bool,
+
     /// Test definitions; scheduling-only collection discards their bodies.
     pub test_function_defs: Vec<StmtFunctionDef>,
 
@@ -71,6 +74,7 @@ impl CollectedModule {
             module_type,
             source_text,
             has_module_tags: has_module_tags(&module_body),
+            uses_benchmark: crate::uses_benchmark(&module_body),
             module_body,
             test_function_defs: Vec::new(),
             doctests: Vec::new(),
@@ -135,6 +139,17 @@ pub struct CollectedPackage {
 }
 
 impl CollectedPackage {
+    /// Conservatively identifies benchmark use before workers are started.
+    /// Imported or dynamically constructed fixtures can escape syntax detection;
+    /// the runtime rejects their measurement when multiple workers are active.
+    pub fn uses_benchmark(&self) -> bool {
+        self.modules
+            .values()
+            .chain(self.configuration_module.iter())
+            .any(|module| module.uses_benchmark)
+            || self.packages.values().any(Self::uses_benchmark)
+    }
+
     /// Creates an empty package rooted at `path`.
     pub fn new(path: Utf8PathBuf) -> Self {
         Self {
@@ -293,6 +308,7 @@ impl CollectedModule {
     fn update(&mut self, module: Self) {
         if self.path == module.path {
             self.has_module_tags |= module.has_module_tags;
+            self.uses_benchmark |= module.uses_benchmark;
             add_new_definitions(&mut self.test_function_defs, module.test_function_defs);
             for doctest in module.doctests {
                 if !self

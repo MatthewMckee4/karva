@@ -14,6 +14,7 @@ use crate::warnings::{WarningCapture, warning_capture_error};
 use super::reporting::finish_output_capture;
 use super::{VariantRunner, VariantSettings};
 use crate::output_capture::PythonOutputCapture;
+use crate::runner::FixtureArguments;
 use crate::runner::package_runner::fixture::PreparedFixtures;
 use crate::runner::package_runner::outcome::{
     OutcomeContext, PhaseDurations, apply_fail_slow_budget, attach_related_diagnostics,
@@ -42,6 +43,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             setup_duration,
             mut output_capture,
             warning_capture,
+            benchmark_setup,
         } = prepared;
         let shared_output =
             if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
@@ -58,12 +60,13 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 None
             };
 
+        let benchmark_active = benchmark_setup.is_some();
         let body = match setup_result {
             Ok(()) => self.execute_test_body(
                 settings,
                 function,
                 test_name_env_result,
-                attempt_env_result,
+                attempt_env_result.and(benchmark_setup.unwrap_or(Ok(()))),
                 &function_arguments,
                 super::timeout::TimeoutAttempt {
                     attempt_number,
@@ -89,13 +92,38 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
-        let finalizer_diagnostics = self
+        let mut finalizer_diagnostics = self
             .package_runner
             .clean_up_test_attempt(self.py, test_finalizers);
-        let teardown_failed = !finalizer_diagnostics.is_empty();
         // Argument references can keep fixture values alive after cache cleanup.
         // Include their destruction in teardown attribution and timing.
         drop(function_arguments);
+        let benchmarks = if benchmark_active {
+            self.py
+                .import("karva._benchmark")
+                .and_then(|module| module.getattr("_finish")?.call0()?.extract::<String>())
+                .and_then(|json| {
+                    serde_json::from_str::<Vec<karva_diagnostic::BenchmarkResult>>(&json).map_err(
+                        |error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()),
+                    )
+                })
+        } else {
+            Ok(Vec::new())
+        };
+        let benchmarks = match benchmarks {
+            Ok(results) => results,
+            Err(error) => {
+                finalizer_diagnostics.push(crate::diagnostic::test_failure_diagnostic(
+                    self.py,
+                    self.input.test.definition(),
+                    &FixtureArguments::default(),
+                    &error,
+                    self.package_runner.context.is_verbose(),
+                ));
+                Vec::new()
+            }
+        };
+        let teardown_failed = !finalizer_diagnostics.is_empty();
         let phases = PhaseDurations {
             setup: setup_duration,
             call: body.call_duration,
@@ -151,6 +179,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 outcome,
                 duration,
                 captured_output,
+                benchmarks,
             },
             retryable,
         }
@@ -255,6 +284,8 @@ struct AttemptBody {
 
 /// Fixture setup and timing captured before one test attempt.
 pub(super) struct PreparedTestAttempt {
+    /// Validation of the benchmark session before fixture setup.
+    pub(super) benchmark_setup: Option<PyResult<()>>,
     /// Arguments, setup failures, and function-scoped finalizers.
     pub(super) fixtures: PreparedFixtures,
     /// Duration of fixture and parameter preparation.
@@ -284,6 +315,9 @@ pub(super) struct TestLifecycleAttempt {
     pub(super) duration: Duration,
     /// Output captured only during this attempt.
     pub(super) captured_output: Option<CapturedTestOutput>,
+
+    /// Callable-only samples collected during this attempt.
+    pub(super) benchmarks: Vec<karva_diagnostic::BenchmarkResult>,
 }
 
 impl TestLifecycleAttempt {
@@ -295,5 +329,6 @@ impl TestLifecycleAttempt {
             self.duration,
             self.captured_output,
         )
+        .with_benchmarks(self.benchmarks)
     }
 }
