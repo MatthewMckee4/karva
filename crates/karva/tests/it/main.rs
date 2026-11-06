@@ -19,6 +19,7 @@ mod failed_first;
 mod filterset;
 mod junit;
 mod last_failed;
+mod logging;
 mod partition;
 mod result_report;
 mod run_ignored;

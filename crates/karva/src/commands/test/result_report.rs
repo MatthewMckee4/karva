@@ -388,6 +388,8 @@ struct CapturedOutputReport<'a> {
     stdout: &'a str,
     #[serde(skip_serializing_if = "str::is_empty")]
     stderr: &'a str,
+    #[serde(skip_serializing_if = "<[karva_diagnostic::CapturedLog]>::is_empty")]
+    logs: &'a [karva_diagnostic::CapturedLog],
 }
 
 impl<'a> CapturedOutputReport<'a> {
@@ -395,6 +397,7 @@ impl<'a> CapturedOutputReport<'a> {
         Self {
             stdout: output.stdout(),
             stderr: output.stderr(),
+            logs: output.logs(),
         }
     }
 }

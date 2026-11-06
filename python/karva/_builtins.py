@@ -26,10 +26,12 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
 
+from karva import _logging
 from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
 from karva._fixtures.tmpdir import LegacyPath, TempPathFactory
 from karva._karva import fixture
+from karva._logging import _LogCapture as _CapLogHandler
 
 __all__ = [
     "CaptureResult",
@@ -303,18 +305,6 @@ class _CapsysBinaryFixture:
         return "<CapsysBinaryFixture object>"
 
 
-class _CapLogHandler(logging.Handler):
-    """Logging handler that captures records into an owned list."""
-
-    def __init__(self) -> None:
-        super().__init__(0)
-        self.records: list[logging.LogRecord] = []
-
-    def emit(self, record: logging.LogRecord) -> None:
-        record.message = record.getMessage()
-        self.records.append(record)
-
-
 class _CapLogAtLevel:
     """Context manager that temporarily sets the log capture level."""
 
@@ -469,15 +459,14 @@ def capfdbinary() -> Generator[_CapsysBinaryFixture, None, None]:
 def caplog() -> Generator[_CapLog, None, None]:
     """Capture log records emitted during a test."""
     saved_disable: int = logging.root.manager.disable
-    handler = _CapLogHandler()
+    handler = _logging._active
+    if handler is None:
+        raise RuntimeError("caplog requires an active test logging capture")
     cap = _CapLog(handler)
-    root_logger = logging.getLogger()
-    root_logger.addHandler(handler)
     logging.disable(logging.NOTSET)
 
     yield cap
 
-    root_logger.removeHandler(handler)
     logging.disable(saved_disable)
     cap._restore_levels()
 

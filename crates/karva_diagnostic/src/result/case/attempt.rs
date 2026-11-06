@@ -74,16 +74,19 @@ impl<D> TestCaseAttempt<D> {
     /// Adds stderr recovered after terminating the interpreter to this attempt.
     pub(super) fn append_captured_stderr(&mut self, stderr: &str) {
         let previous = self.captured_output.take();
-        self.captured_output = Some(CapturedTestOutput::new(
-            previous
-                .as_ref()
-                .map_or("", CapturedTestOutput::stdout)
-                .to_owned(),
-            format!(
-                "{}{stderr}",
-                previous.as_ref().map_or("", CapturedTestOutput::stderr)
-            ),
-        ));
+        self.captured_output = Some(
+            CapturedTestOutput::new(
+                previous
+                    .as_ref()
+                    .map_or("", CapturedTestOutput::stdout)
+                    .to_owned(),
+                format!(
+                    "{}{stderr}",
+                    previous.as_ref().map_or("", CapturedTestOutput::stderr)
+                ),
+            )
+            .with_logs(previous.map_or_else(Vec::new, |output| output.logs().to_vec())),
+        );
     }
 
     pub(super) fn map_diagnostic<T>(self, mut map: impl FnMut(&D) -> T) -> TestCaseAttempt<T> {

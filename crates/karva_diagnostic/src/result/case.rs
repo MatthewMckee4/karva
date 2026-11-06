@@ -144,13 +144,15 @@ impl<D> TestCaseResult<D> {
             );
             let mut stdout = String::new();
             let mut stderr = String::new();
+            let mut logs = Vec::new();
             for attempt in &attempts {
                 if let Some(output) = attempt.captured_output() {
                     stdout.push_str(output.stdout());
                     stderr.push_str(output.stderr());
+                    logs.extend_from_slice(output.logs());
                 }
             }
-            let output = CapturedTestOutput::new(stdout, stderr);
+            let output = CapturedTestOutput::new(stdout, stderr).with_logs(logs);
             self.payload.captured_output = (!output.is_empty()).then_some(output);
             self.payload.attempts = attempts;
         } else {
@@ -177,7 +179,10 @@ impl<D> TestCaseResult<D> {
             "{}{stderr}",
             previous.as_ref().map_or("", CapturedTestOutput::stderr)
         );
-        self.payload.captured_output = Some(CapturedTestOutput::new(stdout, combined));
+        self.payload.captured_output = Some(
+            CapturedTestOutput::new(stdout, combined)
+                .with_logs(previous.map_or_else(Vec::new, |output| output.logs().to_vec())),
+        );
     }
 
     /// Returns the dotted Python module containing the test.

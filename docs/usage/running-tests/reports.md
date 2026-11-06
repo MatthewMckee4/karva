@@ -74,3 +74,10 @@ unattached collection or import diagnostic, then one `run_finished` record
 with final status and aggregate statistics. Every line includes the schema
 version and record type. Seeded shuffled runs include `random_seed` on the
 `run_finished` record.
+
+Structured logging records are included in JSON and JSONL under
+`captured_output.logs`, including passing tests. Records contain the attempt,
+lifecycle phase, decimal Unix timestamp in seconds, logger, level, message,
+source path and line, and formatted exception traceback. JUnit stores the same
+records as JSON in the `karva.logs` testcase property, subject to the
+`store-success-output` and `store-failure-output` settings.

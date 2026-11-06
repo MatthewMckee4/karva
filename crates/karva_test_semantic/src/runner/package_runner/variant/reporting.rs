@@ -110,10 +110,12 @@ fn combine_captured_output<'a>(
 ) -> Option<CapturedTestOutput> {
     let mut stdout = String::new();
     let mut stderr = String::new();
+    let mut logs = Vec::new();
     for output in outputs {
         stdout.push_str(output.stdout());
         stderr.push_str(output.stderr());
+        logs.extend_from_slice(output.logs());
     }
-    let output = CapturedTestOutput::new(stdout, stderr);
+    let output = CapturedTestOutput::new(stdout, stderr).with_logs(logs);
     (!output.is_empty()).then_some(output)
 }

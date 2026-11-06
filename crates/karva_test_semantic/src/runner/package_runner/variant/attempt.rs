@@ -42,6 +42,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             setup_duration,
             mut output_capture,
             warning_capture,
+            log_capture,
         } = prepared;
         let shared_output =
             if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
@@ -58,6 +59,11 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 None
             };
 
+        if let Some(capture) = &log_capture
+            && let Err(error) = capture.set_phase(self.py, "call")
+        {
+            tracing::warn!("failed to set logging phase: {error}");
+        }
         let body = match setup_result {
             Ok(()) => self.execute_test_body(
                 settings,
@@ -88,6 +94,11 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
 
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Teardown);
+        if let Some(capture) = &log_capture
+            && let Err(error) = capture.set_phase(self.py, "teardown")
+        {
+            tracing::warn!("failed to set logging phase: {error}");
+        }
         let teardown_start = Instant::now();
         let finalizer_diagnostics = self
             .package_runner
@@ -127,7 +138,22 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 .state
                 .add_run_diagnostic(warning_capture_error(&error));
         }
-        let captured_output = finish_output_capture(self.py, output_capture);
+        let mut captured_output = finish_output_capture(self.py, output_capture);
+        if let Some(capture) = log_capture {
+            match capture.finish(self.py, attempt_number) {
+                Ok(logs) if !logs.is_empty() => {
+                    captured_output = Some(
+                        captured_output
+                            .unwrap_or_else(|| {
+                                CapturedTestOutput::new(String::new(), String::new())
+                            })
+                            .with_logs(logs),
+                    );
+                }
+                Ok(_) => {}
+                Err(error) => tracing::warn!("failed to finish logging capture: {error}"),
+            }
+        }
         let events = self.package_runner.exception_capture.finish_attempt();
         // A retry must not hide an unhandled exception behind a later pass.
         let retryable = events.is_empty()
@@ -263,6 +289,8 @@ pub(super) struct PreparedTestAttempt {
     pub(super) output_capture: Option<PythonOutputCapture>,
     /// Warning policy and capture spanning this attempt's complete lifecycle.
     pub(super) warning_capture: Option<WarningCapture>,
+    /// Logging capture is active even when stream capture is disabled.
+    pub(super) log_capture: Option<crate::log_capture::LogCapture>,
 }
 
 /// Completed call lifecycle plus retry decision.

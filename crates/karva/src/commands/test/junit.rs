@@ -168,7 +168,8 @@ fn write_case(
     let is_self_closing = matches!(case.outcome(), TestCaseOutcome::Passed)
         && !has_output
         && !has_reruns
-        && warnings.is_empty();
+        && warnings.is_empty()
+        && !(include_output && output.is_some_and(|output| !output.logs().is_empty()));
 
     write!(
         xml,
@@ -183,7 +184,7 @@ fn write_case(
     }
 
     xml.push_str(">\n");
-    write_fixture_failure_properties(xml, case)?;
+    write_case_properties(xml, case, include_output)?;
     match case.outcome() {
         TestCaseOutcome::Passed => {
             if case.is_junit_flaky_failure() {
@@ -269,16 +270,31 @@ fn write_case(
     Ok(())
 }
 
-fn write_fixture_failure_properties(xml: &mut String, case: &TestCaseResult) -> Result<()> {
+fn write_case_properties(
+    xml: &mut String,
+    case: &TestCaseResult,
+    include_output: bool,
+) -> Result<()> {
+    let logs = case
+        .captured_output()
+        .map_or(&[][..], |output| output.logs());
+    let include_logs = include_output && !logs.is_empty();
     let has_attempt_failures = case
         .attempts()
         .iter()
         .any(|attempt| !attempt.outcome().fixture_failures().is_empty());
-    if !has_attempt_failures && case.outcome().fixture_failures().is_empty() {
+    if !include_logs && !has_attempt_failures && case.outcome().fixture_failures().is_empty() {
         return Ok(());
     }
 
     xml.push_str("      <properties>\n");
+    if include_logs {
+        writeln!(
+            xml,
+            "        <property name=\"karva.logs\" value=\"{}\"/>",
+            escape_xml(&serde_json::to_string(logs)?)
+        )?;
+    }
     if has_attempt_failures {
         for attempt in case.attempts() {
             for failure in attempt.outcome().fixture_failures() {

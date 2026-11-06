@@ -9,6 +9,7 @@ pub(crate) mod diagnostic;
 pub(crate) mod discovery;
 mod doctest;
 pub(crate) mod extensions;
+mod log_capture;
 mod output_capture;
 mod py_attach;
 mod python;

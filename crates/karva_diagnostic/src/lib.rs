@@ -7,10 +7,10 @@ mod result;
 
 pub use reporter::{DummyReporter, Reporter, TestCaseReporter};
 pub use result::{
-    AggregatedResults, CapturedTestOutput, DisplayFlakyTests, FixtureFailure, FixtureUsage,
-    FlakyTest, IndividualTestResultKind, RenderedDiagnostic, RunResults, TestCaseAttempt,
-    TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionAttempt, TestExecutionOutcome,
-    TestExecutionResult, TestResultStats, TestWarning,
+    AggregatedResults, CapturedLog, CapturedTestOutput, DisplayFlakyTests, FixtureFailure,
+    FixtureUsage, FlakyTest, IndividualTestResultKind, RenderedDiagnostic, RunResults,
+    TestCaseAttempt, TestCaseOutcome, TestCaseResult, TestCaseRetry, TestExecutionAttempt,
+    TestExecutionOutcome, TestExecutionResult, TestResultStats, TestWarning,
 };
 
 pub use diagnostic::{

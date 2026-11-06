@@ -67,6 +67,11 @@ def database_url():
 
 ## Output capture
 
+Karva captures Python logging records during fixture setup, test calls, and
+teardown, even without `caplog`. Failing tests show warning-and-higher records.
+Application logger levels and handlers are preserved; `caplog` shares the same
+capture and can explicitly change capture levels.
+
 By default, stdout/stderr from a test is captured and emitted only when the test fails or when `--show-output` / `-s` is set. This keeps parallel output legible — without capture, output from concurrent tests would interleave on the terminal.
 
 While output is captured, stdin reads fail immediately with a diagnostic instead of waiting for terminal input. Pass input explicitly to code under test, or use `--no-capture` for an intentional interactive debugging session. Child processes receive an immediate end-of-file on stdin unless the test passes a pipe, file, or `DEVNULL` explicitly.

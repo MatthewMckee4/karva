@@ -22,7 +22,7 @@ pub use case::{
 pub use diagnostic::RenderedDiagnostic;
 pub use flaky::{DisplayFlakyTests, FlakyTest};
 pub use kind::IndividualTestResultKind;
-pub use output::CapturedTestOutput;
+pub use output::{CapturedLog, CapturedTestOutput};
 pub use stats::TestResultStats;
 pub use warnings::TestWarning;
 

@@ -11,6 +11,7 @@ use pyo3::prelude::*;
 
 use crate::warnings::{WarningCapture, warning_capture_error};
 
+use crate::log_capture::LogCapture;
 use crate::output_capture::PythonOutputCapture;
 use crate::runner::test_iterator::TestVariant;
 use crate::utils::{set_attempt_env, set_test_name_env};
@@ -175,6 +176,13 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 None
             }
         };
+        let log_capture = match LogCapture::start(self.py) {
+            Ok(capture) => Some(capture),
+            Err(error) => {
+                tracing::warn!("failed to start logging capture: {error}");
+                None
+            }
+        };
         let setup_start = Instant::now();
         let fixtures = self.package_runner.prepare_test_fixtures(
             self.py,
@@ -189,6 +197,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             setup_duration: setup_start.elapsed(),
             output_capture,
             warning_capture,
+            log_capture,
         }
     }
 

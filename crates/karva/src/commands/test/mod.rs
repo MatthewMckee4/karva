@@ -550,6 +550,20 @@ fn write_test_failures_block(
         if let Some(output) = case.captured_output() {
             write_captured_stream(stdout, "stdout", output.stdout())?;
             write_captured_stream(stdout, "stderr", output.stderr())?;
+            if output.logs().iter().any(|record| record.level >= 30) {
+                writeln!(stdout, "captured logs for {}:", case.full_name())?;
+                writeln!(stdout)?;
+                for record in output.logs().iter().filter(|record| record.level >= 30) {
+                    writeln!(
+                        stdout,
+                        "{} {} {}",
+                        record.level_name, record.logger, record.message
+                    )?;
+                    if let Some(exception) = &record.exception {
+                        writeln!(stdout, "{exception}")?;
+                    }
+                }
+            }
             writeln!(stdout)?;
         }
     }
