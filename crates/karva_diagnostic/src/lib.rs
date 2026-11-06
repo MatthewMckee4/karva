@@ -1,6 +1,8 @@
 //! Test outcomes, source-backed diagnostics, and user-facing result reporting.
 
 mod diagnostic;
+mod timing;
+pub use timing::{LifecycleTiming, TimingPhase};
 mod exception;
 mod render;
 mod reporter;

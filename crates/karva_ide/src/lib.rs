@@ -131,7 +131,9 @@ impl DiagnosticCode {
     /// Concrete next step for a source diagnostic.
     pub const fn action(self) -> &'static str {
         match self {
-            Self::UnusedFixture => "Remove the fixture, or explicitly export it if it is a public fixture API.",
+            Self::UnusedFixture => {
+                "Remove the fixture, or explicitly export it if it is a public fixture API."
+            }
             Self::DuplicateParameterCase => {
                 "Remove the repeated literal case, or suppress this rule if repetition is intentional."
             }

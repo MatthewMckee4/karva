@@ -17,6 +17,10 @@ use crate::verbosity::Verbosity;
 /// User-facing test selection, execution, and reporting arguments.
 #[derive(Debug, Parser, Clone, Default)]
 pub struct SubTestCommand {
+    /// Internal health observation request, transported independently of user config.
+    #[arg(skip)]
+    pub health_timings: crate::HealthTimings,
+
     /// Python warning filter; repeat to add ordered rules. Later rules win.
     /// CLI rules replace configured warning-filters. Test-local tags win over CLI.
     #[arg(short = 'W', long = "warning-filter", action = clap::ArgAction::Append)]

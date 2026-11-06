@@ -84,6 +84,7 @@ fn run() -> anyhow::Result<ExitStatus> {
         settings.terminal().final_status_level,
     );
     let coverage = worker_coverage_config(&settings, &configuration, selection.coverage_data_file)?;
+    let health_timings = configuration.health_timings;
     drop(configuration);
 
     let diagnostic_format = match settings.terminal().output_format {
@@ -110,6 +111,7 @@ fn run() -> anyhow::Result<ExitStatus> {
         client.clone(),
         cwd.clone(),
         diagnostic_config,
+        health_timings,
     );
 
     let result = karva_test_semantic::run_tests(karva_test_semantic::RunRequest {

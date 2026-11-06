@@ -3,9 +3,12 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Instant;
 
 use camino::Utf8Path;
-use karva_diagnostic::{Diagnostic, FixtureFailure, FixtureUsage, TestExecutionOutcome};
+use karva_diagnostic::{
+    Diagnostic, FixtureFailure, FixtureUsage, LifecycleTiming, TestExecutionOutcome, TimingPhase,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 
@@ -75,7 +78,7 @@ impl PackageRunner<'_, '_> {
         let mut diagnostics = finalizers
             .into_iter()
             .rev()
-            .filter_map(|finalizer| finalizer.run(py).err())
+            .filter_map(|finalizer| finalizer.run(py, self.context.reporter()).err())
             .collect::<Vec<_>>();
         diagnostics.extend(self.clean_up_scope(py, ScopeKey::Function));
         diagnostics
@@ -83,7 +86,9 @@ impl PackageRunner<'_, '_> {
 
     /// Clears cached fixture values and runs finalizers for one completed scope.
     fn clean_up_scope(&mut self, py: Python<'_>, scope: ScopeKey<'_>) -> Vec<Diagnostic> {
-        let diagnostics = self.finalizer_cache.run_and_clear_scope(py, scope);
+        let diagnostics =
+            self.finalizer_cache
+                .run_and_clear_scope(py, scope, self.context.reporter());
         self.fixture_cache.clear_scope(scope);
         diagnostics
     }
@@ -202,25 +207,33 @@ impl PackageRunner<'_, '_> {
             }
         }
 
-        let fixture_call_result = match fixture.call(py, &function_arguments) {
-            Ok(result) => result,
-            Err(error) => {
-                return Err(FixtureCallError::new(
-                    fixture,
-                    error,
-                    FixtureArguments::from_fixture_values(function_arguments),
-                ));
-            }
-        };
-
-        let (value, finalizer) = get_value_and_finalizer(py, fixture, fixture_call_result)
-            .map_err(|error| {
-                FixtureCallError::new(
-                    fixture,
-                    error,
-                    FixtureArguments::from_fixture_values(function_arguments),
-                )
-            })?;
+        let started = self.context.reporter().collect_timings().then(Instant::now);
+        let result = fixture
+            .call(py, &function_arguments)
+            .and_then(|result| get_value_and_finalizer(py, fixture, result));
+        if let Some(started) = started {
+            let mut timing = LifecycleTiming::new(
+                fixture.name().to_string(),
+                fixture.definition().source_file(),
+                fixture.statement().name.range,
+                TimingPhase::FixtureSetup,
+                started.elapsed(),
+            );
+            timing.scope = Some(fixture.scope().name().to_owned());
+            timing.dependencies = fixture
+                .dependencies()
+                .iter()
+                .map(|id| fixture_plan.fixture(*id).name().to_string())
+                .collect();
+            self.context.reporter().report_timing(timing);
+        }
+        let (value, finalizer) = result.map_err(|error| {
+            FixtureCallError::new(
+                fixture,
+                error,
+                FixtureArguments::from_fixture_values(function_arguments),
+            )
+        })?;
 
         self.fixture_cache
             .insert(fixture.identity().clone(), value.clone_ref(py), scope);

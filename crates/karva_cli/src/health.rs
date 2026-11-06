@@ -11,6 +11,10 @@ pub struct HealthCommand {
     #[command(flatten)]
     pub config: ShowConfigCommand,
 
+    /// Run the selected tests and measure exclusive test and fixture lifecycle time.
+    #[arg(long)]
+    pub durations: bool,
+
     /// Output representation. JSON uses a versioned schema.
     #[arg(long, value_enum, default_value = "text")]
     pub format: HealthFormat,
@@ -37,4 +41,12 @@ pub enum HealthFailOn {
     None,
     Warning,
     Error,
+}
+
+/// Internal lifecycle observation policy; ordinary test invocations leave it disabled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HealthTimings {
+    #[default]
+    Disabled,
+    Enabled,
 }
