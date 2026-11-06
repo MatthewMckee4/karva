@@ -37,6 +37,15 @@ def test_autospec(mocker):
     callback("key")
     mocker.resetall()
     assert callback.call_count == 2
+    class Client:
+        def get(self, key):
+            return key
+
+    client = mocker.create_autospec(Client, instance=True)
+    client.get(1)
+    mocker.resetall()
+    client.get.assert_not_called()
+
     mock = mocker.Mock()
     mock.allowed = mocker.Mock(return_value=1)
     mocker.seal(mock)
@@ -347,8 +356,10 @@ def test_third({scope}_mocker):
     assert_eq!(context.read_file("restored.txt"), "restored");
 }
 
-#[test]
-fn package_mocker_dependency_lives_as_long_as_its_parent_fixture() {
+#[rstest]
+fn package_mocker_dependency_lives_as_long_as_its_parent_fixture(
+    #[values("parent", "client")] dependency: &str,
+) {
     let context = TestContext::with_files([
         ("shared.py", "value = 'original'\nparent = None\n"),
         (
@@ -376,38 +387,268 @@ def parent(package_mocker):
         ("a/__init__.py", ""),
         ("b/__init__.py", ""),
         (
-            "a/test_first.py",
+            "a/conftest.py",
             r"
-import shared
+import karva
 
 
-def test_first(package_mocker, parent):
-    assert package_mocker is not shared.parent
-    assert shared.value is parent
-    assert shared.value() == 42
+@karva.fixture(scope='package')
+def client(parent):
+    return parent
 ",
         ),
         (
-            "b/test_second.py",
+            "b/conftest.py",
             r"
-import shared
+import karva
 
 
-def test_second(parent, package_mocker):
-    assert package_mocker is not shared.parent
-    assert shared.value is parent
-    assert shared.value() == 42
+@karva.fixture(scope='package')
+def client(parent):
+    return parent
 ",
         ),
     ]);
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    context.write_file(
+        "a/test_first.py",
+        r"
+import shared
+
+
+def test_first(package_mocker, PARENT):
+    assert package_mocker is not shared.parent
+    assert shared.value is PARENT
+    assert shared.value() == 42
+"
+        .replace("PARENT", dependency),
+    );
+    context.write_file(
+        "b/test_second.py",
+        r"
+import shared
+
+
+def test_second(PARENT, package_mocker):
+    assert package_mocker is not shared.parent
+    assert shared.value is PARENT
+    assert shared.value() == 42
+"
+        .replace("PARENT", dependency),
+    );
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+    assert_eq!(context.read_file("restored.txt"), "restored");
+}
+
+#[test]
+fn overlapping_patches_survive_out_of_order_stop_and_teardown() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import os
+import sys
+from collections import UserDict
+from types import SimpleNamespace
+import karva
+
+value = "original"
+mapping = {"shared": "original", "restored": True}
+
+
+@karva.fixture(scope="session")
+def observer():
+    yield
+    assert value == "original"
+    assert mapping == {"shared": "original", "restored": True}
+    assert "KARVA_MOCKER_OVERLAP" not in os.environ
+
+
+def test_first(observer, mocker, module_mocker):
+    mocker.patch.object(sys.modules[__name__], "value", "function")
+    module_mocker.patch(f"{__name__}.value", "module")
+    mocker.patch.dict(mapping, clear=True, function_only=True, shared="function")
+    module_mocker.patch.dict(mapping, module_only=True, shared="module")
+    mocker.patch.dict(os.environ, karva_mocker_overlap="function")
+    module_mocker.patch.dict(os.environ, KARVA_MOCKER_OVERLAP="module")
+    assert value == "module"
+
+
+def test_second(mocker, module_mocker):
+    assert value == "module"
+    assert mapping == {"module_only": True, "shared": "module", "restored": True}
+    assert os.environ["KARVA_MOCKER_OVERLAP"] == "module"
+    if os.name != "nt":
+        assert "karva_mocker_overlap" not in os.environ
+    configured = mocker.patch(f"{__name__}.value", attribute="flag")
+    assert configured.attribute == "flag"
+    mocker.stop(configured)
+    module = sys.modules[__name__]
+    older = mocker.patch.multiple(module, value="older", extra=42, create=True)
+    newer = mocker.patch.object(module, "value", "newer")
+    mocker.stop(older)
+    assert value == "newer"
+    assert not hasattr(module, "extra")
+    mocker.stop(newer)
+    assert value == "module"
+
+    first = SimpleNamespace(value="first")
+    second = SimpleNamespace(value="second")
+    lookups = iter([first, second])
+    def get_dynamic(name):
+        if name != "dynamic":
+            raise AttributeError(name)
+        return next(lookups)
+
+    mocker.patch.object(module, "__getattr__", get_dynamic, create=True)
+    older = mocker.patch(f"{__name__}.dynamic.value", "older")
+    newer = mocker.patch.object(first, "value", "newer")
+    mocker.stop(older)
+    assert first.value == "newer"
+    mocker.stop(newer)
+    assert first.value == "first"
+    assert next(lookups) is second
+
+    custom = UserDict({"key": "original"})
+    original = mocker.patch.dict(custom, key="first")
+    with karva.raises(ValueError, match="Use one mocker"):
+        module_mocker.patch.dict(custom, key="second")
+    assert custom["key"] == "first"
+    mocker.stop(original)
+    assert custom["key"] == "original"
+
+    ordered = dict.fromkeys(range(8, 0, -1))
+    original_order = list(ordered)
+    older = mocker.patch.dict(ordered, {9: None}, clear=True)
+    module_mocker.patch.dict(ordered, {10: None})
+    mocker.stop(older)
+    assert list(ordered) == [*original_order, 10]
+    module_mocker.stop(ordered)
+    assert list(ordered) == original_order
+
+    class Reentrant(UserDict):
+        def copy(self):
+            with karva.raises(ValueError, match="another patch is starting"):
+                module_mocker.patch.dict(self, key="second")
+            return self.data.copy()
+
+    reentrant = Reentrant({"key": "original"})
+    mocker.patch.dict(reentrant, key="first")
+    assert reentrant["key"] == "first"
+    mocker.stop(reentrant)
+    assert reentrant["key"] == "original"
+
+    def values():
+        with karva.raises(ValueError, match="another patch is starting"):
+            module_mocker.patch.dict(custom, key="second")
+        yield "key", "first"
+
+    mocker.patch.dict(custom, values())
+    assert custom["key"] == "first"
+    mocker.stop(custom)
+    assert custom["key"] == "original"
+
+    class StopsDuringCopy(UserDict):
+        def copy(self):
+            if self["key"] == "first":
+                mocker.stop(self)
+            return self.data.copy()
+
+    stopping = StopsDuringCopy({"key": "original"})
+    mocker.patch.dict(stopping, key="first")
+    with karva.raises(ValueError, match="Cannot stop a mapping patch"):
+        mocker.patch.dict(stopping, key="second")
+    assert stopping["key"] == "first"
+    mocker.stop(stopping)
+    assert stopping["key"] == "original"
+
+    if os.name == "nt":
+        environment = os.environ
+        older = mocker.patch.dict(environment, karva_mocker_binding="older")
+        module_mocker.patch.dict(environment, KARVA_MOCKER_BINDING="newer")
+        try:
+            os.environ = {}
+            mocker.stop(older)
+            assert environment["KARVA_MOCKER_BINDING"] == "newer"
+            module_mocker.stop(environment)
+            assert "KARVA_MOCKER_BINDING" not in environment
+        finally:
+            os.environ = environment
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
     ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_first(observer=None, mocker, module_mocker)
+            PASS [TIME] test::test_second(mocker, module_mocker)
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
     ");
-    assert_eq!(context.read_file("restored.txt"), "restored");
+}
+
+#[test]
+fn async_callable_spy_records_the_last_completion() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import asyncio
+import sys
+import karva
+
+
+class Callback:
+    async def __call__(self, ready, release, fail=False):
+        ready.set()
+        if fail:
+            raise ValueError("failed")
+        await release.wait()
+        return 42
+
+
+callback = Callback()
+
+
+async def test_spy(mocker):
+    spy = mocker.spy(sys.modules[__name__], "callback")
+    ready = asyncio.Event()
+    release = asyncio.Event()
+    first = asyncio.create_task(callback(ready, release))
+    await ready.wait()
+    with karva.raises(ValueError):
+        await callback(ready, release, fail=True)
+    assert isinstance(spy.spy_exception, ValueError)
+    release.set()
+    assert await first == 42
+    assert spy.spy_return == 42
+    assert spy.spy_exception is None
+    assert spy.await_count == 2
+    ordinary = mocker.patch(f"{__name__}.Callback")
+    ordinary.spy_return_list = [42]
+    mocker.resetall()
+    assert ordinary.spy_return_list == [42]
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_spy(mocker)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }

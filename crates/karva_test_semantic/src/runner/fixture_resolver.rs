@@ -195,12 +195,25 @@ impl<'a> FixturePlanCompiler<'a> {
         let name = fixture.name().function_name();
         // Built-in package fixtures belong to the requesting package rather
         // than the synthetic framework provider attached to the session root.
-        if self.parents.iter().filter_map(|package| package.framework_module_impl()).any(|module| {
-            matches!(module.lookup_fixture(name), FixtureLookup::Found(candidate) if std::ptr::eq(candidate, fixture))
-        }) {
-            // A package consumer can be cached across child packages. Its
-            // built-in dependencies must live at least as long as it does.
-            if let Some(consumer) = path.fixtures.iter().find(|consumer| consumer.scope() == FixtureScope::Package) {
+        let framework_fixture = self
+            .parents
+            .iter()
+            .filter_map(|package| package.framework_module_impl())
+            .any(|module| {
+                matches!(
+                    module.lookup_fixture(name),
+                    FixtureLookup::Found(candidate) if std::ptr::eq(candidate, fixture)
+                )
+            });
+        if framework_fixture {
+            // Inherit the direct package consumer's owner: intermediate child
+            // fixtures may depend on a parent fixture cached across children.
+            if let Some(consumer) = path
+                .fixtures
+                .iter()
+                .rev()
+                .find(|consumer| consumer.scope() == FixtureScope::Package)
+            {
                 fixture = consumer;
             } else {
                 return self.current_package;

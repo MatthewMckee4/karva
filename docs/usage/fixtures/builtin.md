@@ -436,7 +436,9 @@ The supported pytest-mock surface uses Python's `unittest.mock`:
   arguments. Use `assert_awaited_once_with(...)` to check async callbacks.
 - `stop(result)` restores the patch or spy that returned `result`. For
   `patch.multiple`, pass the returned dictionary. `stopall()` restores every
-  patch owned by this fixture in reverse order.
+  patch owned by this fixture in reverse order. When patches overlap, a newer
+  patch keeps control of the attribute or mapping keys it changed until it stops.
+  Use one mocker per custom mapping so cleanup can preserve its key behavior.
 - `resetall(return_value=False, side_effect=False)` clears call history on active
   patches and spies without restoring them. The optional flags also reset return
   values or side effects. For spies, `side_effect=True` restores forwarding to
