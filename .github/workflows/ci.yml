@@ -29,7 +29,7 @@ env:
   # renovate: datasource=pypi depName=uv
   UV_VERSION: "0.13.5"
   # renovate: datasource=pypi depName=zensical
-  ZENSICAL_VERSION: "0.0.71"
+  ZENSICAL_VERSION: "0.0.73"
   RUSTUP_MAX_RETRIES: 10
   NEXTEST_PROFILE: ci
 
