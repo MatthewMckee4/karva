@@ -281,7 +281,7 @@ impl CoverageCheckpoint {
             .state
             .lock()
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        let current_context = state.current_context.clone();
+        let current_context = compose_context(tracer.static_context.as_deref(), &[]);
         *state = TracerState {
             current_context,
             ..TracerState::default()

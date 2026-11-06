@@ -14,8 +14,11 @@ fn test_cov_child_processes(
 
 #[cfg(unix)]
 #[rstest]
-fn test_cov_fork_children(#[values(false, true)] branch: bool) {
-    check_child_coverage("fork", branch);
+fn test_cov_fork_children(
+    #[values("fork", "fork-setup")] method: &str,
+    #[values(false, true)] branch: bool,
+) {
+    check_child_coverage(method, branch);
 }
 
 fn check_child_coverage(method: &str, branch: bool) {
@@ -59,10 +62,19 @@ import multiprocessing
 import subprocess
 import sys
 import warnings
+import karva
 from child import child
 
-def test_children():
-    method = {method:?}
+@karva.fixture
+def launch_during_setup():
+    if {method:?} == "fork-setup":
+        run_children("fork")
+
+def test_children(launch_during_setup):
+    if {method:?} != "fork-setup":
+        run_children({method:?})
+
+def run_children(method):
     if method in ("spawn", "fork"):
         warnings.filterwarnings("ignore", message="This process .* is multi-threaded", category=DeprecationWarning)
         ctx = multiprocessing.get_context(method)
@@ -94,6 +106,7 @@ def test_children():
     command.args([
         "--cov=target.py",
         "--cov-report=json:result.json",
+        "--cov-context=test",
         "--status-level=none",
     ]);
     if branch {
