@@ -7,19 +7,19 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
-use super::{focused_diff, safe_repr};
+use crate::assertions::{focused_diff, safe_repr};
 
 /// Terminal mock assertion frames and optional last-call argument diagnostics.
-pub(crate) struct MockFailure {
+pub(super) struct MockFailure {
     /// Number of trailing library frames to omit from source diagnostics.
-    pub(crate) hidden_frames: usize,
+    pub(super) hidden_frames: usize,
 
     /// Positional and keyword differences, absent for count or call-list errors.
-    pub(crate) explanation: Option<String>,
+    pub(super) explanation: Option<String>,
 }
 
 /// Recognizes only failures raised inside unittest.mock assertion helpers.
-pub(crate) fn mock_failure(py: Python<'_>, error: &PyErr) -> Option<MockFailure> {
+pub(super) fn mock_failure(py: Python<'_>, error: &PyErr) -> Option<MockFailure> {
     let mut traceback = error.traceback(py)?.into_any();
     let mut failure = MockFailure {
         hidden_frames: 0,

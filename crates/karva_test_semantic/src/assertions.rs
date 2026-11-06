@@ -11,9 +11,6 @@
 //! native loading and compilation.
 
 mod cache;
-mod mocks;
-
-pub(crate) use mocks::mock_failure;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
@@ -761,7 +758,8 @@ const MAX_ITEMS: usize = 8;
 const MAX_DEPTH: usize = 8;
 const MAX_NODES: usize = MAX_ITEMS * MAX_ITEMS;
 
-fn safe_repr(value: &Bound<'_, PyAny>) -> String {
+/// Render bounded built-in values without invoking user representation hooks.
+pub fn safe_repr(value: &Bound<'_, PyAny>) -> String {
     safe_repr_inner(value, 0, &mut MAX_NODES.clone())
 }
 
@@ -1349,7 +1347,8 @@ fn focused_diff_inner(
     None
 }
 
-fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
+/// Locate a difference in safely comparable built-in values, skipping opaque values.
+pub fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
     focused_diff_inner(left, right, "", 0).unwrap_or_default()
 }
 
