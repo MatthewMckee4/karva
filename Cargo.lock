@@ -1333,6 +1333,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "karva_mutation"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "globset",
+ "insta",
+ "regex",
+ "rstest",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
+ "serde",
+ "serde_json",
+ "siphasher",
+ "tempfile",
+]
+
+[[package]]
 name = "karva_project"
 version = "0.0.0"
 dependencies = [
