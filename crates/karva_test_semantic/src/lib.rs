@@ -27,6 +27,7 @@ use karva_diagnostic::{Diagnostic, Reporter};
 use karva_metadata::ProjectSettings;
 use karva_project::path::{TestPath, TestPathError};
 use karva_python_semantic::TestCacheKey;
+use pyo3::types::PyAnyMethods;
 use ruff_python_ast::PythonVersion;
 
 use crate::diagnostic::{
@@ -116,6 +117,21 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
                 }
             });
 
+        let child_coverage = cov_session
+            .as_ref()
+            .zip(coverage)
+            .and_then(
+                |(session, config)| match session.collect_children(py, config) {
+                    Ok(hooks) => Some(hooks),
+                    Err(error) => {
+                        state.add_run_diagnostic(failed_to_start_coverage_diagnostic(
+                            &error.to_string(),
+                        ));
+                        None
+                    }
+                },
+            );
+
         let discovery = StandardDiscoverer::new(&context).discover_with_py(py, test_paths);
 
         for issue in discovery.issues {
@@ -138,6 +154,11 @@ pub fn run_tests(request: RunRequest<'_>) -> Vec<Diagnostic> {
         )
         .execute(py, &discovery.package);
 
+        if let Some(hooks) = child_coverage
+            && let Err(error) = hooks.bind(py).call_method0("close")
+        {
+            tracing::error!("Failed to restore child coverage hooks: {error}");
+        }
         if let Some(cov_session) = cov_session
             && let Err(err) = cov_session.stop_and_save(py)
         {

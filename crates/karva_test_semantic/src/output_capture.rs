@@ -18,6 +18,10 @@ struct CapturedStdin;
 #[pymethods]
 #[expect(clippy::unused_self)]
 impl CapturedStdin {
+    /// Allows multiprocessing fork bootstrap to close its inherited stream.
+    /// The runner keeps owning descriptor zero and reinstalls this read guard.
+    fn close(&self) {}
+
     fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
         slf
     }

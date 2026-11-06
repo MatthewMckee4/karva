@@ -9,4 +9,4 @@ mod branches;
 pub mod executable;
 mod tracer;
 
-pub use tracer::{CoverageConfig, CoveragePhase, CoverageSession};
+pub use tracer::{CoverageConfig, CoveragePhase, CoverageSession, coverage_child_start};

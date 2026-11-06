@@ -4,6 +4,178 @@ use rstest::rstest;
 
 use crate::common::TestContext;
 
+#[rstest]
+fn test_cov_child_processes(
+    #[values("subprocess", "spawn", "exit", "exec", "failure", "term")] method: &str,
+    #[values(false, true)] branch: bool,
+) {
+    check_child_coverage(method, branch);
+}
+
+#[cfg(unix)]
+#[rstest]
+fn test_cov_fork_children(#[values(false, true)] branch: bool) {
+    check_child_coverage("fork", branch);
+}
+
+fn check_child_coverage(method: &str, branch: bool) {
+    let context = TestContext::with_files([
+        (
+            "karva.toml",
+            "[profile.default.coverage]\ncontext = \"CI\"\n",
+        ),
+        (
+            "target.py",
+            "def run(flag):\n    if flag:\n        return 1\n    return 0\n",
+        ),
+        (
+            "child.py",
+            indoc! {r#"
+            import os
+            import signal
+            import sys
+            from target import run
+
+            def child(flag, method):
+                run(flag)
+                if method == "exit":
+                    os._exit(0)
+                if method == "failure":
+                    sys.exit(7)
+                if method == "term":
+                    os.kill(os.getpid(), signal.SIGTERM)
+                if method == "exec":
+                    os.execv(sys.executable, [sys.executable, "-c", "from target import run; run(False)"])
+
+            if __name__ == "__main__":
+                child(sys.argv[1] == "True", sys.argv[2])
+        "#},
+        ),
+        (
+            "test_child.py",
+            &format!(
+                r#"
+import multiprocessing
+import subprocess
+import sys
+import warnings
+from child import child
+
+def test_children():
+    method = {method:?}
+    if method in ("spawn", "fork"):
+        warnings.filterwarnings("ignore", message="This process .* is multi-threaded", category=DeprecationWarning)
+        ctx = multiprocessing.get_context(method)
+        first = ctx.Process(target=child, args=(True, method))
+        second = ctx.Process(target=child, args=(False, method))
+        first.start()
+        second.start()
+        first.join()
+        second.join()
+        assert first.exitcode == second.exitcode == 0
+    else:
+        first = subprocess.Popen([sys.executable, "child.py", "True", method])
+        second = subprocess.Popen([sys.executable, "child.py", "True" if method == "exec" else "False", method])
+        expected = 7 if method == "failure" else (-15 if method == "term" and sys.platform != "win32" else 0)
+        # Windows TerminateProcess cannot run Python cleanup.
+        if method == "term" and sys.platform == "win32":
+            assert first.wait() != 0 and second.wait() != 0
+        else:
+            assert first.wait() == second.wait() == expected
+"#
+            ),
+        ),
+    ]);
+    // TerminateProcess on Windows is a hard termination, covered by the docs.
+    if method == "term" && cfg!(windows) {
+        return;
+    }
+    let mut command = context.command_no_parallel();
+    command.args([
+        "--cov=target.py",
+        "--cov-report=json:result.json",
+        "--status-level=none",
+    ]);
+    if branch {
+        command.arg("--cov-branch");
+    }
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    let report: serde_json::Value =
+        serde_json::from_str(&context.read_file("result.json")).expect("coverage report");
+    let file = &report["files"]["target.py"];
+    assert_eq!(report["files"].as_object().expect("source files").len(), 1);
+    assert_eq!(file["executed_lines"], serde_json::json!([1, 2, 3, 4]));
+    assert_eq!(file["contexts"]["3"], serde_json::json!(["CI"]));
+    assert_eq!(file["contexts"]["4"], serde_json::json!(["CI"]));
+    if branch {
+        assert_eq!(file["missing_branches"], serde_json::json!([]));
+    }
+}
+
+#[test]
+fn test_child_coverage_disabled_without_cov() {
+    let context = TestContext::with_file(
+        "test_child.py",
+        indoc! {r#"
+        import subprocess
+        import sys
+
+        def test_disabled():
+            subprocess.run([sys.executable, "-c", "import os; assert 'KARVA_COVERAGE_BOOTSTRAP' not in os.environ"], check=True)
+    "#},
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_cov_children_preserve_startup_and_source_roots_after_chdir() {
+    let context = TestContext::with_files([
+        ("target.py", "value = 42\n"),
+        ("nested/.keep", ""),
+        (
+            "startup/sitecustomize.py",
+            "import os\nos.environ['APP_SITE_PID'] = str(os.getpid())\n",
+        ),
+        (
+            "test_child.py",
+            indoc! {r#"
+            import subprocess
+            import sys
+
+            def test_startup():
+                subprocess.run([sys.executable, "-c", "import os, runpy, sys; assert os.environ['APP_SITE_PID'] == str(os.getpid()); assert 'coverage' not in sys.modules; assert 'pytest_cov' not in sys.modules; runpy.run_path('../target.py')"], cwd="nested", check=True)
+        "#},
+        ),
+    ]);
+    assert_cmd_snapshot!(context.command_no_parallel()
+        .env("PYTHONPATH", context.root().join("startup"))
+        .args(["--cov=target.py", "--cov-fail-under=100", "--status-level=none", "--cov-report=json:result.json"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[test]
 fn test_no_cov_no_coverage_table() {
     let context = TestContext::with_file(

@@ -283,6 +283,26 @@ Files under explicitly selected importable packages are measured even when they 
 
 Each worker writes its own JSON file. After the run, the main process unions the per-file line sets and produces a single report. No coordination flag is required; coverage works the same with `--no-parallel` or with `-n 16`.
 
+## Child processes
+
+Coverage-enabled runs also measure Python descendants launched with `subprocess`
+or `multiprocessing` (spawn and, on Unix, fork). Children inherit source filters,
+branch mode, and the static context, and write separate shards that Karva combines
+with the worker data. Join children before the test finishes so their shards are
+available for the final report. No coverage.py installation is needed.
+
+Karva flushes on normal interpreter exit, `os._exit`, and before `os.exec*`
+replacement. On Unix, a default `SIGTERM` handler also flushes before preserving
+the signal exit status. Custom signal handlers must return through normal Python
+cleanup or call `os._exit` to save coverage.
+
+Child interpreters need Karva installed and must inherit the run's environment.
+Startup uses a temporary `sitecustomize` on `PYTHONPATH`, then loads the
+application's own `sitecustomize` if present. Isolated interpreters (`-I`, `-E`,
+or `-S`), children with a replaced environment, and native exec or exit calls
+that bypass Python are unsupported. `SIGKILL`, Windows `TerminateProcess`, and
+crashes cannot flush unsaved observations; completed shards remain usable.
+
 ## CI integration
 
 A typical CI invocation pins a minimum and prints the missing lines:

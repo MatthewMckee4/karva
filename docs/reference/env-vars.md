@@ -100,6 +100,12 @@ across runs; the UUID makes the id unique even when multiple jobs
 start in the same millisecond. When coverage is enabled, the same
 value names its directory under `.karva_cache/run-<ms>-<uuid>`.
 
+### `KARVA_COVERAGE_BOOTSTRAP`
+
+Private run-scoped coverage bootstrap payload. Set only while a
+coverage-enabled worker is running; Python descendants inherit it
+together with a temporary startup directory on `PYTHONPATH`.
+
 ### `KARVA_WORKSPACE_ROOT`
 
 Absolute path to the directory Karva resolved as the project root.
