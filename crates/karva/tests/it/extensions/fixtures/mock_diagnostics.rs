@@ -208,3 +208,164 @@ async def test_awaited():
     ----- stderr -----
     ");
 }
+
+#[test]
+fn spies_and_autospecs_report_positional_and_keyword_differences() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+
+def process(value, *, default=None):
+    return value
+
+
+async def fetch(value, *, default=None):
+    return value
+
+
+def test_spy(mocker):
+    spy = mocker.spy(sys.modules[__name__], "process")
+    assert process("actual") == "actual"
+    spy.assert_called_once_with("expected")
+
+
+def test_autospec(mocker):
+    callback = mocker.create_autospec(process)
+    callback("same", default={"x": [1, 2]})
+    callback.assert_called_once_with(value="same", default={"x": [1, 2]})
+    callback.assert_called_with("same", default={"x": [1, 3]})
+
+
+async def test_async_spy(mocker):
+    spy = mocker.spy(sys.modules[__name__], "fetch")
+    assert await fetch("actual") == "actual"
+    spy.assert_awaited_once_with("expected")
+
+
+async def test_async_autospec(mocker):
+    callback = mocker.create_autospec(fetch)
+    await callback("same", default={"x": [1, 2]})
+    callback.assert_awaited_once_with(value="same", default={"x": [1, 2]})
+    callback.assert_awaited_with("same", default={"x": [1, 3]})
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 4 tests across 1 worker
+            FAIL [TIME] test::test_spy(mocker)
+            FAIL [TIME] test::test_autospec(mocker)
+            FAIL [TIME] test::test_async_spy(mocker)
+            FAIL [TIME] test::test_async_autospec(mocker)
+
+    failures:
+
+    test::test_async_autospec(mocker):
+
+    error[test-failure]: Test `test_async_autospec` failed
+      --> test.py:32:11
+       |
+    32 | async def test_async_autospec(mocker):
+       |           ^^^^^^^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `mocker`: `<MockerFixture>`
+    info: Test failed here
+      --> test.py:36:5
+       |
+    36 |     callback.assert_awaited_with("same", default={"x": [1, 3]})
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: expected await not found.
+          Expected: mock('same', default={'x': [1, 3]})
+            Actual: mock('same', default={'x': [1, 2]})
+    info: Mock call arguments differ:
+    Keyword arguments:
+      Actual: {'default': {'x': [1, 2]}}
+      Expected: {'default': {'x': [1, 3]}}
+    Difference at ['default']['x'][1]:
+      left: 2
+      right: 3
+
+    test::test_async_spy(mocker):
+
+    error[test-failure]: Test `test_async_spy` failed
+      --> test.py:26:11
+       |
+    26 | async def test_async_spy(mocker):
+       |           ^^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `mocker`: `<MockerFixture>`
+    info: Test failed here
+      --> test.py:29:5
+       |
+    29 |     spy.assert_awaited_once_with("expected")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: expected await not found.
+          Expected: fetch('expected')
+            Actual: fetch('actual')
+    info: Mock call arguments differ:
+    Positional arguments:
+      Actual: ('actual',)
+      Expected: ('expected',)
+    Difference at [0]:
+      left: 'actual'
+      right: 'expected'
+
+    test::test_autospec(mocker):
+
+    error[test-failure]: Test `test_autospec` failed
+      --> test.py:19:5
+       |
+    19 | def test_autospec(mocker):
+       |     ^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `mocker`: `<MockerFixture>`
+    info: Test failed here
+      --> test.py:23:5
+       |
+    23 |     callback.assert_called_with("same", default={"x": [1, 3]})
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: expected call not found.
+          Expected: mock('same', default={'x': [1, 3]})
+            Actual: mock('same', default={'x': [1, 2]})
+    info: Mock call arguments differ:
+    Keyword arguments:
+      Actual: {'default': {'x': [1, 2]}}
+      Expected: {'default': {'x': [1, 3]}}
+    Difference at ['default']['x'][1]:
+      left: 2
+      right: 3
+
+    test::test_spy(mocker):
+
+    error[test-failure]: Test `test_spy` failed
+      --> test.py:13:5
+       |
+    13 | def test_spy(mocker):
+       |     ^^^^^^^^
+    info: Test ran with arguments:
+    info:   `mocker`: `<MockerFixture>`
+    info: Test failed here
+      --> test.py:16:5
+       |
+    16 |     spy.assert_called_once_with("expected")
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: expected call not found.
+          Expected: process('expected')
+            Actual: process('actual')
+    info: Mock call arguments differ:
+    Positional arguments:
+      Actual: ('actual',)
+      Expected: ('expected',)
+    Difference at [0]:
+      left: 'actual'
+      right: 'expected'
+
+    ────────────
+         Summary [TIME] 4 tests run: 0 passed, 4 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
