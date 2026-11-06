@@ -38,6 +38,8 @@ in the same module or class. Both locations are shown. Definitions in mutually
 exclusive branches are excluded; uncertain execution produces
 `possibly-shadowed-definition` with warning severity. These checks cover code
 that runtime collection can no longer see, including duplicate test methods.
+Duplicate fixtures use `duplicate-fixture` alone; ignoring that rule suppresses
+the defect without producing a second shadowing finding.
 
 `duplicate-parameter-case` and `duplicate-parameter-id` are warnings for repeated
 literal inputs or explicit IDs within one parameter dimension. Nested containers

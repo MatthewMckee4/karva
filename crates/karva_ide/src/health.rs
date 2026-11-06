@@ -18,6 +18,8 @@ use crate::{
 ///
 /// Mutually exclusive arms cannot shadow each other. Other conditional writes
 /// produce an advisory rather than claiming that a definition definitely wins.
+/// Existing duplicate-fixture diagnostics for this module own their definition
+/// groups, so pairs within those groups do not also produce shadow findings.
 pub fn shadowed_definitions(
     module: &CollectedModule,
     test_prefix: &str,
