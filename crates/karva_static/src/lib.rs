@@ -156,6 +156,11 @@ env_vars! {
         /// value names its directory under `.karva_cache/run-<ms>-<uuid>`.
         pub const KARVA_RUN_ID: &'static str = "KARVA_RUN_ID";
 
+        /// Private run-scoped coverage bootstrap payload. Set only while a
+        /// coverage-enabled worker is running; Python descendants inherit it
+        /// together with a temporary startup directory on `PYTHONPATH`.
+        pub const KARVA_COVERAGE_BOOTSTRAP: &'static str = "KARVA_COVERAGE_BOOTSTRAP";
+
         /// Absolute path to the directory Karva resolved as the project root.
         /// Saves tests from re-deriving the root via `__file__` walking or
         /// `os.getcwd()` heuristics.

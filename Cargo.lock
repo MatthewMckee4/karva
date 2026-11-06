@@ -1170,6 +1170,7 @@ dependencies = [
  "ruff_python_parser",
  "ruff_source_file",
  "ruff_text_size",
+ "serde",
  "serde_json",
  "tempfile",
  "tracing",
@@ -1351,6 +1352,7 @@ name = "karva_python"
 version = "0.0.1-alpha.13"
 dependencies = [
  "karva",
+ "karva_coverage_runtime",
  "karva_test_semantic",
  "karva_worker",
  "pyo3",

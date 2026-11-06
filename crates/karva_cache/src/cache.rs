@@ -36,8 +36,8 @@ impl RunArtifacts {
         CacheFile::Coverage.path_in(&self.worker_dir(worker_id))
     }
 
-    /// Returns paths to every per-worker coverage file that exists for this
-    /// run, sorted by worker directory. Used to feed the coverage report.
+    /// Returns completed worker and descendant payloads for this run, sorted
+    /// by worker directory. Temporary checkpoint files are never included.
     pub fn coverage_files(&self) -> Result<Vec<Utf8PathBuf>> {
         let mut files = Vec::new();
         for worker_dir in list_worker_dirs(&self.run_dir)? {
@@ -45,6 +45,20 @@ impl RunArtifacts {
             if path.exists() {
                 files.push(path);
             }
+            let mut children = Vec::new();
+            for entry in fs::read_dir(&worker_dir)? {
+                let entry = entry?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with("coverage-child-")
+                    && name.ends_with(".json")
+                    && entry.file_type()?.is_file()
+                {
+                    children.push(Utf8PathBuf::try_from(entry.path())?);
+                }
+            }
+            children.sort();
+            files.extend(children);
         }
         Ok(files)
     }
@@ -359,6 +373,12 @@ mod tests {
         }
         fs::write(artifacts.coverage_data_file(10), "worker 10")?;
         fs::write(artifacts.coverage_data_file(2), "worker 2")?;
+        let child = artifacts.worker_dir(2).join("coverage-child-example.json");
+        fs::write(&child, "child")?;
+        fs::write(
+            artifacts.worker_dir(2).join(".tmp-checkpoint"),
+            "incomplete",
+        )?;
         fs::create_dir_all(artifacts.run_dir.join("not-worker"))?;
         fs::write(
             artifacts.run_dir.join("not-worker").join("coverage.json"),
@@ -369,6 +389,7 @@ mod tests {
             artifacts.coverage_files()?,
             vec![
                 artifacts.coverage_data_file(2),
+                child,
                 artifacts.coverage_data_file(10)
             ]
         );

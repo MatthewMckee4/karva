@@ -11,6 +11,13 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _E = TypeVar("_E", bound=BaseException)
 
+class _CoverageCheckpoint:
+    def save(self) -> None: ...
+    def after_fork(self, data_file: str) -> None: ...
+
+def coverage_child_start(config: str, data_file: str) -> _CoverageCheckpoint:
+    """Start native coverage from the descendant bootstrap payload."""
+
 def karva_run() -> int:
     """Run Karva using the current process arguments."""
 

@@ -6,6 +6,7 @@
 //! [`CoverageConfig::data_file`].
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -13,6 +14,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
+use tempfile::NamedTempFile;
 
 use crate::branches::{CoveragePartials, branch_analysis_with_exclusions};
 use crate::executable::{CoverageExclusions, SourceLines, executable_lines_with_exclusions};
@@ -26,7 +29,7 @@ const SESSION_CONTEXT: &str = "session";
 const PENDING_SETUP_CONTEXT: &str = "\0karva-pending-setup";
 
 /// Configuration for a single worker's coverage measurement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoverageConfig {
     /// Source paths to measure. An empty entry means "measure the current
     /// working directory" (matches pytest-cov's bare `--cov`).
@@ -87,6 +90,38 @@ pub struct CoverageSession {
 }
 
 impl CoverageSession {
+    /// Enables descendant tracing using canonical roots and the worker's run directory.
+    /// The returned Python guard restores process hooks and environment on stop.
+    pub fn collect_children(&self, py: Python<'_>, config: &CoverageConfig) -> PyResult<Py<PyAny>> {
+        let mut config = config.clone();
+        config.sources = self
+            .tracer
+            .bind(py)
+            .borrow()
+            .roots
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        config.contexts = false;
+        let encoded = serde_json::to_string(&config)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let checkpoint = CoverageCheckpoint {
+            session: Self {
+                tracer: self.tracer.clone_ref(py),
+                data_file: self.data_file.clone(),
+                exclusions: self.exclusions.clone(),
+                partials: self.partials.clone(),
+            },
+        };
+        Ok(py
+            .import("karva._coverage")?
+            .call_method1(
+                "install",
+                (checkpoint, encoded, self.data_file.as_str(), false),
+            )?
+            .unbind())
+    }
+
     /// Installs the best tracer supported by the embedded Python version.
     pub fn start(py: Python<'_>, cwd: &Utf8Path, config: &CoverageConfig) -> PyResult<Self> {
         let exclusions = CoverageExclusions::new(&config.exclude_lines)
@@ -134,13 +169,7 @@ impl CoverageSession {
 
     /// Stops tracing and atomically persists this worker's collected coverage.
     pub fn stop_and_save(self, py: Python<'_>) -> PyResult<()> {
-        let Self {
-            tracer,
-            data_file,
-            exclusions,
-            partials,
-        } = self;
-        let bound = tracer.bind(py);
+        let bound = self.tracer.bind(py);
         let tool_id = bound.borrow().monitoring_tool_id.get().copied();
 
         if let Some(tool_id) = tool_id {
@@ -155,29 +184,39 @@ impl CoverageSession {
                 .call_method1("settrace", (py.None(),))?;
         }
 
-        let borrowed = bound.borrow();
-        let (executed, contexts, arcs, arc_contexts) = match borrowed.state.lock() {
-            Ok(mut state) => (
+        self.save(py, false)
+    }
+
+    /// Retains observations for checkpoints so a failed exec can continue tracing;
+    /// final worker saves drain them to avoid duplicating coverage memory.
+    fn save(&self, py: Python<'_>, retain: bool) -> PyResult<()> {
+        let data_file = &self.data_file;
+        let borrowed = self.tracer.bind(py).borrow();
+        let mut state = match borrowed.state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let (executed, contexts, arcs, arc_contexts) = if retain {
+            (
+                state.executed.clone(),
+                state.contexts.clone(),
+                state.arcs.clone(),
+                state.arc_contexts.clone(),
+            )
+        } else {
+            (
                 std::mem::take(&mut state.executed),
                 std::mem::take(&mut state.contexts),
                 std::mem::take(&mut state.arcs),
                 std::mem::take(&mut state.arc_contexts),
-            ),
-            Err(poisoned) => {
-                let mut state = poisoned.into_inner();
-                (
-                    std::mem::take(&mut state.executed),
-                    std::mem::take(&mut state.contexts),
-                    std::mem::take(&mut state.arcs),
-                    std::mem::take(&mut state.arc_contexts),
-                )
-            }
+            )
         };
+        drop(state);
         let roots = borrowed.roots.clone();
         let branches = borrowed.branches;
         drop(borrowed);
         save_data(
-            &data_file,
+            data_file,
             CollectedCoverage {
                 executed: into_owned_paths(executed),
                 contexts: into_owned_paths(contexts),
@@ -187,8 +226,8 @@ impl CoverageSession {
             },
             branches,
             &roots,
-            &exclusions,
-            &partials,
+            &self.exclusions,
+            &self.partials,
         )
         .map_err(|err| {
             pyo3::exceptions::PyOSError::new_err(format!(
@@ -220,6 +259,59 @@ impl CoverageSession {
     pub fn clear_test_context(&self, py: Python<'_>) {
         self.tracer.bind(py).borrow().clear_test_context();
     }
+}
+
+/// Python-owned checkpoint sharing the current interpreter's native tracer.
+/// Fork callbacks discard inherited observations before assigning a fresh shard.
+#[pyclass]
+struct CoverageCheckpoint {
+    session: CoverageSession,
+}
+
+#[pymethods]
+impl CoverageCheckpoint {
+    fn save(&self, py: Python<'_>) -> PyResult<()> {
+        self.session.save(py, true)
+    }
+
+    fn after_fork(&mut self, py: Python<'_>, data_file: String) -> PyResult<()> {
+        self.session.data_file = Utf8PathBuf::from(data_file);
+        let tracer = self.session.tracer.bind(py).borrow();
+        let mut state = tracer
+            .state
+            .lock()
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+        let current_context = compose_context(tracer.static_context.as_deref(), &[]);
+        *state = TracerState {
+            current_context,
+            ..TracerState::default()
+        };
+        drop(state);
+        if tracer.monitoring_tool_id.get().is_some() {
+            py.import("sys")?
+                .getattr("monitoring")?
+                .call_method0("restart_events")?;
+        }
+        Ok(())
+    }
+}
+
+/// Starts a native tracer in a descendant using the run-scoped bootstrap payload.
+#[pyfunction]
+pub fn coverage_child_start(
+    py: Python<'_>,
+    config: &str,
+    data_file: String,
+) -> PyResult<Py<PyAny>> {
+    let mut config: CoverageConfig =
+        serde_json::from_str(config).map_err(|error| PyValueError::new_err(error.to_string()))?;
+    config.data_file = Utf8PathBuf::from(data_file);
+    let cwd = py
+        .import("os")?
+        .call_method0("getcwd")?
+        .extract::<String>()?;
+    let session = CoverageSession::start(py, Utf8Path::new(&cwd), &config)?;
+    Ok(Py::new(py, CoverageCheckpoint { session })?.into_any())
 }
 
 #[derive(Default)]
@@ -1132,7 +1224,14 @@ fn save_data(
         source_roots,
         files,
     })?;
-    fs::write(data_file.as_std_path(), bytes)
+    let parent = data_file
+        .parent()
+        .filter(|path| !path.as_str().is_empty())
+        .unwrap_or_else(|| Utf8Path::new("."));
+    let mut temporary = NamedTempFile::new_in(parent)?;
+    temporary.write_all(&bytes)?;
+    temporary.persist(data_file).map_err(|error| error.error)?;
+    Ok(())
 }
 
 #[cfg(test)]
