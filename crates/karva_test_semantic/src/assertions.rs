@@ -18,6 +18,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 
 use camino::Utf8Path;
 use pyo3::class::basic::CompareOp;
+use pyo3::exceptions::PyAssertionError;
 use pyo3::prelude::*;
 use pyo3::types::{
     PyAnyMethods, PyBool, PyBytes, PyDict, PyDictMethods, PyFloat, PyFrozenSet, PyFrozenSetMethods,
@@ -26,7 +27,7 @@ use pyo3::types::{
 };
 use ruff_python_ast::visitor::{Visitor, walk_stmt};
 use ruff_python_ast::{CmpOp, Expr, PythonVersion, Stmt};
-use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
+use ruff_python_parser::{Mode, ParseOptions, parse_expression, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange};
 
 const VALUE_PREFIX: &str = "_karva_value_";
@@ -1741,6 +1742,59 @@ fn realize_deferred(filename: &str) -> Option<()> {
     Some(())
 }
 
+/// Recognizes a likely dependency on pytest's generated exception text using
+/// captured operands and the exception being handled, without rerunning code.
+fn expects_pytest_assertion_message(
+    py: Python<'_>,
+    error: &PyErr,
+    metadata: &AssertionMetadata,
+    records: &[EvaluatedCapture<'_>],
+) -> bool {
+    if metadata.comparison != ComparisonKind::Equality || records.len() != 2 {
+        return false;
+    }
+    let Some(context) = error.context(py) else {
+        return false;
+    };
+    if !context.is_instance_of::<PyAssertionError>(py)
+        || !context
+            .value(py)
+            .getattr("args")
+            .ok()
+            .and_then(|args| args.cast_into::<PyTuple>().ok())
+            .is_some_and(|args| args.is_empty())
+    {
+        return false;
+    }
+    let expects_assertion = records.iter().any(|record| {
+        record
+            .value
+            .cast::<PyString>()
+            .ok()
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.starts_with("assert "))
+    });
+    expects_assertion
+        && records.iter().any(|record| {
+            if !record
+                .value
+                .cast::<PyString>()
+                .ok()
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(str::is_empty)
+            {
+                return false;
+            }
+            let Ok(expression) = parse_expression(&record.label) else {
+                return false;
+            };
+            matches!(expression.syntax().body.as_ref(), Expr::Call(call)
+                if matches!(call.func.as_ref(), Expr::Name(name) if name.id == "str")
+                    && call.arguments.args.len() == 1
+                    && call.arguments.keywords.is_empty())
+        })
+}
+
 /// Explains a failed assertion without reevaluating expressions or invoking
 /// user representations. Cached metadata is reconstructed only on failure.
 pub fn explain(py: Python<'_>, error: &PyErr) -> Option<String> {
@@ -1821,5 +1875,12 @@ pub fn explain(py: Python<'_>, error: &PyErr) -> Option<String> {
             })
         })
         .collect();
-    Some(render_explanation(&metadata, missing.as_ref(), records))
+    let migration_hint = expects_pytest_assertion_message(py, error, &metadata, &records);
+    let mut explanation = render_explanation(&metadata, missing.as_ref(), records);
+    if migration_hint {
+        explanation.push_str(
+            "\n\nIf this test expects pytest-generated assertion text, Karva preserves native AssertionError messages. Check the exception type or supply an explicit assertion message.",
+        );
+    }
+    Some(explanation)
 }

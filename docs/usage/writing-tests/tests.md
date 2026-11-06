@@ -44,6 +44,29 @@ Generator test functions are rejected before their bodies run. Use
 [`@karva.tags.parametrize`](../tags/parametrize.md) to create multiple cases.
 Generator fixtures remain supported for setup and teardown.
 
+### Assertion messages when migrating from pytest
+
+Karva captures assertion values for failure reports while preserving Python's
+native exceptions. A plain `assert` raises an `AssertionError` with empty
+`args` and an empty string message. An explicit assertion message is retained.
+
+Tests that inspect pytest-generated text such as `assert 4 > 5` need to change.
+Check the exception type, or supply an explicit message when its text is part
+of the behavior you want to test:
+
+```python
+import karva
+
+
+def validate(value):
+    assert value > 5, "value must exceed 5"
+
+
+def test_validation_message():
+    with karva.raises(AssertionError, match="value must exceed 5"):
+        validate(4)
+```
+
 ## Async tests and fixtures
 
 Async tests run without a plugin or marker:

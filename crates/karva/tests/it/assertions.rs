@@ -4,6 +4,256 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
+fn assertion_message_migration_reports_pytest_dependency() {
+    let context = TestContext::with_file(
+        "test_assertion_message.py",
+        r"
+def validate(value):
+    assert value > 5
+
+def test_assertion_message():
+    try:
+        validate(4)
+    except AssertionError as error:
+        assert str(error) == 'assert 4 > 5'
+",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_assertion_message::test_assertion_message
+
+    failures:
+
+    test_assertion_message::test_assertion_message:
+
+    error[test-failure]: Test `test_assertion_message` failed
+     --> test_assertion_message.py:5:5
+      |
+    5 | def test_assertion_message():
+      |     ^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_assertion_message.py:9:9
+      |
+    9 |         assert str(error) == 'assert 4 > 5'
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: ''
+      right: 'assert 4 > 5'
+
+    If this test expects pytest-generated assertion text, Karva preserves native AssertionError messages. Check the exception type or supply an explicit assertion message.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+    // The hint must survive loading the instrumented module from its bytecode cache.
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test_assertion_message::test_assertion_message
+
+    failures:
+
+    test_assertion_message::test_assertion_message:
+
+    error[test-failure]: Test `test_assertion_message` failed
+     --> test_assertion_message.py:5:5
+      |
+    5 | def test_assertion_message():
+      |     ^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_assertion_message.py:9:9
+      |
+    9 |         assert str(error) == 'assert 4 > 5'
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: ''
+      right: 'assert 4 > 5'
+
+    If this test expects pytest-generated assertion text, Karva preserves native AssertionError messages. Check the exception type or supply an explicit assertion message.
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn assertion_message_migration_ignores_unrelated_failures() {
+    let context = TestContext::with_file(
+        "test_assertion_message.py",
+        r"
+def test_plain_assertion():
+    assert False
+
+def test_other_exception():
+    try:
+        raise ValueError()
+    except ValueError as error:
+        assert str(error) == 'assert 4 > 5'
+
+def test_unrelated_message():
+    try:
+        assert False
+    except AssertionError as error:
+        assert str(error) == 'validation failed'
+
+def test_unrelated_value():
+    try:
+        assert False
+    except AssertionError:
+        actual = ''
+        assert actual == 'assert 4 > 5'
+
+def test_explicit_empty_message():
+    try:
+        assert False, ''
+    except AssertionError as error:
+        assert str(error) == 'assert 4 > 5'
+",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 5 tests across 1 worker
+            FAIL [TIME] test_assertion_message::test_plain_assertion
+            FAIL [TIME] test_assertion_message::test_other_exception
+            FAIL [TIME] test_assertion_message::test_unrelated_message
+            FAIL [TIME] test_assertion_message::test_unrelated_value
+            FAIL [TIME] test_assertion_message::test_explicit_empty_message
+
+    failures:
+
+    test_assertion_message::test_explicit_empty_message:
+
+    error[test-failure]: Test `test_explicit_empty_message` failed
+      --> test_assertion_message.py:24:5
+       |
+    24 | def test_explicit_empty_message():
+       |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_message.py:28:9
+       |
+    28 |         assert str(error) == 'assert 4 > 5'
+       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: ''
+      right: 'assert 4 > 5'
+
+    test_assertion_message::test_other_exception:
+
+    error[test-failure]: Test `test_other_exception` failed
+     --> test_assertion_message.py:5:5
+      |
+    5 | def test_other_exception():
+      |     ^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_assertion_message.py:9:9
+      |
+    9 |         assert str(error) == 'assert 4 > 5'
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: ''
+      right: 'assert 4 > 5'
+
+    test_assertion_message::test_plain_assertion:
+
+    error[test-failure]: Test `test_plain_assertion` failed
+     --> test_assertion_message.py:2:5
+      |
+    2 | def test_plain_assertion():
+      |     ^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+     --> test_assertion_message.py:3:5
+      |
+    3 |     assert False
+      |     ^^^^^^^^^^^^
+
+    test_assertion_message::test_unrelated_message:
+
+    error[test-failure]: Test `test_unrelated_message` failed
+      --> test_assertion_message.py:11:5
+       |
+    11 | def test_unrelated_message():
+       |     ^^^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_message.py:15:9
+       |
+    15 |         assert str(error) == 'validation failed'
+       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: ''
+      right: 'validation failed'
+
+    test_assertion_message::test_unrelated_value:
+
+    error[test-failure]: Test `test_unrelated_value` failed
+      --> test_assertion_message.py:17:5
+       |
+    17 | def test_unrelated_value():
+       |     ^^^^^^^^^^^^^^^^^^^^
+    info: Test failed here
+      --> test_assertion_message.py:22:9
+       |
+    22 |         assert actual == 'assert 4 > 5'
+       |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: String difference:
+      left: ''
+      right: 'assert 4 > 5'
+
+    ────────────
+         Summary [TIME] 5 tests run: 0 passed, 5 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn assertion_message_migration_preserves_native_helper_messages() {
+    let context = TestContext::with_file(
+        "test_assertion_message.py",
+        r"
+def validate(value):
+    assert value > 5
+
+def test_native_message():
+    try:
+        validate(4)
+    except AssertionError as error:
+        assert error.args == ()
+        assert str(error) == ''
+
+def test_explicit_message():
+    try:
+        assert False, 'value must exceed 5'
+    except AssertionError as error:
+        assert error.args == ('value must exceed 5',)
+        assert str(error) == 'value must exceed 5'
+",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test_assertion_message::test_native_message
+            PASS [TIME] test_assertion_message::test_explicit_message
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn reports_captured_operands_without_repeating_side_effects() {
     let context = TestContext::with_file(
         "test_assertions.py",
