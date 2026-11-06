@@ -175,8 +175,7 @@ impl<'runner, 'context, 'settings, 'test, 'py>
                 None
             }
         };
-        let benchmark_active =
-            self.input.tags.has_benchmark() || self.input.fixtures.plan.uses_benchmark();
+        let benchmark_active = self.input.fixtures.plan.uses_benchmark();
         let benchmark_setup = benchmark_active.then(|| {
             self.input
                 .tags
