@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
 
+from karva._fixtures.mocker import MockerFixture
 from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
 from karva._fixtures.tmpdir import LegacyPath, TempPathFactory
@@ -39,6 +40,7 @@ __all__ = [
     "caplog",
     "capsys",
     "capsysbinary",
+    "mocker",
     "monkeypatch",
     "recwarn",
     "temp_dir",
@@ -56,6 +58,16 @@ def monkeypatch() -> Generator[MockEnv, None, None]:
     mpatch = MockEnv()
     yield mpatch
     mpatch.undo()
+
+
+@fixture
+def mocker() -> Generator[MockerFixture, None, None]:
+    """Provide call-aware mocks and restore patches after each test attempt."""
+    mocks = MockerFixture()
+    try:
+        yield mocks
+    finally:
+        mocks.stopall()
 
 
 class CaptureResult(NamedTuple):
