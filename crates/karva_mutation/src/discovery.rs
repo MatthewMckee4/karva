@@ -6,9 +6,9 @@ use anyhow::{Context, Result, bail};
 use camino::Utf8Path;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
-use ruff_python_ast::token::TokenKind;
+use ruff_python_ast::token::{TokenKind, Tokens};
 use ruff_python_ast::visitor::{Visitor, walk_expr, walk_stmt};
-use ruff_python_ast::{Expr, PythonVersion, Stmt, UnaryOp};
+use ruff_python_ast::{Expr, Number, PythonVersion, Stmt, UnaryOp};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange};
 
@@ -116,37 +116,13 @@ pub fn discover(
     }
     let mut visitor = Discovery {
         source,
+        tokens: parsed.tokens(),
         edits: Vec::new(),
         scopes: Vec::new(),
         symbols: Vec::new(),
     };
     if let ruff_python_ast::Mod::Module(module) = parsed.syntax() {
         visitor.visit_body(&module.body);
-    }
-    for token in parsed.tokens() {
-        let edit = match token.kind() {
-            TokenKind::EqEqual => Some((Operator::Comparison, "!=")),
-            TokenKind::NotEqual => Some((Operator::Comparison, "==")),
-            TokenKind::Less => Some((Operator::Comparison, "<=")),
-            TokenKind::LessEqual => Some((Operator::Comparison, "<")),
-            TokenKind::Greater => Some((Operator::Comparison, ">=")),
-            TokenKind::GreaterEqual => Some((Operator::Comparison, ">")),
-            TokenKind::And => Some((Operator::Boolean, "or")),
-            TokenKind::Or => Some((Operator::Boolean, "and")),
-            TokenKind::Plus => Some((Operator::Arithmetic, "-")),
-            TokenKind::Minus => Some((Operator::Arithmetic, "+")),
-            TokenKind::Star => Some((Operator::Arithmetic, "/")),
-            TokenKind::Slash => Some((Operator::Arithmetic, "*")),
-            TokenKind::DoubleSlash => Some((Operator::Arithmetic, "/")),
-            TokenKind::Percent => Some((Operator::Arithmetic, "*")),
-            TokenKind::DoubleStar => Some((Operator::Arithmetic, "*")),
-            _ => None,
-        };
-        if let Some((operator, replacement)) = edit {
-            visitor
-                .edits
-                .push((token.range(), operator, replacement.to_owned()));
-        }
     }
     visitor.edits.sort_by(|left, right| {
         (left.0.start(), left.0.end(), left.1, &left.2).cmp(&(
@@ -229,21 +205,54 @@ pub fn discover(
     Ok(mutations)
 }
 
-struct Discovery<'source> {
+struct Discovery<'source, 'tokens> {
+    tokens: &'tokens Tokens,
     source: &'source str,
     edits: Vec<(TextRange, Operator, String)>,
     scopes: Vec<String>,
     symbols: Vec<(TextRange, String)>,
 }
 
-impl Discovery<'_> {
+impl Discovery<'_, '_> {
+    /// Only inspect AST operator spans, excluding unpacking and signatures.
+    fn operators(&mut self, range: TextRange) {
+        for token in self.tokens.in_range(range) {
+            let edit = match token.kind() {
+                TokenKind::EqEqual => Some((Operator::Comparison, "!=")),
+                TokenKind::NotEqual => Some((Operator::Comparison, "==")),
+                TokenKind::Less => Some((Operator::Comparison, "<=")),
+                TokenKind::LessEqual => Some((Operator::Comparison, "<")),
+                TokenKind::Greater => Some((Operator::Comparison, ">=")),
+                TokenKind::GreaterEqual => Some((Operator::Comparison, ">")),
+                TokenKind::And => Some((Operator::Boolean, "or")),
+                TokenKind::Or => Some((Operator::Boolean, "and")),
+                TokenKind::Plus => Some((Operator::Arithmetic, "-")),
+                TokenKind::Minus => Some((Operator::Arithmetic, "+")),
+                TokenKind::Star => Some((Operator::Arithmetic, "/")),
+                TokenKind::Slash => Some((Operator::Arithmetic, "*")),
+                TokenKind::DoubleSlash => Some((Operator::Arithmetic, "/")),
+                TokenKind::Percent => Some((Operator::Arithmetic, "*")),
+                TokenKind::DoubleStar => Some((Operator::Arithmetic, "*")),
+                _ => None,
+            };
+            if let Some((operator, replacement)) = edit {
+                self.edits
+                    .push((token.range(), operator, replacement.to_owned()));
+            }
+        }
+    }
+
     fn edit(&mut self, range: TextRange, operator: Operator, replacement: &str) {
         self.edits.push((range, operator, replacement.to_owned()));
     }
 }
 
-impl<'ast> Visitor<'ast> for Discovery<'_> {
+impl<'ast> Visitor<'ast> for Discovery<'_, '_> {
     fn visit_stmt(&mut self, statement: &'ast Stmt) {
+        if matches!(statement, Stmt::Expr(value) if matches!(&*value.value, Expr::StringLiteral(_)))
+        {
+            return;
+        }
         let scope = match statement {
             Stmt::FunctionDef(function) => Some(function.name.as_str()),
             Stmt::ClassDef(class) => Some(class.name.as_str()),
@@ -293,15 +302,18 @@ impl<'ast> Visitor<'ast> for Discovery<'_> {
                 Operator::Literal,
                 if boolean.value { "False" } else { "True" },
             ),
-            Expr::NumberLiteral(_) => self.edit(
-                expression.range(),
-                Operator::Literal,
-                if &self.source[expression.range()] == "0" {
-                    "1"
-                } else {
-                    "0"
-                },
-            ),
+            Expr::NumberLiteral(number) => {
+                let zero = match &number.value {
+                    Number::Int(value) => value.as_u64() == Some(0),
+                    Number::Float(value) => *value == 0.0,
+                    Number::Complex { real, imag } => *real == 0.0 && *imag == 0.0,
+                };
+                self.edit(
+                    expression.range(),
+                    Operator::Literal,
+                    if zero { "1" } else { "0" },
+                );
+            }
             Expr::StringLiteral(value) => self.edit(
                 expression.range(),
                 Operator::Literal,
@@ -314,6 +326,24 @@ impl<'ast> Visitor<'ast> for Discovery<'_> {
             Expr::UnaryOp(unary) if unary.op == UnaryOp::Not => {
                 let replacement = format!("({})", &self.source[unary.operand.range()]);
                 self.edit(expression.range(), Operator::Boolean, &replacement);
+            }
+            Expr::BinOp(binary) => {
+                self.operators(TextRange::new(binary.left.end(), binary.right.start()));
+            }
+            Expr::Compare(compare) => {
+                let mut left = &*compare.left;
+                for right in &compare.comparators {
+                    self.operators(TextRange::new(left.end(), right.start()));
+                    left = right;
+                }
+            }
+            Expr::BoolOp(boolean) => {
+                for pair in boolean.values.windows(2) {
+                    self.operators(TextRange::new(pair[0].end(), pair[1].start()));
+                }
+            }
+            Expr::UnaryOp(unary) => {
+                self.operators(TextRange::new(unary.start(), unary.operand.start()));
             }
             _ => {}
         }
@@ -408,6 +438,41 @@ mod tests {
         .expect("discover");
         assert_eq!(mutations.len(), 1);
         assert_eq!(mutations[0].symbol, "C.f");
+    }
+
+    #[test]
+    fn arithmetic_operators_exclude_signatures_and_unpacking() {
+        let source = "def f(a, /, b, *, c, **kw):\n    return g(*a, **kw), {**kw}, [*a]\n";
+        assert!(
+            candidates(source)
+                .iter()
+                .all(|mutation| mutation.operator != Operator::Arithmetic)
+        );
+        let source = "result = (a * b) ** (c + d)\n";
+        let operators: Vec<_> = candidates(source)
+            .into_iter()
+            .filter(|mutation| mutation.operator == Operator::Arithmetic)
+            .map(|mutation| mutation.original)
+            .collect();
+        assert_eq!(operators, ["*", "**", "+"]);
+    }
+
+    #[test]
+    fn docstrings_and_bare_strings_are_excluded_but_string_values_are_mutated() {
+        let source = "'module docs'\nclass C:\n    'class docs'\n    def f(self):\n        'function docs'\n        'unused'\n        value = 'payload'\n        return value\n";
+        let strings: Vec<_> = candidates(source)
+            .into_iter()
+            .filter(|mutation| mutation.operator == Operator::Literal)
+            .map(|mutation| mutation.original)
+            .collect();
+        assert_eq!(strings, ["'payload'"]);
+    }
+
+    #[rstest]
+    fn zero_spellings_change_value(#[values("0", "0.0", "0x0", "0j", "0_0")] literal: &str) {
+        let mutations = candidates(&format!("value = {literal}"));
+        assert_eq!(mutations.len(), 1);
+        assert_eq!(mutations[0].replacement, "1");
     }
 
     #[test]
