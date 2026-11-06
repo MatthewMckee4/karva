@@ -414,13 +414,18 @@ The supported pytest-mock surface uses Python's `unittest.mock`:
 
 - `patch(target, ...)`, `patch.object(obj, name, ...)`, `patch.dict(mapping, ...)`,
   and `patch.multiple(target, ...)` accept the standard-library patch arguments.
+  `patch.context_manager(obj, name, ...)` is an alias for `patch.object`.
   They start immediately; use them directly rather than as decorators or context
   managers. `DEFAULT` requests generated mocks in `patch.multiple`.
-- `Mock`, `MagicMock`, `AsyncMock`, `PropertyMock`, `ANY`, `call`, `sentinel`, and
-  `mock_open` expose the standard-library objects and assertion helpers.
+- `Mock`, `MagicMock`, `AsyncMock`, `PropertyMock`, `ANY`, `call`, `sentinel`,
+  `mock_open`, and `seal` expose the standard-library objects and assertion helpers.
 - `spy(obj, name)` runs the original sync or async callable and records calls,
-  `spy_return`, `spy_return_list`, and `spy_exception`. Iterator duplication is
-  not supported.
+  `spy_return`, `spy_return_list`, `spy_return_iter`, and `spy_exception`. Pass
+  `duplicate_iterators=True` to duplicate returned synchronous iterators with
+  `itertools.tee`; consuming one branch does not consume the other. Retained
+  branches can buffer values. Async iterators are not duplicated.
+- `create_autospec(spec, ...)` creates a tracked mock with the original signature
+  and standard-library spec checks.
 - `stub(name=None)` and `async_stub(name=None)` create callbacks that accept any
   arguments. Use `assert_awaited_once_with(...)` to check async callbacks.
 - `stop(result)` restores the patch or spy that returned `result`. For
@@ -428,7 +433,12 @@ The supported pytest-mock surface uses Python's `unittest.mock`:
   patch owned by this fixture in reverse order.
 - `resetall(return_value=False, side_effect=False)` clears call history on active
   patches and spies without restoring them. The optional flags also reset return
-  values or side effects. Direct constructors and stubs are not tracked or reset.
+  values or side effects. For spies, `side_effect=True` restores forwarding to
+  the original callable. Direct constructors and stubs are not tracked or reset.
 
-Broader-scoped mocker fixtures, pytest-mock configuration, and enhanced assertion
-output are not provided.
+Use `module_mocker`, `package_mocker`, or `session_mocker` from fixtures with
+longer lifetimes. Each owns independent patches and call history for its scope;
+`session_mocker` is local to each worker. Broader-scoped mocks retain state across
+retries. `class_mocker` requires test-class and class-scope support, which Karva
+does not yet provide. Pytest-mock configuration and enhanced assertion output
+are not provided.
