@@ -26,7 +26,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
 
-from karva._fixtures.mocker import MockerFixture
+    from karva._fixtures.mocker import MockerFixture
+
 from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
 from karva._fixtures.tmpdir import LegacyPath, TempPathFactory
@@ -63,6 +64,8 @@ def monkeypatch() -> Generator[MockEnv, None, None]:
 @fixture
 def mocker() -> Generator[MockerFixture, None, None]:
     """Provide call-aware mocks and restore patches after each test attempt."""
+    from karva._fixtures.mocker import MockerFixture
+
     mocks = MockerFixture()
     try:
         yield mocks

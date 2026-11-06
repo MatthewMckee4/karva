@@ -489,3 +489,32 @@ def test_wrong_call(mocker):
     ----- stderr -----
     ");
 }
+
+#[test]
+fn mocker_import_is_lazy_until_requested() {
+    let context = TestContext::with_file("test.py", r#"
+import sys
+import karva
+
+
+def test_import():
+    assert "unittest.mock" not in sys.modules
+    from karva import MockerFixture
+    assert "unittest.mock" in sys.modules
+    assert MockerFixture is karva.MockerFixture
+    assert isinstance(MockerFixture().Mock(), MockerFixture.Mock)
+    with karva.raises(AttributeError, match="missing_attribute"):
+        karva.missing_attribute
+"#);
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_import
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
