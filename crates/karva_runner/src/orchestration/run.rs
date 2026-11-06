@@ -6,9 +6,10 @@ use std::time::Instant;
 
 use anyhow::Result;
 use colored::Colorize;
+use crossbeam_channel::Receiver;
 use karva_cache::{CACHE_DIR, RunArtifacts, RunHash, write_durations};
 use karva_cli::SubTestCommand;
-use karva_ipc::ControllerServer;
+use karva_ipc::{ControllerServer, MutationSource};
 use karva_logging::Printer;
 use karva_project::Project;
 
@@ -29,11 +30,45 @@ pub fn run_parallel_tests(
     args: &SubTestCommand,
     printer: Printer,
 ) -> Result<RunOutput> {
+    run_tests(project, config, args, printer, None, None)
+}
+
+/// Executes one candidate with an independent cancellation receiver.
+///
+/// Callers must disable historical caches and supply a measured run timeout.
+pub fn run_mutation_tests(
+    project: &Project,
+    config: &ParallelTestConfig,
+    args: &SubTestCommand,
+    printer: Printer,
+    mutation: MutationSource,
+    shutdown: &Receiver<()>,
+) -> Result<RunOutput> {
+    run_tests(
+        project,
+        config,
+        args,
+        printer,
+        Some(mutation),
+        Some(shutdown),
+    )
+}
+
+fn run_tests(
+    project: &Project,
+    config: &ParallelTestConfig,
+    args: &SubTestCommand,
+    printer: Printer,
+    mutation: Option<MutationSource>,
+    shutdown_override: Option<&Receiver<()>>,
+) -> Result<RunOutput> {
     // Install the Ctrl+C handler before any potentially long-running work
     // (collection, partitioning, worker spawn). Otherwise an early SIGINT
     // hits the default disposition and the run terminates silently with no
     // cancellation banner.
-    let shutdown_rx = if config.create_ctrlc_handler {
+    let shutdown_rx = if shutdown_override.is_some() {
+        shutdown_override
+    } else if config.create_ctrlc_handler {
         Some(shutdown_receiver())
     } else {
         None
@@ -140,8 +175,10 @@ pub fn run_parallel_tests(
     tracing::info!(target: "karva_runner::orchestration", "Spawning {} workers", scheduled_workers);
 
     let worker_binary = find_karva_worker_binary(project.cwd())?;
+    let mut configuration = worker_configuration(project, args, failed_first_active);
+    std::sync::Arc::make_mut(&mut configuration).mutation = mutation;
     let spawn = WorkerSpawn {
-        configuration: worker_configuration(project, args, failed_first_active),
+        configuration,
         project,
         artifacts: &artifacts,
         controller_endpoint: controller.endpoint(),
