@@ -6,6 +6,7 @@ pub mod decorators;
 pub mod fixture_support;
 pub mod generators;
 pub mod invalid;
+pub mod mock_diagnostics;
 pub mod mocker;
 pub mod mocker_more;
 pub mod more_builtins;
