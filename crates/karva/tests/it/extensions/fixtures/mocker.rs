@@ -492,7 +492,9 @@ def test_wrong_call(mocker):
 
 #[test]
 fn mocker_import_is_lazy_until_requested() {
-    let context = TestContext::with_file("test.py", r#"
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
 import sys
 import karva
 
@@ -505,7 +507,8 @@ def test_import():
     assert isinstance(MockerFixture().Mock(), MockerFixture.Mock)
     with karva.raises(AttributeError, match="missing_attribute"):
         karva.missing_attribute
-"#);
+"#,
+    );
     assert_cmd_snapshot!(context.command_no_parallel(), @"
     success: true
     exit_code: 0
