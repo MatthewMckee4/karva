@@ -2,7 +2,7 @@
 
 use std::process::Command;
 #[cfg(unix)]
-use std::process::Stdio;
+use std::process::{Output, Stdio};
 #[cfg(unix)]
 use std::time::Duration;
 
@@ -16,6 +16,28 @@ fn command(context: &TestContext, action: &str) -> Command {
     let mut command = context.karva_command_in(context.root());
     command.args(["mutate", action]);
     command
+}
+
+#[cfg(unix)]
+fn interrupt_when_started(context: &TestContext, command: &mut Command, marker: &str) -> Output {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    if let Err(message) =
+        crate::cancel::wait_for_file(&context.root().join(marker), Duration::from_secs(20))
+    {
+        let _ = child.kill();
+        let output = child.wait_with_output().expect("wait");
+        panic!("{message}: {output:?}");
+    }
+    let signal = Command::new("kill")
+        .args(["-s", "INT", &child.id().to_string()])
+        .status()
+        .expect("signal");
+    assert!(signal.success());
+    child.wait_with_output().expect("wait")
 }
 
 fn results(context: &TestContext) -> MutationResults {
@@ -673,25 +695,7 @@ fn cancellation_preserves_completed_results_and_resumes_pending_mutants() {
     );
     let mut run = command(&context, "run");
     run.args(["--workers", "1", "--timeout", "1"]);
-    let mut child = run
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn");
-    if let Err(message) = crate::cancel::wait_for_file(
-        &context.root().join(".karva/mutation/started"),
-        Duration::from_secs(20),
-    ) {
-        let _ = child.kill();
-        let output = child.wait_with_output().expect("wait");
-        panic!("{message}: {output:?}");
-    }
-    let signal = Command::new("kill")
-        .args(["-s", "INT", &child.id().to_string()])
-        .status()
-        .expect("signal");
-    assert!(signal.success());
-    let output = child.wait_with_output().expect("wait");
+    let output = interrupt_when_started(&context, &mut run, ".karva/mutation/started");
     insta::assert_snapshot!(format!("exit_code: {:?}\n----- stdout -----\n{}\n----- stderr -----\n{}", output.status.code(), String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)), @"
     exit_code: Some(2)
     ----- stdout -----
@@ -918,4 +922,256 @@ fn retesting_one_candidate_preserves_unrelated_results_and_marks_them_stale() {
 
     ----- stderr -----
     ");
+}
+
+#[test]
+fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting() {
+    let context = project();
+    context.write_file("pyproject.toml", "[tool.karva.profile.default.mutation]\nsources = ['.']\noperators = ['literal']\nworkers = 1\n");
+    context.write_file("obsolete.py", "value = False\n");
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    111bd982bfafade21213f8ee02bce1c7 uncovered obsolete.py:1
+      uncovered: source was not imported; full suite safety check passed
+    7191b78610ed77ee527de1179b4b50d2 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 1
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/2
+    Completed mutation 2/2
+    ");
+    let first = results(&context);
+    assert_eq!(first.records.len(), 2);
+    context.write_file(
+        "app.py",
+        "def enabled():\n    return True # updated source\n",
+    );
+    std::fs::remove_file(context.root().join("obsolete.py")).expect("delete source");
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2b55d4c855448f4e4a609f43e142e474 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/1
+    ");
+    let current = results(&context);
+    assert_eq!(current.records.len(), 1);
+    assert!(
+        current
+            .records
+            .keys()
+            .all(|id| !first.records.contains_key(id))
+    );
+    assert_cmd_snapshot!(command(&context, "results"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2b55d4c855448f4e4a609f43e142e474 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(command(&context, "retest"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    2b55d4c855448f4e4a609f43e142e474 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/1
+    ");
+    assert_eq!(results(&context).records.len(), 1);
+}
+
+#[test]
+fn bulk_retesting_skips_stale_records_and_rejects_discovery_only_flags() {
+    let context = project();
+    context.write_file("app.py", "def enabled():\n    return True\n");
+    context.write_file("other.py", "value = True\n");
+    context.write_file("pyproject.toml", "[tool.karva.profile.default.mutation]\nsources = ['.']\noperators = ['literal']\nworkers = 1\n");
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    7191b78610ed77ee527de1179b4b50d2 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    8368b42eb8074dc5afe5ea7e6a027537 uncovered other.py:1
+      uncovered: source was not imported; full suite safety check passed
+    killed: 1
+    survived: 0
+    uncovered: 1
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/2
+    Completed mutation 2/2
+    ");
+    std::fs::remove_file(context.root().join("other.py")).expect("delete source");
+    assert_cmd_snapshot!(command(&context, "retest"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    7191b78610ed77ee527de1179b4b50d2 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/1
+    ");
+    assert_eq!(results(&context).records.len(), 1);
+    let mut retest = command(&context, "retest");
+    retest.args(["--source", "app.py"]);
+    assert_cmd_snapshot!(retest, @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: `--source` and `--exclude` apply only to `mutate run`; use `--path` to select recorded candidates for retesting
+    ");
+}
+
+#[test]
+fn utf8_bom_source_mutations_compile_and_preserve_the_bom() {
+    let context = project();
+    let source = "\u{feff}def enabled():\n    return True\n";
+    context.write_file("app.py", source);
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    9610700bbb8f6f8fd46bfdb8055353a7 killed app.py:2 enabled
+      full suite: requested or source/test mapping incomplete
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 0
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/1
+    ");
+    let stored = results(&context);
+    assert_eq!(stored.records.len(), 1);
+    assert_eq!(
+        stored.records.values().next().expect("record").outcome,
+        Outcome::Killed
+    );
+    assert_eq!(context.read_file("app.py"), source);
+}
+
+#[test]
+fn default_timeout_uses_the_measured_baseline_without_multiplying_worker_count() {
+    let context = project();
+    context.write_file(
+        "app.py",
+        "def spin():\n    while False:\n        pass\n    return True\n",
+    );
+    context.write_file(
+        "tests/test_app.py",
+        "from app import spin\n\ndef test_spin():\n    assert spin() is True\n",
+    );
+    assert_cmd_snapshot!(command(&context, "run"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    26ce20e81fba0c7294d9e9aa592e0a05 killed app.py:4 spin
+      full suite: requested or source/test mapping incomplete
+    6b065d91b2e6b7103d205bfe2b5397ed timed-out app.py:2 spin
+      full suite: requested or source/test mapping incomplete
+      mutant 6b065d91b2e6b7103d205bfe2b5397ed: mutation-timeout budget exceeded; limit [TIME], requested 1 tests (tests.test_app::test_spin), measured baseline [TIME]
+    killed: 1
+    survived: 0
+    uncovered: 0
+    timed-out: 1
+    invalid: 0
+    errored: 0
+    pending: 0
+
+    ----- stderr -----
+    Completed mutation 1/2
+    Completed mutation 2/2
+    ");
+    let stored = results(&context);
+    assert_eq!(stored.records.len(), 2);
+    let timeout = stored
+        .records
+        .values()
+        .find(|record| record.outcome == Outcome::TimedOut)
+        .expect("timeout");
+    let expected = format!("limit {:.6}s", stored.baseline_seconds * 10.0);
+    assert!(
+        timeout
+            .diagnostic
+            .as_ref()
+            .expect("diagnostic")
+            .contains(&expected)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn baseline_cancellation_does_not_report_a_test_failure() {
+    let context = project();
+    context.write_file("tests/test_app.py", "from pathlib import Path\nimport time\n\ndef test_baseline():\n    Path('.karva/mutation/baseline-started').touch()\n    time.sleep(60)\n");
+    let output = interrupt_when_started(
+        &context,
+        &mut command(&context, "run"),
+        ".karva/mutation/baseline-started",
+    );
+    insta::assert_snapshot!(format!("exit_code: {:?}\n----- stdout -----\n{}\n----- stderr -----\n{}", output.status.code(), String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)), @"
+    exit_code: Some(2)
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: mutation baseline cancelled; no mutants were executed
+    ");
+    assert!(!context.root().join(".karva/mutation/results.json").exists());
 }

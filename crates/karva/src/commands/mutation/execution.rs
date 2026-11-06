@@ -257,8 +257,8 @@ impl Execution<'_> {
         if let Some(tests) = affected.filter(|tests| tests.len() < self.baseline.tests.len()) {
             args.filter_expressions = tests
                 .iter()
-                .map(|test| serde_json::to_string(test).map(|quoted| format!("test(={quoted})")))
-                .collect::<std::result::Result<_, _>>()?;
+                .map(|test| super::filters::test_filter(test))
+                .collect();
             requested = tests;
             record.reason = "affected tests first; full-suite safety check before survival".into();
         } else {
