@@ -7,7 +7,7 @@ import os
 def install(filename, source):
     """Compile and install one source override, returning import-use evidence."""
     target = os.path.normcase(os.path.realpath(filename))
-    code = compile(source, filename, "exec", dont_inherit=True)
+    code = compile(source.encode("utf-8"), filename, "exec", dont_inherit=True)
     loader_type = importlib.machinery.SourceFileLoader
     original_data = loader_type.get_data
     original_code = loader_type.get_code
