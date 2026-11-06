@@ -192,8 +192,11 @@ fn run_mutations(
     let mut discovered = BTreeSet::new();
     if matches!(selection, CandidateSelection::Retest(None)) {
         if let Some(results) = &mut previous {
+            let previous_count = results.records.len();
             files::prune_stale(project.cwd(), results)?;
-            results.write(&data_path)?;
+            if results.records.len() != previous_count {
+                results.write(&data_path)?;
+            }
         }
     }
     if let CandidateSelection::Retest(prefix) = selection {
@@ -256,7 +259,10 @@ fn run_mutations(
             }
         }
     }
-    if matches!(selection, CandidateSelection::Discover) {
+    if matches!(selection, CandidateSelection::Discover)
+        && args.filters.operator.is_empty()
+        && args.exclude.is_empty()
+    {
         let roots = sources
             .iter()
             .map(|source| {
@@ -265,13 +271,16 @@ fn run_mutations(
             })
             .collect::<Result<Vec<_>>>()?;
         if let Some(results) = &mut previous {
+            let previous_count = results.records.len();
             results.records.retain(|id, record| {
                 !roots
                     .iter()
                     .any(|root| record.mutant.path.starts_with(root))
                     || discovered.contains(id)
             });
-            results.write(&data_path)?;
+            if results.records.len() != previous_count {
+                results.write(&data_path)?;
+            }
         }
     }
     candidates.sort_by(|left, right| {
@@ -326,7 +335,8 @@ fn run_mutations(
     // leaves headroom for process startup, instrumentation, and scheduling jitter.
     let budget_seconds = explicit_timeout.unwrap_or(baseline.elapsed_seconds * 10.0);
     let configuration = serde_json::json!({"sources": sources, "mutation": options, "workers": workers, "timeout_seconds": explicit_timeout, "profile": profile});
-    let context = files::context(project, &configuration)?;
+    let execution_configuration = serde_json::json!({"workers": workers, "timeout_seconds": explicit_timeout, "profile": profile});
+    let context = files::context(project, &execution_configuration)?;
     let mut results = previous
         .take()
         .unwrap_or_else(|| MutationResults::new(context.clone(), configuration.clone()));
