@@ -5,7 +5,7 @@
 //! value renderer rather than calling user equality or representation methods.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
+use pyo3::types::{PyDict, PyString, PyTuple};
 
 use crate::assertions::{focused_diff, safe_repr};
 
@@ -36,14 +36,15 @@ pub(super) fn mock_failure(py: Python<'_>, error: &PyErr) -> Option<MockFailure>
             .get_item("__name__")
             .ok()?
             .and_then(|value| value.extract::<String>().ok());
-        let name = frame
-            .getattr("f_code")
-            .ok()?
-            .getattr("co_name")
-            .ok()?
-            .extract::<String>()
-            .ok()?;
-        if module.as_deref() == Some("unittest.mock") && name.starts_with("assert_") {
+        let code = frame.getattr("f_code").ok()?;
+        let name = code.getattr("co_name").ok()?.extract::<String>().ok()?;
+        // Async autospec assertion helpers pass through a generic wrapper.
+        let async_assertion_wrapper = name == "wrapper"
+            && code.getattr("co_qualname").ok()?.extract::<String>().ok()?
+                == "_setup_async_mock.<locals>.wrapper";
+        if module.as_deref() == Some("unittest.mock")
+            && (name.starts_with("assert_") || async_assertion_wrapper)
+        {
             failure.hidden_frames += 1;
             if matches!(name.as_str(), "assert_called_with" | "assert_awaited_with") {
                 failure.explanation = call_difference(&frame);
@@ -70,6 +71,8 @@ fn call_difference(frame: &Bound<'_, PyAny>) -> Option<String> {
         .ok()?
         .cast_into::<PyTuple>()
         .ok()?;
+    let expected = matched_call(expected)?;
+    let actual = matched_call(actual)?;
     let expected_start = expected.len().checked_sub(2)?;
     let actual_start = actual.len().checked_sub(2)?;
     let mut lines = vec!["Mock call arguments differ:".to_string()];
@@ -85,4 +88,20 @@ fn call_difference(frame: &Bound<'_, PyAny>) -> Option<String> {
         }
     }
     (lines.len() > 1).then(|| lines.join("\n"))
+}
+
+/// Unwrap the `_Call` produced by signature binding: its positional arguments
+/// contain `(name, args, kwargs)` inside the outer `(name, args, kwargs)` call.
+/// Plain mocks already expose their actual `(args, kwargs)` pair directly.
+fn matched_call(call: Bound<'_, PyTuple>) -> Option<Bound<'_, PyTuple>> {
+    if call.len() == 3
+        && let Ok(inner) = call.get_item(1).ok()?.cast_into::<PyTuple>()
+        && inner.len() == 3
+        && inner.get_item(0).ok()?.is_instance_of::<PyString>()
+        && let Ok(kwargs) = call.get_item(2).ok()?.cast_into::<PyDict>()
+        && kwargs.is_empty()
+    {
+        return Some(inner);
+    }
+    Some(call)
 }
