@@ -27,6 +27,7 @@ karva_language_server = { path = "crates/karva_language_server" }
 karva_logging = { path = "crates/karva_logging" }
 karva_macros = { path = "crates/karva_macros" }
 karva_metadata = { path = "crates/karva_metadata" }
+karva_mutation = { path = "crates/karva_mutation" }
 karva_project = { path = "crates/karva_project" }
 karva_python_semantic = { path = "crates/karva_python_semantic" }
 karva_runner = { path = "crates/karva_runner" }
