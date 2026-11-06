@@ -2370,6 +2370,7 @@ def test_2(): pass
     [DATETIME] INFO Worker 0 spawned with 2 tests
     [DATETIME] INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
     [DATETIME] DEBUG Trying to parse `monkeypatch` as a fixture
+    [DATETIME] DEBUG Trying to parse `mocker` as a fixture
     [DATETIME] DEBUG Trying to parse `capsys` as a fixture
     [DATETIME] DEBUG Trying to parse `capfd` as a fixture
     [DATETIME] DEBUG Trying to parse `capsysbinary` as a fixture
@@ -2494,6 +2495,7 @@ def test_1(): pass
     1   [TIME] INFO karva_runner::orchestration Worker 0 spawned with 1 tests
     1   [TIME] INFO karva_runner::orchestration Waiting for 1 workers to complete (Ctrl+C to cancel)
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `monkeypatch` as a fixture
+    1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `mocker` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `capsys` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `capfd` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `capsysbinary` as a fixture

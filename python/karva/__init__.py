@@ -1,5 +1,7 @@
 """Karva is a Python test framework, written in Rust."""
 
+from typing import TYPE_CHECKING
+
 from karva._approx import approx
 from karva._builtins import MockEnv
 from karva._fixtures.recwarn import deprecated_call, warns
@@ -32,6 +34,7 @@ __all__: list[str] = [
     "ExceptionInfo",
     "FailError",
     "MockEnv",
+    "MockerFixture",
     "RaisesContext",
     "SkipError",
     "SnapshotMismatchError",
@@ -52,3 +55,17 @@ __all__: list[str] = [
     "tags",
     "warns",
 ]
+
+
+if TYPE_CHECKING:
+    from karva._fixtures.mocker import MockerFixture
+
+
+def __getattr__(name: str) -> object:
+    """Load mock helpers only when requested, keeping worker startup light."""
+    if name == "MockerFixture":
+        from karva._fixtures.mocker import MockerFixture
+
+        globals()[name] = MockerFixture
+        return MockerFixture
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

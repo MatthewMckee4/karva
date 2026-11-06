@@ -329,6 +329,12 @@ pub(super) struct BuiltinFixture {
 
 const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     BuiltinFixture {
+        name: "mocker",
+        scope: FixtureScope::Function,
+        signature: "mocker() -> Generator[MockerFixture, None, None]",
+        docstring: "Provide call-aware mocks and restore patches after each test attempt.",
+    },
+    BuiltinFixture {
         name: "monkeypatch",
         scope: FixtureScope::Function,
         signature: "monkeypatch() -> Generator[MockEnv, None, None]",
@@ -1542,7 +1548,7 @@ mod tests {
                 @fixture
                 def database(): pass
 
-                def test_example(database, tmp_path): pass
+                def test_example(database, tmp_path, mocker): pass
             "})
             .diagnostics
             .as_slice(),
