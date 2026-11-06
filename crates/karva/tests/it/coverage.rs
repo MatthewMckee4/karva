@@ -31,6 +31,7 @@ fn check_child_coverage(method: &str, branch: bool) {
             "target.py",
             "def run(flag):\n    if flag:\n        return 1\n    return 0\n",
         ),
+        ("replacement.py", "from target import run\nrun(False)\n"),
         (
             "child.py",
             indoc! {r#"
@@ -48,7 +49,7 @@ fn check_child_coverage(method: &str, branch: bool) {
                 if method == "term":
                     os.kill(os.getpid(), signal.SIGTERM)
                 if method == "exec":
-                    os.execv(sys.executable, [sys.executable, "-c", "from target import run; run(False)"])
+                    os.execv(sys.executable, [sys.executable, "replacement.py"])
 
             if __name__ == "__main__":
                 child(sys.argv[1] == "True", sys.argv[2])
@@ -86,14 +87,17 @@ def run_children(method):
         second.join()
         assert first.exitcode == second.exitcode == 0
     else:
-        first = subprocess.Popen([sys.executable, "child.py", "True", method])
-        second = subprocess.Popen([sys.executable, "child.py", "True" if method == "exec" else "False", method])
+        first = subprocess.Popen([sys.executable, "child.py", "True", method], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        second = subprocess.Popen([sys.executable, "child.py", "True" if method == "exec" else "False", method], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # On Windows exec starts a replacement process; pipe EOF waits for it too.
+        assert first.communicate() == (b"", b"")
+        assert second.communicate() == (b"", b"")
         expected = 7 if method == "failure" else (-15 if method == "term" and sys.platform != "win32" else 0)
         # Windows TerminateProcess cannot run Python cleanup.
         if method == "term" and sys.platform == "win32":
-            assert first.wait() != 0 and second.wait() != 0
+            assert first.returncode != 0 and second.returncode != 0
         else:
-            assert first.wait() == second.wait() == expected
+            assert first.returncode == second.returncode == expected
 "#
             ),
         ),
