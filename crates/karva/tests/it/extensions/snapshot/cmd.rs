@@ -7,7 +7,7 @@ use crate::common::TestContext;
 fn test_cmd_snapshot_drains_output_while_writing_stdin(#[values("stdout", "stderr")] stream: &str) {
     let context = TestContext::with_file(
         "test.py",
-        &format!(
+        format!(
             r#"
 import sys
 
