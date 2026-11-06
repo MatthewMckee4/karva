@@ -32,8 +32,19 @@ Karva in `settings.json`:
 
 The extension uses an explicit `lsp.karva.binary.path`, then `karva server` from
 the worktree PATH, then the project version through `uv run karva server`.
-Install Karva in the project when using uv. If no command is available, the
-extension reports how to configure a local installation.
+Install Karva in the project when using uv. Without a local command, the
+extension downloads and caches the matching standalone server from the highest
+semantic version among stable and prerelease GitHub releases. A resolved binary
+is reused within the session. If release lookup or download fails, the newest
+matching cached binary is used, including after restarting Zed. Failed downloads
+are never promoted to the cache. Releases without a native asset report the
+missing platform and how to configure a local installation.
+
+Managed servers support macOS ARM64 and x86-64, Linux ARM64 and x86-64, and Windows
+x86-64. Linux assets use glibc and are built on Ubuntu 24.04 for ARM64 and
+22.04 for x86-64. Other platforms can use a local Karva installation. The
+standalone executable needs no Python runtime; running tests still requires the
+project's Karva package. Native assets are published by the release workflow.
 
 For a debug Karva binary, configure the server subcommand explicitly:
 
@@ -53,6 +64,7 @@ For a debug Karva binary, configure the server subcommand explicitly:
 
 Explicit and PATH binaries default to the `server` argument. Binary arguments
 and environment overrides apply to every resolution mode.
+Managed standalone servers default to no arguments.
 
 Initialization and workspace settings remain available under `lsp.karva`:
 
