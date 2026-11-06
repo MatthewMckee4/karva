@@ -11,6 +11,9 @@
 //! native loading and compilation.
 
 mod cache;
+mod mocks;
+
+pub(crate) use mocks::mock_failure;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
