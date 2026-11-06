@@ -378,6 +378,7 @@ name = "karva-zed"
 version = "0.1.0"
 dependencies = [
  "rstest",
+ "semver",
  "tempfile",
  "zed_extension_api",
 ]

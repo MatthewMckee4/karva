@@ -1,7 +1,12 @@
+use std::path::Path;
+
+use semver::Version;
 use zed::settings::LspSettings;
 use zed_extension_api as zed;
 
-struct KarvaExtension;
+struct KarvaExtension {
+    cached_binary: Option<String>,
+}
 
 fn command_for_binary(path: String, args: &[&str], settings: &LspSettings) -> zed::Command {
     let binary = settings.binary.as_ref();
@@ -32,6 +37,7 @@ fn local_command(
     {
         return Some(command_for_binary(path, &["server"], settings));
     }
+
     if let Some(path) = which("karva") {
         return Some(command_for_binary(path, &["server"], settings));
     }
@@ -60,8 +66,93 @@ fn release_asset<'a>(
         .ok_or_else(|| format!("Karva release {} has no {name}; install uv and add Karva to the project, or set lsp.karva.binary.path", release.version))
 }
 
+fn release_version(value: &str) -> zed::Result<Version> {
+    Version::parse(value.strip_prefix('v').unwrap_or(value))
+        .map_err(|error| format!("Invalid Karva release version {value}: {error}"))
+}
+
+fn latest_release(
+    mut lookup: impl FnMut(bool) -> zed::Result<zed::GithubRelease>,
+) -> zed::Result<zed::GithubRelease> {
+    let versioned = |release: zed::GithubRelease| {
+        release_version(&release.version).map(|version| (version, release))
+    };
+    // Zed filters by an exact prerelease flag rather than including both kinds.
+    let stable = lookup(false).and_then(versioned);
+    let prerelease = lookup(true).and_then(versioned);
+    match (stable, prerelease) {
+        (Ok((stable_version, stable)), Ok((prerelease_version, prerelease))) => {
+            Ok(if stable_version >= prerelease_version {
+                stable
+            } else {
+                prerelease
+            })
+        }
+        (Ok((_, release)), Err(_)) | (Err(_), Ok((_, release))) => Ok(release),
+        (Err(stable), Err(prerelease)) => Err(format!(
+            "Cannot find a Karva release: {stable}; {prerelease}; install uv or set lsp.karva.binary.path"
+        )),
+    }
+}
+
+fn find_cached_binary(root: &Path, asset: &str) -> Option<(Version, String)> {
+    std::fs::read_dir(root)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let version = release_version(name.to_str()?.strip_prefix("karva-")?).ok()?;
+            let binary = entry.path().join(asset);
+            binary
+                .is_file()
+                .then(|| binary.to_str().map(|path| (version, path.to_owned())))
+                .flatten()
+        })
+        .max_by(|left, right| left.0.cmp(&right.0))
+}
+
+fn managed_binary(
+    root: &Path,
+    asset_name: &str,
+    lookup: impl FnMut(bool) -> zed::Result<zed::GithubRelease>,
+    download: impl FnOnce(&str, &str) -> zed::Result<()>,
+    make_executable: impl Fn(&str) -> zed::Result<()>,
+) -> zed::Result<String> {
+    let cached = find_cached_binary(root, asset_name);
+    let resolved = (|| {
+        let release = latest_release(lookup)?;
+        let version = release_version(&release.version)?;
+        if let Some((cached_version, path)) = &cached {
+            if *cached_version >= version {
+                make_executable(path)?;
+                return Ok(path.clone());
+            }
+        }
+        let asset = release_asset(&release, asset_name)?;
+        let path = root
+            .join(format!("karva-{}", release.version))
+            .join(asset_name);
+        cached_download(
+            &path,
+            |path| download(&asset.download_url, path),
+            &make_executable,
+        )
+    })();
+    match resolved {
+        Ok(binary) => Ok(binary),
+        Err(error) => {
+            let Some((_, binary)) = cached else {
+                return Err(error);
+            };
+            make_executable(&binary)
+                .map_err(|error| format!("Cannot run cached Karva server at {binary}: {error}"))?;
+            Ok(binary)
+        }
+    }
+}
+
 fn cached_download(
-    path: &std::path::Path,
+    path: &Path,
     download: impl FnOnce(&str) -> zed::Result<()>,
     make_executable: impl FnOnce(&str) -> zed::Result<()>,
 ) -> zed::Result<String> {
@@ -98,7 +189,9 @@ fn workspace_configuration(settings: &LspSettings) -> Option<zed::serde_json::Va
 
 impl zed::Extension for KarvaExtension {
     fn new() -> Self {
-        Self
+        Self {
+            cached_binary: None,
+        }
     }
 
     fn language_server_command(
@@ -111,44 +204,39 @@ impl zed::Extension for KarvaExtension {
         if let Some(command) = local_command(&settings, |name| worktree.which(name)) {
             return Ok(command);
         }
+        if let Some(binary) = &self.cached_binary {
+            if Path::new(binary).is_file() {
+                return Ok(command_for_binary(binary.clone(), &[], &settings));
+            }
+        }
         let (os, arch) = zed::current_platform();
         let name = asset_name(os, arch)?;
         zed::set_language_server_installation_status(
             language_server_id,
             &zed::LanguageServerInstallationStatus::CheckingForUpdate,
         );
-        let release = zed::latest_github_release(
-            "MatthewMckee4/karva",
-            zed::GithubReleaseOptions {
-                require_assets: true,
-                pre_release: true,
+        let binary = managed_binary(
+            Path::new("servers"),
+            &name,
+            |pre_release| {
+                zed::latest_github_release(
+                    "MatthewMckee4/karva",
+                    zed::GithubReleaseOptions {
+                        require_assets: true,
+                        pre_release,
+                    },
+                )
             },
-        )
-        .map_err(|error| {
-            format!("Cannot find a Karva release: {error}; install uv or set lsp.karva.binary.path")
-        })?;
-        let asset = release_asset(&release, &name)?;
-        if release.version.contains(['/', '\\']) {
-            return Err("Invalid Karva release version in download path".to_owned());
-        }
-        let path = std::path::Path::new("servers")
-            .join(format!("karva-{}", release.version))
-            .join(&name);
-        let binary = cached_download(
-            &path,
-            |path| {
+            |url, path| {
                 zed::set_language_server_installation_status(
                     language_server_id,
                     &zed::LanguageServerInstallationStatus::Downloading,
                 );
-                zed::download_file(
-                    &asset.download_url,
-                    path,
-                    zed::DownloadedFileType::Uncompressed,
-                )
+                zed::download_file(url, path, zed::DownloadedFileType::Uncompressed)
             },
             zed::make_file_executable,
         )?;
+        self.cached_binary = Some(binary.clone());
         Ok(command_for_binary(binary, &[], &settings))
     }
 
@@ -178,9 +266,10 @@ zed::register_extension!(KarvaExtension);
 #[cfg(test)]
 mod tests {
     use super::{
-        asset_name, cached_download, command_for_binary, initialization_options, local_command,
-        release_asset, workspace_configuration,
+        asset_name, cached_download, command_for_binary, initialization_options, latest_release,
+        local_command, managed_binary, release_asset, workspace_configuration,
     };
+    use std::path::Path;
     use zed_extension_api as zed;
 
     #[test]
@@ -209,16 +298,11 @@ mod tests {
     }
 
     #[test]
-    fn path_resolution_precedes_uv_and_managed_downloads() {
+    fn path_resolution_precedes_uv() {
         let settings = Default::default();
         let command =
             local_command(&settings, |name| Some(format!("/bin/{name}"))).expect("PATH command");
         assert_eq!(command.command, "/bin/karva");
-        assert_eq!(command.args, ["server"]);
-        let command = local_command(&settings, |name| {
-            (name == "karva").then(|| "/bin/karva".to_owned())
-        })
-        .expect("Karva command");
         assert_eq!(command.args, ["server"]);
         let command = local_command(&settings, |name| {
             (name == "uv").then(|| "/bin/uv".to_owned())
@@ -226,6 +310,32 @@ mod tests {
         .expect("UV command");
         assert_eq!(command.args, ["run", "karva", "server"]);
         assert!(local_command(&settings, |_| None).is_none());
+    }
+
+    #[test]
+    fn explicit_binary_defaults_to_server_without_path_lookup() {
+        let settings = zed::serde_json::from_value(zed::serde_json::json!({
+            "binary": {"path": "/custom/karva"}
+        }))
+        .expect("settings");
+        let command = local_command(&settings, |_| None).expect("explicit command");
+        assert_eq!(command.command, "/custom/karva");
+        assert_eq!(command.args, ["server"]);
+    }
+
+    #[test]
+    fn uv_resolution_honors_arguments_and_environment() {
+        let settings = zed::serde_json::from_value(zed::serde_json::json!({
+            "binary": {"arguments": ["run", "karva", "server"], "env": {"RUST_LOG": "debug"}}
+        }))
+        .expect("settings");
+        let command = local_command(&settings, |name| {
+            (name == "uv").then(|| "/bin/uv".to_owned())
+        })
+        .expect("UV command");
+        assert_eq!(command.command, "/bin/uv");
+        assert_eq!(command.args, ["run", "karva", "server"]);
+        assert_eq!(command.env, [("RUST_LOG".to_owned(), "debug".to_owned())]);
     }
 
     #[rstest::rstest]
@@ -352,31 +462,142 @@ mod tests {
         assert!(manifest.contains("id = \"karva\""));
         assert!(manifest.contains("[language_servers.karva]"));
         assert!(manifest.contains("languages = [\"Python\"]"));
-        assert!(!manifest.contains("download_file"));
     }
-    #[test]
-    fn explicit_binary_defaults_to_server_without_path_lookup() {
-        let settings = zed::serde_json::from_value(zed::serde_json::json!({
-            "binary": {"path": "/custom/karva"}
-        }))
-        .expect("settings");
-        let command = local_command(&settings, |_| None).expect("explicit command");
-        assert_eq!(command.command, "/custom/karva");
-        assert_eq!(command.args, ["server"]);
+
+    #[rstest::rstest]
+    #[case(Some("0.1.0"), Some("0.0.2-alpha.1"), "0.1.0")]
+    #[case(Some("0.1.0"), Some("0.2.0-alpha.1"), "0.2.0-alpha.1")]
+    #[case(None, Some("0.0.1-alpha.13"), "0.0.1-alpha.13")]
+    #[case(Some("v1.0.0"), None, "v1.0.0")]
+    fn chooses_the_newest_available_release_kind(
+        #[case] stable: Option<&str>,
+        #[case] prerelease: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        let mut queried = Vec::new();
+        let release = latest_release(|pre| {
+            queried.push(pre);
+            if pre { prerelease } else { stable }
+                .map(|version| zed::GithubRelease {
+                    version: version.to_owned(),
+                    assets: vec![],
+                })
+                .ok_or_else(|| "no release of this kind".to_owned())
+        })
+        .expect("one release kind available");
+        assert_eq!(queried, [false, true]);
+        assert_eq!(release.version, expected);
     }
 
     #[test]
-    fn uv_resolution_honors_arguments_and_environment() {
-        let settings = zed::serde_json::from_value(zed::serde_json::json!({
-            "binary": {"arguments": ["run", "karva", "server"], "env": {"RUST_LOG": "debug"}}
-        }))
-        .expect("settings");
-        let command = local_command(&settings, |name| {
-            (name == "uv").then(|| "/bin/uv".to_owned())
-        })
-        .expect("UV command");
-        assert_eq!(command.command, "/bin/uv");
-        assert_eq!(command.args, ["run", "karva", "server"]);
-        assert_eq!(command.env, [("RUST_LOG".to_owned(), "debug".to_owned())]);
+    fn offline_lookup_reuses_the_newest_matching_complete_cache()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let asset = "karva-language-server-aarch64-apple-darwin";
+        for (version, filename) in [
+            ("0.2.0", asset),
+            ("0.10.0", asset),
+            ("0.99.0", "other-platform"),
+            ("0.98.0", "server.partial"),
+            ("not-a-version", asset),
+        ] {
+            let root = directory.path().join(format!("karva-{version}"));
+            std::fs::create_dir_all(&root)?;
+            std::fs::write(root.join(filename), b"complete")?;
+        }
+        let binary = managed_binary(
+            directory.path(),
+            asset,
+            |_| Err("offline".to_owned()),
+            |_, _| Err("must not download".to_owned()),
+            |_| Ok(()),
+        )
+        .expect("existing cache works offline");
+        let expected = directory.path().join("karva-0.10.0").join(asset);
+        assert_eq!(Path::new(&binary), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn offline_without_a_cached_binary_explains_local_configuration() {
+        let directory = tempfile::tempdir().expect("cache root");
+        let error = managed_binary(
+            directory.path(),
+            "server",
+            |_| Err("offline".to_owned()),
+            |_, _| Err("must not download".to_owned()),
+            |_| Ok(()),
+        )
+        .expect_err("no available binary");
+        assert!(error.contains("offline"));
+        assert!(error.contains("lsp.karva.binary.path"));
+    }
+
+    #[rstest::rstest]
+    fn cached_binary_survives_missing_assets_and_failed_downloads(
+        #[values(false, true)] fail_download: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let asset = "server";
+        let cached = directory.path().join("karva-1.0.0").join(asset);
+        std::fs::create_dir_all(cached.parent().expect("cache parent"))?;
+        std::fs::write(&cached, b"complete")?;
+        let attempted = std::cell::Cell::new(false);
+        let binary = managed_binary(
+            directory.path(),
+            asset,
+            |_| {
+                Ok(zed::GithubRelease {
+                    version: "2.0.0".to_owned(),
+                    assets: if fail_download {
+                        vec![zed::GithubReleaseAsset {
+                            name: asset.to_owned(),
+                            download_url: "https://example.invalid/server".to_owned(),
+                        }]
+                    } else {
+                        vec![]
+                    },
+                })
+            },
+            |_, partial| {
+                attempted.set(true);
+                std::fs::write(partial, b"incomplete").map_err(|error| error.to_string())?;
+                Err("offline".to_owned())
+            },
+            |_| Ok(()),
+        )
+        .expect("cached version survives update failure");
+        assert_eq!(Path::new(&binary), cached);
+        assert_eq!(attempted.get(), fail_download);
+        assert!(!directory.path().join("karva-2.0.0").join(asset).is_file());
+        Ok(())
+    }
+
+    #[test]
+    fn a_partial_release_lookup_never_downgrades_a_newer_cache()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let cached = directory.path().join("karva-1.0.0/server");
+        std::fs::create_dir_all(cached.parent().expect("cache parent"))?;
+        std::fs::write(&cached, b"complete")?;
+        let binary = managed_binary(
+            directory.path(),
+            "server",
+            |pre| {
+                if pre {
+                    Ok(zed::GithubRelease {
+                        version: "0.9.0-alpha.1".to_owned(),
+                        assets: vec![],
+                    })
+                } else {
+                    Err("offline".to_owned())
+                }
+            },
+            |_, _| Err("must not download".to_owned()),
+            |_| Ok(()),
+        )
+        .expect("newer cached binary");
+        assert_eq!(Path::new(&binary), cached);
+        Ok(())
     }
 }
