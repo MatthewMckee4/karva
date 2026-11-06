@@ -1,7 +1,6 @@
 """One logging capture shared by the runner and caplog for each attempt."""
 
 import logging
-from collections.abc import Callable
 
 
 class _LogCapture(logging.Handler):
@@ -38,23 +37,21 @@ class _LogCapture(logging.Handler):
     def start(self) -> None:
         global _active
         _active = self
-        self._basic_config: Callable[..., None] = logging.basicConfig
-        vars(logging)["basicConfig"] = self._configure
-        logging.getLogger().addHandler(self)
+        self._dispatch = logging.Logger.callHandlers
+        capture = self
 
-    def _configure(self, **kwargs: object) -> None:
-        """Hide capture from basicConfig and protect it from force=True."""
-        root = logging.getLogger()
-        root.removeHandler(self)
-        try:
-            self._basic_config(**kwargs)
-        finally:
-            root.addHandler(self)
+        def dispatch(self: logging.Logger, record: logging.LogRecord) -> None:
+            if record.levelno >= capture.level:
+                capture.handle(record)
+            capture._dispatch(self, record)
+
+        # Capture after logger filters, independently of propagation and handlers.
+        # Leaving root.handlers untouched preserves basicConfig and lastResort.
+        logging.Logger.callHandlers = dispatch
 
     def finish(self) -> None:
         global _active
-        vars(logging)["basicConfig"] = self._basic_config
-        logging.getLogger().removeHandler(self)
+        logging.Logger.callHandlers = self._dispatch
         _active = None
         self.close()
 

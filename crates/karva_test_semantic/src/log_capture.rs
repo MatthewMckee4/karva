@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 pub struct LogCapture(Py<PyAny>);
 
 impl LogCapture {
-    pub(crate) fn start(py: Python<'_>) -> PyResult<Self> {
+    pub(super) fn start(py: Python<'_>) -> PyResult<Self> {
         let handler = py
             .import("karva._logging")?
             .getattr("_LogCapture")?
@@ -16,12 +16,12 @@ impl LogCapture {
         Ok(Self(handler.unbind()))
     }
 
-    pub(crate) fn set_phase(&self, py: Python<'_>, phase: &str) -> PyResult<()> {
+    pub(super) fn set_phase(&self, py: Python<'_>, phase: &str) -> PyResult<()> {
         self.0.bind(py).setattr("phase", phase)
     }
 
     /// Removes the handler before converting retained records to IPC data.
-    pub(crate) fn finish(self, py: Python<'_>, attempt: u32) -> PyResult<Vec<CapturedLog>> {
+    pub(super) fn finish(self, py: Python<'_>, attempt: u32) -> PyResult<Vec<CapturedLog>> {
         let handler = self.0.bind(py);
         handler.call_method0("finish")?;
         handler

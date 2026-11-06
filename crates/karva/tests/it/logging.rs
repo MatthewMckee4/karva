@@ -19,6 +19,7 @@ logger.setLevel(logging.INFO)
 original_level = logging.getLogger().level
 user_handler = logging.StreamHandler()
 logger.addHandler(user_handler)
+logger.propagate = False
 
 @karva.fixture
 def checkout():
@@ -133,6 +134,8 @@ def test_checkout():
     10 |     assert False
        |     ^^^^^^^^^^^^
 
+    captured stderr:
+    fallback response
     captured logs for test_logs::test_checkout:
 
     WARNING payments fallback response
@@ -154,21 +157,23 @@ import os
 from pathlib import Path
 import karva
 
+from karva import _logging
+
 root = logging.getLogger()
+root.addHandler(logging.NullHandler())
 baseline = list(root.handlers)
-baseline_config = logging.basicConfig
+baseline_dispatch = logging.Logger.callHandlers
+original_finish = _logging._LogCapture.finish
 
-original_remove = root.removeHandler
+def finish(capture):
+    original_finish(capture)
+    Path("cleanup").write_text(str(root.handlers == baseline and logging.Logger.callHandlers is baseline_dispatch))
 
-def remove_handler(handler):
-    original_remove(handler)
-    Path("cleanup").write_text(str(root.handlers == baseline and logging.basicConfig is baseline_config))
-
-root.removeHandler = remove_handler
+_logging._LogCapture.finish = finish
 
 @karva.fixture
 def resource():
-    assert len(root.handlers) == len(baseline) + 1
+    assert root.handlers == baseline
     logging.warning("setup")
     yield
     logging.warning("teardown")
@@ -413,6 +418,8 @@ def test_checkout(resource):
           |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         info: setup failed
 
+        captured stderr:
+        WARNING:root:setup context
         captured logs for test_logs::test_checkout:
 
         WARNING root setup context
@@ -441,6 +448,10 @@ def test_checkout(resource):
           |     ^^^^^^^^
         info: Failed to reset fixture: teardown failed
 
+        captured stderr:
+        WARNING:root:setup context
+        WARNING:root:call context
+        WARNING:root:teardown context
         captured logs for test_logs::test_checkout(resource=None):
 
         WARNING root setup context
