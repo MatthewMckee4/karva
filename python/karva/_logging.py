@@ -1,6 +1,7 @@
 """One logging capture shared by the runner and caplog for each attempt."""
 
 import logging
+from collections.abc import Callable
 
 
 class _LogCapture(logging.Handler):
@@ -37,10 +38,22 @@ class _LogCapture(logging.Handler):
     def start(self) -> None:
         global _active
         _active = self
+        self._basic_config: Callable[..., None] = logging.basicConfig
+        vars(logging)["basicConfig"] = self._configure
         logging.getLogger().addHandler(self)
+
+    def _configure(self, **kwargs: object) -> None:
+        """Hide capture from basicConfig and protect it from force=True."""
+        root = logging.getLogger()
+        root.removeHandler(self)
+        try:
+            self._basic_config(**kwargs)
+        finally:
+            root.addHandler(self)
 
     def finish(self) -> None:
         global _active
+        vars(logging)["basicConfig"] = self._basic_config
         logging.getLogger().removeHandler(self)
         _active = None
         self.close()

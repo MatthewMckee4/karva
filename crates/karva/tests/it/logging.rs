@@ -157,12 +157,13 @@ import karva
 
 root = logging.getLogger()
 baseline = list(root.handlers)
+baseline_config = logging.basicConfig
 
 original_remove = root.removeHandler
 
 def remove_handler(handler):
     original_remove(handler)
-    Path("cleanup").write_text(str(root.handlers == baseline))
+    Path("cleanup").write_text(str(root.handlers == baseline and logging.basicConfig is baseline_config))
 
 root.removeHandler = remove_handler
 
@@ -224,6 +225,63 @@ def test_next(caplog):
         );
     }
     assert_eq!(context.read_file("cleanup"), "True");
+}
+
+#[rstest]
+fn logs_preserve_basic_config(
+    #[values(false, true)] force: bool,
+    #[values("", "caplog")] fixture: &str,
+) {
+    let caplog_check = if fixture == "caplog" {
+        "assert caplog.messages == ['application context']"
+    } else {
+        ""
+    };
+    let context = TestContext::with_file(
+        "test_logs.py",
+        format!(
+            r#"
+import io
+import logging
+
+def test_configure({fixture}):
+    root = logging.getLogger()
+    old_level = root.level
+    application_stream = io.StringIO()
+    try:
+        logging.basicConfig(level=logging.INFO, stream=application_stream, force={force})
+        logging.info("application context")
+        assert root.level == logging.INFO
+        assert application_stream.getvalue() == "INFO:root:application context\n"
+        {caplog_check}
+    finally:
+        for handler in root.handlers[:]:
+            if isinstance(handler, logging.StreamHandler):
+                root.removeHandler(handler)
+                handler.close()
+        root.setLevel(old_level)
+"#,
+            force = if force { "True" } else { "False" }
+        ),
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().args([
+        "--status-level=none", "--result-output=results.json",
+    ]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    let report: Value = serde_json::from_str(&context.read_file("results.json")).expect("report");
+    let logs = report["tests"][0]["captured_output"]["logs"]
+        .as_array()
+        .expect("logs");
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0]["message"], "application context");
+    assert_eq!(logs[0]["level"], 20);
 }
 
 #[rstest]
