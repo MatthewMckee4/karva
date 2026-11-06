@@ -771,6 +771,9 @@ fn is_false(value: &bool) -> bool {
 )]
 /// Resolved test selection, retry, timeout, and failure settings.
 pub struct TestSettings {
+    /// Run benchmark callables once for correctness without timing them.
+    pub benchmark_disable: bool,
+
     /// Ordered warning policy applied before collection and each test attempt.
     pub warning_filters: Vec<String>,
 

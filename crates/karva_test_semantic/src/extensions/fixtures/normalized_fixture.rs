@@ -24,11 +24,26 @@ impl FixtureId {
 #[derive(Debug)]
 pub struct FixturePlan {
     fixtures: Vec<NormalizedFixture>,
+
+    /// Cached once per graph so parametrized variants do not rescan fixtures.
+    uses_benchmark: bool,
 }
 
 impl FixturePlan {
+    /// Whether the selected fixture graph contains the built-in benchmark.
+    pub(crate) fn uses_benchmark(&self) -> bool {
+        self.uses_benchmark
+    }
+
     pub(crate) fn new(fixtures: Vec<NormalizedFixture>) -> Self {
-        Self { fixtures }
+        let uses_benchmark = fixtures.iter().any(|fixture| {
+            fixture.function_name() == "benchmark"
+                && fixture.name().module_path().module_name() == "karva._builtins"
+        });
+        Self {
+            fixtures,
+            uses_benchmark,
+        }
     }
 
     pub(crate) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
