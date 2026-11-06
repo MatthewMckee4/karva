@@ -141,7 +141,16 @@ pub fn run_parallel_tests(
 
     let worker_binary = find_karva_worker_binary(project.cwd())?;
     let spawn = WorkerSpawn {
-        configuration: worker_configuration(project, args, failed_first_active),
+        configuration: worker_configuration(
+            project,
+            args,
+            failed_first_active,
+            failed_first_active
+                || matches!(
+                    config.test_ordering,
+                    crate::TestOrdering::Stable | crate::TestOrdering::SeededShuffle(_)
+                ),
+        ),
         project,
         artifacts: &artifacts,
         controller_endpoint: controller.endpoint(),
@@ -251,6 +260,7 @@ pub fn run_parallel_tests(
     };
 
     Ok(RunOutput {
+        cancelled: matches!(outcome, WaitOutcome::Cancelled),
         results,
         coverage_files,
         timed_out,

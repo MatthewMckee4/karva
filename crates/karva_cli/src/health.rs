@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use clap::{Parser, ValueEnum};
 
 use crate::ShowConfigCommand;
@@ -14,6 +16,14 @@ pub struct HealthCommand {
     /// Run the selected tests and measure exclusive test and fixture lifecycle time.
     #[arg(long)]
     pub durations: bool,
+
+    /// Repeat stable and seeded shuffled execution this many times each (at least 2).
+    #[arg(long, value_name = "RUNS", conflicts_with = "durations")]
+    pub probe: Option<NonZeroU32>,
+
+    /// Reproducible shuffled order; repeat for more orders. Generated if omitted.
+    #[arg(long, value_name = "SEED", requires = "probe")]
+    pub probe_seed: Vec<u64>,
 
     /// Output representation. JSON uses a versioned schema.
     #[arg(long, value_enum, default_value = "text")]

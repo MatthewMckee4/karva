@@ -14,6 +14,9 @@ use crate::RunRequest;
 
 /// Immutable configuration and reporting services shared by one test run.
 pub struct Context<'a> {
+    /// Explicit controller ordering is independent of the failed-first policy.
+    preserve_test_order: bool,
+
     /// Current working directory.
     cwd: &'a Utf8Path,
 
@@ -48,6 +51,7 @@ impl<'a> Context<'a> {
     pub(super) fn from_request(request: &RunRequest<'a>) -> Self {
         Self {
             cwd: request.cwd,
+            preserve_test_order: request.preserve_test_order,
             settings: request.settings,
             python_version: request.python_version,
             reporter: request.reporter,
@@ -55,6 +59,10 @@ impl<'a> Context<'a> {
             resume_attempts: request.resume_attempts,
             verbose: request.verbose,
         }
+    }
+
+    pub(super) fn preserve_test_order(&self) -> bool {
+        self.preserve_test_order
     }
 
     pub(super) fn cwd(&self) -> &'a Utf8Path {
