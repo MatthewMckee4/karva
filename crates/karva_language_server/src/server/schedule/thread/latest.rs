@@ -3,6 +3,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 
+use super::SEMANTIC_STACK_BYTES;
+
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 struct State {
@@ -28,6 +30,7 @@ impl LatestPool {
         let worker_state = Arc::clone(&state);
         let handle = thread::Builder::new()
             .name("karva-language-server-latest-worker".to_owned())
+            .stack_size(SEMANTIC_STACK_BYTES)
             .spawn(move || worker_loop(&worker_state))?;
         Ok(Self {
             state,

@@ -64,7 +64,7 @@ impl Server {
                     } else {
                         super::api::request(request)
                     };
-                    scheduler.dispatch(task, &mut self.session, client);
+                    scheduler.dispatch(task, &mut self.session, &client);
                 }
                 NextEvent::Message(Message::Notification(notification)) => {
                     if notification.method == ExitNotification::METHOD.as_str() {
@@ -75,7 +75,7 @@ impl Server {
                     }
 
                     let task = super::api::notification(notification);
-                    scheduler.dispatch(task, &mut self.session, client);
+                    scheduler.dispatch(task, &mut self.session, &client);
                 }
                 NextEvent::Message(Message::Response(response)) => {
                     let is_file_watcher_registration = response.id

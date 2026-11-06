@@ -150,7 +150,7 @@ where
     };
     let task_id = id.clone();
 
-    Task::background(BackgroundSchedule::Worker, move |session| {
+    Task::background(BackgroundSchedule::Worker(id.clone()), move |session| {
         let cancellation = session
             .request_queue()
             .incoming()
@@ -346,7 +346,7 @@ mod tests {
             background_request_task::<PanickingRequest<false>>(request)
         };
         let mut scheduler = Scheduler::new(NonZeroUsize::MIN)?;
-        scheduler.dispatch(task, &mut session, client);
+        scheduler.dispatch(task, &mut session, &client);
         drop(scheduler);
         let Event::Action(Action::SendResponse(response)) = event_receiver.try_recv()? else {
             anyhow::bail!("expected a panic response");
