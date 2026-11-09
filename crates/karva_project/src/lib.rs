@@ -209,6 +209,7 @@ mod tests {
             "{err:?}"
         );
     }
+
     #[test]
     fn python_walk_keeps_hidden_python_files_and_respects_ignores() {
         let temp = tempfile::tempdir().expect("create fixture");

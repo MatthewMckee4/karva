@@ -26,6 +26,3 @@ pub struct ConfigArgs {
     )]
     pub profile: Option<String>,
 }
-
-/// Arguments for printing resolved configuration.
-pub type ShowConfigCommand = ConfigArgs;

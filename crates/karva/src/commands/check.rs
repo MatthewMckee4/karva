@@ -93,7 +93,7 @@ pub fn check(args: CheckCommand) -> Result<ExitStatus> {
             &settings,
             &[],
         )
-        .with_context(|| format!("failed to parse {path}"))?;
+        .with_context(|| format!("failed to resolve Python module {path}"))?;
         let findings = source_health(&module, settings.test_function_prefix);
         if !findings.is_empty() {
             let source_file =
@@ -164,12 +164,15 @@ fn render(
         CheckFormat::Json => {
             let mut output = Vec::new();
             for (path, source, findings) in analyzed {
-                let location = |range: karva_ide::SourceLocation| {
-                    let start = source.to_source_code().line_column(range.range.start());
-                    let end = source.to_source_code().line_column(range.range.end());
+                let location = |location: &karva_ide::SourceLocation| {
+                    let start = source.to_source_code().line_column(location.range.start());
+                    let end = source.to_source_code().line_column(location.range.end());
                     JsonLocation {
                         path: json_path(path.strip_prefix(cwd).unwrap_or(path)),
-                        byte_range: [u32::from(range.range.start()), u32::from(range.range.end())],
+                        byte_range: [
+                            u32::from(location.range.start()),
+                            u32::from(location.range.end()),
+                        ],
                         start: JsonPosition {
                             line: start.line.get(),
                             column: start.column.get(),
@@ -184,13 +187,13 @@ fn render(
                     output.push(JsonFinding {
                         code: finding.code.as_str(),
                         message: &finding.message,
-                        location: location(finding.location.clone()),
+                        location: location(&finding.location),
                         related: finding
                             .related
                             .iter()
                             .map(|related| JsonRelated {
                                 message: &related.message,
-                                location: location(related.location.clone()),
+                                location: location(&related.location),
                             })
                             .collect(),
                     });

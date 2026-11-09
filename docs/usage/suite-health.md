@@ -23,6 +23,10 @@ configured `src.include` paths when no paths are supplied (otherwise `tests/`,
 then the project root). JSON paths use `/`; locations include UTF-8 byte ranges
 and 1-based Unicode line/column pairs, both with an exclusive end.
 
-Exit codes are 0 for no findings, 1 for health findings, and 2 for a configuration,
-source parsing or filesystem error. Warnings fail this opt-in check. This check
+Exit codes are 0 for no findings, 1 for health findings, and 2 for a configuration
+or filesystem error. Warnings fail this opt-in check. This check
 does not change test collection or execution.
+
+This check uses an error-recovering parser and does not validate Python syntax.
+Mutually exclusive branches inside a loop are checked within one iteration;
+redefinitions across different iterations are not detected.

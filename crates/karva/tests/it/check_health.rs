@@ -366,11 +366,13 @@ fn check_health_uses_configured_paths_profiles_and_ignore_files() {
 
 #[rstest]
 fn check_health_accepts_explicit_file_and_nested_directory(
-    #[values("suite/test_a.py", "suite/nested")] path: &str,
+    #[values("suite/nested/test_selected.py", "suite/nested")] path: &str,
 ) {
     let context = TestContext::with_files([
-        ("suite/test_a.py", "def test_clean(): pass\n"),
-        ("suite/nested/test_b.py", "def test_other(): pass\n"),
+        (
+            "suite/nested/test_selected.py",
+            "def test_selected(): pass\ndef test_selected(): pass\n",
+        ),
         (
             "test_outside.py",
             "def test_same(): pass\ndef test_same(): pass\n",
@@ -379,21 +381,60 @@ fn check_health_accepts_explicit_file_and_nested_directory(
     let mut command = context.karva_command_in(context.root());
     command.args(["check", path, "--output-format", "json"]);
     insta::allow_duplicates! {
-    assert_cmd_snapshot!(command, @"
-    success: true
-    exit_code: 0
+    assert_cmd_snapshot!(command, @r#"
+    success: false
+    exit_code: 1
     ----- stdout -----
-    []
+    [
+      {
+        "code": "shadowed-definition",
+        "message": "`test_selected` is shadowed by the later definition, which wins. Rename or remove one definition",
+        "path": "suite/nested/test_selected.py",
+        "byte_range": [
+          4,
+          17
+        ],
+        "start": {
+          "line": 1,
+          "column": 5
+        },
+        "end": {
+          "line": 1,
+          "column": 18
+        },
+        "related": [
+          {
+            "message": "Later definition replaces the earlier binding",
+            "path": "suite/nested/test_selected.py",
+            "byte_range": [
+              30,
+              43
+            ],
+            "start": {
+              "line": 2,
+              "column": 5
+            },
+            "end": {
+              "line": 2,
+              "column": 18
+            }
+          }
+        ]
+      }
+    ]
 
     ----- stderr -----
-    ");
+    "#);
     }
 }
 
 #[test]
 fn check_health_defaults_to_tests_directory() {
     let context = TestContext::with_files([
-        ("tests/test_clean.py", "def test_clean(): pass\n"),
+        (
+            "tests/test_selected.py",
+            "def test_selected(): pass\ndef test_selected(): pass\n",
+        ),
         (
             "test_outside.py",
             "def test_same(): pass\ndef test_same(): pass\n",
@@ -401,14 +442,50 @@ fn check_health_defaults_to_tests_directory() {
     ]);
     let mut command = context.karva_command_in(context.root());
     command.args(["check", "--output-format", "json"]);
-    assert_cmd_snapshot!(command, @"
-    success: true
-    exit_code: 0
+    assert_cmd_snapshot!(command, @r#"
+    success: false
+    exit_code: 1
     ----- stdout -----
-    []
+    [
+      {
+        "code": "shadowed-definition",
+        "message": "`test_selected` is shadowed by the later definition, which wins. Rename or remove one definition",
+        "path": "tests/test_selected.py",
+        "byte_range": [
+          4,
+          17
+        ],
+        "start": {
+          "line": 1,
+          "column": 5
+        },
+        "end": {
+          "line": 1,
+          "column": 18
+        },
+        "related": [
+          {
+            "message": "Later definition replaces the earlier binding",
+            "path": "tests/test_selected.py",
+            "byte_range": [
+              30,
+              43
+            ],
+            "start": {
+              "line": 2,
+              "column": 5
+            },
+            "end": {
+              "line": 2,
+              "column": 18
+            }
+          }
+        ]
+      }
+    ]
 
     ----- stderr -----
-    ");
+    "#);
 }
 
 #[test]
@@ -424,5 +501,36 @@ fn check_health_reports_nonexistent_path() {
     ----- stderr -----
     karva failed
       Cause: path `<temp_dir>/missing.py` could not be found
+    ");
+}
+
+#[test]
+fn check_health_documents_syntax_recovery_without_validation() {
+    let context = TestContext::with_file("test_syntax.py", "def test_broken(:\n pass\n");
+    let mut command = context.karva_command_in(context.root());
+    command.args(["check", "--output-format", "json"]);
+    assert_cmd_snapshot!(command, @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    []
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn check_health_rejects_function_selectors() {
+    let context = TestContext::with_file("test_selected.py", "def test_selected(): pass\n");
+    let mut command = context.karva_command_in(context.root());
+    command.args(["check", "test_selected.py::test_selected"]);
+    assert_cmd_snapshot!(command, @"
+    success: false
+    exit_code: 2
+    ----- stdout -----
+
+    ----- stderr -----
+    karva failed
+      Cause: source checks accept files or directories, not function selectors
     ");
 }

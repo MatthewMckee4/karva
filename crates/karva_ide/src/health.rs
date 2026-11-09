@@ -380,6 +380,7 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].message.contains("if both execute"));
     }
+
     #[test]
     fn control_flow_spans_and_replacement_certainty() {
         let sources = [

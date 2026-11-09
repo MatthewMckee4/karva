@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use anyhow::{Context as _, Result};
-use karva_cli::ShowConfigCommand;
+use karva_cli::ConfigArgs;
 use karva_logging::Printer;
 use karva_metadata::{Options, ProjectMetadata, ProjectOptionsOverrides};
 use karva_project::Project;
@@ -11,7 +11,7 @@ use karva_python_semantic::current_python_version;
 use crate::ExitStatus;
 use crate::utils::cwd;
 
-pub fn show_config(args: ShowConfigCommand) -> Result<ExitStatus> {
+pub fn show_config(args: ConfigArgs) -> Result<ExitStatus> {
     let cwd = cwd().map_err(|_| {
         anyhow::anyhow!(
             "The current working directory contains non-Unicode characters. karva only supports Unicode paths."

@@ -27,7 +27,7 @@ pub use enums::{
 };
 pub use exit_status::ExitStatus;
 pub use partition::PartitionSelection;
-pub use show_config::{ConfigArgs, ShowConfigCommand};
+pub use show_config::ConfigArgs;
 pub use snapshot::{
     SnapshotAction, SnapshotCommand, SnapshotDeleteArgs, SnapshotFilterArgs, SnapshotPruneArgs,
 };
@@ -70,7 +70,7 @@ pub enum Command {
     Cache(CacheCommand),
 
     /// Print the resolved configuration karva would run with.
-    ShowConfig(ShowConfigCommand),
+    ShowConfig(ConfigArgs),
 
     /// Run the language server.
     Server,
