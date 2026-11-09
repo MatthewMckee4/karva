@@ -6,7 +6,6 @@ import os
 
 def install(filename, source):
     """Compile and install one source override, returning import-use evidence."""
-    target = os.path.normcase(os.path.realpath(filename))
     code = compile(source.encode("utf-8"), filename, "exec", dont_inherit=True)
     loader_type = importlib.machinery.SourceFileLoader
     original_data = loader_type.get_data
@@ -14,7 +13,10 @@ def install(filename, source):
     state = {"used": False}
 
     def matches(path):
-        return os.path.normcase(os.path.realpath(path)) == target
+        try:
+            return os.path.samefile(path, filename)
+        except OSError:
+            return False
 
     def get_data(self, path):
         if matches(path):

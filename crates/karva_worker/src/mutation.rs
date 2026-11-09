@@ -75,6 +75,9 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("mutation_loader_example.py");
         std::fs::write(&path, "value = True\n").expect("original source");
+        // Windows canonicalization includes the verbatim path prefix, while Python's
+        // import loader can use the ordinary spelling of the same file.
+        let canonical = std::fs::canonicalize(&path).expect("canonical source path");
         let path = path.to_str().expect("UTF-8 path");
         Python::attach(|py| {
             let globals = PyDict::new(py);
@@ -82,7 +85,7 @@ mod tests {
             py.run(c"import importlib.util\nimport importlib.machinery\nloader = importlib.machinery.SourceFileLoader('_mutation_example', filename)\noriginal_data = importlib.machinery.SourceFileLoader.get_data\noriginal_code = importlib.machinery.SourceFileLoader.get_code\nassert loader.get_code('_mutation_example') is not None\n", Some(&globals), None).expect("populate original bytecode");
             let mutation = MutationSource {
                 id: "example".into(),
-                path: path.into(),
+                path: canonical.to_str().expect("UTF-8 canonical path").into(),
                 original_fingerprint: karva_mutation::fingerprint(&[b"value = True\n"]),
                 source: "value = False\n".into(),
             };
