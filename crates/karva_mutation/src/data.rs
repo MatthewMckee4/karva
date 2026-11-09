@@ -8,7 +8,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 
-use crate::fingerprint;
+use super::fingerprint;
 
 /// Current native mutation result schema.
 const FORMAT_VERSION: u32 = 1;
@@ -16,7 +16,7 @@ const FORMAT_VERSION: u32 = 1;
 /// Independently selectable mutation families.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(crate) enum Operator {
+pub(super) enum Operator {
     /// Replace a boolean, number, or string literal.
     Literal,
 
@@ -66,7 +66,7 @@ impl Operator {
 
 /// One exact edit in a project-relative source file.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) struct Mutant {
+pub(super) struct Mutant {
     /// Deterministic identity binding path, source, span, operator, and replacement.
     pub(super) id: String,
 
@@ -126,7 +126,7 @@ impl Mutant {
 /// Durable lifecycle and classification for one candidate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub(crate) enum Outcome {
+enum Outcome {
     /// Not completed; safe to execute after interruption.
     Pending,
 
@@ -148,7 +148,7 @@ pub(crate) enum Outcome {
 
 /// Classification and evidence retained for one candidate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct MutationRecord {
+struct MutationRecord {
     /// Source-bound candidate description.
     mutant: Mutant,
 
@@ -170,7 +170,7 @@ pub(crate) struct MutationRecord {
 
 /// A resumable run, keyed by deterministic mutant identity.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct MutationResults {
+struct MutationResults {
     format_version: u32,
 
     /// Identity of source, tests, dependencies, interpreter, environment, and configuration.

@@ -12,11 +12,11 @@ use ruff_python_ast::{Expr, Number, PythonVersion, Stmt, UnaryOp};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange};
 
-use crate::{Mutant, Operator, fingerprint};
+use super::{Mutant, Operator, fingerprint};
 
 /// Validated filters shared by every discovered file.
 #[derive(Default)]
-pub(crate) struct DiscoveryFilters {
+struct DiscoveryFilters {
     operators: BTreeSet<Operator>,
     symbols: Option<GlobSet>,
     exclude_symbols: Option<GlobSet>,

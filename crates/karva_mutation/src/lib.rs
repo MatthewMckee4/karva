@@ -4,13 +4,4 @@
 //! Workers validate compilation and execute each candidate in a fresh interpreter.
 
 #[cfg(test)]
-mod data;
-#[cfg(test)]
-mod discovery;
-#[cfg(test)]
-mod identity;
-
-#[cfg(test)]
-use data::{Mutant, Operator};
-#[cfg(test)]
-use identity::fingerprint;
+mod tests;
