@@ -1409,7 +1409,7 @@ fn narrowed_runs_remove_changed_source_records() {
 
 #[rstest::rstest]
 fn empty_narrowed_runs_leave_stored_results_unchanged(
-    #[values(["--operator", "boolean"], ["--exclude", "*.py"])] arguments: [&str; 2],
+    #[values("--operator=boolean", "--exclude=*.py")] argument: &str,
 ) {
     insta::allow_duplicates! {
     let context = project_with_multiple_operators();
@@ -1450,7 +1450,7 @@ fn empty_narrowed_runs_leave_stored_results_unchanged(
     ");
     let original = context.read_file(".karva/mutation/results.json");
     let mut narrowed = command(&context, "run");
-    narrowed.args(arguments);
+    narrowed.arg(argument);
     assert_cmd_snapshot!(narrowed, @"
     success: false
     exit_code: 2
