@@ -27,7 +27,7 @@ env:
   PYTHON_VERSION: "3.15.1"
   # Pin uv so CI does not depend on the mutable latest release manifest.
   # renovate: datasource=pypi depName=uv
-  UV_VERSION: "0.13.5"
+  UV_VERSION: "0.13.6"
   # renovate: datasource=pypi depName=zensical
   ZENSICAL_VERSION: "0.0.74"
   RUSTUP_MAX_RETRIES: 10
