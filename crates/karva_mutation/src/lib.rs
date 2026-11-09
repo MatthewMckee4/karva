@@ -5,8 +5,8 @@
 
 mod data;
 mod discovery;
+mod identity;
 
-pub use data::{
-    Mutant, MutationRecord, MutationResults, Operator, Outcome, fingerprint, fingerprint_file,
-};
+pub use data::{Mutant, MutationRecord, MutationResults, Operator, Outcome, fingerprint_file};
 pub use discovery::{DiscoveryFilters, discover};
+pub use identity::fingerprint;

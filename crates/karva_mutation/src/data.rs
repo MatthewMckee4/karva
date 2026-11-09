@@ -10,19 +10,10 @@ use serde::{Deserialize, Serialize};
 use siphasher::sip128::{Hasher128, SipHasher13};
 use tempfile::NamedTempFile;
 
+use crate::fingerprint;
+
 /// Current native mutation result schema.
 const FORMAT_VERSION: u32 = 1;
-
-/// A stable digest of length-delimited byte strings, independent of Rust's `Hash` format.
-pub fn fingerprint(parts: &[&[u8]]) -> String {
-    let mut hash = SipHasher13::new();
-    for part in parts {
-        hash.write(part.len().to_string().as_bytes());
-        hash.write(b":");
-        hash.write(part);
-    }
-    format!("{:032x}", hash.finish128().as_u128())
-}
 
 /// Streams a file into a stable digest without retaining its contents in memory.
 pub fn fingerprint_file(path: &Utf8Path) -> std::io::Result<String> {
@@ -66,7 +57,7 @@ pub enum Operator {
 
 impl Operator {
     /// Names accepted by configuration and CLI filters.
-    pub const NAMES: &[&str] = &[
+    const NAMES: &[&str] = &[
         "literal",
         "comparison",
         "boolean",
@@ -123,7 +114,7 @@ pub struct Mutant {
     pub original: String,
 
     /// Exact replacement bytes.
-    pub replacement: String,
+    pub(super) replacement: String,
 }
 
 impl Mutant {

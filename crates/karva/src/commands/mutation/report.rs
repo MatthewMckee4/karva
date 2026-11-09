@@ -7,7 +7,7 @@ use karva_mutation::{MutationRecord, MutationResults, Outcome};
 
 use crate::ExitStatus;
 
-pub(super) fn outcome_name(outcome: Outcome) -> &'static str {
+fn outcome_name(outcome: Outcome) -> &'static str {
     match outcome {
         Outcome::Pending => "pending",
         Outcome::Killed => "killed",
@@ -19,7 +19,7 @@ pub(super) fn outcome_name(outcome: Outcome) -> &'static str {
     }
 }
 
-pub(super) fn exit_status(records: impl Iterator<Item = Outcome>) -> ExitStatus {
+fn exit_status(records: impl Iterator<Item = Outcome>) -> ExitStatus {
     let outcomes: Vec<_> = records.collect();
     if outcomes
         .iter()
