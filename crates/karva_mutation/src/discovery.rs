@@ -16,7 +16,7 @@ use crate::{Mutant, Operator, fingerprint};
 
 /// Validated filters shared by every discovered file.
 #[derive(Default)]
-pub struct DiscoveryFilters {
+pub(crate) struct DiscoveryFilters {
     operators: BTreeSet<Operator>,
     symbols: Option<GlobSet>,
     exclude_symbols: Option<GlobSet>,
@@ -25,7 +25,7 @@ pub struct DiscoveryFilters {
 
 impl DiscoveryFilters {
     /// Validates operator names, symbol globs, and line exclusion regular expressions.
-    pub fn new(
+    fn new(
         operators: &[String],
         symbols: &[String],
         exclude_symbols: &[String],
@@ -67,7 +67,7 @@ impl DiscoveryFilters {
 /// `path` is project-relative and normalized by the caller. Pragmas are comments:
 /// `# pragma: no mutate` excludes that line, and `# karva: mutate off` / `on`
 /// delimit excluded blocks. Text inside string literals cannot activate pragmas.
-pub fn discover(
+fn discover(
     path: &Utf8Path,
     source: &str,
     version: PythonVersion,

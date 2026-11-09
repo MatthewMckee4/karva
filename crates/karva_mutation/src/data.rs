@@ -1,33 +1,22 @@
 //! Versioned, atomically replaced mutation results and source-bound identities.
 
 use std::collections::BTreeMap;
-use std::hash::Hasher;
 use std::io::Write;
 
 use anyhow::{Context, Result, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
-use siphasher::sip128::{Hasher128, SipHasher13};
 use tempfile::NamedTempFile;
+
+use crate::fingerprint;
 
 /// Current native mutation result schema.
 const FORMAT_VERSION: u32 = 1;
 
-/// A stable digest of length-delimited byte strings, independent of Rust's `Hash` format.
-pub fn fingerprint(parts: &[&[u8]]) -> String {
-    let mut hash = SipHasher13::new();
-    for part in parts {
-        hash.write(part.len().to_string().as_bytes());
-        hash.write(b":");
-        hash.write(part);
-    }
-    format!("{:032x}", hash.finish128().as_u128())
-}
-
 /// Independently selectable mutation families.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Operator {
+pub(crate) enum Operator {
     /// Replace a boolean, number, or string literal.
     Literal,
 
@@ -49,7 +38,7 @@ pub enum Operator {
 
 impl Operator {
     /// Names accepted by configuration and CLI filters.
-    pub const NAMES: &[&str] = &[
+    const NAMES: &[&str] = &[
         "literal",
         "comparison",
         "boolean",
@@ -59,7 +48,7 @@ impl Operator {
     ];
 
     /// Parses the public spelling, reporting both the request and allowed values.
-    pub fn parse(value: &str) -> Result<Self> {
+    pub(super) fn parse(value: &str) -> Result<Self> {
         match value {
             "literal" => Ok(Self::Literal),
             "comparison" => Ok(Self::Comparison),
@@ -77,41 +66,41 @@ impl Operator {
 
 /// One exact edit in a project-relative source file.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Mutant {
+pub(crate) struct Mutant {
     /// Deterministic identity binding path, source, span, operator, and replacement.
-    pub id: String,
+    pub(super) id: String,
 
     /// Portable project-relative file path.
-    pub path: Utf8PathBuf,
+    pub(super) path: Utf8PathBuf,
 
     /// Fingerprint of the complete original file.
-    pub source_fingerprint: String,
+    pub(super) source_fingerprint: String,
 
     /// Inclusive UTF-8 byte offset in the original source.
-    pub start: usize,
+    pub(super) start: usize,
 
     /// Exclusive UTF-8 byte offset in the original source.
-    pub end: usize,
+    pub(super) end: usize,
 
     /// One-based original source line.
-    pub line: usize,
+    pub(super) line: usize,
 
     /// Qualified containing class/function, or an empty string for module scope.
-    pub symbol: String,
+    pub(super) symbol: String,
 
     /// Mutation family selected by this candidate.
-    pub operator: Operator,
+    pub(super) operator: Operator,
 
     /// Exact original bytes in the span.
-    pub original: String,
+    pub(super) original: String,
 
     /// Exact replacement bytes.
-    pub replacement: String,
+    pub(super) replacement: String,
 }
 
 impl Mutant {
     /// Validates the complete source and applies only this edit in memory.
-    pub fn apply(&self, source: &str) -> Result<String> {
+    pub(super) fn apply(&self, source: &str) -> Result<String> {
         if fingerprint(&[source.as_bytes()]) != self.source_fingerprint {
             bail!(
                 "mutant {}: stale source `{}`; rerun `uv run karva mutate run` before applying",
@@ -137,7 +126,7 @@ impl Mutant {
 /// Durable lifecycle and classification for one candidate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Outcome {
+pub(crate) enum Outcome {
     /// Not completed; safe to execute after interruption.
     Pending,
 
@@ -159,47 +148,47 @@ pub enum Outcome {
 
 /// Classification and evidence retained for one candidate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MutationRecord {
+pub(crate) struct MutationRecord {
     /// Source-bound candidate description.
-    pub mutant: Mutant,
+    mutant: Mutant,
 
     /// Most recent completed outcome, or pending work.
-    pub outcome: Outcome,
+    outcome: Outcome,
 
     /// Qualified test selectors actually executed.
-    pub selected_tests: Vec<String>,
+    selected_tests: Vec<String>,
 
     /// Wall time spent executing the candidate, in seconds.
-    pub duration_seconds: f64,
+    duration_seconds: f64,
 
     /// Why these tests were selected or the result was reused.
-    pub reason: String,
+    reason: String,
 
     /// Failure, timeout, or infrastructure detail, when present.
-    pub diagnostic: Option<String>,
+    diagnostic: Option<String>,
 }
 
 /// A resumable run, keyed by deterministic mutant identity.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MutationResults {
+pub(crate) struct MutationResults {
     format_version: u32,
 
     /// Identity of source, tests, dependencies, interpreter, environment, and configuration.
-    pub context_fingerprint: String,
+    context_fingerprint: String,
 
     /// Effective run configuration for later inspection.
-    pub configuration: serde_json::Value,
+    configuration: serde_json::Value,
 
     /// Measured full baseline wall time used to size mutant budgets.
-    pub baseline_seconds: f64,
+    baseline_seconds: f64,
 
     /// All known candidates and their most recent outcomes.
-    pub records: BTreeMap<String, MutationRecord>,
+    records: BTreeMap<String, MutationRecord>,
 }
 
 impl MutationResults {
     /// Creates an empty artifact in the current format.
-    pub fn new(context_fingerprint: String, configuration: serde_json::Value) -> Self {
+    fn new(context_fingerprint: String, configuration: serde_json::Value) -> Self {
         Self {
             format_version: FORMAT_VERSION,
             context_fingerprint,
@@ -210,7 +199,7 @@ impl MutationResults {
     }
 
     /// Atomically replaces an artifact; a failed write leaves the previous file intact.
-    pub fn write(&self, path: &Utf8Path) -> Result<()> {
+    fn write(&self, path: &Utf8Path) -> Result<()> {
         let parent = path
             .parent()
             .context("mutation results require a parent directory")?;
@@ -224,7 +213,7 @@ impl MutationResults {
     }
 
     /// Rejects incompatible data before deserializing the current record schema.
-    pub fn read(path: &Utf8Path) -> Result<Self> {
+    fn read(path: &Utf8Path) -> Result<Self> {
         let source = std::fs::read(path).with_context(|| {
             format!("failed to read mutation results `{path}`; run `uv run karva mutate run` first")
         })?;
