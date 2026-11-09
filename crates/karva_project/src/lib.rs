@@ -209,4 +209,50 @@ mod tests {
             "{err:?}"
         );
     }
+    #[test]
+    fn python_walk_keeps_hidden_python_files_and_respects_ignores() {
+        let temp = tempfile::tempdir().expect("create fixture");
+        let root = temp_path(&temp);
+        std::fs::write(root.join("test_normal.py"), "").expect("write Python source");
+        std::fs::write(root.join(".test_hidden.py"), "").expect("write hidden source");
+        std::fs::write(root.join("image.png"), "").expect("write non-Python source");
+        std::fs::write(root.join("ignored.py"), "").expect("write ignored source");
+        std::fs::write(root.join(".gitignore"), "ignored.py\n").expect("write ignore file");
+        let mut paths: Vec<_> = super::python_source_walker(root, true)
+            .expect("configure walker")
+            .build()
+            .map(|entry| entry.expect("walk fixture"))
+            .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        paths.sort();
+        insta::assert_debug_snapshot!(paths, @r#"
+        [
+            ".test_hidden.py",
+            "test_normal.py",
+        ]
+        "#);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn python_walk_follows_test_directory_symlinks() {
+        let temp = tempfile::tempdir().expect("create fixture");
+        let target = tempfile::tempdir().expect("create symlink target");
+        let root = temp_path(&temp);
+        std::fs::write(target.path().join("test_linked.py"), "").expect("write source");
+        std::os::unix::fs::symlink(target.path(), root.join("linked")).expect("link directory");
+        let paths: Vec<_> = super::python_source_walker(root, true)
+            .expect("configure walker")
+            .build()
+            .map(|entry| entry.expect("walk fixture"))
+            .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        insta::assert_debug_snapshot!(paths, @r#"
+        [
+            "test_linked.py",
+        ]
+        "#);
+    }
 }
