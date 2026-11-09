@@ -35,8 +35,12 @@ struct Checker<'a> {
 
 /// One binding in a lexical scope, with its control-flow provenance.
 struct Definition {
+    /// Name span used by both primary and related annotations.
     range: TextRange,
+
+    /// Whether replacing this binding loses a test or fixture.
     relevant: bool,
+
     /// Branch statement offsets and mutually exclusive arm indices.
     branches: Vec<(TextSize, usize)>,
 
@@ -61,17 +65,25 @@ impl Checker<'_> {
                 .enumerate()
                 .filter(|(_, definition)| definition.relevant)
             {
-                let later = definitions[index + 1..].iter().rev().find(|later| {
+                let compatible = |later: &&Definition| {
                     !earlier.branches.iter().any(|(branch, arm)| {
                         later.branches.iter().any(|(other_branch, other_arm)| {
                             branch == other_branch && arm != other_arm
                         })
                     })
-                });
+                };
+                // Prefer a replacement that does not depend on a later condition.
+                let certain = |later: &&Definition| !later.uncertain;
+                let candidates = &definitions[index + 1..];
+                let later = candidates
+                    .iter()
+                    .filter(compatible)
+                    .rfind(certain)
+                    .or_else(|| candidates.iter().rfind(compatible));
                 let Some(later) = later else {
                     continue;
                 };
-                let uncertain = earlier.uncertain || later.uncertain;
+                let uncertain = !certain(&later);
                 let message = if uncertain {
                     format!(
                         "`{name}` may be shadowed by the later definition if both execute; the later definition wins. Rename or remove one definition"
@@ -234,23 +246,51 @@ impl Checker<'_> {
                     definitions,
                 ),
                 Stmt::Try(statement) => {
-                    for body in std::iter::once(statement.body.as_slice())
-                        .chain(statement.handlers.iter().map(|handler| {
+                    self.scan(
+                        &statement.body,
+                        collect_tests,
+                        &mut bindings.clone(),
+                        branches,
+                        uncertain,
+                        definitions,
+                    );
+                    for (arm, body) in statement
+                        .handlers
+                        .iter()
+                        .map(|handler| {
                             let ruff_python_ast::ExceptHandler::ExceptHandler(handler) = handler;
                             handler.body.as_slice()
-                        }))
-                        .chain([statement.orelse.as_slice(), statement.finalbody.as_slice()])
+                        })
+                        .chain(std::iter::once(statement.orelse.as_slice()))
+                        .enumerate()
                     {
+                        let mut arm_branches = branches.to_vec();
+                        // except* handlers can execute together, unlike ordinary handlers.
+                        let arm = if statement.is_star {
+                            usize::from(arm == statement.handlers.len())
+                        } else {
+                            arm
+                        };
+                        arm_branches.push((statement.start(), arm));
                         self.scan(
                             body,
                             collect_tests,
                             &mut bindings.clone(),
-                            branches,
+                            &arm_branches,
                             true,
                             definitions,
                         );
                     }
+                    self.scan(
+                        &statement.finalbody,
+                        collect_tests,
+                        &mut bindings.clone(),
+                        branches,
+                        uncertain,
+                        definitions,
+                    );
                 }
+
                 Stmt::Match(statement) => {
                     for (arm, case) in statement.cases.iter().enumerate() {
                         let mut arm_branches = branches.to_vec();
@@ -339,5 +379,198 @@ mod tests {
             check("if first:\n def test_same(): pass\nif second:\n def test_same(): pass\n");
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].message.contains("if both execute"));
+    }
+    #[test]
+    fn control_flow_spans_and_replacement_certainty() {
+        let sources = [
+            "try: import optional\nexcept ImportError:\n def test_same(): pass\nelse:\n def test_same(): pass\n",
+            "try: import optional\nexcept ValueError:\n def test_same(): pass\nexcept ImportError:\n def test_same(): pass\n",
+            "try:\n def test_same(): pass\n def test_same(): pass\nexcept Exception: pass\n",
+            "def test_same(): pass\ndef test_same(): pass\nif condition:\n def test_same(): pass\n",
+            "match value:\n case 1:\n  def test_same(): pass\n case _:\n  def test_same(): pass\n",
+            "for value in values:\n def test_same(): pass\ndef test_same(): pass\n",
+            "while condition:\n def test_same(): pass\ndef test_same(): pass\n",
+            "with context:\n def test_same(): pass\n def test_same(): pass\n",
+            "if condition:\n def test_same(): pass\nelif False:\n def test_same(): pass\nelif True:\n def test_same(): pass\nelse:\n def test_same(): pass\n",
+            "if True:\n if condition:\n  def test_same(): pass\n else:\n  def test_same(): pass\n",
+            "try:\n def test_same(): pass\nfinally:\n def test_same(): pass\n",
+        ];
+        let diagnostics: Vec<_> = sources
+            .iter()
+            .map(|source| (source, check(source)))
+            .collect();
+        insta::assert_debug_snapshot!(diagnostics, @r#"
+        [
+            (
+                "try: import optional\nexcept ImportError:\n def test_same(): pass\nelse:\n def test_same(): pass\n",
+                [],
+            ),
+            (
+                "try: import optional\nexcept ValueError:\n def test_same(): pass\nexcept ImportError:\n def test_same(): pass\n",
+                [],
+            ),
+            (
+                "try:\n def test_same(): pass\n def test_same(): pass\nexcept Exception: pass\n",
+                [
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` is shadowed by the later definition, which wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 10..19,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 33..42,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ),
+            (
+                "def test_same(): pass\ndef test_same(): pass\nif condition:\n def test_same(): pass\n",
+                [
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` is shadowed by the later definition, which wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 4..13,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 26..35,
+                                },
+                            },
+                        ],
+                    },
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` may be shadowed by the later definition if both execute; the later definition wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 26..35,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 63..72,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ),
+            (
+                "match value:\n case 1:\n  def test_same(): pass\n case _:\n  def test_same(): pass\n",
+                [],
+            ),
+            (
+                "for value in values:\n def test_same(): pass\ndef test_same(): pass\n",
+                [
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` is shadowed by the later definition, which wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 26..35,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 48..57,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ),
+            (
+                "while condition:\n def test_same(): pass\ndef test_same(): pass\n",
+                [
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` is shadowed by the later definition, which wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 22..31,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 44..53,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ),
+            (
+                "with context:\n def test_same(): pass\n def test_same(): pass\n",
+                [
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` is shadowed by the later definition, which wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 19..28,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 42..51,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ),
+            (
+                "if condition:\n def test_same(): pass\nelif False:\n def test_same(): pass\nelif True:\n def test_same(): pass\nelse:\n def test_same(): pass\n",
+                [],
+            ),
+            (
+                "if True:\n if condition:\n  def test_same(): pass\n else:\n  def test_same(): pass\n",
+                [],
+            ),
+            (
+                "try:\n def test_same(): pass\nfinally:\n def test_same(): pass\n",
+                [
+                    SourceDiagnostic {
+                        code: ShadowedDefinition,
+                        message: "`test_same` is shadowed by the later definition, which wins. Rename or remove one definition",
+                        location: SourceLocation {
+                            path: "/project/test_health.py",
+                            range: 10..19,
+                        },
+                        related: [
+                            RelatedInformation {
+                                message: "Later definition replaces the earlier binding",
+                                location: SourceLocation {
+                                    path: "/project/test_health.py",
+                                    range: 42..51,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            ),
+        ]
+        "#);
     }
 }

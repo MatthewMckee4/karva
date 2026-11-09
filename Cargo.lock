@@ -1007,7 +1007,6 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "dunce",
- "ignore",
  "indoc",
  "insta",
  "insta-cmd",
@@ -1225,6 +1224,7 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "indoc",
+ "insta",
  "karva_collector",
  "karva_python_semantic",
  "rstest",
@@ -1346,6 +1346,7 @@ dependencies = [
  "camino",
  "fs-err",
  "glob",
+ "ignore",
  "insta",
  "karva_metadata",
  "karva_python_semantic",

@@ -7,9 +7,9 @@ use std::thread;
 use anyhow::{Context as _, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use crossbeam_channel::unbounded;
-use ignore::types::Types;
-use ignore::{WalkBuilder, WalkState};
+use ignore::WalkState;
 use karva_project::path::{TestPath, TestPathFunction};
+use karva_project::python_source_walker;
 
 /// Discovers test modules concurrently in the controller process.
 ///
@@ -177,28 +177,12 @@ impl<'a> ParallelCollector<'a> {
             .context("Failed to determine collection worker count")?
             .get();
 
-        Ok(WalkBuilder::new(path)
-            .threads(num_threads)
-            .standard_filters(true)
-            .require_git(false)
-            .git_global(false)
-            .parents(true)
-            .follow_links(true)
-            .git_ignore(self.settings.respect_ignore_files)
-            .types(python_file_types()?)
-            .build_parallel())
+        Ok(
+            python_source_walker(path, self.settings.respect_ignore_files)?
+                .threads(num_threads)
+                .build_parallel(),
+        )
     }
-}
-
-fn python_file_types() -> Result<Types> {
-    let mut types = ignore::types::TypesBuilder::new();
-    types
-        .add("python", "*.py")
-        .context("failed to register Python file pattern")?;
-    types.select("python");
-    types
-        .build()
-        .context("failed to build Python file type matcher")
 }
 
 #[cfg(test)]

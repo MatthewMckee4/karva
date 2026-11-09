@@ -27,7 +27,7 @@ pub use enums::{
 };
 pub use exit_status::ExitStatus;
 pub use partition::PartitionSelection;
-pub use show_config::ShowConfigCommand;
+pub use show_config::{ConfigArgs, ShowConfigCommand};
 pub use snapshot::{
     SnapshotAction, SnapshotCommand, SnapshotDeleteArgs, SnapshotFilterArgs, SnapshotPruneArgs,
 };
@@ -54,11 +54,11 @@ pub struct Args {
 #[derive(Debug, clap::Subcommand)]
 /// Top-level operations supported by the `karva` executable.
 pub enum Command {
-    /// Check suite health without importing or executing Python source.
-    Check(CheckCommand),
-
     /// Run tests.
     Test(Box<TestCommand>),
+
+    /// Check suite health without importing or executing Python source.
+    Check(CheckCommand),
 
     /// Manage snapshots created by `karva.assert_snapshot()`.
     Snapshot(SnapshotCommand),

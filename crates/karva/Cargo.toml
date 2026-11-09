@@ -17,7 +17,6 @@ name = "karva"
 path = "src/main.rs"
 
 [dependencies]
-ignore = { workspace = true }
 karva_cache = { workspace = true }
 karva_cli = { workspace = true }
 karva_collector = { workspace = true }

@@ -119,6 +119,35 @@ impl Project {
     }
 }
 
+/// Configures Python discovery shared by runtime collection and source checks.
+///
+/// Follows test-directory symlinks and honors parent ignore files. A Python
+/// type whitelist preserves hidden `.py` files; consumers skip non-UTF-8 paths.
+pub fn python_source_walker(
+    path: &Utf8Path,
+    respect_ignore_files: bool,
+) -> anyhow::Result<ignore::WalkBuilder> {
+    let mut types = ignore::types::TypesBuilder::new();
+    types
+        .add("python", "*.py")
+        .context("failed to register Python file pattern")?;
+    types.select("python");
+    let mut walker = ignore::WalkBuilder::new(path);
+    walker
+        .standard_filters(true)
+        .require_git(false)
+        .git_global(false)
+        .parents(true)
+        .follow_links(true)
+        .git_ignore(respect_ignore_files)
+        .types(
+            types
+                .build()
+                .context("failed to build Python file type matcher")?,
+        );
+    Ok(walker)
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::{File, FileTimes};

@@ -4,10 +4,9 @@ mod assertions;
 mod r#async;
 mod basic;
 mod cache;
-mod check_health;
-
 mod cancel;
 mod capture;
+mod check_health;
 mod configuration;
 mod coverage;
 mod coverage_command;

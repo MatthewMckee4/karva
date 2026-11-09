@@ -2,13 +2,9 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use karva_static::EnvVars;
 
-/// Print the resolved configuration karva would run with.
-///
-/// Resolves the same settings the test runner builds — defaults layered with
-/// `karva.toml` / `pyproject.toml` and any selected profile — and prints them
-/// as TOML.
+/// Configuration location and profile shared by source checks and configuration display.
 #[derive(Debug, Parser)]
-pub struct ShowConfigCommand {
+pub struct ConfigArgs {
     /// The path to a `karva.toml` file to use for configuration.
     #[arg(
         long,
@@ -30,3 +26,6 @@ pub struct ShowConfigCommand {
     )]
     pub profile: Option<String>,
 }
+
+/// Arguments for printing resolved configuration.
+pub type ShowConfigCommand = ConfigArgs;
