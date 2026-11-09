@@ -5,3 +5,6 @@
 
 #[cfg(test)]
 mod tests;
+
+mod identity;
+pub use identity::fingerprint;

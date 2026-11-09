@@ -33,27 +33,6 @@ pub fn run_parallel_tests(
     run_tests(project, config, args, printer, None, None)
 }
 
-/// Executes one candidate with an independent cancellation receiver.
-///
-/// Callers must disable historical caches and supply a measured run timeout.
-pub fn run_mutation_tests(
-    project: &Project,
-    config: &ParallelTestConfig,
-    args: &SubTestCommand,
-    printer: Printer,
-    mutation: MutationSource,
-    shutdown: &Receiver<()>,
-) -> Result<RunOutput> {
-    run_tests(
-        project,
-        config,
-        args,
-        printer,
-        Some(mutation),
-        Some(shutdown),
-    )
-}
-
 fn run_tests(
     project: &Project,
     config: &ParallelTestConfig,

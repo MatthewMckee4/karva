@@ -18,7 +18,7 @@ mod worker;
 pub use config::{
     FailurePriority, LastFailedSelection, ParallelTestConfig, RunOutput, TestResultRetention,
 };
-pub use run::{run_mutation_tests, run_parallel_tests};
+pub use run::run_parallel_tests;
 
 // Receipt: worker writes and controller reads each advance every 10 ms. With
 // no window the cancellation integration test consistently missed the first
