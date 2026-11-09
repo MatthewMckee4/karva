@@ -76,7 +76,7 @@ impl PreparedWorkspaceSymbols {
             if cancellation.is_cancelled() {
                 return Err(SourceIndexError::Cancelled.into());
             }
-            reject_symlink_root(root)?;
+            reject_symlink_root(self.workspaces.system().as_ref(), root)?;
             let uri = Uri::from_file_path(root.join("__karva_workspace__.py").as_std_path())
                 .map_err(|()| anyhow::anyhow!("workspace root is not a file URI: {root}"))?;
             let project = self
@@ -84,6 +84,7 @@ impl PreparedWorkspaceSymbols {
                 .prepare_project_discovery(&uri)?
                 .discover()?;
             discover_directory(
+                self.workspaces.system().as_ref(),
                 root,
                 project.settings().src().respect_ignore_files,
                 cancellation,
@@ -113,10 +114,13 @@ impl PreparedWorkspaceSymbols {
             let source = if let Some(source) = self.overlays.get(&path) {
                 source.to_string()
             } else {
-                std::fs::read_to_string(&path).map_err(|source| SourceIndexError::ReadSource {
-                    path: path.clone(),
-                    source,
-                })?
+                self.workspaces
+                    .system()
+                    .read_to_string(&path)
+                    .map_err(|source| SourceIndexError::ReadSource {
+                        path: path.clone(),
+                        source,
+                    })?
             };
             let settings = SourceAnalysisSettings {
                 python_version: project.metadata().python_version(),

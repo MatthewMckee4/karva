@@ -133,6 +133,7 @@ impl PreparedDiagnostics {
             if cancellation.is_cancelled() {
                 return None;
             }
+            let system = Arc::clone(&document.project.system);
             let project = match document.project.discover() {
                 Ok(project) => project,
                 Err(error) => {
@@ -179,7 +180,8 @@ impl PreparedDiagnostics {
                 project.settings().src().respect_ignore_files,
                 SourceIndexScope::OpenDocuments,
                 cache,
-            );
+            )
+            .with_system(system);
             projects
                 .entry(project_root)
                 .or_insert_with(|| (prepared_index, Vec::new()))
@@ -308,6 +310,7 @@ impl PreparedSourceAnalysis {
         if cancellation.is_cancelled() {
             return Err(SourceIndexError::Cancelled.into());
         }
+        let system = Arc::clone(&self.project_discovery.system);
         let project = self.project_discovery.discover()?;
         if cancellation.is_cancelled() {
             return Err(SourceIndexError::Cancelled.into());
@@ -332,6 +335,7 @@ impl PreparedSourceAnalysis {
             self.scope,
             cache,
         )
+        .with_system(system)
         .build(cancellation)?;
         let _ = self.project.set(project);
         Ok(index)

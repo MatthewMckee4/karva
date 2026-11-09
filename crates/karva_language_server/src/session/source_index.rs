@@ -10,25 +10,23 @@
 )]
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::fs;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use ignore::WalkBuilder;
-use ignore::types::Types;
 use karva_collector::{
     CollectedModule, CollectionSettings, collect_source, collect_source_with_module_name,
     project_import_paths,
 };
 use karva_ide::{SourceAnalysisSettings, WorkspaceSourceIndex};
+use karva_metadata::ProjectFileMetadata;
 use karva_project::path::{TestPath, TestPathError, TestPathFunction, absolute};
 use once_cell::sync::OnceCell;
 use ruff_python_ast::Stmt;
 use thiserror::Error;
 
 use super::RequestCancellationToken;
+use crate::system::{FileType, OsSystem, System, SystemError, WalkOptions};
 
 pub(super) type SourceIndexCache = Arc<SourceIndexState>;
 
@@ -78,6 +76,7 @@ pub(super) enum SourceIndexScope {
 /// Owned inputs captured before building a workspace source index.
 #[derive(Debug)]
 pub(super) struct PreparedSourceIndex {
+    system: Arc<dyn System>,
     project_root: Utf8PathBuf,
     include_paths: Vec<String>,
     open_sources: BTreeMap<Utf8PathBuf, Arc<str>>,
@@ -118,6 +117,7 @@ impl PreparedSourceIndex {
         cache: SourceIndexCache,
     ) -> Self {
         Self {
+            system: Arc::new(OsSystem),
             project_root,
             include_paths,
             open_sources,
@@ -126,6 +126,12 @@ impl PreparedSourceIndex {
             scope,
             cache,
         }
+    }
+
+    /// Uses the same filesystem as discovery; the cache must belong to that system.
+    pub(super) fn with_system(mut self, system: Arc<dyn System>) -> Self {
+        self.system = system;
+        self
     }
 
     /// Builds a deterministic source index while honoring cooperative cancellation.
@@ -146,6 +152,7 @@ impl PreparedSourceIndex {
     ) -> Result<WorkspaceSourceIndex, SourceIndexError> {
         let started = Instant::now();
         let Self {
+            system,
             project_root,
             include_paths,
             open_sources,
@@ -158,21 +165,28 @@ impl PreparedSourceIndex {
         let mut paths = BTreeSet::new();
         let test_paths = match scope {
             SourceIndexScope::OpenDocuments => Vec::new(),
-            SourceIndexScope::Project => vec![TestPath::new(project_root.as_str())],
+            SourceIndexScope::Project => vec![TestPath::new_with_file_system(
+                project_root.as_str(),
+                system.as_ref(),
+            )],
             SourceIndexScope::TestSelection if include_paths.is_empty() => {
                 let tests = project_root.join("tests");
-                let default_path = if tests.is_dir() {
+                let default_path = if system
+                    .path_metadata(&tests)
+                    .is_ok_and(ProjectFileMetadata::is_dir)
+                {
                     tests
                 } else {
                     project_root.clone()
                 };
-                vec![TestPath::new(default_path.as_str())]
+                vec![TestPath::new_with_file_system(
+                    default_path.as_str(),
+                    system.as_ref(),
+                )]
             }
             SourceIndexScope::TestSelection => include_paths
                 .iter()
-                .flat_map(|path| {
-                    karva_project::path::resolve_test_paths(absolute(path, &project_root).as_str())
-                })
+                .flat_map(|path| system.resolve_test_paths(absolute(path, &project_root).as_str()))
                 .collect(),
         };
         for test_path in test_paths {
@@ -188,10 +202,16 @@ impl PreparedSourceIndex {
                     project_root,
                 });
             }
-            reject_symlink_root(root)?;
+            reject_symlink_root(system.as_ref(), root)?;
             match test_path {
                 TestPath::Directory(path) => {
-                    discover_directory(&path, respect_ignore_files, cancellation, &mut paths)?;
+                    discover_directory(
+                        system.as_ref(),
+                        &path,
+                        respect_ignore_files,
+                        cancellation,
+                        &mut paths,
+                    )?;
                 }
                 TestPath::File(path) => {
                     if is_python_path(&path) {
@@ -216,6 +236,7 @@ impl PreparedSourceIndex {
         let initial_paths = paths.clone();
         for path in initial_paths {
             add_ancestor_conftests(
+                system.as_ref(),
                 &project_root,
                 &path,
                 &open_sources,
@@ -255,10 +276,12 @@ impl PreparedSourceIndex {
                 source_text.to_string()
             } else {
                 read_count += 1;
-                fs::read_to_string(&path).map_err(|source| SourceIndexError::ReadSource {
-                    path: path.clone(),
-                    source,
-                })?
+                system
+                    .read_to_string(&path)
+                    .map_err(|source| SourceIndexError::ReadSource {
+                        path: path.clone(),
+                        source,
+                    })?
             };
             source_bytes += source_text.len();
             check_cancelled(cancellation)?;
@@ -286,14 +309,16 @@ impl PreparedSourceIndex {
                         .into_iter()
                         .find(|candidate| {
                             open_sources.contains_key(candidate)
-                                || candidate.is_file()
+                                || system
+                                    .path_metadata(candidate)
+                                    .is_ok_and(ProjectFileMetadata::is_file)
                                     && candidate
                                         .ancestors()
                                         .take_while(|ancestor| ancestor.starts_with(&project_root))
                                         .all(|ancestor| {
-                                            fs::symlink_metadata(ancestor).is_ok_and(|metadata| {
-                                                !metadata.file_type().is_symlink()
-                                            })
+                                            system
+                                                .symlink_path_metadata(ancestor)
+                                                .is_ok_and(|metadata| !metadata.is_symlink())
                                         })
                         })
                         && paths.insert(imported.clone())
@@ -305,8 +330,8 @@ impl PreparedSourceIndex {
             modules.push(module);
         }
         parsed.modules.retain(|path, _| paths.contains(path));
-        if let Some(path) = find_builtin_source(&project_root)
-            && let Ok(source_text) = fs::read_to_string(&path)
+        if let Some(path) = find_builtin_source(system.as_ref(), &project_root)
+            && let Ok(source_text) = system.read_to_string(&path)
         {
             let builtin =
                 if let Some(module) = parsed.builtin.as_ref().filter(|module| {
@@ -377,14 +402,7 @@ pub(crate) enum SourceIndexError {
 
         /// Underlying walker error.
         #[source]
-        source: ignore::Error,
-    },
-
-    /// A discovered filesystem path could not be represented as UTF-8.
-    #[error("Python source path is not valid UTF-8: {path:?}")]
-    NonUtf8Path {
-        /// Original filesystem path.
-        path: PathBuf,
+        source: SystemError,
     },
 
     /// A discovered source file could not be read.
@@ -404,10 +422,6 @@ pub(crate) enum SourceIndexError {
         /// File whose syntax could not be collected.
         path: Utf8PathBuf,
     },
-
-    /// The Python walker type filter could not be initialized.
-    #[error("failed to initialize Python source file filter: {0}")]
-    TypeFilter(#[source] ignore::Error),
 
     /// A source path could not be inspected for symlinks or file type.
     #[error("failed to inspect source path `{path}`: {source}")]
@@ -430,61 +444,52 @@ pub(crate) enum SourceIndexError {
 }
 
 pub(super) fn discover_directory(
+    system: &dyn System,
     root: &Utf8Path,
     respect_ignore_files: bool,
     cancellation: &RequestCancellationToken,
     paths: &mut BTreeSet<Utf8PathBuf>,
 ) -> Result<(), SourceIndexError> {
-    let walker = WalkBuilder::new(root)
-        .standard_filters(true)
-        .require_git(false)
-        .git_global(false)
-        .parents(true)
-        .follow_links(false)
-        .git_ignore(respect_ignore_files)
-        .types(python_file_types()?)
-        .build();
-
+    let walker = system.walk_python_files(
+        root,
+        WalkOptions {
+            respect_ignore_files,
+            max_depth: None,
+        },
+    );
     for entry in walker {
         check_cancelled(cancellation)?;
         let entry = entry.map_err(|source| SourceIndexError::Walk {
             root: root.to_path_buf(),
             source,
         })?;
-        if !entry
-            .file_type()
-            .is_some_and(|file_type| file_type.is_file())
-        {
+        if !entry.file_type().is_file() || !is_python_path(entry.path()) {
             continue;
         }
-        let path = Utf8PathBuf::from_path_buf(entry.into_path())
-            .map_err(|path| SourceIndexError::NonUtf8Path { path })?;
-        paths.insert(path);
+        paths.insert(entry.path().to_path_buf());
     }
     Ok(())
 }
 
-pub(super) fn reject_symlink_root(path: &Utf8Path) -> Result<(), SourceIndexError> {
-    let metadata = fs::symlink_metadata(path).map_err(|source| SourceIndexError::Metadata {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    if metadata.file_type().is_symlink() {
+pub(super) fn reject_symlink_root(
+    system: &dyn System,
+    path: &Utf8Path,
+) -> Result<(), SourceIndexError> {
+    let file_type =
+        system
+            .symlink_path_metadata(path)
+            .map_err(|source| SourceIndexError::Metadata {
+                path: path.to_path_buf(),
+                source,
+            })?;
+    if file_type.is_symlink() {
         return Err(SourceIndexError::SymlinkRoot(path.to_path_buf()));
     }
     Ok(())
 }
 
-fn python_file_types() -> Result<Types, SourceIndexError> {
-    let mut types = ignore::types::TypesBuilder::new();
-    types
-        .add("python", "*.py")
-        .map_err(SourceIndexError::TypeFilter)?;
-    types.select("python");
-    types.build().map_err(SourceIndexError::TypeFilter)
-}
-
 fn add_ancestor_conftests(
+    system: &dyn System,
     project_root: &Utf8Path,
     path: &Utf8Path,
     open_sources: &BTreeMap<Utf8PathBuf, Arc<str>>,
@@ -496,7 +501,7 @@ fn add_ancestor_conftests(
         check_cancelled(cancellation)?;
         let conftest = directory.join("conftest.py");
         if open_sources.contains_key(&conftest)
-            || is_discoverable_file(&conftest, respect_ignore_files, cancellation)?
+            || is_discoverable_file(system, &conftest, respect_ignore_files, cancellation)?
         {
             paths.insert(conftest);
         }
@@ -505,12 +510,13 @@ fn add_ancestor_conftests(
 }
 
 fn is_discoverable_file(
+    system: &dyn System,
     path: &Utf8Path,
     respect_ignore_files: bool,
     cancellation: &RequestCancellationToken,
 ) -> Result<bool, SourceIndexError> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_file() => return Ok(false),
+    match system.symlink_path_metadata(path) {
+        Ok(file_type) if file_type != FileType::File => return Ok(false),
         Ok(_) => {}
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(source) => {
@@ -523,27 +529,20 @@ fn is_discoverable_file(
     let Some(parent) = path.parent() else {
         return Ok(false);
     };
-    let walker = WalkBuilder::new(parent)
-        .standard_filters(true)
-        .require_git(false)
-        .git_global(false)
-        .parents(true)
-        .follow_links(false)
-        .git_ignore(respect_ignore_files)
-        .types(python_file_types()?)
-        .max_depth(Some(1))
-        .build();
+    let walker = system.walk_python_files(
+        parent,
+        WalkOptions {
+            respect_ignore_files,
+            max_depth: Some(1),
+        },
+    );
     for entry in walker {
         check_cancelled(cancellation)?;
         let entry = entry.map_err(|source| SourceIndexError::Walk {
             root: parent.to_path_buf(),
             source,
         })?;
-        if entry.path() == path.as_std_path()
-            && entry
-                .file_type()
-                .is_some_and(|file_type| file_type.is_file())
-        {
+        if entry.path() == path && entry.file_type().is_file() {
             return Ok(true);
         }
     }
@@ -566,7 +565,7 @@ fn is_python_path(path: &Utf8Path) -> bool {
 }
 
 /// Locates the bundled fixture source without importing Python.
-fn find_builtin_source(project_root: &Utf8Path) -> Option<Utf8PathBuf> {
+fn find_builtin_source(system: &dyn System, project_root: &Utf8Path) -> Option<Utf8PathBuf> {
     let virtual_env = std::env::var_os("VIRTUAL_ENV")
         .and_then(|path| Utf8PathBuf::from_path_buf(path.into()).ok());
     let executable = std::env::current_exe()
@@ -578,7 +577,8 @@ fn find_builtin_source(project_root: &Utf8Path) -> Option<Utf8PathBuf> {
         .flat_map(std::env::split_paths)
         .filter_map(|path| Utf8PathBuf::from_path_buf(path).ok())
         .collect::<Vec<_>>();
-    find_builtin_source_in(
+    find_builtin_source_in_with_system(
+        system,
         project_root,
         virtual_env.as_deref(),
         executable.as_deref(),
@@ -586,30 +586,51 @@ fn find_builtin_source(project_root: &Utf8Path) -> Option<Utf8PathBuf> {
     )
 }
 
+#[cfg(test)]
 fn find_builtin_source_in(
     project_root: &Utf8Path,
     virtual_env: Option<&Utf8Path>,
     executable: Option<&Utf8Path>,
     python_paths: &[Utf8PathBuf],
 ) -> Option<Utf8PathBuf> {
+    find_builtin_source_in_with_system(
+        &OsSystem,
+        project_root,
+        virtual_env,
+        executable,
+        python_paths,
+    )
+}
+
+fn find_builtin_source_in_with_system(
+    system: &dyn System,
+    project_root: &Utf8Path,
+    virtual_env: Option<&Utf8Path>,
+    executable: Option<&Utf8Path>,
+    python_paths: &[Utf8PathBuf],
+) -> Option<Utf8PathBuf> {
     let mut candidates = Vec::new();
-    add_environment_root(&mut candidates, &project_root.join(".venv"));
-    add_environment_root(&mut candidates, &project_root.join("venv"));
+    add_environment_root(system, &mut candidates, &project_root.join(".venv"));
+    add_environment_root(system, &mut candidates, &project_root.join("venv"));
     if let Some(virtual_env) = virtual_env {
-        add_environment_root(&mut candidates, virtual_env);
+        add_environment_root(system, &mut candidates, virtual_env);
     }
     if let Some(executable) = executable {
         if let Some(environment_root) = executable_environment_root(executable) {
-            add_environment_root(&mut candidates, environment_root);
+            add_environment_root(system, &mut candidates, environment_root);
         }
     }
     for python_path in python_paths {
         add_unique(&mut candidates, python_path.join("karva/_builtins.py"));
     }
-    candidates.into_iter().find(|path| path.is_file())
+    candidates.into_iter().find(|path| {
+        system
+            .path_metadata(path)
+            .is_ok_and(ProjectFileMetadata::is_file)
+    })
 }
 
-fn add_environment_root(candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
+fn add_environment_root(system: &dyn System, candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
     add_source_root(candidates, root);
     add_unique(
         candidates,
@@ -620,17 +641,14 @@ fn add_environment_root(candidates: &mut Vec<Utf8PathBuf>, root: &Utf8Path) {
         root.join("Lib/site-packages/karva/_builtins.py"),
     );
     for library in [root.join("lib"), root.join("Lib")] {
-        let Ok(mut entries) = fs::read_dir(library) else {
+        let Ok(entries) = system.read_directory(&library) else {
             continue;
         };
         let mut python_dirs = entries
-            .by_ref()
-            .flatten()
+            .into_iter()
             .filter_map(|entry| {
-                let name = entry.file_name().into_string().ok()?;
-                name.starts_with("python")
-                    .then(|| Utf8PathBuf::from_path_buf(entry.path()).ok())
-                    .flatten()
+                let name = entry.file_name()?;
+                name.starts_with("python").then_some(entry.clone())
             })
             .collect::<Vec<_>>();
         python_dirs.sort_unstable();
@@ -1417,5 +1435,120 @@ mod tests {
             )
             .build(&RequestCancellationToken::default())
         }
+    }
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use super::*;
+    use crate::system::MemorySystem;
+    use ruff_python_ast::PythonVersion;
+    use std::io::ErrorKind;
+
+    fn root() -> Utf8PathBuf {
+        Utf8PathBuf::from(if cfg!(windows) {
+            "C:/virtual-karva"
+        } else {
+            "/virtual-karva"
+        })
+    }
+
+    fn prepared(
+        system: MemorySystem,
+        overlays: BTreeMap<Utf8PathBuf, Arc<str>>,
+    ) -> PreparedSourceIndex {
+        PreparedSourceIndex::new(
+            root(),
+            vec![],
+            overlays,
+            SourceAnalysisSettings {
+                python_version: PythonVersion::PY313,
+                test_function_prefix: "test".to_owned(),
+                try_import_fixtures: false,
+            },
+            true,
+        )
+        .with_system(Arc::new(system))
+    }
+
+    #[test]
+    fn virtual_sources_imports_and_missing_parent_overlays_share_one_system() {
+        let root = root();
+        let path = root.join("not-created/test_virtual.py");
+        let mut system = MemorySystem::new(root.clone());
+        system.add_file(&root.join("conftest.py"), "from providers import sample\n");
+        system.add_file(
+            &root.join("providers.py"),
+            "from karva import fixture\n@fixture\ndef sample(): return True\n",
+        );
+        let index = prepared(
+            system,
+            BTreeMap::from([(path.clone(), Arc::from("def test_virtual(sample): pass\n"))]),
+        )
+        .build(&RequestCancellationToken::default())
+        .expect("virtual index");
+        let analysis = index.analyze(&path).expect("virtual analysis");
+        assert_eq!(analysis.diagnostics, []);
+        assert_eq!(index.paths().count(), 3);
+    }
+
+    #[rstest::rstest]
+    fn injected_read_metadata_and_walk_failures_keep_the_path(
+        #[values("read", "metadata", "walk")] operation: &str,
+    ) {
+        let root = root();
+        let path = root.join("test_virtual.py");
+        let mut system = MemorySystem::new(root.clone());
+        system.add_file(&path, "def test_virtual(): pass\n");
+        let expected_path = match operation {
+            "read" => {
+                system.fail_read(&path, ErrorKind::PermissionDenied);
+                path
+            }
+            "metadata" => {
+                let conftest = root.join("conftest.py");
+                system.fail_metadata(&conftest, ErrorKind::PermissionDenied);
+                conftest
+            }
+            _ => {
+                system.fail_walk(&root, ErrorKind::PermissionDenied);
+                root
+            }
+        };
+        let error = prepared(system, BTreeMap::new())
+            .build(&RequestCancellationToken::default())
+            .expect_err("injected failure");
+        let (path, kind) = match &error {
+            SourceIndexError::ReadSource { path, source }
+            | SourceIndexError::Metadata { path, source } => (Some(path), Some(source.kind())),
+            SourceIndexError::Walk {
+                root,
+                source: SystemError::Io(source),
+            } => (Some(root), Some(source.kind())),
+            _ => (None, None),
+        };
+        assert_eq!(path, Some(&expected_path));
+        assert_eq!(kind, Some(ErrorKind::PermissionDenied));
+    }
+
+    #[test]
+    fn virtual_globs_and_symlink_roots_use_injected_metadata() {
+        let root = root();
+        let mut system = MemorySystem::new(root.clone());
+        system.add_file(&root.join("test_first.py"), "def test_first(): pass\n");
+        system.add_file(&root.join("other.py"), "def test_other(): pass\n");
+        system.add_symlink(&root.join("linked"));
+        let mut input = prepared(system, BTreeMap::new());
+        input.include_paths = vec!["test_*.py".to_owned()];
+        let index = input
+            .build(&RequestCancellationToken::default())
+            .expect("virtual glob");
+        assert_eq!(index.paths().count(), 1);
+        let mut system = MemorySystem::new(root.clone());
+        system.add_symlink(&root);
+        assert!(matches!(
+            reject_symlink_root(&system, &root),
+            Err(SourceIndexError::SymlinkRoot(_))
+        ));
     }
 }

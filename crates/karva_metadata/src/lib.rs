@@ -4,6 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use ruff_python_ast::PythonVersion;
 use std::collections::BTreeMap;
+use std::io;
 use thiserror::Error;
 
 mod environment;
@@ -31,6 +32,66 @@ pub use settings::{
 
 use crate::options::KarvaTomlError;
 use crate::pyproject::PyProject;
+
+/// Filesystem operations needed while discovering project metadata.
+///
+/// Language-server callers can provide an in-memory implementation so project
+/// discovery does not need to touch the host filesystem.
+pub trait ProjectFileSystem {
+    /// Returns metadata for `path`, following symlinks like native metadata.
+    fn path_metadata(&self, path: &Utf8Path) -> io::Result<ProjectFileMetadata>;
+
+    /// Reads UTF-8 text from `path`.
+    fn read_to_string(&self, path: &Utf8Path) -> io::Result<String>;
+
+    /// Returns whether `path` exists without hiding inspection failures.
+    fn path_exists(&self, path: &Utf8Path) -> io::Result<bool> {
+        match self.path_metadata(path) {
+            Ok(_) => Ok(true),
+            Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(source) => Err(source),
+        }
+    }
+}
+
+/// Metadata needed by project discovery for one filesystem path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProjectFileMetadata {
+    is_file: bool,
+    is_dir: bool,
+}
+
+impl ProjectFileMetadata {
+    /// Creates metadata for a filesystem path.
+    pub const fn new(is_file: bool, is_dir: bool) -> Self {
+        Self { is_file, is_dir }
+    }
+
+    /// Returns whether path is a regular file.
+    pub const fn is_file(self) -> bool {
+        self.is_file
+    }
+
+    /// Returns whether path is a directory.
+    pub const fn is_dir(self) -> bool {
+        self.is_dir
+    }
+}
+
+/// Native filesystem used by [`ProjectMetadata::discover`].
+#[derive(Debug, Default, Clone, Copy)]
+pub struct OsProjectFileSystem;
+
+impl ProjectFileSystem for OsProjectFileSystem {
+    fn path_metadata(&self, path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+        fs::metadata(path)
+            .map(|metadata| ProjectFileMetadata::new(metadata.is_file(), metadata.is_dir()))
+    }
+
+    fn read_to_string(&self, path: &Utf8Path) -> io::Result<String> {
+        fs::read_to_string(path)
+    }
+}
 
 /// File-level configuration paired with the resolved per-profile [`Options`].
 ///
@@ -130,18 +191,30 @@ impl ProjectMetadata {
         path: &Utf8Path,
         python_version: PythonVersion,
     ) -> Result<Self, ProjectMetadataError> {
+        Self::discover_with(path, python_version, &OsProjectFileSystem)
+    }
+
+    /// Discovers the closest project at `path` using `file_system`.
+    pub fn discover_with(
+        path: &Utf8Path,
+        python_version: PythonVersion,
+        file_system: &(impl ProjectFileSystem + ?Sized),
+    ) -> Result<Self, ProjectMetadataError> {
         tracing::debug!("Searching for a project in '{path}'");
 
-        if !path.as_std_path().is_dir() {
+        if !file_system
+            .path_metadata(path)
+            .is_ok_and(ProjectFileMetadata::is_dir)
+        {
             return Err(ProjectMetadataError::NotADirectory(path.to_path_buf()));
         }
 
         let mut closest_project: Option<Self> = None;
 
         for project_root in path.ancestors() {
-            let pyproject = try_load_pyproject(project_root)?;
+            let pyproject = try_load_pyproject(project_root, file_system)?;
 
-            if let Some(mut config) = try_load_karva_toml(project_root)? {
+            if let Some(mut config) = try_load_karva_toml(project_root, file_system)? {
                 if has_karva_section(pyproject.as_ref()) {
                     let pyproject_path = project_root.join("pyproject.toml");
                     let karva_toml_path = project_root.join("karva.toml");
@@ -185,7 +258,8 @@ impl ProjectMetadata {
 
             // Stop walking up at a `.git` boundary to avoid escaping the current
             // repository and picking up a parent project's configuration.
-            if project_root.join(".git").exists() {
+            let git_path = project_root.join(".git");
+            if file_system.path_exists(&git_path).unwrap_or(false) {
                 tracing::debug!(
                     "Stopping project discovery at git boundary '{}'",
                     project_root
@@ -235,10 +309,13 @@ impl ProjectMetadata {
 }
 
 /// Checks for a `karva.toml` in `dir` and parses it if present.
-fn try_load_karva_toml(dir: &Utf8Path) -> Result<Option<Config>, ProjectMetadataError> {
+fn try_load_karva_toml(
+    dir: &Utf8Path,
+    file_system: &(impl ProjectFileSystem + ?Sized),
+) -> Result<Option<Config>, ProjectMetadataError> {
     let path = dir.join("karva.toml");
 
-    let content = match fs::read_to_string(&path) {
+    let content = match file_system.read_to_string(&path) {
         Ok(content) => content,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(source) => {
@@ -263,10 +340,13 @@ fn try_load_karva_toml(dir: &Utf8Path) -> Result<Option<Config>, ProjectMetadata
 }
 
 /// Checks for a `pyproject.toml` in `dir` and parses it if present.
-fn try_load_pyproject(dir: &Utf8Path) -> Result<Option<PyProject>, ProjectMetadataError> {
+fn try_load_pyproject(
+    dir: &Utf8Path,
+    file_system: &(impl ProjectFileSystem + ?Sized),
+) -> Result<Option<PyProject>, ProjectMetadataError> {
     let path = dir.join("pyproject.toml");
 
-    let content = match fs::read_to_string(&path) {
+    let content = match file_system.read_to_string(&path) {
         Ok(content) => content,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(source) => {
@@ -290,8 +370,49 @@ fn try_load_pyproject(dir: &Utf8Path) -> Result<Option<PyProject>, ProjectMetada
 #[cfg(test)]
 mod tests {
     use camino::Utf8Path;
+    use std::collections::BTreeSet;
+    use std::io::ErrorKind;
 
     use super::*;
+
+    #[derive(Default)]
+    struct InMemoryFileSystem {
+        files: BTreeMap<Utf8PathBuf, String>,
+        directories: BTreeSet<Utf8PathBuf>,
+        metadata_errors: BTreeMap<Utf8PathBuf, ErrorKind>,
+    }
+
+    impl InMemoryFileSystem {
+        fn directory(&mut self, path: &Utf8Path) {
+            self.directories.insert(path.to_path_buf());
+        }
+
+        fn file(&mut self, path: &Utf8Path, content: &str) {
+            self.files.insert(path.to_path_buf(), content.to_string());
+        }
+    }
+
+    impl ProjectFileSystem for InMemoryFileSystem {
+        fn path_metadata(&self, path: &Utf8Path) -> io::Result<ProjectFileMetadata> {
+            if let Some(kind) = self.metadata_errors.get(path) {
+                return Err(io::Error::from(*kind));
+            }
+            if self.directories.contains(path) {
+                return Ok(ProjectFileMetadata::new(false, true));
+            }
+            if self.files.contains_key(path) {
+                return Ok(ProjectFileMetadata::new(true, false));
+            }
+            Err(io::Error::new(ErrorKind::NotFound, path.to_string()))
+        }
+
+        fn read_to_string(&self, path: &Utf8Path) -> io::Result<String> {
+            self.files
+                .get(path)
+                .cloned()
+                .ok_or_else(|| io::Error::new(ErrorKind::NotFound, path.to_string()))
+        }
+    }
 
     fn temp_path(dir: &tempfile::TempDir) -> &Utf8Path {
         Utf8Path::from_path(dir.path()).expect("temp path should be UTF-8")
@@ -303,7 +424,8 @@ mod tests {
         let root = temp_path(&temp_dir);
         std::fs::create_dir(root.join("karva.toml")).expect("create directory config path");
 
-        let err = try_load_karva_toml(root).expect_err("directory config path should fail");
+        let err = try_load_karva_toml(root, &OsProjectFileSystem)
+            .expect_err("directory config path should fail");
 
         assert!(matches!(
             err,
@@ -318,13 +440,59 @@ mod tests {
         let root = temp_path(&temp_dir);
         std::fs::create_dir(root.join("pyproject.toml")).expect("create directory config path");
 
-        let err = try_load_pyproject(root).expect_err("directory config path should fail");
+        let err = try_load_pyproject(root, &OsProjectFileSystem)
+            .expect_err("directory config path should fail");
 
         assert!(matches!(
             err,
             ProjectMetadataError::InvalidPyProject { ref source, .. }
                 if matches!(source.as_ref(), PyProjectError::FileReadError { .. })
         ));
+    }
+
+    #[test]
+    fn discovery_uses_in_memory_configuration_and_git_boundary() {
+        let root = Utf8Path::new("/workspace");
+        let nested = root.join("packages/app");
+        let mut file_system = InMemoryFileSystem::default();
+        file_system.directory(root);
+        file_system.directory(&nested);
+        file_system.directory(&root.join(".git"));
+        file_system.file(&root.join("karva.toml"), "");
+
+        let metadata =
+            ProjectMetadata::discover_with(&nested, PythonVersion::default(), &file_system)
+                .expect("in-memory project should be discovered");
+
+        assert_eq!(metadata.root(), root);
+    }
+
+    #[test]
+    fn discovery_rejects_missing_in_memory_directory() {
+        let path = Utf8Path::new("/missing");
+        let error = ProjectMetadata::discover_with(
+            path,
+            PythonVersion::default(),
+            &InMemoryFileSystem::default(),
+        )
+        .expect_err("missing path should not be a project");
+
+        assert!(
+            matches!(error, ProjectMetadataError::NotADirectory(path) if path == Utf8Path::new("/missing"))
+        );
+    }
+
+    #[test]
+    fn git_marker_probe_errors_preserve_default_project_discovery() {
+        let root = Utf8Path::new("/workspace");
+        let mut file_system = InMemoryFileSystem::default();
+        file_system.directory(root);
+        file_system
+            .metadata_errors
+            .insert(root.join(".git"), ErrorKind::PermissionDenied);
+        let metadata = ProjectMetadata::discover_with(root, PythonVersion::default(), &file_system)
+            .expect("a failed marker probe must not fail discovery");
+        assert_eq!(metadata.root(), root);
     }
 }
 
