@@ -20,7 +20,7 @@ env:
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   # renovate: datasource=github-releases depName=astral-sh/hawk
-  HAWK_VERSION: 0.1.15
+  HAWK_VERSION: 0.1.17
   # Build abi3 wheels against the oldest supported Python.
   MINIMUM_PYTHON_VERSION: "3.11"
   # Main test interpreter; keep this exact version preinstalled before nextest starts.
