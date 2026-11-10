@@ -1,5 +1,6 @@
 //! End-to-end orchestration of one `karva test` invocation.
 
+mod benchmark;
 mod junit;
 mod result_report;
 mod watch;
@@ -163,7 +164,13 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         timed_out,
     } = karva_runner::run_parallel_tests(&project, &config, &sub_command, printer)?;
 
-    print_test_output(printer, start_time, &result, durations)?;
+    print_test_output(
+        printer,
+        start_time,
+        &result,
+        durations,
+        !verbosity.is_default(),
+    )?;
     junit::write_junit_report(project.settings().junit(), &result, project.cwd())?;
     let coverage_data_file = persist_coverage(&project, &coverage_files)?;
     let write_result_report = |exit_status| {
@@ -435,6 +442,7 @@ pub fn print_test_output(
     start_time: Instant,
     result: &AggregatedResults,
     durations: Option<usize>,
+    verbose: bool,
 ) -> Result<()> {
     let mut details = printer.stream_for_details().lock();
 
@@ -485,55 +493,7 @@ pub fn print_test_output(
         has_preceding_test_lines && !has_diagnostics,
     )?;
 
-    let mut benchmarks = result
-        .test_cases
-        .iter()
-        .flat_map(|case| {
-            case.benchmarks()
-                .iter()
-                .map(move |benchmark| (case.full_name(), benchmark))
-        })
-        .collect::<Vec<_>>();
-    benchmarks.sort_by_key(|(name, benchmark)| (benchmark.group.as_deref(), *name));
-    if !benchmarks.is_empty() {
-        writeln!(details, "\nbenchmarks (nanoseconds per call):")?;
-        for (name, benchmark) in benchmarks {
-            writeln!(
-                details,
-                "  {name} [group: {}]",
-                benchmark.group.as_deref().unwrap_or("ungrouped")
-            )?;
-            if let (Some(min), Some(median), Some(mean), Some(stddev)) = (
-                benchmark.min_ns,
-                benchmark.median_ns,
-                benchmark.mean_ns,
-                benchmark.stddev_ns,
-            ) {
-                writeln!(
-                    details,
-                    "    min={min}ns median={median}ns mean={mean}ns stddev={stddev}ns"
-                )?;
-            }
-            writeln!(
-                details,
-                "    warmup={} calibration={} rounds={} iterations={} measured={} total={} elapsed={}ns stop={}",
-                benchmark.warmup_calls,
-                benchmark.calibration_calls,
-                benchmark.rounds,
-                benchmark.iterations,
-                benchmark.measurement_calls,
-                benchmark.total_calls,
-                benchmark.elapsed_ns,
-                benchmark.stop_reason
-            )?;
-            writeln!(
-                details,
-                "    options: {}",
-                serde_json::to_string(&benchmark.options)?
-            )?;
-        }
-        writeln!(details)?;
-    }
+    benchmark::write_benchmarks(&mut details, result, verbose)?;
 
     drop(details);
 

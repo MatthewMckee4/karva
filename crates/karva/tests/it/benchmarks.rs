@@ -6,6 +6,49 @@ use serde_json::Value;
 use crate::common::TestContext;
 
 #[test]
+fn verbose_output_keeps_sampling_details() {
+    let context = TestContext::with_file(
+        "test_verbose.py",
+        r#"
+import karva
+import karva._benchmark as sampling
+
+@karva.tags.benchmark(group="parser", rounds=1, iterations=1, warmup=0)
+def test_parse(benchmark, monkeypatch):
+    ticks = iter([0, 0, 1500, 2000])
+    monkeypatch.setattr(sampling.time, "perf_counter_ns", lambda: next(ticks))
+    assert benchmark(int, "42") == 42
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().args(["-v", "--status-level=none"]), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    benchmarks (per call):
+
+      parser
+        Test                                                 Min  Median    Mean  Stddev  Rounds  Iters    Status
+        test_verbose::test_parse(benchmark, monkeypatch)  1.50µs  1.50µs  1.50µs     0ns       1      1  complete
+
+        test_verbose::test_parse(benchmark, monkeypatch)
+          warmup=0 calibration=0 measured=1 total=1 elapsed=2.00µs stop=rounds
+          options: {"disable_gc":false,"group":"parser","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Spawning 1 workers
+    INFO Worker 0 spawned with 1 tests
+    INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+    INFO Worker 0 completed successfully in [TIME]
+    INFO All workers completed
+    "#);
+}
+
+#[test]
 fn validates_sampling_controls_and_callable_contracts() {
     let context = TestContext::with_file(
         "test_contract.py",
@@ -42,22 +85,22 @@ def test_async_rejected(benchmark):
         benchmark(operation)
 "#,
     );
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
     success: true
     exit_code: 0
     ----- stdout -----
 
-    benchmarks (nanoseconds per call):
-      test_contract::test_single_use(benchmark, monkeypatch) [group: ungrouped]
-        min=0ns median=0ns mean=0ns stddev=0ns
-        warmup=0 calibration=0 rounds=1 iterations=1 measured=1 total=1 elapsed=0ns stop=rounds
-        options: {"disable_gc":false,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
+    benchmarks (per call):
+
+      ungrouped
+        Test                                                    Min  Median  Mean  Stddev  Rounds  Iters    Status
+        test_contract::test_single_use(benchmark, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
 
     ────────────
          Summary [TIME] 10 tests run: 10 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 #[test]
@@ -93,7 +136,7 @@ def test_local(measure, monkeypatch):
 "#,
         ),
     ]);
-    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--result-output=results.jsonl", "--result-format=jsonl"]), @r#"
+    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--result-output=results.jsonl", "--result-format=jsonl"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -101,21 +144,21 @@ def test_local(measure, monkeypatch):
             PASS [TIME] test_group::test_inherited(measure=<Benchmark>, monkeypatch)
             PASS [TIME] test_group::test_local(measure=<Benchmark>, monkeypatch)
 
-    benchmarks (nanoseconds per call):
-      test_group::test_local(measure=<Benchmark>, monkeypatch) [group: local]
-        min=0ns median=0ns mean=0ns stddev=0ns
-        warmup=0 calibration=0 rounds=1 iterations=1 measured=1 total=1 elapsed=0ns stop=rounds
-        options: {"disable_gc":false,"group":"local","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
-      test_group::test_inherited(measure=<Benchmark>, monkeypatch) [group: module]
-        min=0ns median=0ns mean=0ns stddev=0ns
-        warmup=0 calibration=0 rounds=1 iterations=1 measured=1 total=1 elapsed=0ns stop=rounds
-        options: {"disable_gc":false,"group":"module","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
+    benchmarks (per call):
+
+      local
+        Test                                                      Min  Median  Mean  Stddev  Rounds  Iters    Status
+        test_group::test_local(measure=<Benchmark>, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
+
+      module
+        Test                                                          Min  Median  Mean  Stddev  Rounds  Iters    Status
+        test_group::test_inherited(measure=<Benchmark>, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
 
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
     let report = context.read_file("results.jsonl");
     let tests = report
         .lines()
@@ -174,11 +217,11 @@ def test_failure(benchmark, monkeypatch):
     info: benchmark callable failed
 
 
-    benchmarks (nanoseconds per call):
-      test_failure::test_failure(benchmark, monkeypatch) [group: ungrouped]
-        min=0ns median=0ns mean=0ns stddev=0ns
-        warmup=0 calibration=0 rounds=1 iterations=1 measured=2 total=2 elapsed=0ns stop=exception
-        options: {"disable_gc":true,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+    benchmarks (per call):
+
+      ungrouped
+        Test                                                Min  Median  Mean  Stddev  Rounds  Iters   Status
+        test_failure::test_failure(benchmark, monkeypatch)  0ns     0ns   0ns     0ns       1      1  partial
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -228,24 +271,24 @@ def test_parse(benchmark, monkeypatch):
     );
     context.write_file("karva.toml", "[profile.default.test]\nstrict-tags = true\n");
     insta::allow_duplicates! {
-        assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--result-output=results.json"]), @r#"
+        assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--result-output=results.json"]), @"
         success: true
         exit_code: 0
         ----- stdout -----
             Starting 1 test across 1 worker
                 PASS [TIME] test_bench::test_parse(benchmark, monkeypatch)
 
-        benchmarks (nanoseconds per call):
-          test_bench::test_parse(benchmark, monkeypatch) [group: parser]
-            min=10ns median=20ns mean=20ns stddev=10ns
-            warmup=0 calibration=0 rounds=3 iterations=2 measured=6 total=6 elapsed=200ns stop=rounds
-            options: {"disable_gc":false,"group":"parser","iterations":2,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+        benchmarks (per call):
+
+          parser
+            Test                                             Min  Median  Mean  Stddev  Rounds  Iters    Status
+            test_bench::test_parse(benchmark, monkeypatch)  10ns    20ns  20ns    10ns       3      2  complete
 
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 
         ----- stderr -----
-        "#);
+        ");
     }
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
@@ -324,25 +367,23 @@ def test_normal():
     if !configuration {
         command.arg("--benchmark-disable");
     }
-    let mut settings = insta::Settings::clone_current();
-    settings.add_filter(r"elapsed=\d+ns", "elapsed=[TIME]");
-    let _guard = settings.bind_to_scope();
     {
-        insta::allow_duplicates! { assert_cmd_snapshot!(command, @r#"
+        insta::allow_duplicates! { assert_cmd_snapshot!(command, @"
         success: true
         exit_code: 0
         ----- stdout -----
 
-        benchmarks (nanoseconds per call):
-          test_bench::test_correctness(benchmark) [group: ungrouped]
-            warmup=0 calibration=0 rounds=0 iterations=1 measured=1 total=1 elapsed=[TIME] stop=disabled
-            options: {"disable_gc":false,"group":null,"iterations":2,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":2}
+        benchmarks (per call):
+
+          ungrouped
+            Test                                     Min  Median  Mean  Stddev  Rounds  Iters    Status
+            test_bench::test_correctness(benchmark)    -       -     -       -       0      1  disabled
 
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
 
         ----- stderr -----
-        "#); }
+        "); }
     }
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
@@ -403,24 +444,24 @@ def test_adaptive(benchmark, clock):
     assert stats["stddev_ns"] == 0
 "#,
     );
-    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--result-output=results.json"]), @r#"
+    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--result-output=results.json"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
         Starting 1 test across 1 worker
             PASS [TIME] test_bench::test_adaptive(benchmark, clock=<test_bench.clock.<locals>....)
 
-    benchmarks (nanoseconds per call):
-      test_bench::test_adaptive(benchmark, clock=<test_bench.clock.<locals>....) [group: ungrouped]
-        min=500000ns median=500000ns mean=500000ns stddev=0ns
-        warmup=1 calibration=3 rounds=8 iterations=2 measured=16 total=20 elapsed=10000000ns stop=max_time
-        options: {"disable_gc":false,"group":null,"iterations":null,"max_time":0.01,"min_rounds":5,"min_time":0.001,"rounds":null,"warmup":1}
+    benchmarks (per call):
+
+      ungrouped
+        Test                                                                             Min    Median      Mean  Stddev  Rounds  Iters    Status
+        test_bench::test_adaptive(benchmark, clock=<test_bench.clock.<locals>....)  500.00µs  500.00µs  500.00µs     0ns       8      2  complete
 
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
     assert_snapshot!(serde_json::to_string_pretty(&report["tests"][0]["benchmarks"]).expect("serialize benchmark"), @r#"
@@ -540,7 +581,7 @@ def test_retry(benchmark, monkeypatch):
         assert gc.isenabled()
 "#,
     );
-    assert_cmd_snapshot!(context.command_no_parallel().args(["--retry=1", "--result-output=results.json"]), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel().args(["--retry=1", "--result-output=results.json"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -548,18 +589,18 @@ def test_retry(benchmark, monkeypatch):
       TRY 1 FAIL [TIME] test_bench::test_retry(benchmark, monkeypatch)
       TRY 2 PASS [TIME] test_bench::test_retry(benchmark, monkeypatch)
 
-    benchmarks (nanoseconds per call):
-      test_bench::test_retry(benchmark, monkeypatch) [group: ungrouped]
-        min=10ns median=10ns mean=10ns stddev=0ns
-        warmup=0 calibration=0 rounds=3 iterations=1 measured=3 total=3 elapsed=70ns stop=rounds
-        options: {"disable_gc":true,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+    benchmarks (per call):
+
+      ungrouped
+        Test                                             Min  Median  Mean  Stddev  Rounds  Iters    Status
+        test_bench::test_retry(benchmark, monkeypatch)  10ns    10ns  10ns     0ns       3      1  complete
 
     ────────────
          Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
        FLAKY 2/2 [TIME] test_bench::test_retry(benchmark, monkeypatch)
 
     ----- stderr -----
-    "#);
+    ");
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
     assert_snapshot!(serde_json::to_string_pretty(&report["tests"][0]["attempts"][0]["benchmarks"]).expect("serialize benchmark"), @r#"
@@ -698,7 +739,7 @@ def test_teardown(measured, fail):
     measured["fail"] = fail
 "#,
     );
-    assert_cmd_snapshot!(context.command_no_parallel().arg("--result-output=results.json"), @r#"
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--result-output=results.json"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -718,21 +759,18 @@ def test_teardown(measured, fail):
     info: Failed to reset fixture: teardown benchmark failed
 
 
-    benchmarks (nanoseconds per call):
-      test_teardown::test_teardown(measured={}, fail=False) [group: teardown]
-        min=10ns median=10ns mean=10ns stddev=0ns
-        warmup=0 calibration=0 rounds=3 iterations=1 measured=3 total=3 elapsed=30ns stop=rounds
-        options: {"disable_gc":false,"group":"teardown","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
-      test_teardown::test_teardown(measured={}, fail=True) [group: teardown]
-        min=10ns median=10ns mean=10ns stddev=0ns
-        warmup=0 calibration=0 rounds=1 iterations=1 measured=2 total=2 elapsed=20ns stop=exception
-        options: {"disable_gc":false,"group":"teardown","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+    benchmarks (per call):
+
+      teardown
+        Test                                                    Min  Median  Mean  Stddev  Rounds  Iters    Status
+        test_teardown::test_teardown(measured={}, fail=False)  10ns    10ns  10ns     0ns       3      1  complete
+        test_teardown::test_teardown(measured={}, fail=True)   10ns    10ns  10ns     0ns       1      1   partial
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 error, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
     let passed = &report["tests"][0]["benchmarks"][0];
@@ -814,22 +852,22 @@ def test_measure(benchmark, monkeypatch):
 "#,
         ),
     ]);
-    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--status-level=none"]), @r#"
+    assert_cmd_snapshot!(context.command().args(["--num-workers=2", "--status-level=none"]), @"
     success: true
     exit_code: 0
     ----- stdout -----
 
-    benchmarks (nanoseconds per call):
-      test_measure::test_measure(benchmark, monkeypatch) [group: ungrouped]
-        min=0ns median=0ns mean=0ns stddev=0ns
-        warmup=0 calibration=0 rounds=1 iterations=1 measured=1 total=1 elapsed=0ns stop=rounds
-        options: {"disable_gc":false,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
+    benchmarks (per call):
+
+      ungrouped
+        Test                                                Min  Median  Mean  Stddev  Rounds  Iters    Status
+        test_measure::test_measure(benchmark, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
 
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped
 
     ----- stderr -----
-    "#);
+    ");
 }
 
 #[test]

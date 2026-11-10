@@ -65,11 +65,13 @@ The same setting is available as `benchmark-disable = true` under
 
 ## Results and isolation
 
-Terminal output shows each test's group, minimum, median, mean, sample standard
-deviation, warmup calls, calibration calls, rounds, iterations, total calls,
-elapsed time, effective options, and stopping reason. Statistics describe
-per-call round averages, rounded to nanoseconds. A single round has a standard
-deviation of zero. Warmup and calibration do not enter the statistics.
+Terminal output groups benchmarks in a table with minimum, median, mean, sample
+standard deviation, rounds, and iterations. Times use ns, µs, ms, or s. Disabled
+and partial measurements are labelled. Add `-v` to show warmup, calibration,
+measured and total calls, elapsed time, effective options, and stopping reason.
+Statistics describe per-call round averages, rounded to nanoseconds. A single
+round has a standard deviation of zero. Warmup and calibration do not enter the
+statistics.
 
 Use `--result-output=results.json` for JSON, or add `--result-format=jsonl` for
 JSONL. Each benchmark test has a `benchmarks` array containing the same data
