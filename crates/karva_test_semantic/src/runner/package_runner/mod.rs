@@ -98,6 +98,9 @@ pub struct PackageRunner<'context, 'settings> {
     exception_capture: &'context UnhandledExceptionCapture,
     /// Failed variants observed so far, used to enforce `max-fail`.
     failed_count: u32,
+    /// Test functions whose shared fixture-plan diagnostic was already reported.
+    reported_fixture_errors: HashSet<TestPlanKey>,
+
     /// Module whose scoped fixtures are currently being prepared or executed.
     active_module: Option<Utf8PathBuf>,
     /// Process stdin guard shared by all captured test attempts in this worker.
@@ -122,6 +125,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             coverage,
             exception_capture,
             failed_count: 0,
+            reported_fixture_errors: HashSet::new(),
             active_module: None,
             stdin_capture: None,
             python_stdin_capture: None,

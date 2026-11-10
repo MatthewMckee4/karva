@@ -1209,6 +1209,7 @@ import pytest
 @pytest.mark.parametrize("value", [
     pytest.param(1, marks=pytest.mark.selected, id="selected"),
     pytest.param(2, id="excluded"),
+    pytest.param(3, marks=pytest.mark.selected, id="also-selected"),
 ])
 def test_cases(value, missing_fixture):
     assert False
@@ -1219,16 +1220,16 @@ def test_cases(value, missing_fixture):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-           ERROR [TIME] test::test_cases(selected)
+           ERROR [TIME] test::test_cases
 
     failures:
 
-    test::test_cases(selected):
+    test::test_cases:
 
     error[missing-fixtures]: Test `test_cases` has missing fixtures
-     --> test.py:8:5
+     --> test.py:9:5
       |
-    8 | def test_cases(value, missing_fixture):
+    9 | def test_cases(value, missing_fixture):
       |     ^^^^^^^^^^
     info: Missing fixtures: `missing_fixture`
 

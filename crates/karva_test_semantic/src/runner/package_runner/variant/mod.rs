@@ -84,8 +84,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         }
 
         if let Some(error) = self.input.fixture_error.take() {
+            let key = (
+                self.input.module_path.clone(),
+                self.input.test.name().to_string(),
+            );
+            if !self.package_runner.reported_fixture_errors.insert(key) {
+                return true;
+            }
             return self.package_runner.context.register_test_case_result(
-                &unresolved_test_name,
+                &QualifiedTestName::new(self.input.test.name().clone()),
                 TestExecutionOutcome::error(*error),
                 Duration::ZERO,
                 None,
