@@ -302,3 +302,102 @@ def test_different_marks(value): pass
     ----- stderr -----
     ");
 }
+
+#[test]
+fn health_unused_fixture_graph() {
+    let context = TestContext::with_files([
+        (
+            "conftest.py",
+            "import karva\n@karva.fixture\ndef inherited(): pass\n@karva.fixture\ndef abandoned(): pass\n",
+        ),
+        (
+            "test_health.py",
+            r"
+import karva
+@karva.fixture
+def dependency(): pass
+@karva.fixture
+def used(dependency): pass
+@karva.fixture(auto_use=True)
+def automatic(): pass
+@karva.fixture
+def unused_dependency(): pass
+@karva.fixture
+def unused(unused_dependency): pass
+@karva.fixture
+def inherited(): pass
+def test_ok(used, inherited): pass
+",
+        ),
+    ]);
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).args(["health", "--fail-on=warning"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    conftest.py:3:5: warning[unused-fixture]: Fixture `inherited` has no direct or transitive consumer in the full configured suite
+      help: Remove the fixture, or explicitly export it if it is a public fixture API.
+    conftest.py:5:5: warning[unused-fixture]: Fixture `abandoned` has no direct or transitive consumer in the full configured suite
+      help: Remove the fixture, or explicitly export it if it is a public fixture API.
+    test_health.py:10:5: warning[unused-fixture]: Fixture `unused_dependency` has no direct or transitive consumer in the full configured suite
+      help: Remove the fixture, or explicitly export it if it is a public fixture API.
+    test_health.py:12:5: warning[unused-fixture]: Fixture `unused` has no direct or transitive consumer in the full configured suite
+      help: Remove the fixture, or explicitly export it if it is a public fixture API.
+    4 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).args(["health", "test_health.py"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    0 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_dynamic_fixture_lookup_does_not_claim_unused_fixtures() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r"
+import karva
+@karva.fixture
+def data(): pass
+def test_dynamic(request): request.getfixturevalue('data')
+",
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).args(["health", "--ignore=missing-fixture"]), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    0 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_exported_and_configuration_selected_fixtures_are_consumed() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r#"
+import karva
+__all__ = ["public"]
+@karva.fixture
+def public(): pass
+@karva.fixture
+def side_effect(): pass
+@karva.tags.use_fixtures("side_effect")
+def test_used(): pass
+"#,
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    0 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
