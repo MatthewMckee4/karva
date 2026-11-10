@@ -178,6 +178,40 @@ impl WorkerSupervisor {
             });
     }
 
+    /// Evaluates invocation-wide stop policy for polls and phase transitions.
+    ///
+    /// A disconnected shutdown channel has the same meaning as cancellation.
+    pub(in crate::orchestration) fn stop_outcome(
+        &self,
+        shutdown_rx: Option<&Receiver<()>>,
+        max_fail: MaxFail,
+        deadline: Option<Instant>,
+    ) -> Option<WaitOutcome> {
+        if let Some(rx) = shutdown_rx {
+            match rx.try_recv() {
+                Ok(()) | Err(TryRecvError::Disconnected) => {
+                    tracing::info!(target: "karva_runner::orchestration", "Shutdown requested — stopping remaining workers");
+                    return Some(WaitOutcome::Cancelled);
+                }
+                Err(TryRecvError::Empty) => {}
+            }
+        }
+
+        if max_fail.is_exceeded_by(self.dispatcher.failure_count()) {
+            tracing::info!(target: "karva_runner::orchestration", "Failure budget exhausted — stopping remaining workers");
+            return Some(WaitOutcome::FailFast);
+        }
+
+        if let Some(deadline) = deadline
+            && Instant::now() >= deadline
+        {
+            tracing::info!(target: "karva_runner::orchestration", "Run timeout exceeded — stopping remaining workers");
+            return Some(WaitOutcome::TimedOut);
+        }
+
+        None
+    }
+
     /// Wait for all workers to complete.
     ///
     /// Returns early if a message is received on `shutdown_rx`, the global
@@ -221,26 +255,8 @@ impl WorkerSupervisor {
                 return Ok(WaitOutcome::AllCompleted);
             }
 
-            if let Some(rx) = shutdown_rx {
-                match rx.try_recv() {
-                    Ok(()) | Err(TryRecvError::Disconnected) => {
-                        tracing::info!(target: "karva_runner::orchestration", "Shutdown requested — stopping remaining workers");
-                        return Ok(WaitOutcome::Cancelled);
-                    }
-                    Err(TryRecvError::Empty) => {}
-                }
-            }
-
-            if max_fail.is_exceeded_by(self.dispatcher.failure_count()) {
-                tracing::info!(target: "karva_runner::orchestration", "Failure budget exhausted — stopping remaining workers");
-                return Ok(WaitOutcome::FailFast);
-            }
-
-            if let Some(deadline) = deadline
-                && Instant::now() >= deadline
-            {
-                tracing::info!(target: "karva_runner::orchestration", "Run timeout exceeded — stopping remaining workers");
-                return Ok(WaitOutcome::TimedOut);
+            if let Some(outcome) = self.stop_outcome(shutdown_rx, max_fail, deadline) {
+                return Ok(outcome);
             }
 
             std::thread::sleep(WORKER_POLL_INTERVAL);

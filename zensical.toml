@@ -47,6 +47,7 @@ nav = [
         { "Fixtures" = [
             { "Fixtures" = "usage/fixtures/fixtures.md"},
             { "Built In" = "usage/fixtures/builtin.md"},
+            { "Benchmarks" = "usage/benchmarks.md"},
         ]},
         { "Tags" = [
             { "Parametrize" = "usage/tags/parametrize.md"},

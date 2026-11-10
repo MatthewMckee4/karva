@@ -17,6 +17,10 @@ use crate::verbosity::Verbosity;
 /// User-facing test selection, execution, and reporting arguments.
 #[derive(Debug, Parser, Clone, Default)]
 pub struct SubTestCommand {
+    /// Invoke benchmark callables once without warmup, calibration, or sampling.
+    #[arg(long, default_missing_value = "true", require_equals = true, num_args = 0..=1)]
+    pub benchmark_disable: Option<bool>,
+
     /// Python warning filter; repeat to add ordered rules. Later rules win.
     /// CLI rules replace configured warning-filters. Test-local tags win over CLI.
     #[arg(short = 'W', long = "warning-filter", action = clap::ArgAction::Append)]
@@ -507,6 +511,7 @@ impl SubTestCommand {
                 final_status_level: self.final_status_level,
             }),
             test: Some(TestOptions {
+                benchmark_disable: self.benchmark_disable,
                 warning_filters: (!self.warning_filters.is_empty()).then_some(self.warning_filters),
                 max_warnings: self.max_warnings,
                 test_function_prefix: self.test_prefix,

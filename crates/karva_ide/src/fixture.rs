@@ -365,6 +365,12 @@ const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
         docstring: "Capture log records emitted during a test.",
     },
     BuiltinFixture {
+        name: "benchmark",
+        scope: FixtureScope::Function,
+        signature: "benchmark() -> Benchmark",
+        docstring: "Measure a synchronous callable, or decorate one to run it immediately.",
+    },
+    BuiltinFixture {
         name: "tmp_path",
         scope: FixtureScope::Function,
         signature: "tmp_path(tmp_path_factory: TempPathFactory) -> Path",
