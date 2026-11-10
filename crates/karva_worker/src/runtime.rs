@@ -85,6 +85,7 @@ fn run() -> anyhow::Result<ExitStatus> {
     );
     let coverage = worker_coverage_config(&settings, &configuration, selection.coverage_data_file)?;
     let health_timings = configuration.health_timings;
+    let preserve_test_order = configuration.preserve_test_order;
     drop(configuration);
 
     let diagnostic_format = match settings.terminal().output_format {
@@ -119,6 +120,7 @@ fn run() -> anyhow::Result<ExitStatus> {
         settings: &settings,
         python_version,
         reporter: &reporter,
+        preserve_test_order,
         test_paths,
         resume_skip: &resume_skip,
         resume_attempts: &resume_attempts,

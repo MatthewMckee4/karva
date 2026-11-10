@@ -129,6 +129,10 @@ pub enum WireMessage {
 /// at process creation and omitted here; test selectors live in the assignment.
 #[derive(Default, Serialize, Deserialize)]
 pub struct WorkerConfiguration {
+    /// Execute the controller's assignment sequence, independently of cached failures.
+    #[serde(default)]
+    pub preserve_test_order: bool,
+
     /// Enable lifecycle timing only for an explicit health runtime analysis.
     #[serde(default)]
     pub health_timings: bool,

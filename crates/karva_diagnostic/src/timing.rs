@@ -16,6 +16,17 @@ pub enum TimingPhase {
     FixtureTeardown,
 }
 
+impl TimingPhase {
+    /// Stable spelling shared by text reports and serialized observations.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TestBody => "test-body",
+            Self::FixtureSetup => "fixture-setup",
+            Self::FixtureTeardown => "fixture-teardown",
+        }
+    }
+}
+
 /// One actual invocation, never multiplied by the number of fixture consumers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LifecycleTiming {

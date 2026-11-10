@@ -132,6 +132,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
     }
 
     let config = karva_runner::ParallelTestConfig {
+        health_timings: false,
         num_workers,
         no_cache,
         create_ctrlc_handler: true,
@@ -161,6 +162,7 @@ pub fn test(args: TestCommand) -> Result<ExitStatus> {
         results: result,
         coverage_files,
         timed_out,
+        ..
     } = karva_runner::run_parallel_tests(&project, &config, &sub_command, printer)?;
 
     print_test_output(printer, start_time, &result, durations)?;

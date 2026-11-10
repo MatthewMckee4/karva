@@ -465,6 +465,7 @@ pub fn prepare_benchmark_project_environment(config: &BenchmarkProject) -> Resul
 /// Executes one silent benchmark iteration and validates success.
 pub fn try_run_project(project: &Project) -> Result<RunOutput> {
     let config = karva_runner::ParallelTestConfig {
+        health_timings: false,
         num_workers: max_parallelism()
             .context("Failed to determine benchmark worker count")?
             .get(),

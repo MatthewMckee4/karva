@@ -92,7 +92,11 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         {
             let definition = self.input.test.definition();
             let mut timing = LifecycleTiming::new(
-                settings.identity.qualified_test_name.to_string(),
+                settings
+                    .identity
+                    .qualified_test_name
+                    .cache_key()
+                    .to_string(),
                 definition.source_file(),
                 definition.diagnostic_range(),
                 TimingPhase::TestBody,

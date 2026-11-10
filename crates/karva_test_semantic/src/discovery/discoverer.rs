@@ -73,8 +73,7 @@ impl<'ctx, 'a> StandardDiscoverer<'ctx, 'a> {
             })
             .collect();
 
-        let case_filter =
-            build_case_filter(&test_paths, self.context.settings().test().failed_first);
+        let case_filter = build_case_filter(&test_paths, self.context.preserve_test_order());
         let mut seen_tests = HashSet::new();
         let test_order = test_paths
             .iter()
