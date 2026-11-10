@@ -12,7 +12,9 @@ const STDIN_CAPTURE_ERROR: &str = "stdin is unavailable while test output is cap
 pyo3::create_exception!(karva, CapturedStdinError, pyo3::exceptions::PyRuntimeError);
 
 /// Python-facing stdin replacement that fails reads instead of waiting on a terminal.
-#[pyclass]
+///
+/// Instance attributes let tests monkeypatch stream methods such as `isatty`.
+#[pyclass(dict)]
 struct CapturedStdin;
 
 #[pymethods]

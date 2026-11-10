@@ -3,6 +3,40 @@ use rstest::rstest;
 
 use crate::common::TestContext;
 
+#[test]
+fn captured_stdin_allows_monkeypatching_isatty() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+import karva
+
+
+def test_patch_isatty(monkeypatch):
+    assert sys.stdin.isatty() is False
+    with monkeypatch.context() as patch:
+        patch.setattr(sys.stdin, "isatty", lambda: True)
+        assert sys.stdin.isatty() is True
+        with karva.raises(RuntimeError, match="stdin is unavailable"):
+            sys.stdin.read()
+    assert sys.stdin.isatty() is False
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_patch_isatty(monkeypatch)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[rstest]
 fn captured_stdin_rejects_python_reads(
     #[values(
