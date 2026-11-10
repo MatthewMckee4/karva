@@ -1,4 +1,5 @@
 use insta_cmd::assert_cmd_snapshot;
+use rstest::rstest;
 
 use crate::common::TestContext;
 
@@ -1117,4 +1118,124 @@ fn filterset_empty_expression() {
       Cause: empty filter expression ``
     "
     );
+}
+
+#[test]
+fn filterset_excludes_missing_fixtures() {
+    let context = TestContext::with_file(
+        "test.py",
+        r"
+def test_pass():
+    assert True
+
+def test_filtered_out(missing_fixture):
+    assert False
+",
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(test_pass)"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_pass
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 skipped
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("test(test_filtered_out)"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+           ERROR [TIME] test::test_filtered_out
+
+    failures:
+
+    test::test_filtered_out:
+
+    error[missing-fixtures]: Test `test_filtered_out` has missing fixtures
+     --> test.py:5:5
+      |
+    5 | def test_filtered_out(missing_fixture):
+      |     ^^^^^^^^^^^^^^^^^
+    info: Missing fixtures: `missing_fixture`
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 1 error, 1 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn filterset_excludes_parametrized_missing_fixtures(
+    #[values("test(test_pass)", "tag(selected)")] filter: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.tags.selected
+def test_pass():
+    assert True
+
+@karva.tags.parametrize("value", [1, 2])
+def test_filtered_out(value, missing_fixture):
+    assert False
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg(filter), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_pass
+    ────────────
+         Summary [TIME] 3 tests run: 1 passed, 2 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn filterset_parameter_tags_apply_before_fixture_errors() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.mark.parametrize("value", [
+    pytest.param(1, marks=pytest.mark.selected, id="selected"),
+    pytest.param(2, id="excluded"),
+    pytest.param(3, marks=pytest.mark.selected, id="also-selected"),
+])
+def test_cases(value, missing_fixture):
+    assert False
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("-E").arg("tag(selected)"), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+           ERROR [TIME] test::test_cases
+
+    failures:
+
+    test::test_cases:
+
+    error[missing-fixtures]: Test `test_cases` has missing fixtures
+     --> test.py:9:5
+      |
+    9 | def test_cases(value, missing_fixture):
+      |     ^^^^^^^^^^
+    info: Missing fixtures: `missing_fixture`
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 1 error, 1 skipped
+
+    ----- stderr -----
+    ");
 }

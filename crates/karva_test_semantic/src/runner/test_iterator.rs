@@ -4,13 +4,15 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use karva_diagnostic::Diagnostic;
 use pyo3::prelude::*;
 
+use crate::diagnostic::fixture_resolution_diagnostic;
 use crate::discovery::DiscoveredTestFunction;
 use crate::extensions::fixtures::{FixtureId, FixturePlan};
 use crate::extensions::tags::parametrize::{ParameterPlan, ParameterPlanIterator};
 use crate::extensions::tags::{CompiledTags, RuntimeTags};
-use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResult};
+use crate::runner::fixture_resolver::FixturePlanCompiler;
 
 /// A single variant of a test to be executed.
 ///
@@ -23,6 +25,9 @@ use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionResu
 /// so producing a new variant is a handful of refcount bumps rather than a
 /// full `Vec` clone per fixture set.
 pub(super) struct TestVariant<'a> {
+    /// Deferred until variant filtering has selected this test.
+    pub(super) fixture_error: Option<Box<Diagnostic>>,
+
     /// Reference to the original discovered test function. Borrowed from the
     /// surrounding module, which outlives the iterator.
     pub(super) test: &'a DiscoveredTestFunction,
@@ -69,6 +74,9 @@ impl TestVariant<'_> {
 /// module and shares fixture lists between variants via `Rc<[…]>`, so
 /// producing N variants costs N refcount bumps rather than N deep clones.
 pub(super) struct TestVariantIterator<'a> {
+    /// Deferred until variant filtering has selected this test.
+    fixture_error: Option<Box<Diagnostic>>,
+
     /// Discovered Python function shared by all emitted variants.
     test: &'a DiscoveredTestFunction,
     /// Consumed as we iterate, so parameter values and tags move into variants.
@@ -92,6 +100,9 @@ pub(super) struct TestVariantIterator<'a> {
 
 /// Fixture roots and parameter cases compiled before any test fixture executes.
 pub(super) struct CompiledTestPlan {
+    /// Deferred until variant filtering has selected this test.
+    fixture_error: Option<Box<Diagnostic>>,
+
     fixture_plan: Rc<FixturePlan>,
     fixture_dependencies: Rc<[FixtureId]>,
     use_fixture_dependencies: Rc<[FixtureId]>,
@@ -102,6 +113,9 @@ pub(super) struct CompiledTestPlan {
 
 /// Per-test roots and parameter cases compiled against a module fixture arena.
 pub(super) struct PendingTestPlan {
+    /// Deferred until variant filtering has selected this test.
+    fixture_error: Option<Box<Diagnostic>>,
+
     fixture_dependencies: Rc<[FixtureId]>,
     use_fixture_dependencies: Rc<[FixtureId]>,
     auto_use_fixtures: Rc<[FixtureId]>,
@@ -115,34 +129,48 @@ impl PendingTestPlan {
         py: Python,
         test: &DiscoveredTestFunction,
         compiler: &mut FixturePlanCompiler<'_>,
-    ) -> FixtureResolutionResult<Self> {
+    ) -> Self {
         let tags = CompiledTags::new(&test.tags);
         let parametrize_param_names = tags.parameter_names();
 
-        let auto_use_fixtures = compiler.get_normalized_auto_use_fixtures(
-            py,
-            crate::extensions::fixtures::FixtureScope::Function,
-        )?;
-
-        let fixture_dependencies =
-            compiler.resolve_test_fixtures(py, test, &parametrize_param_names)?;
-
-        let use_fixture_dependencies =
-            compiler.resolve_use_fixtures(py, tags.required_fixtures())?;
+        let fixtures = (|| {
+            let auto_use = compiler.get_normalized_auto_use_fixtures(
+                py,
+                crate::extensions::fixtures::FixtureScope::Function,
+            )?;
+            let dependencies =
+                compiler.resolve_test_fixtures(py, test, &parametrize_param_names)?;
+            let use_dependencies = compiler.resolve_use_fixtures(py, tags.required_fixtures())?;
+            Ok((dependencies, use_dependencies, auto_use))
+        })();
+        let (fixture_dependencies, use_fixture_dependencies, auto_use_fixtures, fixture_error) =
+            match fixtures {
+                Ok((dependencies, use_dependencies, auto_use)) => {
+                    (dependencies, use_dependencies, auto_use, None)
+                }
+                Err(error) => (
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Some(Box::new(fixture_resolution_diagnostic(error))),
+                ),
+            };
         let (parameters, runtime_tags) = tags.into_runtime();
 
-        Ok(Self {
+        Self {
+            fixture_error,
             fixture_dependencies: Rc::from(fixture_dependencies),
             use_fixture_dependencies: Rc::from(use_fixture_dependencies),
             auto_use_fixtures: Rc::from(auto_use_fixtures),
             parameters,
             runtime_tags,
-        })
+        }
     }
 
     /// Attaches the immutable arena shared by every test in the module.
     pub(super) fn finish(self, fixture_plan: Rc<FixturePlan>) -> CompiledTestPlan {
         CompiledTestPlan {
+            fixture_error: self.fixture_error,
             fixture_plan,
             fixture_dependencies: self.fixture_dependencies,
             use_fixture_dependencies: self.use_fixture_dependencies,
@@ -157,6 +185,7 @@ impl<'a> TestVariantIterator<'a> {
     /// Consumes one compiled plan into concrete test variants.
     pub(super) fn new(test: &'a DiscoveredTestFunction, plan: CompiledTestPlan) -> Self {
         Self {
+            fixture_error: plan.fixture_error,
             test,
             param_args: plan.parameters.into_iter(),
             case_filter: test.case_filter.clone().map(Vec::into_iter),
@@ -209,6 +238,7 @@ impl<'a> TestVariantIterator<'a> {
         tags.extend(&param_args.tags);
 
         TestVariant {
+            fixture_error: self.fixture_error.clone(),
             test: self.test,
             id: param_args.id().map(str::to_string),
             params: param_args.values,

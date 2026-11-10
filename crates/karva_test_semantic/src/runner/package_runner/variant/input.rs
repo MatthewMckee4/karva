@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use camino::Utf8PathBuf;
+use karva_diagnostic::Diagnostic;
 use pyo3::prelude::*;
 
 use crate::discovery::DiscoveredTestFunction;
@@ -34,6 +35,9 @@ pub(super) struct VariantFixtures {
 
 /// Inputs that remain stable across all attempts for one test variant.
 pub(super) struct VariantInput<'test> {
+    /// Fixture validation failure reported only for selected variants.
+    pub(super) fixture_error: Option<Box<Diagnostic>>,
+
     /// Discovered test definition shared by every attempt.
     pub(super) test: &'test DiscoveredTestFunction,
     /// Parameter values reused when a retry prepares fresh fixtures.
@@ -53,6 +57,7 @@ impl<'test> VariantInput<'test> {
     pub(super) fn from_test_variant(variant: TestVariant<'test>) -> Self {
         let module_path = variant.module_path().clone();
         let TestVariant {
+            fixture_error,
             test,
             params,
             id,
@@ -65,6 +70,7 @@ impl<'test> VariantInput<'test> {
         } = variant;
 
         Self {
+            fixture_error,
             test,
             params,
             identity: VariantIdentity { id, case_index },
