@@ -38,9 +38,9 @@ pub struct FixtureCodeAction {
 /// body fails explicitly until implemented. Existing code, including imports, is
 /// left intact; a new decorator import follows the module header and initial imports.
 pub fn fixture_code_actions(analysis: &SourceAnalysis) -> Vec<FixtureCodeAction> {
-    let source = &analysis.module.source_text;
+    let source = &analysis.module().source_text;
     let mut identifiers = Identifiers::default();
-    source_order::walk_body(&mut identifiers, &analysis.module.module_body);
+    source_order::walk_body(&mut identifiers, &analysis.module().module_body);
     if identifiers.bindings.contains("NotImplementedError") {
         return Vec::new();
     }
@@ -57,10 +57,10 @@ pub fn fixture_code_actions(analysis: &SourceAnalysis) -> Vec<FixtureCodeAction>
         "\n"
     };
     let indent = analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
-        .chain(&analysis.module.fixture_function_defs)
+        .chain(&analysis.module().fixture_function_defs)
         .flat_map(|function| &function.body)
         .find_map(|statement| {
             let before = source.get(..statement.start().to_usize())?;
@@ -84,7 +84,7 @@ pub fn fixture_code_actions(analysis: &SourceAnalysis) -> Vec<FixtureCodeAction>
             continue;
         }
         let scope = analysis
-            .fixture_model
+            .fixture_model()
             .local()
             .iter()
             .filter(|fixture| {
@@ -123,9 +123,9 @@ pub fn fixture_code_actions(analysis: &SourceAnalysis) -> Vec<FixtureCodeAction>
 
 /// Keeps leading comments, the module docstring, and future imports ahead of new imports.
 fn import_offset(analysis: &SourceAnalysis) -> TextSize {
-    let source = &analysis.module.source_text;
+    let source = &analysis.module().source_text;
     let mut offset = TextSize::ZERO;
-    for (index, statement) in analysis.module.module_body.iter().enumerate() {
+    for (index, statement) in analysis.module().module_body.iter().enumerate() {
         let header = matches!(statement, Stmt::Import(_) | Stmt::ImportFrom(_))
             || index == 0
                 && matches!(statement, Stmt::Expr(expression) if matches!(&*expression.value, Expr::StringLiteral(_)));

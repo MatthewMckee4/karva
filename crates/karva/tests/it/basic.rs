@@ -3547,6 +3547,7 @@ fn test_no_subcommand_prints_help() {
 
     Commands:
       test         Run tests
+      health       Inspect test-suite diagnostics; source-only by default
       snapshot     Manage snapshots created by `karva.assert_snapshot()`
       coverage     Read and report native Karva coverage data
       cache        Manage the karva cache

@@ -15,6 +15,7 @@ karva <COMMAND>
 <h3 class="cli-reference">Commands</h3>
 
 <dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
+<dt><a href="#karva-health"><code>karva health</code></a></dt><dd><p>Inspect test-suite diagnostics; source-only by default</p></dd>
 <dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
 <dt><a href="#karva-coverage"><code>karva coverage</code></a></dt><dd><p>Read and report native Karva coverage data</p></dd>
 <dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
@@ -218,6 +219,41 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--warning-filter"><a href="#karva-test--warning-filter"><code>--warning-filter</code></a>, <code>-W</code> <i>warning-filters</i></dt><dd><p>Python warning filter; repeat to add ordered rules. Later rules win. CLI rules replace configured warning-filters. Test-local tags win over CLI</p>
 </dd><dt id="karva-test--watch"><a href="#karva-test--watch"><code>--watch</code></a></dt><dd><p>Re-run tests when Python source files change</p>
 </dd></dl>
+
+## karva health
+
+Inspect test-suite diagnostics; source-only by default
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva health [OPTIONS] [PATHS]...
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-health--paths"><a href="#karva-health--paths"><code>PATHS</code></a></dt><dd><p>Files, directories, globs, or test selectors, as accepted by <code>test</code></p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-health--config-file"><a href="#karva-health--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-health--fail-on"><a href="#karva-health--fail-on"><code>--fail-on</code></a> <i>fail-on</i></dt><dd><p>Lowest finding severity that causes exit code 1</p>
+<p>&#91;default: error&#93;</p><p>Possible values:</p>
+<ul>
+<li><code>none</code></li>
+<li><code>warning</code></li>
+<li><code>error</code></li>
+</ul></dd><dt id="karva-health--format"><a href="#karva-health--format"><code>--format</code></a> <i>format</i></dt><dd><p>Output representation. JSON uses a versioned schema</p>
+<p>&#91;default: text&#93;</p><p>Possible values:</p>
+<ul>
+<li><code>text</code></li>
+<li><code>json</code></li>
+</ul></dd><dt id="karva-health--help"><a href="#karva-health--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
+</dd><dt id="karva-health--ignore"><a href="#karva-health--ignore"><code>--ignore</code></a> <i>ignore</i></dt><dd><p>Rule IDs to suppress for this invocation (comma separated)</p>
+</dd><dt id="karva-health--profile"><a href="#karva-health--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve.</p>
+<p>Defaults to <code>default</code>.</p>
+<p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>
 
 ## karva snapshot
 

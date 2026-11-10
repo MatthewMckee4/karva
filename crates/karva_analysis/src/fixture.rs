@@ -4,20 +4,16 @@
 //! by public fixture name across the current module and ancestor `conftest.py`
 //! providers. This module overlays that relationship on collected syntax. One
 //! [`FixtureModel`] owns the resolved declarations and visibility barriers used
-//! by every editor feature, so provider discovery and precedence stay
+//! by suite and editor queries, so provider discovery and precedence stay
 //! consistent across diagnostics, completion, navigation, and rename.
-
-#![expect(
-    clippy::redundant_pub_crate,
-    reason = "the crate root re-exports fixture analysis across this private module"
-)]
 
 mod imports;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use imports::{FixtureImport, provider_with_imports};
+pub use imports::FixtureImport;
+use imports::provider_with_imports;
 
 use camino::Utf8PathBuf;
 use karva_collector::{CollectedModule, ModuleType};
@@ -35,7 +31,7 @@ pub struct FixtureId {
     pub path: Utf8PathBuf,
 
     /// Function-name range anchoring the fixture declaration.
-    pub(super) range: TextRange,
+    pub range: TextRange,
 }
 
 /// Runtime lifetime of a fixture value.
@@ -88,7 +84,7 @@ impl TryFrom<&str> for FixtureScope {
 
 /// Result of resolving one fixture reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum FixtureResolution {
+pub enum FixtureResolution {
     /// The reference resolves to a source fixture.
     Resolved(FixtureId),
 
@@ -107,66 +103,66 @@ pub(super) enum FixtureResolution {
 
 /// One fixture reference from a function parameter.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct FixtureReference {
+pub struct FixtureReference {
     /// Requested fixture name.
-    pub(super) name: String,
+    pub name: String,
 
     /// Range of the parameter name.
-    pub(super) range: TextRange,
+    pub range: TextRange,
 
     /// Static lookup result.
-    pub(super) resolution: FixtureResolution,
+    pub resolution: FixtureResolution,
 }
 
 /// A statically understood fixture declaration.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct FixtureDefinition {
+pub struct FixtureDefinition {
     /// Stable source identity.
-    pub(super) id: FixtureId,
+    pub id: FixtureId,
 
     /// Public fixture name after literal decorator renaming.
-    pub(super) name: String,
+    pub name: String,
 
     /// Python function name.
-    pub(super) defining_name: String,
+    pub defining_name: String,
 
     /// Function-name source range.
-    pub(super) name_range: TextRange,
+    pub name_range: TextRange,
 
     /// Source range of the provider's first yield expression, or its function
     /// name when the provider is not a generator.
-    pub(super) implementation_range: TextRange,
+    pub implementation_range: TextRange,
 
     /// Source range representing the public fixture name.
     ///
     /// This is the function name for ordinary fixtures, the string contents
     /// for a single literal `name=`, or the complete expression for implicit
     /// string concatenation.
-    pub(super) public_name_range: TextRange,
+    pub public_name_range: TextRange,
 
     /// Range that can be replaced with another public fixture name.
     ///
     /// Implicitly concatenated string literals have no syntax-preserving
     /// single replacement range.
-    pub(super) public_name_edit_range: Option<TextRange>,
+    pub public_name_edit_range: Option<TextRange>,
 
     /// Source signature of the provider function.
-    pub(super) signature: String,
+    pub signature: String,
 
     /// Explicit annotation for the injected fixture value, when available.
-    pub(super) value_type: Option<String>,
+    pub value_type: Option<String>,
 
     /// Leading function docstring, when statically available.
-    pub(super) docstring: Option<String>,
+    pub docstring: Option<String>,
 
     /// Statically known scope, or `None` for dynamic scope metadata.
-    pub(super) scope: Option<FixtureScope>,
+    pub scope: Option<FixtureScope>,
 
     /// Statically known autouse value, or `None` for dynamic metadata.
-    pub(super) auto_use: Option<bool>,
+    pub auto_use: Option<bool>,
 
     /// Fixture dependencies declared as non-variadic parameters.
-    pub(super) dependencies: Vec<FixtureReference>,
+    pub dependencies: Vec<FixtureReference>,
 }
 
 #[derive(Clone, Debug)]
@@ -206,7 +202,7 @@ struct FixtureProvider {
 
 /// Resolved fixture declarations and visibility for one source document.
 #[derive(Debug)]
-pub(super) struct FixtureModel {
+pub struct FixtureModel {
     local: Vec<FixtureDefinition>,
     visible: Vec<FixtureDefinition>,
 
@@ -224,22 +220,23 @@ pub(super) struct FixtureModel {
 }
 
 impl FixtureModel {
-    pub(super) fn imports(&self) -> impl Iterator<Item = &FixtureImport> {
+    /// Fixture imports retaining their source aliases and resolved providers.
+    pub fn imports(&self) -> impl Iterator<Item = &FixtureImport> {
         self.imports.iter()
     }
 
     /// Returns declarations defined by the current source document.
-    pub(super) fn local(&self) -> &[FixtureDefinition] {
+    pub fn local(&self) -> &[FixtureDefinition] {
         &self.local
     }
 
     /// Returns declarations selected before any dynamic provider barrier.
-    pub(super) fn visible(&self) -> &[FixtureDefinition] {
+    pub fn visible(&self) -> &[FixtureDefinition] {
         &self.visible
     }
 
     /// Returns the visible source declaration for `name`.
-    pub(super) fn resolve(&self, name: &str) -> Option<&FixtureDefinition> {
+    pub fn resolve(&self, name: &str) -> Option<&FixtureDefinition> {
         if self.blocked_names.contains(name) {
             return None;
         }
@@ -247,7 +244,7 @@ impl FixtureModel {
     }
 
     /// Returns a declaration by identity, including shadowed dependency providers.
-    pub(super) fn definition(&self, id: &FixtureId) -> Option<&FixtureDefinition> {
+    pub fn definition(&self, id: &FixtureId) -> Option<&FixtureDefinition> {
         self.visible
             .iter()
             .chain(&self.shadowed)
@@ -256,12 +253,12 @@ impl FixtureModel {
     }
 
     /// Returns the parsed built-in provider for `name`, when its source is available.
-    pub(super) fn builtin_definition(&self, name: &str) -> Option<&FixtureDefinition> {
+    pub fn builtin_definition(&self, name: &str) -> Option<&FixtureDefinition> {
         self.builtins.iter().find(|fixture| fixture.name == name)
     }
 
     /// Returns parsed built-ins for completion and metadata consumers.
-    pub(super) fn builtin_completions(
+    pub fn builtin_completions(
         &self,
     ) -> impl Iterator<Item = (&str, Option<FixtureScope>, Option<bool>)> {
         self.builtins
@@ -270,31 +267,27 @@ impl FixtureModel {
     }
 
     /// Returns names whose rejected declarations prevent provider fallback.
-    pub(super) fn blocked_names(&self) -> &HashSet<String> {
+    pub fn blocked_names(&self) -> &HashSet<String> {
         &self.blocked_names
     }
 
     /// Returns whether `expression` is a recognized fixture-use decorator.
-    pub(super) fn is_use_fixtures_reference(
-        &self,
-        function: &StmtFunctionDef,
-        expression: &Expr,
-    ) -> bool {
+    pub fn is_use_fixtures_reference(&self, function: &StmtFunctionDef, expression: &Expr) -> bool {
         self.bindings_for(function).is_use_fixtures(expression)
     }
 
     /// Returns whether a test parameter remains available for fixture injection.
-    pub(super) fn parameter_is_fixture(&self, function: &StmtFunctionDef, name: &str) -> bool {
+    pub fn parameter_is_fixture(&self, function: &StmtFunctionDef, name: &str) -> bool {
         parameter_is_fixture(self.bindings_for(function), function, name)
     }
 
     /// Returns whether parametrization may capture unknown parameter names.
-    pub(super) fn parametrization_is_dynamic(&self, function: &StmtFunctionDef) -> bool {
+    pub fn parametrization_is_dynamic(&self, function: &StmtFunctionDef) -> bool {
         parametrization_is_dynamic(self.bindings_for(function), function)
     }
 
     /// Returns whether static lookup may fall back to Karva's built-ins.
-    pub(super) const fn builtins_visible(&self) -> bool {
+    pub const fn builtins_visible(&self) -> bool {
         self.builtins_visible
     }
 
@@ -313,18 +306,18 @@ struct InvalidMetadata {
 
 /// Static metadata for a fixture bundled with Karva.
 #[derive(Clone, Copy)]
-pub(super) struct BuiltinFixture {
+pub struct BuiltinFixture {
     /// Public fixture name.
     name: &'static str,
 
     /// Runtime fixture scope.
-    pub(super) scope: FixtureScope,
+    pub scope: FixtureScope,
 
     /// Source-like signature shown by editor features.
-    pub(super) signature: &'static str,
+    pub signature: &'static str,
 
     /// User-facing description derived from the bundled implementation.
-    pub(super) docstring: &'static str,
+    pub docstring: &'static str,
 }
 
 const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
@@ -408,7 +401,7 @@ const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     },
 ];
 
-pub(super) fn analyze(
+pub fn analyze(
     module: &CollectedModule,
     try_import_fixtures: bool,
 ) -> (FixtureModel, Vec<SourceDiagnostic>) {
@@ -417,7 +410,7 @@ pub(super) fn analyze(
 
 /// Analyzes a module against configuration providers ordered from the session
 /// root toward the nearest package.
-pub(super) fn analyze_modules(
+pub fn analyze_modules(
     current: &CollectedModule,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
@@ -426,7 +419,7 @@ pub(super) fn analyze_modules(
     analyze_modules_with_sources(current, parents, builtin_module, try_import_fixtures, None)
 }
 
-pub(super) fn analyze_modules_with_sources(
+pub fn analyze_modules_with_sources(
     current: &CollectedModule,
     parents: &[&CollectedModule],
     builtin_module: Option<&CollectedModule>,
@@ -598,14 +591,14 @@ impl FixtureModel {
 }
 
 /// Returns the built-in fixtures exposed by Karva's runtime.
-pub(super) fn builtin_fixtures() -> impl Iterator<Item = (&'static str, FixtureScope)> {
+pub fn builtin_fixtures() -> impl Iterator<Item = (&'static str, FixtureScope)> {
     BUILTIN_FIXTURES
         .iter()
         .map(|fixture| (fixture.name, fixture.scope))
 }
 
 /// Returns bundled metadata for a built-in fixture name.
-pub(super) fn builtin_info(name: &str) -> Option<BuiltinFixture> {
+pub fn builtin_info(name: &str) -> Option<BuiltinFixture> {
     builtin(name)
 }
 
@@ -728,7 +721,7 @@ fn has_unknown_fixture_decorator(module: &CollectedModule) -> bool {
 }
 
 /// Returns the replaceable contents of a non-concatenated string literal.
-pub(super) fn single_string_content_range(
+pub fn single_string_content_range(
     expression: &ruff_python_ast::ExprStringLiteral,
 ) -> Option<TextRange> {
     let [literal] = expression.value.as_slice() else {
@@ -1481,7 +1474,6 @@ mod tests {
 
     use camino::{Utf8Path, Utf8PathBuf};
     use ruff_python_ast::PythonVersion;
-    use ruff_text_size::TextSize;
 
     use super::FixtureResolution;
     use crate::{DiagnosticCode, SourceAnalysisSettings, analyze_source, analyze_sources};
@@ -1744,54 +1736,6 @@ mod tests {
         assert!(
             matches!(dependency, FixtureResolution::Resolved(id) if id.path == "/project/pkg/conftest.py")
         );
-    }
-
-    #[test]
-    fn same_name_overrides_continue_outward_through_all_providers() {
-        let root = module(
-            "/project/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(): pass\n",
-        );
-        let parent = module(
-            "/project/pkg/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(database): pass\n",
-        );
-        let current = module(
-            "/project/pkg/inner/conftest.py",
-            "from karva import fixture\n\n@fixture\ndef database(database): pass\n",
-        );
-        let analysis = analyze_sources(current, &[root, parent], &settings());
-
-        assert!(
-            analysis.diagnostics.is_empty(),
-            "{:?}",
-            analysis.diagnostics
-        );
-        let dependency = &analysis.fixture_model.local()[0].dependencies[0].resolution;
-        let id = match dependency {
-            FixtureResolution::Resolved(id) => Some(id),
-            _ => None,
-        }
-        .expect("expected parent fixture");
-        assert_eq!(id.path, "/project/pkg/conftest.py");
-        let parent = analysis
-            .fixture_model
-            .definition(id)
-            .expect("parent definition");
-        assert!(matches!(
-            &parent.dependencies[0].resolution,
-            FixtureResolution::Resolved(id) if id.path == "/project/conftest.py"
-        ));
-        let offset = TextSize::try_from(
-            analysis
-                .module
-                .source_text
-                .find("database):")
-                .expect("parameter"),
-        )
-        .expect("source fits");
-        let target = crate::fixture_definition(&analysis, offset).expect("outer override target");
-        assert_eq!(target.path, "/project/pkg/conftest.py");
     }
 
     #[test]

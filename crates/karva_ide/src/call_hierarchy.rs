@@ -41,17 +41,17 @@ pub struct FixtureHierarchyCall {
 /// Returns accepted fixture and collected test functions in source order.
 pub fn fixture_hierarchy_items(analysis: &SourceAnalysis) -> Vec<FixtureHierarchyItem> {
     let mut items = analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
         .chain(
             analysis
-                .module
+                .module()
                 .fixture_function_defs
                 .iter()
                 .filter(|function| {
                     analysis
-                        .fixture_model
+                        .fixture_model()
                         .local()
                         .iter()
                         .any(|definition| definition.id.range == function.name.range)
@@ -142,10 +142,10 @@ pub fn fixture_outgoing_calls(
 
 fn item(analysis: &SourceAnalysis, function: &StmtFunctionDef) -> FixtureHierarchyItem {
     FixtureHierarchyItem {
-        path: analysis.module.path.path().to_path_buf(),
+        path: analysis.module().path.path().to_path_buf(),
         name: function.name.to_string(),
         kind: if analysis
-            .fixture_model
+            .fixture_model()
             .local()
             .iter()
             .any(|definition| definition.id.range == function.name.range)
@@ -190,7 +190,7 @@ mod tests {
     use crate::{SourceAnalysisSettings, SourceDocument};
 
     fn index(sources: &[(&str, &str)]) -> WorkspaceSourceIndex {
-        WorkspaceSourceIndex::from_documents(
+        crate::test_support::source_index(
             "/project".into(),
             sources.iter().map(|(path, source)| {
                 SourceDocument::new(Utf8Path::new("/project").join(path), (*source).to_owned())
@@ -210,7 +210,7 @@ mod tests {
             .expect("source analysis");
         fixture_target(
             &analysis,
-            TextSize::try_from(analysis.module.source_text.find(marker).expect("marker"))
+            TextSize::try_from(analysis.module().source_text.find(marker).expect("marker"))
                 .expect("offset"),
         )
         .expect("provider")
@@ -337,7 +337,7 @@ mod tests {
             .analyze(Utf8Path::new("/project/test_example.py"))
             .expect("analysis");
         assert_eq!(
-            &analysis.module.source_text[outgoing[0].ranges[0].to_std_range()],
+            &analysis.module().source_text[outgoing[0].ranges[0].to_std_range()],
             "данные"
         );
         assert!(
@@ -345,7 +345,7 @@ mod tests {
                 &analysis,
                 TextSize::try_from(
                     analysis
-                        .module
+                        .module()
                         .source_text
                         .find("tmp_path")
                         .expect("builtin")

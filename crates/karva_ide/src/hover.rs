@@ -1,8 +1,8 @@
 use ruff_python_ast::{Expr, StmtFunctionDef};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
-use crate::fixture::FixtureDefinition;
 use crate::{FixtureId, FixtureResolution, FixtureScope, SourceAnalysis};
+use karva_analysis::FixtureDefinition;
 
 /// Source-only hover information for one fixture reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,7 +41,7 @@ pub struct FixtureHover {
 /// missing, and dynamic providers remain silent rather than showing a target
 /// that runtime lookup cannot guarantee.
 pub fn hover_fixture(analysis: &SourceAnalysis, offset: TextSize) -> Option<FixtureHover> {
-    if let Some(reference) = analysis.fixture_model.local().iter().find_map(|fixture| {
+    if let Some(reference) = analysis.fixture_model().local().iter().find_map(|fixture| {
         fixture
             .dependencies
             .iter()
@@ -57,17 +57,17 @@ pub fn hover_fixture(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fixt
     }
 
     for function in analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
-        .chain(&analysis.module.fixture_function_defs)
+        .chain(&analysis.module().fixture_function_defs)
     {
         if let Some(reference) = test_parameter_reference(analysis, function, offset) {
             return hover_from_name(analysis, reference.0, reference.1);
         }
     }
 
-    for function in &analysis.module.test_function_defs {
+    for function in &analysis.module().test_function_defs {
         if let Some((name, range)) = use_fixtures_reference(analysis, function, offset) {
             return hover_from_name(analysis, name, range);
         }
@@ -84,7 +84,7 @@ pub fn hover_fixture(analysis: &SourceAnalysis, offset: TextSize) -> Option<Fixt
 /// ancestor overrides, without importing user code.
 pub fn fixture_reference_hovers(analysis: &SourceAnalysis) -> Vec<FixtureHover> {
     let mut hovers = analysis
-        .fixture_model
+        .fixture_model()
         .local()
         .iter()
         .flat_map(|definition| {
@@ -98,7 +98,7 @@ pub fn fixture_reference_hovers(analysis: &SourceAnalysis) -> Vec<FixtureHover> 
             })
         })
         .collect::<Vec<_>>();
-    for function in &analysis.module.test_function_defs {
+    for function in &analysis.module().test_function_defs {
         for parameter in function.parameters.iter_non_variadic_params() {
             if let Some((name, range)) =
                 test_parameter_reference(analysis, function, parameter.parameter.name.range.start())
@@ -112,14 +112,14 @@ pub fn fixture_reference_hovers(analysis: &SourceAnalysis) -> Vec<FixtureHover> 
                 continue;
             };
             if !analysis
-                .fixture_model
+                .fixture_model()
                 .is_use_fixtures_reference(function, &call.func)
             {
                 continue;
             }
             for argument in &call.arguments.args {
                 if let Expr::StringLiteral(literal) = argument
-                    && let Some(range) = crate::fixture::single_string_content_range(literal)
+                    && let Some(range) = karva_analysis::single_string_content_range(literal)
                     && let Some((name, _)) =
                         use_fixtures_reference(analysis, function, range.start())
                     && let Some(hover) = hover_from_name(analysis, name, literal.range())
@@ -138,16 +138,16 @@ fn hover_from_name(
     name: String,
     range: TextRange,
 ) -> Option<FixtureHover> {
-    if let Some(definition) = analysis.fixture_model.resolve(&name) {
+    if let Some(definition) = analysis.fixture_model().resolve(&name) {
         return Some(hover_from_definition(name, range, definition));
     }
-    if !analysis.fixture_model.builtins_visible() {
+    if !analysis.fixture_model().builtins_visible() {
         return None;
     }
-    if let Some(definition) = analysis.fixture_model.builtin_definition(&name) {
+    if let Some(definition) = analysis.fixture_model().builtin_definition(&name) {
         return Some(hover_from_builtin_definition(name, range, definition));
     }
-    let builtin = crate::fixture::builtin_info(&name)?;
+    let builtin = karva_analysis::builtin_info(&name)?;
     Some(FixtureHover {
         name,
         range,
@@ -169,9 +169,9 @@ fn hover_from_resolution(
 ) -> Option<FixtureHover> {
     match resolution {
         FixtureResolution::Resolved(id) => {
-            let definition = analysis.fixture_model.definition(id)?;
+            let definition = analysis.fixture_model().definition(id)?;
             if analysis
-                .fixture_model
+                .fixture_model()
                 .builtin_definition(&name)
                 .is_some_and(|builtin| builtin.id == *id)
             {
@@ -241,13 +241,13 @@ fn test_parameter_reference(
         .iter_non_variadic_params()
         .find(|parameter| parameter.parameter.name.range.contains_inclusive(offset))?;
     if !analysis
-        .fixture_model
+        .fixture_model()
         .parameter_is_fixture(function, parameter.parameter.name.as_str())
     {
         return None;
     }
     let name = parameter.parameter.name.to_string();
-    if analysis.fixture_model.blocked_names().contains(&name) {
+    if analysis.fixture_model().blocked_names().contains(&name) {
         return None;
     }
     Some((name, parameter.parameter.name.range))
@@ -266,7 +266,7 @@ fn use_fixtures_reference(
             continue;
         };
         if !analysis
-            .fixture_model
+            .fixture_model()
             .is_use_fixtures_reference(function, &call.func)
         {
             continue;
@@ -275,7 +275,7 @@ fn use_fixtures_reference(
             let Expr::StringLiteral(literal) = argument else {
                 return None;
             };
-            let interior = crate::fixture::single_string_content_range(literal)?;
+            let interior = karva_analysis::single_string_content_range(literal)?;
             if !interior.contains_inclusive(offset) {
                 continue;
             }
@@ -295,8 +295,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        SourceAnalysisSettings, SourceDocument, WorkspaceSourceIndex, analyze_source,
-        analyze_source_with_parents,
+        SourceAnalysisSettings, SourceDocument, analyze_source, analyze_source_with_parents,
     };
 
     fn settings() -> SourceAnalysisSettings {
@@ -427,7 +426,7 @@ mod tests {
             from support import client
             def test_example(client): pass
         "};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             Utf8PathBuf::from("/project"),
             [
                 SourceDocument::new(
