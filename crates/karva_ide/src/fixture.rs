@@ -329,6 +329,24 @@ pub(super) struct BuiltinFixture {
 
 const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     BuiltinFixture {
+        name: "module_mocker",
+        scope: FixtureScope::Module,
+        signature: "module_mocker() -> Generator[MockerFixture, None, None]",
+        docstring: "Own mocks and patches for one test module.",
+    },
+    BuiltinFixture {
+        name: "package_mocker",
+        scope: FixtureScope::Package,
+        signature: "package_mocker() -> Generator[MockerFixture, None, None]",
+        docstring: "Own mocks and patches for one test package.",
+    },
+    BuiltinFixture {
+        name: "session_mocker",
+        scope: FixtureScope::Session,
+        signature: "session_mocker() -> Generator[MockerFixture, None, None]",
+        docstring: "Own mocks and patches for one worker's test session.",
+    },
+    BuiltinFixture {
         name: "mocker",
         scope: FixtureScope::Function,
         signature: "mocker() -> Generator[MockerFixture, None, None]",
@@ -1548,7 +1566,7 @@ mod tests {
                 @fixture
                 def database(): pass
 
-                def test_example(database, tmp_path, mocker): pass
+                def test_example(database, tmp_path, mocker, module_mocker, package_mocker, session_mocker): pass
             "})
             .diagnostics
             .as_slice(),
