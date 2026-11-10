@@ -8,11 +8,11 @@ use karva_coverage_runtime::CoverageSession;
 use karva_python_semantic::QualifiedTestName;
 use pyo3::prelude::*;
 
-use crate::diagnostic::{fixture_resolution_diagnostic, invalid_parametrize_diagnostic};
+use crate::diagnostic::invalid_parametrize_diagnostic;
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
 use crate::output_capture::{PythonStdinCapture, StdinCapture};
-use crate::runner::fixture_resolver::{FixturePlanCompiler, FixtureResolutionError};
+use crate::runner::fixture_resolver::FixturePlanCompiler;
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::{CompiledTestPlan, PendingTestPlan, TestVariantIterator};
 use crate::runner::{FinalizerCache, FixtureCache};
@@ -29,7 +29,7 @@ pub use fixture::{FixtureCallError, FixtureChainEntry};
 use failure::TestError;
 
 type TestPlanKey = (Utf8PathBuf, String);
-type CompiledTestPlans = HashMap<TestPlanKey, Result<CompiledTestPlan, FixtureResolutionError>>;
+type CompiledTestPlans = HashMap<TestPlanKey, CompiledTestPlan>;
 type VariantIterators<'a> = HashMap<TestPlanKey, TestVariantIterator<'a>>;
 
 struct TestContext<'a> {
@@ -243,7 +243,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             for (name, plan) in module_plans {
                 plans.insert(
                     (module.path().clone(), name),
-                    plan.map(|plan| plan.finish(Rc::clone(&fixture_plan))),
+                    plan.finish(Rc::clone(&fixture_plan)),
                 );
             }
         }
@@ -378,10 +378,6 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         ordered
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "test execution receives independent plan and cache state"
-    )]
     fn execute_one_test<'a>(
         &mut self,
         py: Python<'_>,
@@ -389,29 +385,14 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         test: &'a DiscoveredTestFunction,
         test_plans: &mut CompiledTestPlans,
         variant_iterators: &mut VariantIterators<'a>,
-        failed_plans: &mut HashMap<TestPlanKey, TestError>,
         case_index: Option<usize>,
     ) -> bool {
         let key = (module.path().clone(), test.name().to_string());
-        if !variant_iterators.contains_key(&key) && !failed_plans.contains_key(&key) {
+        if !variant_iterators.contains_key(&key) {
             let Some(test_plan) = test_plans.remove(&key) else {
                 return false;
             };
-            match test_plan {
-                Ok(plan) => {
-                    variant_iterators.insert(key.clone(), TestVariantIterator::new(test, plan));
-                }
-                Err(error) => {
-                    failed_plans.insert(
-                        key.clone(),
-                        TestError::new(fixture_resolution_diagnostic(error)),
-                    );
-                }
-            }
-        }
-        if let Some(error) = failed_plans.get(&key) {
-            self.register_error_test(test, error.clone());
-            return false;
+            variant_iterators.insert(key.clone(), TestVariantIterator::new(test, test_plan));
         }
         let Some(iterator) = variant_iterators.get_mut(&key) else {
             return false;
@@ -502,7 +483,6 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let mut failed_modules = HashMap::<Utf8PathBuf, TestError>::new();
         let mut failed_packages = HashMap::<Utf8PathBuf, TestError>::new();
         let mut variant_iterators = VariantIterators::new();
-        let mut failed_plans = HashMap::new();
         let mut passed = true;
 
         for context in &contexts {
@@ -562,7 +542,6 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                             context.test,
                             test_plans,
                             &mut variant_iterators,
-                            &mut failed_plans,
                             context.case_index,
                         )
                     }
@@ -573,7 +552,6 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                         context.test,
                         test_plans,
                         &mut variant_iterators,
-                        &mut failed_plans,
                         context.case_index,
                     )
                 }

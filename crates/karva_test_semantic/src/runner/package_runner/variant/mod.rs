@@ -83,6 +83,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             return result;
         }
 
+        if let Some(error) = self.input.fixture_error.take() {
+            return self.package_runner.context.register_test_case_result(
+                &unresolved_test_name,
+                TestExecutionOutcome::error(*error),
+                Duration::ZERO,
+                None,
+            );
+        }
+
         let (initial_test_name, initial_name_is_exact) =
             self.initial_test_name(unresolved_test_name);
         // Flush checkpoint before fixture setup; it covers setup and test body.
