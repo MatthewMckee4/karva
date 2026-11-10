@@ -391,3 +391,44 @@ def test_recwarn_pop(recwarn):
     recwarn.clear()
     assert len(recwarn) == 0
 ```
+
+## Mocks and Spies
+
+Use the function-scoped `mocker` fixture to replace dependencies and assert how
+calls were made. Patches are restored after every test attempt, including
+failures and retries.
+
+```py title="test.py"
+import os
+
+import karva
+
+
+def test_directory(mocker: karva.MockerFixture):
+    getcwd = mocker.patch("os.getcwd", return_value="/project")
+    assert os.getcwd() == "/project"
+    getcwd.assert_called_once_with()
+```
+
+The supported pytest-mock surface uses Python's `unittest.mock`:
+
+- `patch(target, ...)`, `patch.object(obj, name, ...)`, `patch.dict(mapping, ...)`,
+  and `patch.multiple(target, ...)` accept the standard-library patch arguments.
+  They start immediately; use them directly rather than as decorators or context
+  managers. `DEFAULT` requests generated mocks in `patch.multiple`.
+- `Mock`, `MagicMock`, `AsyncMock`, `PropertyMock`, `ANY`, `call`, `sentinel`, and
+  `mock_open` expose the standard-library objects and assertion helpers.
+- `spy(obj, name)` runs the original sync or async callable and records calls,
+  `spy_return`, `spy_return_list`, and `spy_exception`. Iterator duplication is
+  not supported.
+- `stub(name=None)` and `async_stub(name=None)` create callbacks that accept any
+  arguments. Use `assert_awaited_once_with(...)` to check async callbacks.
+- `stop(result)` restores the patch or spy that returned `result`. For
+  `patch.multiple`, pass the returned dictionary. `stopall()` restores every
+  patch owned by this fixture in reverse order.
+- `resetall(return_value=False, side_effect=False)` clears call history on active
+  patches and spies without restoring them. The optional flags also reset return
+  values or side effects. Direct constructors and stubs are not tracked or reset.
+
+Broader-scoped mocker fixtures, pytest-mock configuration, and enhanced assertion
+output are not provided.
