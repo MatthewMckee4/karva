@@ -52,3 +52,23 @@ resolution, or dynamic parameter names prevent this check. Modules declaring
 `__all__`, and fixture-only modules other than `conftest.py`, are treated as public fixture APIs. Plugin and built-in providers are
 not reported. Explicit path selections skip this rule; run without paths to
 inspect the full configured suite.
+
+Run tests explicitly to measure duration hotspots:
+
+```sh
+uv run karva health --durations
+```
+
+This runs the selection serially in stable order, with fresh worker processes and
+without historical duration scheduling. Test and fixture behavior, retries, and
+timeout settings still apply. Each actual fixture setup and teardown is measured
+once per instance, excluding dependency setup. Shared cost is not copied onto
+every test. Test-body observations include the attempt number.
+
+`duration-hotspot` is informational: it reports invocations above the analyzed
+run's upper median, ordered by source location with their duration rank. JSON
+also contains every measurement, source coordinates, fixture scopes, dependency
+names, wall time, and time spent serializing and sending observations. That
+reporting overhead excludes clocks and source-coordinate construction. There is
+no universal definition of slow or fixed ranking cutoff. Runtime failures remain
+visible and make the command fail, independently of advisory severity.

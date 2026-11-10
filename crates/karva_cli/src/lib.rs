@@ -25,7 +25,7 @@ pub use enums::{
     CovContext, CovReport, FlakyResult, NoTests, OutputFormat, ResultFormat, RunIgnored,
 };
 pub use exit_status::ExitStatus;
-pub use health::{HealthCommand, HealthFailOn, HealthFormat};
+pub use health::{HealthCommand, HealthFailOn, HealthFormat, HealthTimings};
 pub use partition::PartitionSelection;
 pub use show_config::ShowConfigCommand;
 pub use snapshot::{
