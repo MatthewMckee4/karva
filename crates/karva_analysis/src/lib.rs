@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 mod fixture;
+mod health;
 mod occurrences;
 mod source_index;
 
@@ -18,6 +19,7 @@ pub use fixture::{
     BuiltinFixture, FixtureDefinition, FixtureId, FixtureModel, FixtureReference,
     FixtureResolution, FixtureScope, builtin_fixtures, builtin_info, single_string_content_range,
 };
+pub use health::shadowed_definitions;
 pub use occurrences::{
     FixtureOccurrence, FixtureOccurrenceKind, body_contains_name, body_contains_name_in_body,
     body_has_nested_binding_conflict, body_has_unsupported_bindings,
@@ -62,6 +64,12 @@ pub struct SourceAnalysisSettings {
 /// Stable identifier for a source diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiagnosticCode {
+    /// A later definition replaces a test or fixture in the same Python scope.
+    ShadowedDefinition,
+
+    /// Conditional execution may replace a test or fixture.
+    PossiblyShadowedDefinition,
+
     /// Two fixtures in one module resolve to the same public name.
     DuplicateFixture,
 
@@ -81,6 +89,8 @@ pub enum DiagnosticCode {
 impl DiagnosticCode {
     /// All supported source diagnostic identifiers, for validating suppressions.
     pub const ALL: &[Self] = &[
+        Self::ShadowedDefinition,
+        Self::PossiblyShadowedDefinition,
         Self::DuplicateFixture,
         Self::InvalidFixture,
         Self::MissingFixture,
@@ -91,6 +101,9 @@ impl DiagnosticCode {
     /// Concrete next step for a source diagnostic.
     pub const fn action(self) -> &'static str {
         match self {
+            Self::ShadowedDefinition | Self::PossiblyShadowedDefinition => {
+                "Rename or remove one definition so each test or fixture has a distinct name."
+            }
             Self::DuplicateFixture => "Rename or remove the duplicate fixture.",
             Self::InvalidFixture => "Correct the fixture decorator arguments.",
             Self::MissingFixture => "Define or import the required fixture.",
@@ -102,6 +115,8 @@ impl DiagnosticCode {
     /// Returns the stable protocol code.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ShadowedDefinition => "shadowed-definition",
+            Self::PossiblyShadowedDefinition => "possibly-shadowed-definition",
             Self::DuplicateFixture => "duplicate-fixture",
             Self::InvalidFixture => "invalid-fixture",
             Self::MissingFixture => "missing-fixture",
