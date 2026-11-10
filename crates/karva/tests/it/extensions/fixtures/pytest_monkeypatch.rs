@@ -22,6 +22,87 @@ use insta_cmd::assert_cmd_snapshot;
 use crate::common::TestContext;
 
 #[test]
+fn test_setattr_rejected_assignment_cleanup() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+import karva
+
+
+def test_rejected_assignment(monkeypatch):
+    class Target:
+        value = "original"
+
+    monkeypatch.setattr(Target, "value", "patched")
+    with karva.raises(AttributeError):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.undo()
+    assert Target.value == "original"
+    monkeypatch.undo()
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_rejected_assignment(monkeypatch)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_setattr_rejected_assignment_reports_original_failure() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import sys
+
+
+def test_patch_stdin(monkeypatch):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            FAIL [TIME] test::test_patch_stdin(monkeypatch)
+
+    failures:
+
+    test::test_patch_stdin(monkeypatch):
+
+    error[test-failure]: Test `test_patch_stdin` failed
+     --> test.py:5:5
+      |
+    5 | def test_patch_stdin(monkeypatch):
+      |     ^^^^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `monkeypatch`: `<MockEnv object>`
+    info: Test failed here
+     --> test.py:6:5
+      |
+    6 |     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: 'builtins.CapturedStdin' object attribute 'isatty' is read-only
+
+    ────────────
+         Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[test]
 fn test_setattr_class_attribute() {
     let context = TestContext::with_file(
         "test.py",

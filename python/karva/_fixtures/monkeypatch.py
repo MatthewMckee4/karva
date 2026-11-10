@@ -185,8 +185,8 @@ class MockEnv:
 
         if inspect.isclass(target):
             oldval = target.__dict__.get(name, _NOTSET)
-        self._setattr.append((target, name, oldval))
         setattr(target, name, value)
+        self._setattr.append((target, name, oldval))
 
     def delattr(
         self,
