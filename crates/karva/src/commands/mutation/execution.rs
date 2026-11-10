@@ -13,7 +13,7 @@ use karva_diagnostic::AggregatedResults;
 use karva_ipc::MutationSource;
 use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
 use karva_metadata::{RunTimeoutSecs, TerminalOptions};
-use karva_mutation::{Mutant, MutationRecord, MutationResults, Outcome};
+use karva_mutation::{MUTATION_RESULTS_PATH, Mutant, MutationRecord, MutationResults, Outcome};
 use karva_project::Project;
 use karva_runner::{ParallelTestConfig, RunOutput};
 
@@ -375,7 +375,7 @@ pub(super) fn run(
         full_suite,
         json,
     } = settings;
-    let path = project.cwd().join(".karva/mutation/results.json");
+    let path = project.cwd().join(MUTATION_RESULTS_PATH);
     let shutdown = karva_runner::shutdown_receiver();
     let cancelled = AtomicBool::new(false);
     let context = results.context_fingerprint.clone();

@@ -1,22 +1,17 @@
 //! Cross-boundary mutation workflow contracts using real Python worker processes.
 
-use std::process::Command;
 #[cfg(unix)]
-use std::process::{Output, Stdio};
+use std::process::{Command, Output, Stdio};
 #[cfg(unix)]
 use std::time::Duration;
 
 use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
-use karva_mutation::{MutationResults, Outcome};
+#[cfg(unix)]
+use karva_mutation::MUTATION_DIR;
+use karva_mutation::{MUTATION_RESULTS_PATH, MutationResults, Outcome};
 
 use crate::common::TestContext;
-
-fn command(context: &TestContext, action: &str) -> Command {
-    let mut command = context.karva_command_in(context.root());
-    command.args(["mutate", action]);
-    command
-}
 
 #[cfg(unix)]
 fn interrupt_when_started(context: &TestContext, command: &mut Command, marker: &str) -> Output {
@@ -41,8 +36,7 @@ fn interrupt_when_started(context: &TestContext, command: &mut Command, marker: 
 }
 
 fn results(context: &TestContext) -> MutationResults {
-    MutationResults::read(&context.root().join(".karva/mutation/results.json"))
-        .expect("mutation results")
+    MutationResults::read(&context.root().join(MUTATION_RESULTS_PATH)).expect("mutation results")
 }
 
 fn project() -> TestContext {
@@ -62,7 +56,7 @@ fn project() -> TestContext {
 #[test]
 fn kills_mutations_without_changing_source_and_reuses_valid_results() {
     let context = project();
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -79,16 +73,29 @@ fn kills_mutations_without_changing_source_and_reuses_valid_results() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let first = results(&context);
-    assert_eq!(first.records.len(), 1);
-    let record = first.records.values().next().expect("record");
-    assert_eq!(record.outcome, Outcome::Killed);
-    assert_eq!(record.selected_tests, ["tests.test_app::test_enabled"]);
-    assert_eq!(
-        context.read_file("app.py"),
-        "def enabled():\n    return True\n"
-    );
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    let records = first
+        .records
+        .values()
+        .map(|record| (record.outcome, &record.selected_tests))
+        .collect::<Vec<_>>();
+    insta::assert_debug_snapshot!(records, @r#"
+    [
+        (
+            Killed,
+            [
+                "tests.test_app::test_enabled",
+            ],
+        ),
+    ]
+    "#);
+    insta::assert_snapshot!(context.read_file("app.py"), @"
+    def enabled():
+        return True
+    ");
+
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -104,6 +111,7 @@ fn kills_mutations_without_changing_source_and_reuses_valid_results() {
 
     ----- stderr -----
     ");
+
     let cached = results(&context);
     assert!(
         cached
@@ -120,7 +128,7 @@ fn inspects_retests_and_applies_a_surviving_mutant() {
         "tests/test_app.py",
         "from app import enabled\n\ndef test_enabled():\n    assert isinstance(enabled(), bool)\n",
     );
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -137,10 +145,12 @@ fn inspects_retests_and_applies_a_surviving_mutant() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let stored = results(&context);
     let id = &stored.records.values().next().expect("record").mutant.id;
-    assert_eq!(stored.records[id].outcome, Outcome::Survived);
-    let mut show = command(&context, "show");
+    insta::assert_debug_snapshot!(stored.records[id].outcome, @"Survived");
+
+    let mut show = context.mutate("show");
     show.arg(id);
     assert_cmd_snapshot!(show, @"
     success: true
@@ -159,11 +169,13 @@ fn inspects_retests_and_applies_a_surviving_mutant() {
 
     ----- stderr -----
     ");
+
     context.write_file(
         "tests/test_app.py",
         "from app import enabled\n\ndef test_enabled():\n    assert enabled() is True\n",
     );
-    let mut retest = command(&context, "retest");
+
+    let mut retest = context.mutate("retest");
     retest.arg(id);
     assert_cmd_snapshot!(retest, @"
     success: true
@@ -182,8 +194,10 @@ fn inspects_retests_and_applies_a_surviving_mutant() {
     ----- stderr -----
     Completed mutation 1/1
     ");
-    assert_eq!(results(&context).records[id].outcome, Outcome::Killed);
-    let mut apply = command(&context, "apply");
+
+    insta::assert_debug_snapshot!(results(&context).records[id].outcome, @"Killed");
+
+    let mut apply = context.mutate("apply");
     apply.arg(id);
     assert_cmd_snapshot!(apply, @"
     success: true
@@ -193,11 +207,13 @@ fn inspects_retests_and_applies_a_surviving_mutant() {
 
     ----- stderr -----
     ");
-    assert_eq!(
-        context.read_file("app.py"),
-        "def enabled():\n    return False\n"
-    );
-    let mut stale = command(&context, "apply");
+
+    insta::assert_snapshot!(context.read_file("app.py"), @"
+    def enabled():
+        return False
+    ");
+
+    let mut stale = context.mutate("apply");
     stale.arg(id);
     assert_cmd_snapshot!(stale, @"
     success: false
@@ -208,10 +224,11 @@ fn inspects_retests_and_applies_a_surviving_mutant() {
     karva failed
       Cause: mutant 7191b78610ed77ee527de1179b4b50d2: stale source `app.py`; rerun `uv run karva mutate run` before applying
     ");
-    assert_eq!(
-        context.read_file("app.py"),
-        "def enabled():\n    return False\n"
-    );
+
+    insta::assert_snapshot!(context.read_file("app.py"), @"
+    def enabled():
+        return False
+    ");
 }
 
 #[test]
@@ -221,7 +238,7 @@ fn baseline_failure_preserves_original_failures_and_does_not_create_results() {
         "tests/test_app.py",
         "def test_baseline():\n    assert False, 'baseline evidence'\n",
     );
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -249,14 +266,14 @@ fn baseline_failure_preserves_original_failures_and_does_not_create_results() {
     karva failed
       Cause: mutation baseline failed; fix the unmodified test suite before running mutants
     ");
-    assert!(!context.root().join(".karva/mutation/results.json").exists());
+    assert!(!context.root().join(MUTATION_RESULTS_PATH).exists());
 }
 
 #[test]
 fn reports_uncovered_sources_and_rejects_invalid_filters_and_budgets() {
     let context = project();
     context.write_file("tests/test_app.py", "def test_other():\n    pass\n");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -282,7 +299,7 @@ fn reports_uncovered_sources_and_rejects_invalid_filters_and_budgets() {
             .outcome,
         Outcome::Uncovered
     );
-    let mut invalid = command(&context, "run");
+    let mut invalid = context.mutate("run");
     invalid.args(["--operator", "typo"]);
     assert_cmd_snapshot!(invalid, @"
     success: false
@@ -293,7 +310,8 @@ fn reports_uncovered_sources_and_rejects_invalid_filters_and_budgets() {
     karva failed
       Cause: unknown mutation operator `typo`; allowed: literal, comparison, boolean, arithmetic, control-flow, return
     ");
-    let mut invalid = command(&context, "run");
+
+    let mut invalid = context.mutate("run");
     invalid.args(["--timeout", "0"]);
     assert_cmd_snapshot!(invalid, @"
     success: false
@@ -309,7 +327,7 @@ fn reports_uncovered_sources_and_rejects_invalid_filters_and_budgets() {
 #[test]
 fn json_and_terminal_reports_use_the_same_stored_outcomes_from_nested_directories() {
     let context = project();
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -326,6 +344,7 @@ fn json_and_terminal_reports_use_the_same_stored_outcomes_from_nested_directorie
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let mut nested = context.karva_command_in(context.root().join("tests"));
     nested.args(["mutate", "results"]);
     assert_cmd_snapshot!(nested, @"
@@ -344,12 +363,13 @@ fn json_and_terminal_reports_use_the_same_stored_outcomes_from_nested_directorie
 
     ----- stderr -----
     ");
+
     let mut settings = insta::Settings::clone_current();
     settings.add_filter(r#"("context_fingerprint": ")[0-9a-f]+""#, "$1[CONTEXT]\"");
     settings.add_filter(r#"("baseline_seconds": )\d+(?:\.\d+)?"#, "$1\"[TIME]\"");
     settings.add_filter(r#"(?m)^(\s*"diagnostic": ).*$"#, "$1\"[DIAGNOSTIC]\"");
     let _guard = settings.bind_to_scope();
-    let mut json = command(&context, "results");
+    let mut json = context.mutate("results");
     json.arg("--json");
     assert_cmd_snapshot!(json, @r#"
     success: true
@@ -432,7 +452,7 @@ fn affected_selection_matches_full_suite_and_dependency_changes_invalidate_resul
         ),
         ("uv.lock", "dependency version one"),
     ]);
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -449,11 +469,12 @@ fn affected_selection_matches_full_suite_and_dependency_changes_invalidate_resul
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let optimized = results(&context);
     let record = optimized.records.values().next().expect("record");
     assert!(record.reason.starts_with("affected tests first"));
     assert_eq!(record.selected_tests, ["tests.test_app::test_enabled"]);
-    let mut full = command(&context, "run");
+    let mut full = context.mutate("run");
     full.args(["--full-suite", "--no-cache"]);
     assert_cmd_snapshot!(full, @"
     success: true
@@ -472,10 +493,11 @@ fn affected_selection_matches_full_suite_and_dependency_changes_invalidate_resul
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let full = results(&context);
     assert_eq!(record.outcome, full.records[&record.mutant.id].outcome);
     context.write_file("uv.lock", "dependency version two");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -516,7 +538,7 @@ fn concurrent_mutants_use_independent_interpreters_and_original_source() {
             assert flags() == (True, False)
     "},
     );
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -536,14 +558,19 @@ fn concurrent_mutants_use_independent_interpreters_and_original_source() {
     Completed mutation 1/2
     Completed mutation 2/2
     ");
+
     let stored = results(&context);
-    assert_eq!(stored.records.len(), 2);
-    assert!(
-        stored
-            .records
-            .values()
-            .all(|record| record.outcome == Outcome::Killed)
-    );
+    let outcomes = stored
+        .records
+        .values()
+        .map(|record| record.outcome)
+        .collect::<Vec<_>>();
+    insta::assert_debug_snapshot!(outcomes, @"
+    [
+        Killed,
+        Killed,
+    ]
+    ");
     assert_eq!(context.read_file("app.py"), source);
 }
 
@@ -560,7 +587,7 @@ fn invalid_compile_candidates_do_not_execute_tests() {
     "},
     );
     context.write_file("tests/test_app.py", "from app import combine\n\ndef test_combine():\n    assert combine({True: 1, False: 2}) == 3\n");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -580,14 +607,25 @@ fn invalid_compile_candidates_do_not_execute_tests() {
     Completed mutation 1/2
     Completed mutation 2/2
     ");
+
     let stored = results(&context);
-    assert_eq!(stored.records.len(), 2);
-    assert!(
-        stored
-            .records
-            .values()
-            .all(|record| record.outcome == Outcome::Invalid && record.selected_tests.is_empty())
-    );
+    let records = stored
+        .records
+        .values()
+        .map(|record| (record.outcome, &record.selected_tests))
+        .collect::<Vec<_>>();
+    insta::assert_debug_snapshot!(records, @"
+    [
+        (
+            Invalid,
+            [],
+        ),
+        (
+            Invalid,
+            [],
+        ),
+    ]
+    ");
 }
 
 #[test]
@@ -598,7 +636,8 @@ fn measured_timeout_diagnostics_name_the_mutant_and_budget() {
         "tests/test_app.py",
         "from app import spin\n\ndef test_spin():\n    spin()\n",
     );
-    let mut run = command(&context, "run");
+
+    let mut run = context.mutate("run");
     run.args(["--timeout", "1"]);
     assert_cmd_snapshot!(run, @"
     success: false
@@ -618,18 +657,27 @@ fn measured_timeout_diagnostics_name_the_mutant_and_budget() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let stored = results(&context);
     let record = stored.records.values().next().expect("record");
-    assert_eq!(record.outcome, Outcome::TimedOut);
-    assert_eq!(record.selected_tests, ["tests.test_app::test_spin"]);
+    insta::assert_debug_snapshot!((record.outcome, &record.selected_tests), @r#"
+    (
+        TimedOut,
+        [
+            "tests.test_app::test_spin",
+        ],
+    )
+    "#);
+
     let diagnostic = record.diagnostic.as_ref().expect("timeout diagnostic");
     assert!(diagnostic.contains(&record.mutant.id));
     assert!(diagnostic.contains("limit 1.000000s"));
     assert!(diagnostic.contains("measured baseline"));
-    assert_eq!(
-        context.read_file("app.py"),
-        "def spin():\n    while False:\n        pass\n"
-    );
+    insta::assert_snapshot!(context.read_file("app.py"), @"
+    def spin():
+        while False:
+            pass
+    ");
 }
 
 #[test]
@@ -643,7 +691,7 @@ fn worker_crashes_are_infrastructure_errors_instead_of_killed_mutants() {
         "tests/test_app.py",
         "from app import maybe_exit\n\ndef test_exit():\n    maybe_exit()\n",
     );
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -661,6 +709,7 @@ fn worker_crashes_are_infrastructure_errors_instead_of_killed_mutants() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let stored = results(&context);
     let record = stored.records.values().next().expect("record");
     assert_eq!(record.outcome, Outcome::Errored);
@@ -674,13 +723,16 @@ fn worker_crashes_are_infrastructure_errors_instead_of_killed_mutants() {
 #[test]
 fn cancellation_preserves_completed_results_and_resumes_pending_mutants() {
     let context = project();
+    let marker = format!("{MUTATION_DIR}/started");
+
     context.write_file(
         "app.py",
         "def first():\n    return True\n\ndef second():\n    return False\n",
     );
     context.write_file(
         "tests/test_app.py",
-        indoc! {r"
+        format!(
+            indoc! {r"
         from pathlib import Path
         import time
         from app import first, second
@@ -688,14 +740,17 @@ fn cancellation_preserves_completed_results_and_resumes_pending_mutants() {
         def test_flags():
             assert first() is True
             if second():
-                Path('.karva/mutation/started').touch()
+                Path({marker:?}).touch()
                 while True:
                     time.sleep(1)
     "},
+            marker = marker
+        ),
     );
-    let mut run = command(&context, "run");
+
+    let mut run = context.mutate("run");
     run.args(["--workers", "1", "--timeout", "1"]);
-    let output = interrupt_when_started(&context, &mut run, ".karva/mutation/started");
+    let output = interrupt_when_started(&context, &mut run, &marker);
     insta::assert_snapshot!(format!("exit_code: {:?}\n----- stdout -----\n{}\n----- stderr -----\n{}", output.status.code(), String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)), @"
     exit_code: Some(2)
     ----- stdout -----
@@ -715,6 +770,7 @@ fn cancellation_preserves_completed_results_and_resumes_pending_mutants() {
     Completed mutation 1/2
     Completed mutation 2/2
     ");
+
     let interrupted = results(&context);
     assert_eq!(
         interrupted
@@ -732,7 +788,7 @@ fn cancellation_preserves_completed_results_and_resumes_pending_mutants() {
             .count(),
         1
     );
-    let mut resumed = command(&context, "run");
+    let mut resumed = context.mutate("run");
     resumed.args(["--workers", "1", "--timeout", "1"]);
     assert_cmd_snapshot!(resumed, @"
     success: false
@@ -754,6 +810,7 @@ fn cancellation_preserves_completed_results_and_resumes_pending_mutants() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let resumed = results(&context);
     assert!(resumed.records.values().any(|record| record.outcome == Outcome::Killed && record.reason.starts_with("reused:")));
     assert!(
@@ -780,7 +837,7 @@ fn installed_dependency_source_changes_invalidate_cached_results() {
     std::fs::write(&module, "flag = True\n").expect("dependency");
     context.write_file("tests/test_app.py", "from app import enabled\nimport mutation_probe\n\ndef test_enabled():\n    assert isinstance(mutation_probe.flag, bool)\n    assert enabled() is True\n");
     let execute = || {
-        let mut run = command(&context, "run");
+        let mut run = context.mutate("run");
         run.env("PYTHONPATH", dependency.path());
         run
     };
@@ -801,6 +858,7 @@ fn installed_dependency_source_changes_invalidate_cached_results() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let first = results(&context);
     std::fs::write(&module, "flag = False\n").expect("changed dependency");
     assert_cmd_snapshot!(execute(), @"
@@ -820,6 +878,7 @@ fn installed_dependency_source_changes_invalidate_cached_results() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let second = results(&context);
     assert_ne!(first.context_fingerprint, second.context_fingerprint);
     assert!(
@@ -835,7 +894,7 @@ fn retesting_one_candidate_preserves_unrelated_results_and_marks_them_stale() {
     let context = project();
     context.write_file("app.py", "def flags():\n    return True, False\n");
     context.write_file("tests/test_app.py", "from app import flags\n\ndef test_flags():\n    assert all(isinstance(value, bool) for value in flags())\n");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -855,6 +914,7 @@ fn retesting_one_candidate_preserves_unrelated_results_and_marks_them_stale() {
     Completed mutation 1/2
     Completed mutation 2/2
     ");
+
     let first = results(&context);
     let selected = first
         .records
@@ -870,7 +930,8 @@ fn retesting_one_candidate_preserves_unrelated_results_and_marks_them_stale() {
         "tests/test_app.py",
         "from app import flags\n\ndef test_flags():\n    assert flags()[0] is True\n",
     );
-    let mut retest = command(&context, "retest");
+
+    let mut retest = context.mutate("retest");
     retest.arg(&selected.mutant.id);
     assert_cmd_snapshot!(retest, @"
     success: true
@@ -889,6 +950,7 @@ fn retesting_one_candidate_preserves_unrelated_results_and_marks_them_stale() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let second = results(&context);
     assert_eq!(second.records[&selected.mutant.id].outcome, Outcome::Killed);
     assert_eq!(
@@ -903,7 +965,7 @@ fn retesting_one_candidate_preserves_unrelated_results_and_marks_them_stale() {
         second.records[&unrelated.mutant.id].context_fingerprint,
         second.context_fingerprint
     );
-    assert_cmd_snapshot!(command(&context, "results"), @"
+    assert_cmd_snapshot!(context.mutate("results"), @"
     success: false
     exit_code: 2
     ----- stdout -----
@@ -929,7 +991,7 @@ fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting()
     let context = project();
     context.write_file("pyproject.toml", "[tool.karva.profile.default.mutation]\nsources = ['.']\noperators = ['literal']\nworkers = 1\n");
     context.write_file("obsolete.py", "value = False\n");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -949,6 +1011,7 @@ fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting()
     Completed mutation 1/2
     Completed mutation 2/2
     ");
+
     let first = results(&context);
     assert_eq!(first.records.len(), 2);
     context.write_file(
@@ -956,7 +1019,7 @@ fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting()
         "def enabled():\n    return True # updated source\n",
     );
     std::fs::remove_file(context.root().join("obsolete.py")).expect("delete source");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -973,6 +1036,7 @@ fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting()
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let current = results(&context);
     assert_eq!(current.records.len(), 1);
     assert!(
@@ -981,7 +1045,7 @@ fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting()
             .keys()
             .all(|id| !first.records.contains_key(id))
     );
-    assert_cmd_snapshot!(command(&context, "results"), @"
+    assert_cmd_snapshot!(context.mutate("results"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -997,7 +1061,8 @@ fn rediscovery_removes_edited_and_deleted_source_records_before_bulk_retesting()
 
     ----- stderr -----
     ");
-    assert_cmd_snapshot!(command(&context, "retest"), @"
+
+    assert_cmd_snapshot!(context.mutate("retest"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1023,7 +1088,7 @@ fn bulk_retesting_skips_stale_records_and_rejects_discovery_only_flags() {
     context.write_file("app.py", "def enabled():\n    return True\n");
     context.write_file("other.py", "value = True\n");
     context.write_file("pyproject.toml", "[tool.karva.profile.default.mutation]\nsources = ['.']\noperators = ['literal']\nworkers = 1\n");
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1044,7 +1109,7 @@ fn bulk_retesting_skips_stale_records_and_rejects_discovery_only_flags() {
     Completed mutation 2/2
     ");
     std::fs::remove_file(context.root().join("other.py")).expect("delete source");
-    assert_cmd_snapshot!(command(&context, "retest"), @"
+    assert_cmd_snapshot!(context.mutate("retest"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1062,7 +1127,7 @@ fn bulk_retesting_skips_stale_records_and_rejects_discovery_only_flags() {
     Completed mutation 1/1
     ");
     assert_eq!(results(&context).records.len(), 1);
-    let mut retest = command(&context, "retest");
+    let mut retest = context.mutate("retest");
     retest.args(["--source", "app.py"]);
     assert_cmd_snapshot!(retest, @"
     success: false
@@ -1080,7 +1145,7 @@ fn utf8_bom_source_mutations_compile_and_preserve_the_bom() {
     let context = project();
     let source = "\u{feff}def enabled():\n    return True\n";
     context.write_file("app.py", source);
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1097,6 +1162,7 @@ fn utf8_bom_source_mutations_compile_and_preserve_the_bom() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let stored = results(&context);
     assert_eq!(stored.records.len(), 1);
     assert_eq!(
@@ -1117,7 +1183,7 @@ fn default_timeout_uses_the_measured_baseline_without_multiplying_worker_count()
         "tests/test_app.py",
         "from app import spin\n\ndef test_spin():\n    assert spin() is True\n",
     );
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: false
     exit_code: 1
     ----- stdout -----
@@ -1138,6 +1204,7 @@ fn default_timeout_uses_the_measured_baseline_without_multiplying_worker_count()
     Completed mutation 1/2
     Completed mutation 2/2
     ");
+
     let stored = results(&context);
     assert_eq!(stored.records.len(), 2);
     let timeout = stored
@@ -1159,12 +1226,11 @@ fn default_timeout_uses_the_measured_baseline_without_multiplying_worker_count()
 #[test]
 fn baseline_cancellation_does_not_report_a_test_failure() {
     let context = project();
-    context.write_file("tests/test_app.py", "from pathlib import Path\nimport time\n\ndef test_baseline():\n    Path('.karva/mutation/baseline-started').touch()\n    time.sleep(60)\n");
-    let output = interrupt_when_started(
-        &context,
-        &mut command(&context, "run"),
-        ".karva/mutation/baseline-started",
-    );
+    let marker = format!("{MUTATION_DIR}/baseline-started");
+
+    context.write_file("tests/test_app.py", format!("from pathlib import Path\nimport time\n\ndef test_baseline():\n    Path({marker:?}).touch()\n    time.sleep(60)\n"));
+
+    let output = interrupt_when_started(&context, &mut context.mutate("run"), &marker);
     insta::assert_snapshot!(format!("exit_code: {:?}\n----- stdout -----\n{}\n----- stderr -----\n{}", output.status.code(), String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)), @"
     exit_code: Some(2)
     ----- stdout -----
@@ -1173,7 +1239,7 @@ fn baseline_cancellation_does_not_report_a_test_failure() {
     karva failed
       Cause: mutation baseline cancelled; no mutants were executed
     ");
-    assert!(!context.root().join(".karva/mutation/results.json").exists());
+    assert!(!context.root().join(MUTATION_RESULTS_PATH).exists());
 }
 
 fn project_with_multiple_operators() -> TestContext {
@@ -1194,7 +1260,7 @@ fn project_with_multiple_operators() -> TestContext {
 #[test]
 fn narrowed_runs_preserve_unselected_operator_and_file_results() {
     let context = project_with_multiple_operators();
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1229,9 +1295,10 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
     Completed mutation 6/7
     Completed mutation 7/7
     ");
+
     let first = results(&context);
     assert_eq!(first.records.len(), 7);
-    let mut comparison = command(&context, "run");
+    let mut comparison = context.mutate("run");
     comparison.args(["--operator", "comparison"]);
     assert_cmd_snapshot!(comparison, @"
     success: true
@@ -1249,6 +1316,7 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
 
     ----- stderr -----
     ");
+
     let narrowed = results(&context);
     assert_eq!(narrowed.records.len(), first.records.len());
     assert!(
@@ -1258,7 +1326,8 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
             .all(|id| narrowed.records.contains_key(id))
     );
     assert_eq!(first.context_fingerprint, narrowed.context_fingerprint);
-    let mut excluded = command(&context, "run");
+
+    let mut excluded = context.mutate("run");
     excluded.args(["--exclude", "app.py"]);
     assert_cmd_snapshot!(excluded, @"
     success: true
@@ -1278,6 +1347,7 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
 
     ----- stderr -----
     ");
+
     let excluded = results(&context);
     assert_eq!(excluded.records.len(), first.records.len());
     assert!(
@@ -1287,7 +1357,8 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
             .all(|id| excluded.records.contains_key(id))
     );
     assert_eq!(first.context_fingerprint, excluded.context_fingerprint);
-    assert_cmd_snapshot!(command(&context, "results"), @"
+
+    assert_cmd_snapshot!(context.mutate("results"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1320,7 +1391,7 @@ fn narrowed_runs_preserve_unselected_operator_and_file_results() {
 #[test]
 fn narrowed_runs_remove_changed_source_records() {
     let context = project_with_multiple_operators();
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1355,12 +1426,14 @@ fn narrowed_runs_remove_changed_source_records() {
     Completed mutation 6/7
     Completed mutation 7/7
     ");
+
     let first = results(&context);
     context.write_file(
         "app.py",
         "# moved\ndef enabled(value):\n    return value + 1 > 0\n",
     );
-    let mut narrowed = command(&context, "run");
+
+    let mut narrowed = context.mutate("run");
     narrowed.args(["--operator", "comparison"]);
     assert_cmd_snapshot!(narrowed, @"
     success: true
@@ -1379,6 +1452,7 @@ fn narrowed_runs_remove_changed_source_records() {
     ----- stderr -----
     Completed mutation 1/1
     ");
+
     let updated = results(&context);
     assert_eq!(updated.records.len(), 3);
     for (id, record) in &first.records {
@@ -1387,7 +1461,8 @@ fn narrowed_runs_remove_changed_source_records() {
             record.mutant.path == "other.py"
         );
     }
-    let mut report = command(&context, "results");
+
+    let mut report = context.mutate("results");
     report.args(["--path", "app.py"]);
     assert_cmd_snapshot!(report, @"
     success: true
@@ -1413,7 +1488,7 @@ fn empty_narrowed_runs_leave_stored_results_unchanged(
 ) {
     insta::allow_duplicates! {
     let context = project_with_multiple_operators();
-    assert_cmd_snapshot!(command(&context, "run"), @"
+    assert_cmd_snapshot!(context.mutate("run"), @"
     success: true
     exit_code: 0
     ----- stdout -----
@@ -1448,8 +1523,10 @@ fn empty_narrowed_runs_leave_stored_results_unchanged(
     Completed mutation 6/7
     Completed mutation 7/7
     ");
-    let original = context.read_file(".karva/mutation/results.json");
-    let mut narrowed = command(&context, "run");
+
+    let original = context.read_file(MUTATION_RESULTS_PATH);
+
+    let mut narrowed = context.mutate("run");
     narrowed.arg(argument);
     assert_cmd_snapshot!(narrowed, @"
     success: false
@@ -1460,6 +1537,6 @@ fn empty_narrowed_runs_leave_stored_results_unchanged(
     karva failed
       Cause: no mutations match the supplied sources and filters; check mutation.sources, --source, --path, --symbol, --operator, and --outcome
     ");
-    assert_eq!(context.read_file(".karva/mutation/results.json"), original);
+    assert_eq!(context.read_file(MUTATION_RESULTS_PATH), original);
     }
 }

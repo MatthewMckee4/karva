@@ -6,7 +6,7 @@ use std::io::Write;
 
 use anyhow::{Context, Result, bail};
 use camino::{Utf8Path, Utf8PathBuf};
-use karva_mutation::{Mutant, MutationResults, fingerprint, fingerprint_file};
+use karva_mutation::{MUTATION_DIR, Mutant, MutationResults, fingerprint, fingerprint_file};
 use karva_project::Project;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
@@ -14,7 +14,7 @@ use tempfile::NamedTempFile;
 
 /// Serializes mutation commands within one project, without preventing result reads.
 pub(super) fn lock(root: &Utf8Path) -> Result<File> {
-    let directory = root.join(".karva/mutation");
+    let directory = root.join(MUTATION_DIR);
     std::fs::create_dir_all(&directory)?;
     let file = OpenOptions::new()
         .create(true)

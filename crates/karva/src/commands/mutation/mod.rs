@@ -13,7 +13,9 @@ use anyhow::{Context, Result, bail};
 use karva_cli::{MutationAction, MutationCommand, MutationRunArgs};
 use karva_logging::Printer;
 use karva_metadata::{MutationOptions, Options, ProjectMetadata, ProjectOptionsOverrides};
-use karva_mutation::{DiscoveryFilters, MutationRecord, MutationResults, Outcome};
+use karva_mutation::{
+    DiscoveryFilters, MUTATION_RESULTS_PATH, MutationRecord, MutationResults, Outcome,
+};
 use karva_project::Project;
 use karva_project::path::absolute;
 use karva_python_semantic::current_python_version;
@@ -26,22 +28,27 @@ pub fn mutation(args: MutationCommand) -> Result<ExitStatus> {
     let cwd = cwd()?;
     let config_file = args.config_file.as_ref().map(|path| absolute(path, &cwd));
     let version = current_python_version();
+
     let mut metadata = if let Some(config) = &config_file {
         ProjectMetadata::from_config_file(config, &cwd, version)?
     } else {
         ProjectMetadata::discover(&cwd, version)?
     };
+
     metadata.apply_overrides(
         &ProjectOptionsOverrides::new(config_file, Options::default())
             .with_profile(args.profile.clone()),
     )?;
+
     let project = Project::from_metadata(metadata);
-    let path = project.cwd().join(".karva/mutation/results.json");
+    let path = project.cwd().join(MUTATION_RESULTS_PATH);
+
     match args.action {
         MutationAction::Results(arguments) => {
             let filter = filters::Filters::new(&arguments)?;
             let mut results = MutationResults::read(&path)?;
             results.records.retain(|_, record| filter.matches(record));
+
             report::results(&results, args.json)
         }
         MutationAction::Show { mutant } => {
@@ -51,9 +58,13 @@ pub fn mutation(args: MutationCommand) -> Result<ExitStatus> {
                 .records
                 .get(&id)
                 .context("resolved mutant missing")?;
+
             let source_path =
                 files::canonical_source(project.cwd(), &project.cwd().join(&record.mutant.path))?;
-            report::show(record, &std::fs::read_to_string(source_path)?, args.json)?;
+            let source = std::fs::read_to_string(source_path)?;
+
+            report::show(record, &source, args.json)?;
+
             Ok(ExitStatus::Success)
         }
         MutationAction::Apply { mutant } => {
@@ -64,7 +75,9 @@ pub fn mutation(args: MutationCommand) -> Result<ExitStatus> {
                 .records
                 .get(&id)
                 .context("resolved mutant missing")?;
+
             files::apply(project.cwd(), &record.mutant)?;
+
             if args.json {
                 writeln!(
                     std::io::stdout(),
@@ -74,6 +87,7 @@ pub fn mutation(args: MutationCommand) -> Result<ExitStatus> {
             } else {
                 writeln!(std::io::stdout(), "Applied {id} to {}", record.mutant.path)?;
             }
+
             Ok(ExitStatus::Success)
         }
         MutationAction::Run(run) => run_mutations(
@@ -89,6 +103,7 @@ pub fn mutation(args: MutationCommand) -> Result<ExitStatus> {
                     "`--source` and `--exclude` apply only to `mutate run`; use `--path` to select recorded candidates for retesting"
                 );
             }
+
             retest.run.no_cache = true;
             run_mutations(
                 &project,
@@ -111,6 +126,7 @@ fn resolved_options(
         .mutation
         .clone()
         .unwrap_or_default();
+
     if !args.source.is_empty() {
         options.sources = Some(args.source.clone());
     }
@@ -120,6 +136,7 @@ fn resolved_options(
     if !args.filters.operator.is_empty() {
         options.operators = Some(args.filters.operator.clone());
     }
+
     let workers = args
         .workers
         .map(std::num::NonZeroUsize::get)
@@ -131,6 +148,7 @@ fn resolved_options(
     if workers == 0 {
         bail!("mutation workers budget requested 0; allowed values are positive integers");
     }
+
     let timeout = args
         .timeout
         .or_else(|| options.timeout.map(|value| value.0));
@@ -148,6 +166,7 @@ fn resolved_options(
             );
         }
     }
+
     Ok((options, workers, timeout))
 }
 
@@ -167,6 +186,7 @@ fn run_mutations(
 ) -> Result<ExitStatus> {
     let filter = filters::Filters::new(&args.filters)?;
     let (options, workers, explicit_timeout) = resolved_options(project, args)?;
+
     let discovery_filters = DiscoveryFilters::new(
         options.operators.as_deref().unwrap_or_default(),
         &[],
@@ -174,13 +194,15 @@ fn run_mutations(
         options.exclude_lines.as_deref().unwrap_or_default(),
     )?;
     let exclusions = filters::globs(options.exclude.as_deref().unwrap_or_default())?;
+
     let _lock = files::lock(project.cwd())?;
-    let data_path = project.cwd().join(".karva/mutation/results.json");
+    let data_path = project.cwd().join(MUTATION_RESULTS_PATH);
     let mut previous = if data_path.exists() {
         Some(MutationResults::read(&data_path)?)
     } else {
         None
     };
+
     let sources = options.sources.clone().unwrap_or_else(|| {
         vec![if project.cwd().join("src").is_dir() {
             "src".into()
@@ -188,6 +210,7 @@ fn run_mutations(
             ".".into()
         }]
     });
+
     let mut candidates = Vec::new();
     let mut discovered = BTreeSet::new();
     if matches!(
@@ -202,6 +225,7 @@ fn run_mutations(
             }
         }
     }
+
     if let CandidateSelection::Retest(prefix) = selection {
         let results = previous
             .as_ref()
@@ -209,6 +233,7 @@ fn run_mutations(
         let exact_id = prefix
             .map(|prefix| filters::resolve_id(results.records.values(), prefix))
             .transpose()?;
+
         for record in results.records.values() {
             if exact_id.as_ref().is_none_or(|id| id == &record.mutant.id) && filter.matches(record)
             {
@@ -262,6 +287,7 @@ fn run_mutations(
             }
         }
     }
+
     if matches!(selection, CandidateSelection::Discover)
         && args.filters.operator.is_empty()
         && args.exclude.is_empty()
@@ -286,6 +312,7 @@ fn run_mutations(
             }
         }
     }
+
     candidates.sort_by(|left, right| {
         (&left.path, left.start, left.end, &left.id).cmp(&(
             &right.path,
@@ -300,6 +327,7 @@ fn run_mutations(
             "no mutations match the supplied sources and filters; check mutation.sources, --source, --path, --symbol, --operator, and --outcome"
         );
     }
+
     let start = Instant::now();
     let baseline = execution::baseline(project, &sources, profile.clone())?;
     if baseline.output.cancelled {
@@ -312,6 +340,7 @@ fn run_mutations(
         }
         bail!("mutation baseline cancelled; no mutants were executed");
     }
+
     if baseline.output.timed_out
         || !baseline.output.results.is_success()
         || baseline.output.results.stats.total() == 0
@@ -332,6 +361,7 @@ fn run_mutations(
         }
         bail!("mutation baseline failed; fix the unmodified test suite before running mutants");
     }
+
     // Receipt: CPython 3.13 on macOS, one passing test, three warm sequential
     // invocations measured 0.621–0.993 s. Eight invocations at concurrency four
     // measured 1.404–2.132 s (maximum ratio 3.432). A tenfold baseline budget
@@ -340,12 +370,14 @@ fn run_mutations(
     let configuration = serde_json::json!({"sources": sources, "mutation": options, "workers": workers, "timeout_seconds": explicit_timeout, "profile": profile});
     let execution_configuration = serde_json::json!({"workers": workers, "timeout_seconds": explicit_timeout, "profile": profile});
     let context = files::context(project, &execution_configuration)?;
+
     let mut results = previous
         .take()
         .unwrap_or_else(|| MutationResults::new(context.clone(), configuration.clone()));
     results.context_fingerprint.clone_from(&context);
     results.configuration = configuration;
     results.baseline_seconds = baseline.elapsed_seconds;
+
     let mut pending = Vec::new();
     for mutant in candidates {
         if !args.no_cache {
@@ -372,6 +404,7 @@ fn run_mutations(
         );
         pending.push(mutant);
     }
+
     results.write(&data_path)?;
     let cancelled = execution::run(
         project,
@@ -386,6 +419,7 @@ fn run_mutations(
             json,
         },
     )?;
+
     results.records.retain(|id, _| selected.contains(id));
     let status = report::results(&results, json)?;
     if cancelled {
