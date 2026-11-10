@@ -42,6 +42,7 @@ nav = [
             { "Doctests" = "usage/writing-tests/doctests.md"},
             { "Snapshots" = "usage/writing-tests/snapshots.md"},
             { "Coverage" = "usage/writing-tests/coverage.md"},
+            { "Mutation Testing" = "usage/writing-tests/mutation-testing.md"},
             { "Other Functions" = "usage/writing-tests/functions.md"},
         ]},
         { "Fixtures" = [
@@ -68,6 +69,7 @@ nav = [
         { "CLI" = "reference/cli.md"},
         { "Environment Variables" = "reference/env-vars.md"},
         { "Native Coverage Format" = "reference/native-coverage-format.md"},
+        { "Native Mutation Format" = "reference/native-mutation-format.md"},
     ]},
 ]
 

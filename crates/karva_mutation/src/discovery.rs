@@ -12,11 +12,11 @@ use ruff_python_ast::{Expr, Number, PythonVersion, Stmt, UnaryOp};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange};
 
-use super::{Mutant, Operator, fingerprint};
+use crate::{Mutant, Operator, fingerprint};
 
 /// Validated filters shared by every discovered file.
 #[derive(Default)]
-struct DiscoveryFilters {
+pub struct DiscoveryFilters {
     operators: BTreeSet<Operator>,
     symbols: Option<GlobSet>,
     exclude_symbols: Option<GlobSet>,
@@ -25,7 +25,7 @@ struct DiscoveryFilters {
 
 impl DiscoveryFilters {
     /// Validates operator names, symbol globs, and line exclusion regular expressions.
-    fn new(
+    pub fn new(
         operators: &[String],
         symbols: &[String],
         exclude_symbols: &[String],
@@ -67,7 +67,7 @@ impl DiscoveryFilters {
 /// `path` is project-relative and normalized by the caller. Pragmas are comments:
 /// `# pragma: no mutate` excludes that line, and `# karva: mutate off` / `on`
 /// delimit excluded blocks. Text inside string literals cannot activate pragmas.
-fn discover(
+pub fn discover(
     path: &Utf8Path,
     source: &str,
     version: PythonVersion,
