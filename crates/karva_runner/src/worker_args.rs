@@ -119,6 +119,7 @@ pub fn worker_configuration(
         src.include = None;
     }
     Arc::new(WorkerConfiguration {
+        mutation: None,
         verbosity: args.verbosity.level(),
         color: args.color.or_else(|| {
             colored::control::SHOULD_COLORIZE
