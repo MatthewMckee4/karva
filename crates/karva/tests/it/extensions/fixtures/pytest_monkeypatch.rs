@@ -26,8 +26,6 @@ fn test_setattr_rejected_assignment_cleanup() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-import sys
-
 import karva
 
 
@@ -35,9 +33,13 @@ def test_rejected_assignment(monkeypatch):
     class Target:
         value = "original"
 
+    class ReadOnly:
+        __slots__ = ()
+        value = "original"
+
     monkeypatch.setattr(Target, "value", "patched")
     with karva.raises(AttributeError):
-        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(ReadOnly(), "value", "patched")
     monkeypatch.undo()
     assert Target.value == "original"
     monkeypatch.undo()
@@ -62,11 +64,12 @@ fn test_setattr_rejected_assignment_reports_original_failure() {
     let context = TestContext::with_file(
         "test.py",
         r#"
-import sys
+def test_read_only(monkeypatch):
+    class ReadOnly:
+        __slots__ = ()
+        value = "original"
 
-
-def test_patch_stdin(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(ReadOnly(), "value", "patched")
 "#,
     );
 
@@ -75,25 +78,25 @@ def test_patch_stdin(monkeypatch):
     exit_code: 1
     ----- stdout -----
         Starting 1 test across 1 worker
-            FAIL [TIME] test::test_patch_stdin(monkeypatch)
+            FAIL [TIME] test::test_read_only(monkeypatch)
 
     failures:
 
-    test::test_patch_stdin(monkeypatch):
+    test::test_read_only(monkeypatch):
 
-    error[test-failure]: Test `test_patch_stdin` failed
-     --> test.py:5:5
+    error[test-failure]: Test `test_read_only` failed
+     --> test.py:2:5
       |
-    5 | def test_patch_stdin(monkeypatch):
-      |     ^^^^^^^^^^^^^^^^
+    2 | def test_read_only(monkeypatch):
+      |     ^^^^^^^^^^^^^^
     info: Test ran with arguments:
     info:   `monkeypatch`: `<MockEnv object>`
     info: Test failed here
-     --> test.py:6:5
+     --> test.py:7:5
       |
-    6 |     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    info: 'builtins.CapturedStdin' object attribute 'isatty' is read-only
+    7 |     monkeypatch.setattr(ReadOnly(), "value", "patched")
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: 'ReadOnly' object attribute 'value' is read-only
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
