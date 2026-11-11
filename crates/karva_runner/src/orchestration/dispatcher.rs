@@ -162,6 +162,10 @@ impl EventDispatcher {
             anyhow::bail!("Karva worker {worker_id} sent an event after completing");
         }
         match event {
+            WorkerEvent::Timing(timing) => self.results.timings.push(timing),
+            WorkerEvent::TimingReportingSeconds(seconds) => {
+                self.results.timing_reporting_seconds += seconds;
+            }
             WorkerEvent::Warning(warning) => self.results.warnings.push(warning),
             WorkerEvent::TestSlow => self.results.register_slow_test(),
             WorkerEvent::TestTimedOut {

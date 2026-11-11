@@ -14,6 +14,12 @@ use serde::{Deserialize, Serialize};
 /// One runtime state change sent from a worker to the controller.
 #[derive(Serialize, Deserialize)]
 pub enum WorkerEvent {
+    /// Exclusive invocation timing requested by health inspection.
+    Timing(karva_diagnostic::LifecycleTiming),
+
+    /// Total seconds spent sending timing observations in this worker generation.
+    TimingReportingSeconds(f64),
+
     /// Unconsumed warning from collection, execution, or fixture cleanup.
     Warning(karva_diagnostic::TestWarning),
 
@@ -123,6 +129,10 @@ pub enum WireMessage {
 /// at process creation and omitted here; test selectors live in the assignment.
 #[derive(Default, Serialize, Deserialize)]
 pub struct WorkerConfiguration {
+    /// Enable lifecycle timing only for an explicit health runtime analysis.
+    #[serde(default)]
+    pub health_timings: bool,
+
     /// Resolved terminal color policy for test output and diagnostics.
     pub color: Option<TerminalColor>,
 
