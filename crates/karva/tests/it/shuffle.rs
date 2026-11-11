@@ -137,16 +137,16 @@ fn parallel_worker_assignment_and_order_are_reproducible() {
     let first_worker_1 = context.read_file("order-1.txt");
     assert_snapshot!(first_worker_0, @"
     d
-    e
-    h
     i
+    h
+    e
     ");
     assert_snapshot!(first_worker_1, @"
-    a
-    b
-    c
-    f
     g
+    f
+    c
+    b
+    a
     j
     ");
 
@@ -201,9 +201,9 @@ fn filtering_precedes_seeded_ordering() {
     );
     let filtered_order = context.read_file("order-0.txt");
     assert_snapshot!(filtered_order, @"
-    keep_a
     keep_b
     keep_c
+    keep_a
     ");
 
     context.write_file(
@@ -257,8 +257,8 @@ fn partition_selection_precedes_seeded_ordering() {
     "
     );
     assert_snapshot!(context.read_file("order-0.txt"), @"
-    b
     d
+    b
     f
     ");
 }
@@ -302,10 +302,10 @@ def test_z(): _record("z")
     "
     );
     assert_snapshot!(context.read_file("order-0.txt"), @"
-    a
     flaky:1
     flaky:2
     z
+    a
     ");
 }
 

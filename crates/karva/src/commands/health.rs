@@ -20,6 +20,7 @@ use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextRange;
 use serde::Serialize;
 
+mod probe;
 mod runtime;
 
 use crate::ExitStatus;
@@ -34,6 +35,9 @@ struct HealthReport {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     runtime: Option<runtime::RuntimeReport>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    probe: Option<probe::ProbeReport>,
 }
 
 /// A finding retains evidence separately from the action proposed to the user.
@@ -45,6 +49,9 @@ struct Finding {
     evidence: String,
     related: Vec<Related>,
     action: &'static str,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reproduction: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -96,10 +103,30 @@ impl Location {
 }
 
 pub fn health(args: HealthCommand) -> Result<ExitStatus> {
+    if let Some(count) = args.probe {
+        anyhow::ensure!(
+            count.get() >= 2,
+            "health probe requires at least 2 runs per order, requested {}",
+            count.get()
+        );
+    }
+    let mut reproduction = vec![
+        "uv".to_owned(),
+        "run".to_owned(),
+        "karva".to_owned(),
+        "health".to_owned(),
+    ];
+    reproduction.extend(args.paths.iter().cloned());
+    if let Some(profile) = &args.config.profile {
+        reproduction.extend(["--profile".to_owned(), profile.clone()]);
+    }
     for rule in &args.ignore {
         anyhow::ensure!(
             DiagnosticCode::ALL.iter().any(|code| code.as_str() == rule)
-                || rule == "duration-hotspot",
+                || matches!(
+                    rule.as_str(),
+                    "duration-hotspot" | "unstable-test" | "order-dependent-test"
+                ),
             "unknown health rule `{rule}`"
         );
     }
@@ -111,6 +138,9 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
         .config_file
         .as_ref()
         .map(|path| absolute(path, &cwd));
+    if let Some(path) = &config_file {
+        reproduction.extend(["--config-file".to_owned(), path.to_string()]);
+    }
     let mut metadata = if let Some(path) = &config_file {
         ProjectMetadata::from_config_file(path, &cwd, python_version)?
     } else {
@@ -118,6 +148,12 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     };
     let full_suite = args.paths.is_empty();
     let options = Options {
+        test: args.probe.map(|_| karva_metadata::TestOptions {
+            retry: Some(0),
+            fail_fast: Some(false),
+            max_fail: Some(karva_metadata::MaxFail::unlimited()),
+            ..karva_metadata::TestOptions::default()
+        }),
         terminal: Some(TerminalOptions {
             status_level: Some(karva_logging::StatusLevel::None),
             final_status_level: Some(karva_logging::FinalStatusLevel::None),
@@ -189,10 +225,14 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     );
     let mut findings = Vec::new();
     for path in selected_paths {
+        let Some(analysis) = index.analyze(&path) else {
+            continue;
+        };
         if let Some(module) = index.module(&path) {
             for diagnostic in karva_analysis::shadowed_definitions(
                 module,
                 &project.settings().test().test_function_prefix,
+                &analysis.diagnostics,
             )
             .into_iter()
             .chain(karva_analysis::duplicate_parameter_cases(module))
@@ -206,15 +246,13 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
                 }
             }
         }
-        if let Some(analysis) = index.analyze(&path) {
-            for diagnostic in analysis.diagnostics {
-                if !args
-                    .ignore
-                    .iter()
-                    .any(|rule| rule == diagnostic.code.as_str())
-                {
-                    findings.push(source_finding(diagnostic, &modules, project.cwd()));
-                }
+        for diagnostic in analysis.diagnostics {
+            if !args
+                .ignore
+                .iter()
+                .any(|rule| rule == diagnostic.code.as_str())
+            {
+                findings.push(source_finding(diagnostic, &modules, project.cwd()));
             }
         }
     }
@@ -238,6 +276,24 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     } else {
         None
     };
+    let probe = if let Some(count) = args.probe {
+        let report = probe::probe(
+            &project,
+            args.config.profile.as_deref(),
+            count.get(),
+            args.probe_seed,
+            reproduction,
+        )?;
+        findings.extend(
+            report
+                .findings(&modules, project.cwd())
+                .into_iter()
+                .filter(|finding| !args.ignore.iter().any(|rule| rule == finding.rule)),
+        );
+        Some(report)
+    } else {
+        None
+    };
     findings.sort_by(|a, b| {
         (&a.location.path, a.location.start, a.rule).cmp(&(
             &b.location.path,
@@ -250,7 +306,8 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
             && a.location.path == b.location.path
             && a.location.start == b.location.start
     });
-    let failed = runtime.as_ref().is_some_and(|report| !report.success)
+    let failed = probe.as_ref().is_some_and(|report| !report.success)
+        || runtime.as_ref().is_some_and(|report| !report.success)
         || findings.iter().any(|finding| match args.fail_on {
             HealthFailOn::None => false,
             HealthFailOn::Warning => finding.severity != "info",
@@ -258,13 +315,14 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
         });
     let report = HealthReport {
         schema_version: 1,
-        analysis: if runtime.is_some() {
+        analysis: if runtime.is_some() || probe.is_some() {
             "source-and-runtime"
         } else {
             "source-only"
         },
         findings,
         runtime,
+        probe,
     };
     let mut output = io::stdout().lock();
     match args.format {
@@ -295,8 +353,27 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
                     )?;
                 }
                 writeln!(output, "  help: {}", finding.action)?;
+                if let Some(argv) = &finding.reproduction {
+                    writeln!(output, "  reproduce argv: {}", serde_json::to_string(argv)?)?;
+                }
             }
-            if let Some(runtime) = &report.runtime {
+            if let Some(probe) = &report.probe {
+                writeln!(
+                    output,
+                    "{} health finding(s) (probe: {} observed run(s); seeds: {:?})",
+                    report.findings.len(),
+                    probe.runs.len(),
+                    probe.seeds
+                )?;
+                let errors = probe
+                    .runs
+                    .iter()
+                    .flat_map(|run| &run.errors)
+                    .collect::<std::collections::BTreeSet<_>>();
+                for error in errors {
+                    writeln!(output, "{error}")?;
+                }
+            } else if let Some(runtime) = &report.runtime {
                 writeln!(
                     output,
                     "{} health finding(s) (runtime measured; {} invocation(s); median {:.6}s; reporting overhead {:.6}s)",
@@ -363,5 +440,6 @@ fn source_finding(
             })
             .collect(),
         action: diagnostic.code.action(),
+        reproduction: None,
     }
 }

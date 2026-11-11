@@ -104,6 +104,8 @@ pub fn worker_configuration(
     project: &Project,
     args: &SubTestCommand,
     failed_first_active: bool,
+    preserve_test_order: bool,
+    health_timings: bool,
 ) -> Arc<WorkerConfiguration> {
     let mut options = project.metadata().options.clone();
     options.env.clear();
@@ -119,7 +121,8 @@ pub fn worker_configuration(
         src.include = None;
     }
     Arc::new(WorkerConfiguration {
-        health_timings: args.health_timings == karva_cli::HealthTimings::Enabled,
+        health_timings,
+        preserve_test_order,
         verbosity: args.verbosity.level(),
         color: args.color.or_else(|| {
             colored::control::SHOULD_COLORIZE
@@ -172,7 +175,8 @@ mod tests {
             ..SubTestCommand::default()
         };
 
-        let configuration = worker_configuration(&project, &args, failed_first_active);
+        let configuration =
+            worker_configuration(&project, &args, failed_first_active, false, false);
         let mut expected = project.metadata().options.clone();
         expected.env.clear();
         expected.test.as_mut().expect("test options").failed_first = Some(failed_first_active);

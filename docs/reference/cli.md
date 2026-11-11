@@ -252,6 +252,8 @@ karva health [OPTIONS] [PATHS]...
 <li><code>json</code></li>
 </ul></dd><dt id="karva-health--help"><a href="#karva-health--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help (see a summary with '-h')</p>
 </dd><dt id="karva-health--ignore"><a href="#karva-health--ignore"><code>--ignore</code></a> <i>ignore</i></dt><dd><p>Rule IDs to suppress for this invocation (comma separated)</p>
+</dd><dt id="karva-health--probe"><a href="#karva-health--probe"><code>--probe</code></a> <i>runs</i></dt><dd><p>Repeat stable and seeded shuffled execution this many times each (at least 2)</p>
+</dd><dt id="karva-health--probe-seed"><a href="#karva-health--probe-seed"><code>--probe-seed</code></a> <i>seed</i></dt><dd><p>Reproducible shuffled order; repeat for more orders. Generated if omitted</p>
 </dd><dt id="karva-health--profile"><a href="#karva-health--profile"><code>--profile</code></a>, <code>-P</code> <i>name</i></dt><dd><p>Configuration profile to resolve.</p>
 <p>Defaults to <code>default</code>.</p>
 <p>May also be set with the <code>KARVA_PROFILE</code> environment variable.</p></dd></dl>

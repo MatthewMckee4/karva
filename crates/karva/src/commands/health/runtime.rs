@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use anyhow::Result;
-use karva_cli::{HealthTimings, SubTestCommand};
+use karva_cli::SubTestCommand;
 use karva_diagnostic::{AggregatedResults, LifecycleTiming};
 use karva_logging::{FinalStatusLevel, Printer, StatusLevel};
 use karva_project::Project;
@@ -35,7 +35,7 @@ pub(super) fn durations(project: &Project, profile: Option<String>) -> Result<Ru
     let start = Instant::now();
     let output = run(project, profile, true, TestOrdering::Stable)?;
     let elapsed_seconds = start.elapsed().as_secs_f64();
-    let success = output.results.is_success() && !output.timed_out;
+    let success = successful(&output);
     let errors = execution_errors(&output);
     let mut measurements = output.results.timings;
     for timing in &mut measurements {
@@ -82,30 +82,49 @@ impl RuntimeReport {
                 .total_cmp(&a.duration_seconds)
                 .then_with(|| a.name.cmp(&b.name))
         });
-        ranked.into_iter().enumerate().filter(|(_, timing)| timing.duration_seconds > median).map(|(rank,timing)| Finding {
-            rule: "duration-hotspot", severity: "info",
-            location: Location { path: timing.path.as_str().replace('\\', "/"), line: timing.line, column: timing.column, start: timing.start, end: timing.end },
-            evidence: format!("{} {:?}: {:.6}s; rank {} of {}; above measured median {:.6}s; measured phase total {:.6}s; scope {}; dependencies: {}", timing.name, timing.phase, timing.duration_seconds, rank + 1, self.measurements.len(), median, total, timing.scope.as_deref().unwrap_or("test"), timing.dependencies.join(", ")),
-            related: Vec::new(), action: "Inspect this measured phase and its dependencies before optimizing; shared fixture invocations are counted once.",
-        }).collect()
+        ranked
+            .into_iter()
+            .enumerate()
+            .filter(|(_, timing)| timing.duration_seconds > median)
+            .map(|(rank, timing)| Finding {
+                rule: "duration-hotspot",
+                severity: "info",
+                location: Location {
+                    path: timing.path.as_str().replace('\\', "/"),
+                    line: timing.line,
+                    column: timing.column,
+                    start: timing.start,
+                    end: timing.end,
+                },
+                evidence: format!(
+                    "{} {}: {:.6}s; rank {} of {}; above measured median {:.6}s; measured phase total {:.6}s; scope {}; dependencies: {}",
+                    timing.name,
+                    timing.phase.as_str(),
+                    timing.duration_seconds,
+                    rank + 1,
+                    self.measurements.len(),
+                    median,
+                    total,
+                    timing.scope.as_deref().unwrap_or("test"),
+                    timing.dependencies.join(", "),
+                ),
+                reproduction: None,
+                related: Vec::new(),
+                action: "Inspect this measured phase and its dependencies before optimizing; shared fixture invocations are counted once.",
+            })
+            .collect()
     }
 }
 
-fn run(
+pub(super) fn run(
     project: &Project,
     profile: Option<String>,
     health_timings: bool,
     ordering: TestOrdering,
 ) -> Result<RunOutput> {
-    let args = SubTestCommand {
-        health_timings: if health_timings {
-            HealthTimings::Enabled
-        } else {
-            HealthTimings::Disabled
-        },
-        ..SubTestCommand::default()
-    };
+    let args = SubTestCommand::default();
     let config = ParallelTestConfig {
+        health_timings,
         num_workers: 1,
         no_cache: true,
         create_ctrlc_handler: true,
@@ -114,7 +133,11 @@ fn run(
         profile,
         partition: None,
         test_ordering: ordering,
-        result_retention: TestResultRetention::All,
+        result_retention: if health_timings {
+            TestResultRetention::FailuresAndRetries
+        } else {
+            TestResultRetention::Observations
+        },
     };
     karva_runner::run_parallel_tests(
         project,
@@ -124,7 +147,15 @@ fn run(
     )
 }
 
-fn execution_errors(output: &RunOutput) -> Vec<String> {
+/// Retains the test command's flaky-result policy as well as ordinary failures.
+pub(super) fn successful(output: &RunOutput) -> bool {
+    output.results.is_success()
+        && !output.results.has_flaky_failures()
+        && !output.timed_out
+        && !output.cancelled
+}
+
+pub(super) fn execution_errors(output: &RunOutput) -> Vec<String> {
     let results: &AggregatedResults = &output.results;
     let mut errors = results
         .run_diagnostics
@@ -136,6 +167,12 @@ fn execution_errors(output: &RunOutput) -> Vec<String> {
             .diagnostic()
             .map(|diagnostic| format!("{}: {}", test.full_name(), diagnostic.rendered()))
     }));
+    if results.has_flaky_failures() {
+        errors.push("Flaky-result policy failed the analyzed run".to_owned());
+    }
+    if output.cancelled {
+        errors.push("Health runtime analysis was interrupted".to_owned());
+    }
     if output.timed_out {
         errors.push("Health runtime analysis exceeded the configured run timeout".to_owned());
     }

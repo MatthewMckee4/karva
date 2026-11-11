@@ -18,7 +18,23 @@ use crate::{
 ///
 /// Mutually exclusive arms cannot shadow each other. Other conditional writes
 /// produce an advisory rather than claiming that a definition definitely wins.
-pub fn shadowed_definitions(module: &CollectedModule, test_prefix: &str) -> Vec<SourceDiagnostic> {
+/// Existing duplicate-fixture diagnostics for this module own their definition
+/// groups, so pairs within those groups do not also produce shadow findings.
+pub fn shadowed_definitions(
+    module: &CollectedModule,
+    test_prefix: &str,
+    existing: &[SourceDiagnostic],
+) -> Vec<SourceDiagnostic> {
+    let mut duplicate_fixture_groups = HashMap::new();
+    for diagnostic in existing.iter().filter(|diagnostic| {
+        diagnostic.code == DiagnosticCode::DuplicateFixture
+            && diagnostic.location.path == *module.path.path()
+    }) {
+        if let Some(first) = diagnostic.related.first() {
+            duplicate_fixture_groups.insert(first.location.range, first.location.range);
+            duplicate_fixture_groups.insert(diagnostic.location.range, first.location.range);
+        }
+    }
     let mut visitor = ShadowVisitor {
         module,
         test_prefix,
@@ -27,6 +43,7 @@ pub fn shadowed_definitions(module: &CollectedModule, test_prefix: &str) -> Vec<
         branches: Vec::new(),
         uncertain: false,
         diagnostics: Vec::new(),
+        duplicate_fixture_groups,
     };
     visitor.visit_body(&module.module_body);
     visitor.diagnostics
@@ -47,6 +64,8 @@ struct ShadowVisitor<'a> {
     branches: Vec<(TextSize, usize)>,
     uncertain: bool,
     diagnostics: Vec<SourceDiagnostic>,
+    /// Pairs already owned by the fixture diagnostic, grouped by first declaration.
+    duplicate_fixture_groups: HashMap<TextRange, TextRange>,
 }
 
 impl ShadowVisitor<'_> {
@@ -73,6 +92,11 @@ impl<'a> SourceOrderVisitor<'a> for ShadowVisitor<'_> {
                 let relevant = function.name.starts_with(self.test_prefix)
                     || is_fixture_function_with_bindings(function, &self.bindings);
                 for previous in self.seen.get(function.name.as_str()).into_iter().flatten() {
+                    if let Some(group) = self.duplicate_fixture_groups.get(&previous.range)
+                        && self.duplicate_fixture_groups.get(&function.name.range()) == Some(group)
+                    {
+                        continue;
+                    }
                     if !(relevant || previous.relevant)
                         || previous.branches.iter().any(|(group, arm)| {
                             self.branches.iter().any(|(other_group, other_arm)| {
@@ -82,10 +106,8 @@ impl<'a> SourceOrderVisitor<'a> for ShadowVisitor<'_> {
                     {
                         continue;
                     }
-                    let uncertain = self.uncertain
-                        || previous.uncertain
-                        || !self.branches.is_empty()
-                        || !previous.branches.is_empty();
+                    let uncertain =
+                        self.uncertain || previous.uncertain || self.branches != previous.branches;
                     let diagnostic = SourceDiagnostic {
                         code: if uncertain {
                             DiagnosticCode::PossiblyShadowedDefinition
@@ -136,9 +158,11 @@ impl<'a> SourceOrderVisitor<'a> for ShadowVisitor<'_> {
             Stmt::ClassDef(class) => {
                 let seen = std::mem::take(&mut self.seen);
                 let bindings = self.bindings.clone();
+                let uncertain = std::mem::replace(&mut self.uncertain, false);
                 self.visit_body(&class.body);
                 self.seen = seen;
                 self.bindings = bindings;
+                self.uncertain = uncertain;
             }
             Stmt::Match(statement) => {
                 for (arm, case) in statement.cases.iter().enumerate() {
@@ -281,6 +305,7 @@ fn parameter_diagnostics(
                     Some(Expr::NoneLiteral(_)) | None => ids.and_then(|ids| ids.get(index)),
                     Some(_) => None,
                 },
+                // Dynamic values may return param objects whose own IDs override `ids`.
                 None if literal(value) => ids.and_then(|ids| ids.get(index)),
                 None => None,
             };
