@@ -173,6 +173,20 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     );
     let mut findings = Vec::new();
     for path in selected_paths {
+        if let Some(module) = index.module(&path) {
+            for diagnostic in karva_analysis::shadowed_definitions(
+                module,
+                &project.settings().test().test_function_prefix,
+            ) {
+                if !args
+                    .ignore
+                    .iter()
+                    .any(|rule| rule == diagnostic.code.as_str())
+                {
+                    findings.push(source_finding(diagnostic, &modules, project.cwd()));
+                }
+            }
+        }
         if let Some(analysis) = index.analyze(&path) {
             for diagnostic in analysis.diagnostics {
                 if !args
@@ -197,7 +211,11 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
             && a.location.path == b.location.path
             && a.location.start == b.location.start
     });
-    let failed = !findings.is_empty() && !matches!(args.fail_on, HealthFailOn::None);
+    let failed = findings.iter().any(|finding| match args.fail_on {
+        HealthFailOn::None => false,
+        HealthFailOn::Warning => true,
+        HealthFailOn::Error => finding.severity == "error",
+    });
     let report = HealthReport {
         schema_version: 1,
         analysis: "source-only",
@@ -254,7 +272,11 @@ fn source_finding(
 ) -> Finding {
     Finding {
         rule: diagnostic.code.as_str(),
-        severity: "error",
+        severity: if diagnostic.code == DiagnosticCode::PossiblyShadowedDefinition {
+            "warning"
+        } else {
+            "error"
+        },
         location: Location::new(
             &diagnostic.location.path,
             diagnostic.location.range,
