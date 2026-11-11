@@ -4,13 +4,13 @@ use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, ExprContext, Stmt};
 use ruff_text_size::{Ranged, TextRange};
 
-use crate::occurrences::{
-    body_contains_name, body_contains_name_in_body, body_has_nested_binding_conflict,
-    body_has_unsupported_bindings, expression_contains_name_in_scope, local_bindings,
-};
 use crate::{
     FixtureId, FixtureOccurrence, FixtureOccurrenceKind, LocatedFixtureOccurrence, SourceAnalysis,
     WorkspaceSourceIndex, fixture_occurrences,
+};
+use karva_analysis::{
+    body_contains_name, body_contains_name_in_body, body_has_nested_binding_conflict,
+    body_has_unsupported_bindings, expression_contains_name_in_scope, local_bindings,
 };
 
 /// Returns whether `name` is a valid public name for a fixture rename.
@@ -70,16 +70,16 @@ fn has_unsafe_all_bindings(index: &WorkspaceSourceIndex, target: &FixtureId) -> 
         let Some(analysis) = index.analyze(path) else {
             return true;
         };
-        let local_default = analysis.fixture_model.local().iter().any(|definition| {
+        let local_default = analysis.fixture_model().local().iter().any(|definition| {
             definition.id == *target
                 && definition.name == definition.defining_name
                 && definition.name_range == definition.public_name_range
         });
         let imported_default =
-            analysis.fixture_model.imports().any(|import| {
+            analysis.fixture_model().imports().any(|import| {
                 import.fixture == *target && !import.has_alias && import.rename_source
             }) && analysis
-                .fixture_model
+                .fixture_model()
                 .definition(target)
                 .is_some_and(|definition| {
                     definition.name == definition.defining_name
@@ -90,7 +90,7 @@ fn has_unsafe_all_bindings(index: &WorkspaceSourceIndex, target: &FixtureId) -> 
         }
 
         let mut visitor = AllBindingVisitor { found: false };
-        source_order::walk_body(&mut visitor, &analysis.module.module_body);
+        source_order::walk_body(&mut visitor, &analysis.module().module_body);
         visitor.found
     })
 }
@@ -132,7 +132,7 @@ fn has_unsafe_project_imports(index: &WorkspaceSourceIndex, target: &FixtureId) 
     let Some((public_name, defining_name)) = index.paths().find_map(|path| {
         index
             .analyze(path)?
-            .fixture_model
+            .fixture_model()
             .definition(target)
             .map(|definition| (definition.name.clone(), definition.defining_name.clone()))
     }) else {
@@ -150,7 +150,7 @@ fn has_unsafe_project_imports(index: &WorkspaceSourceIndex, target: &FixtureId) 
             })
             .filter_map(|occurrence| occurrence.edit_range)
             .collect::<HashSet<_>>();
-        analysis.module.module_body.iter().any(|statement| {
+        analysis.module().module_body.iter().any(|statement| {
             let Stmt::ImportFrom(import) = statement else {
                 return false;
             };
@@ -184,11 +184,11 @@ fn editable_fixture_occurrences(
     for path in index.paths() {
         let analysis = index.analyze(path)?;
         let custom_name = analysis
-            .fixture_model
+            .fixture_model()
             .definition(&current.fixture)
             .is_some_and(|definition| definition.name_range != definition.public_name_range);
         let preserved_imports = analysis
-            .fixture_model
+            .fixture_model()
             .imports()
             .filter(|import| import.fixture == current.fixture && !import.rename_source)
             .map(|import| import.range)
@@ -236,12 +236,12 @@ fn has_unsafe_import_scope(
     new_name: Option<&str>,
 ) -> bool {
     let old_names = analysis
-        .fixture_model
+        .fixture_model()
         .imports()
         .filter(|import| import.fixture == *target && !import.has_alias && import.rename_source)
         .filter_map(|import| {
             analysis
-                .fixture_model
+                .fixture_model()
                 .definition(&import.fixture)
                 .filter(|definition| definition.name == definition.defining_name)
                 .map(|definition| definition.name.clone())
@@ -255,13 +255,13 @@ fn has_unsafe_import_scope(
         old_names: &old_names,
         found: false,
     };
-    source_order::walk_body(&mut lambda_visitor, &analysis.module.module_body);
+    source_order::walk_body(&mut lambda_visitor, &analysis.module().module_body);
     if lambda_visitor.found {
         return true;
     }
 
     analysis
-        .module
+        .module()
         .module_body
         .iter()
         .any(|statement| match statement {
@@ -295,7 +295,7 @@ impl SourceOrderVisitor<'_> for ImportedLambdaVisitor<'_> {
             self.found |= self
                 .old_names
                 .iter()
-                .any(|name| expression_contains_name_in_scope(&lambda.body, name, HashSet::new()));
+                .any(|name| expression_contains_name_in_scope(&lambda.body, name));
         } else {
             source_order::walk_expr(self, expression);
         }
@@ -307,12 +307,12 @@ fn has_imported_binding_conflict(
     target: &FixtureId,
     new_name: &str,
 ) -> bool {
-    let has_unaliased_import = analysis.fixture_model.imports().any(|import| {
+    let has_unaliased_import = analysis.fixture_model().imports().any(|import| {
         if import.fixture != *target || import.has_alias || !import.rename_source {
             return false;
         }
         analysis
-            .fixture_model
+            .fixture_model()
             .definition(&import.fixture)
             .is_some_and(|definition| definition.name == definition.defining_name)
     });
@@ -324,7 +324,7 @@ fn has_imported_binding_conflict(
         name: new_name,
         found: false,
     };
-    source_order::walk_body(&mut visitor, &analysis.module.module_body);
+    source_order::walk_body(&mut visitor, &analysis.module().module_body);
     visitor.found
 }
 
@@ -354,7 +354,7 @@ impl SourceOrderVisitor<'_> for ImportedBindingConflictVisitor<'_> {
 }
 
 fn has_unindexed_provider_references(analysis: &SourceAnalysis, target: &FixtureId) -> bool {
-    let Some(definition) = analysis.fixture_model.definition(target) else {
+    let Some(definition) = analysis.fixture_model().definition(target) else {
         return false;
     };
     let occurrences = fixture_occurrences(analysis)
@@ -376,7 +376,7 @@ fn has_unindexed_provider_references(analysis: &SourceAnalysis, target: &Fixture
         known_import_ranges: &known_import_ranges,
         found: false,
     };
-    source_order::walk_body(&mut visitor, &analysis.module.module_body);
+    source_order::walk_body(&mut visitor, &analysis.module().module_body);
     visitor.found
 }
 
@@ -423,10 +423,10 @@ fn has_unsupported_parameter_bindings(
     occurrences: &[FixtureOccurrence],
 ) -> bool {
     analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
-        .chain(&analysis.module.fixture_function_defs)
+        .chain(&analysis.module().fixture_function_defs)
         .any(|function| {
             let target_names = function
                 .parameters
@@ -453,28 +453,30 @@ fn fixture_name_conflicts(
     new_name: &str,
 ) -> bool {
     let target_name = analysis
-        .fixture_model
+        .fixture_model()
         .definition(target)
         .map(|definition| definition.name.as_str());
     if target_name == Some(new_name) {
         return false;
     }
 
-    analysis.fixture_model.blocked_names().contains(new_name)
+    analysis.fixture_model().blocked_names().contains(new_name)
         || analysis
-            .fixture_model
+            .fixture_model()
             .visible()
             .iter()
             .any(|definition| definition.name == new_name && &definition.id != target)
-        || crate::fixture::builtin_info(new_name).is_some()
+        || karva_analysis::builtin_info(new_name).is_some()
         || target_name.is_some_and(|target_name| {
             analysis
-                .fixture_model
+                .fixture_model()
                 .visible()
                 .iter()
                 .any(|definition| &definition.id == target && definition.name == target_name)
-                && analysis.module.test_function_defs.iter().any(|function| {
-                    analysis.fixture_model.parametrization_is_dynamic(function)
+                && analysis.module().test_function_defs.iter().any(|function| {
+                    analysis
+                        .fixture_model()
+                        .parametrization_is_dynamic(function)
                         && function
                             .parameters
                             .iter_non_variadic_params()
@@ -482,13 +484,13 @@ fn fixture_name_conflicts(
                 })
         })
         || analysis
-            .module
+            .module()
             .test_function_defs
             .iter()
             .map(|function| (function, true))
             .chain(
                 analysis
-                    .module
+                    .module()
                     .fixture_function_defs
                     .iter()
                     .map(|function| (function, false)),
@@ -528,7 +530,7 @@ fn fixture_name_conflicts(
                         })
                         || is_test
                             && !analysis
-                                .fixture_model
+                                .fixture_model()
                                 .parameter_is_fixture(function, new_name))
             })
 }
@@ -542,8 +544,8 @@ mod tests {
     use ruff_text_size::TextSize;
 
     use super::*;
-    use crate::occurrences::fixture_occurrence;
     use crate::{SourceAnalysisSettings, SourceDocument};
+    use karva_analysis::fixture_occurrence;
 
     fn settings() -> SourceAnalysisSettings {
         SourceAnalysisSettings {
@@ -569,7 +571,7 @@ mod tests {
             def test_example(): pass
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -601,7 +603,7 @@ mod tests {
         "};
         let test = "def test_example(database): pass\n";
         let path = Utf8Path::new("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/conftest.py".into(), provider.to_owned()),
@@ -627,7 +629,7 @@ mod tests {
             def test_example(database): pass
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -660,7 +662,7 @@ mod tests {
                 return database
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -693,7 +695,7 @@ mod tests {
                 return database()
         "};
         let path = Utf8PathBuf::from("/project/conftest.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -715,7 +717,7 @@ mod tests {
                 return provider()
         "#};
         let path = Utf8PathBuf::from("/project/conftest.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -737,7 +739,7 @@ mod tests {
         "};
         let reexport = "from support import database as db\n";
         let test = "def test_example(database): pass\n";
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -779,7 +781,7 @@ mod tests {
         "#};
         let reexport = "from support import provider as db\n";
         let test = "def test_example(database): pass\n";
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -814,7 +816,7 @@ mod tests {
         let first = "from support import database as db\n";
         let second = "from conftest import db\n";
         let test = "def test_example(database): pass\n";
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -851,7 +853,7 @@ mod tests {
             from support import database
             value = database()
         "};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -890,7 +892,7 @@ mod tests {
             def helper(database):
                 return database
         "};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -916,7 +918,7 @@ mod tests {
             def database(): pass
         "};
         let reexport = "from support import *\n";
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -942,7 +944,7 @@ mod tests {
             def database(): pass
         "};
         let unresolved = "from missing import database\n";
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -968,7 +970,7 @@ mod tests {
             def database(): pass
             __all__ = ["database"]
         "#};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(
                 "/project/conftest.py".into(),
@@ -997,7 +999,7 @@ mod tests {
             from support import database
             __all__ = ["database"]
         "#};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 SourceDocument::new("/project/support.py".into(), provider.to_owned()),
@@ -1023,7 +1025,7 @@ mod tests {
             def provider(): pass
             __all__ = ["provider"]
         "#};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(
                 "/project/conftest.py".into(),
@@ -1051,7 +1053,7 @@ mod tests {
                 return replacement
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1076,7 +1078,7 @@ mod tests {
                 return inner
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1100,7 +1102,7 @@ mod tests {
                 return database
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1126,7 +1128,7 @@ mod tests {
                 return database
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1159,7 +1161,7 @@ mod tests {
             def test_example(database): pass
         "};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1184,7 +1186,7 @@ mod tests {
             def test_example(database, replacement): pass
         "};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1208,7 +1210,7 @@ mod tests {
             def test_example(database): pass
         "};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1233,7 +1235,7 @@ mod tests {
             def test_fixture(database): pass
         "};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1257,7 +1259,7 @@ mod tests {
             def test_example(database, replacement): pass
         "};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -1280,7 +1282,7 @@ mod tests {
             def wrapper(database, replacement): pass
         "};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),

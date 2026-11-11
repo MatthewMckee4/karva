@@ -1,0 +1,28 @@
+[package]
+name = "karva_analysis"
+version = "0.0.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Shared source analysis for Karva CLI and editor features."
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[dependencies]
+camino = { workspace = true }
+karva_collector = { workspace = true }
+karva_python_semantic = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_text_size = { workspace = true }
+
+[dev-dependencies]
+indoc = { workspace = true }
+
+[lints]
+workspace = true
