@@ -32,3 +32,9 @@ and invocation errors still exit with code 2.
 JSON output uses `schema_version: 1`. Findings are sorted by source location and
 rule. Locations contain one-based lines and Unicode columns and zero-based UTF-8
 byte offsets. Paths are relative to the project root with forward slashes.
+
+`shadowed-definition` identifies a test or fixture replaced by a later function
+in the same module or class. Both locations are shown. Definitions in mutually
+exclusive branches are excluded; uncertain execution produces
+`possibly-shadowed-definition` with warning severity. These checks cover code
+that runtime collection can no longer see, including duplicate test methods.
