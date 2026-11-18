@@ -108,6 +108,7 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     } else {
         ProjectMetadata::discover(&cwd, python_version)?
     };
+    let full_suite = args.paths.is_empty();
     let options = Options {
         src: Some(SrcOptions {
             include: (!args.paths.is_empty()).then_some(args.paths),
@@ -202,6 +203,17 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
             }
         }
     }
+    if full_suite {
+        for diagnostic in karva_analysis::unused_fixtures(&index) {
+            if !args
+                .ignore
+                .iter()
+                .any(|rule| rule == diagnostic.code.as_str())
+            {
+                findings.push(source_finding(diagnostic, &modules, project.cwd()));
+            }
+        }
+    }
     findings.sort_by(|a, b| {
         (&a.location.path, a.location.start, a.rule).cmp(&(
             &b.location.path,
@@ -277,7 +289,8 @@ fn source_finding(
         rule: diagnostic.code.as_str(),
         severity: if matches!(
             diagnostic.code,
-            DiagnosticCode::PossiblyShadowedDefinition
+            DiagnosticCode::UnusedFixture
+                | DiagnosticCode::PossiblyShadowedDefinition
                 | DiagnosticCode::DuplicateParameterCase
                 | DiagnosticCode::DuplicateParameterId
         ) {
