@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
@@ -12,6 +12,9 @@ use karva_python_semantic::{QualifiedTestName, TestCacheKey};
 
 /// Streams worker lifecycle and results while preserving terminal output.
 pub struct WorkerReporter {
+    health_timings: bool,
+    timing_reporting_seconds: Mutex<f64>,
+
     /// Terminal-facing status reporter local to the worker process.
     output: TestCaseReporter,
 
@@ -34,8 +37,11 @@ impl WorkerReporter {
         client: WorkerClient,
         cwd: Utf8PathBuf,
         diagnostic_config: DisplayDiagnosticConfig,
+        health_timings: bool,
     ) -> Self {
         Self {
+            health_timings,
+            timing_reporting_seconds: Mutex::new(0.0),
             output,
             client,
             cwd,
@@ -46,6 +52,13 @@ impl WorkerReporter {
 
     /// Returns first transport error observed by reporter callbacks.
     pub fn finish(&self) -> Result<()> {
+        if self.health_timings {
+            let seconds = *self
+                .timing_reporting_seconds
+                .lock()
+                .map_err(|_| anyhow!("timing reporting lock poisoned"))?;
+            self.send(WorkerEvent::TimingReportingSeconds(seconds));
+        }
         let error = self
             .send_error
             .lock()
@@ -73,6 +86,18 @@ impl WorkerReporter {
 }
 
 impl Reporter for WorkerReporter {
+    fn collect_timings(&self) -> bool {
+        self.health_timings
+    }
+
+    fn report_timing(&self, timing: karva_diagnostic::LifecycleTiming) {
+        let start = Instant::now();
+        self.send(WorkerEvent::Timing(timing));
+        if let Ok(mut seconds) = self.timing_reporting_seconds.lock() {
+            *seconds += start.elapsed().as_secs_f64();
+        }
+    }
+
     fn report_warning(&self, warning: karva_diagnostic::TestWarning) {
         self.send(WorkerEvent::Warning(warning));
     }

@@ -3,7 +3,9 @@
 use std::time::{Duration, Instant};
 
 use karva_coverage_runtime::CoveragePhase;
-use karva_diagnostic::{CapturedTestOutput, TestExecutionAttempt, TestExecutionOutcome};
+use karva_diagnostic::{
+    CapturedTestOutput, LifecycleTiming, TestExecutionAttempt, TestExecutionOutcome, TimingPhase,
+};
 use pyo3::prelude::*;
 
 use crate::diagnostic::unhandled_exception_diagnostic;
@@ -86,6 +88,19 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             }
         };
 
+        if self.package_runner.context.reporter().collect_timings() && !body.call_duration.is_zero()
+        {
+            let definition = self.input.test.definition();
+            let mut timing = LifecycleTiming::new(
+                settings.identity.qualified_test_name.to_string(),
+                definition.source_file(),
+                definition.diagnostic_range(),
+                TimingPhase::TestBody,
+                body.call_duration,
+            );
+            timing.attempt = Some(attempt_number);
+            self.package_runner.context.reporter().report_timing(timing);
+        }
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();

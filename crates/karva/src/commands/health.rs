@@ -11,12 +11,16 @@ use karva_analysis::{
 };
 use karva_cli::{HealthCommand, HealthFailOn, HealthFormat};
 use karva_collector::{CollectedModule, CollectionSettings, collect_source_with_module_name};
-use karva_metadata::{Options, ProjectMetadata, ProjectOptionsOverrides, SrcOptions};
+use karva_metadata::{
+    Options, ProjectMetadata, ProjectOptionsOverrides, SrcOptions, TerminalOptions,
+};
 use karva_project::Project;
 use karva_project::path::absolute;
 use ruff_python_ast::PythonVersion;
 use ruff_text_size::TextRange;
 use serde::Serialize;
+
+mod runtime;
 
 use crate::ExitStatus;
 use crate::utils::cwd;
@@ -27,6 +31,9 @@ struct HealthReport {
     schema_version: u8,
     analysis: &'static str,
     findings: Vec<Finding>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    runtime: Option<runtime::RuntimeReport>,
 }
 
 /// A finding retains evidence separately from the action proposed to the user.
@@ -91,7 +98,8 @@ impl Location {
 pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     for rule in &args.ignore {
         anyhow::ensure!(
-            DiagnosticCode::ALL.iter().any(|code| code.as_str() == rule),
+            DiagnosticCode::ALL.iter().any(|code| code.as_str() == rule)
+                || rule == "duration-hotspot",
             "unknown health rule `{rule}`"
         );
     }
@@ -110,6 +118,12 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     };
     let full_suite = args.paths.is_empty();
     let options = Options {
+        terminal: Some(TerminalOptions {
+            status_level: Some(karva_logging::StatusLevel::None),
+            final_status_level: Some(karva_logging::FinalStatusLevel::None),
+            show_python_output: Some(false),
+            output_format: None,
+        }),
         src: Some(SrcOptions {
             include: (!args.paths.is_empty()).then_some(args.paths),
             respect_ignore_files: None,
@@ -118,7 +132,8 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
     };
     metadata
         .apply_overrides(
-            &ProjectOptionsOverrides::new(config_file, options).with_profile(args.config.profile),
+            &ProjectOptionsOverrides::new(config_file, options)
+                .with_profile(args.config.profile.clone()),
         )
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     let project = Project::from_metadata(metadata);
@@ -214,6 +229,15 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
             }
         }
     }
+    let runtime = if args.durations {
+        let report = runtime::durations(&project, args.config.profile.clone())?;
+        if !args.ignore.iter().any(|rule| rule == "duration-hotspot") {
+            findings.extend(report.hotspots());
+        }
+        Some(report)
+    } else {
+        None
+    };
     findings.sort_by(|a, b| {
         (&a.location.path, a.location.start, a.rule).cmp(&(
             &b.location.path,
@@ -226,15 +250,21 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
             && a.location.path == b.location.path
             && a.location.start == b.location.start
     });
-    let failed = findings.iter().any(|finding| match args.fail_on {
-        HealthFailOn::None => false,
-        HealthFailOn::Warning => true,
-        HealthFailOn::Error => finding.severity == "error",
-    });
+    let failed = runtime.as_ref().is_some_and(|report| !report.success)
+        || findings.iter().any(|finding| match args.fail_on {
+            HealthFailOn::None => false,
+            HealthFailOn::Warning => finding.severity != "info",
+            HealthFailOn::Error => finding.severity == "error",
+        });
     let report = HealthReport {
         schema_version: 1,
-        analysis: "source-only",
+        analysis: if runtime.is_some() {
+            "source-and-runtime"
+        } else {
+            "source-only"
+        },
         findings,
+        runtime,
     };
     let mut output = io::stdout().lock();
     match args.format {
@@ -266,11 +296,25 @@ pub fn health(args: HealthCommand) -> Result<ExitStatus> {
                 }
                 writeln!(output, "  help: {}", finding.action)?;
             }
-            writeln!(
-                output,
-                "{} health finding(s) (source-only; tests were not executed)",
-                report.findings.len()
-            )?;
+            if let Some(runtime) = &report.runtime {
+                writeln!(
+                    output,
+                    "{} health finding(s) (runtime measured; {} invocation(s); median {:.6}s; reporting overhead {:.6}s)",
+                    report.findings.len(),
+                    runtime.measurements.len(),
+                    runtime.median_seconds.unwrap_or_default(),
+                    runtime.reporting_overhead_seconds
+                )?;
+                for diagnostic in &runtime.errors {
+                    writeln!(output, "{diagnostic}")?;
+                }
+            } else {
+                writeln!(
+                    output,
+                    "{} health finding(s) (source-only; tests were not executed)",
+                    report.findings.len()
+                )?;
+            }
         }
     }
     Ok(if failed {

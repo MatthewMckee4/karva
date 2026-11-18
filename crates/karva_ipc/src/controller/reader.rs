@@ -133,7 +133,11 @@ pub(super) fn read_worker(
             WorkerEvent::WorkerFinished => {
                 checkpoint.ensure_idle(worker_id)?;
             }
-            WorkerEvent::TestSlow | WorkerEvent::RunDiagnostic(_) | WorkerEvent::Warning(_) => {}
+            WorkerEvent::TestSlow
+            | WorkerEvent::RunDiagnostic(_)
+            | WorkerEvent::Warning(_)
+            | WorkerEvent::Timing(_)
+            | WorkerEvent::TimingReportingSeconds(_) => {}
         }
         if sender
             .send(Incoming::Event(ControllerEvent { worker_id, event }))

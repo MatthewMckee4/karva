@@ -119,6 +119,7 @@ pub fn worker_configuration(
         src.include = None;
     }
     Arc::new(WorkerConfiguration {
+        health_timings: args.health_timings == karva_cli::HealthTimings::Enabled,
         verbosity: args.verbosity.level(),
         color: args.color.or_else(|| {
             colored::control::SHOULD_COLORIZE

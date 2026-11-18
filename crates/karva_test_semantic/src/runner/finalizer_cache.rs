@@ -49,12 +49,13 @@ impl FinalizerCache {
         &mut self,
         py: Python<'_>,
         scope: ScopeKey<'_>,
+        reporter: &dyn karva_diagnostic::Reporter,
     ) -> Vec<Diagnostic> {
         self.storage
             .take(scope)
             .into_iter()
             .rev()
-            .filter_map(|finalizer| finalizer.run(py).err())
+            .filter_map(|finalizer| finalizer.run(py, reporter).err())
             .collect()
     }
 }

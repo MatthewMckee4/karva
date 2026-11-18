@@ -29,6 +29,14 @@ pub use warnings::TestWarning;
 /// Results from one or more workers, parameterized by diagnostic representation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunResults<D> {
+    /// Opt-in observations retained independently of test-result retention.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub timings: Vec<crate::LifecycleTiming>,
+
+    /// Worker time spent serializing and sending timing records, in seconds.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub timing_reporting_seconds: f64,
+
     /// Unconsumed warnings with optional test and attempt attribution.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<TestWarning>,
@@ -52,9 +60,19 @@ pub struct RunResults<D> {
     pub test_cases: Vec<TestCaseResult<D>>,
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if passes fields by reference"
+)]
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
+}
+
 impl<D> Default for RunResults<D> {
     fn default() -> Self {
         Self {
+            timings: Vec::new(),
+            timing_reporting_seconds: 0.0,
             warnings: Vec::new(),
             run_diagnostics: Vec::new(),
             stats: TestResultStats::default(),

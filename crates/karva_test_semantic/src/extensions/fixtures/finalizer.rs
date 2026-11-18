@@ -1,7 +1,8 @@
 use std::rc::Rc;
+use std::time::Instant;
 
 use camino::Utf8PathBuf;
-use karva_diagnostic::Diagnostic;
+use karva_diagnostic::{Diagnostic, LifecycleTiming, Reporter, TimingPhase};
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 use thiserror::Error;
@@ -55,13 +56,25 @@ pub struct Finalizer {
 
 impl Finalizer {
     /// Resumes teardown once and reports invalid generator behavior.
-    pub(crate) fn run(self, py: Python<'_>) -> Result<(), Diagnostic> {
+    pub(crate) fn run(self, py: Python<'_>, reporter: &dyn Reporter) -> Result<(), Diagnostic> {
+        let started = reporter.collect_timings().then(Instant::now);
         let result = if self.is_async {
             self.run_async_teardown(py)
         } else {
             self.run_sync_teardown(py)
         };
 
+        if let Some(started) = started {
+            let mut timing = LifecycleTiming::new(
+                self.definition.name().to_string(),
+                self.definition.source_file(),
+                self.definition.statement().name.range,
+                TimingPhase::FixtureTeardown,
+                started.elapsed(),
+            );
+            timing.scope = Some(self.scope.name().to_owned());
+            reporter.report_timing(timing);
+        }
         result.map_err(|error| {
             let (reason, error) = match &error {
                 FinalizerError::MultipleYields => (error.to_string(), None),

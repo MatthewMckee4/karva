@@ -238,7 +238,8 @@ karva health [OPTIONS] [PATHS]...
 <h3 class="cli-reference">Options</h3>
 
 <dl class="cli-reference"><dt id="karva-health--config-file"><a href="#karva-health--config-file"><code>--config-file</code></a> <i>path</i></dt><dd><p>The path to a <code>karva.toml</code> file to use for configuration</p>
-<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-health--fail-on"><a href="#karva-health--fail-on"><code>--fail-on</code></a> <i>fail-on</i></dt><dd><p>Lowest finding severity that causes exit code 1</p>
+<p>May also be set with the <code>KARVA_CONFIG_FILE</code> environment variable.</p></dd><dt id="karva-health--durations"><a href="#karva-health--durations"><code>--durations</code></a></dt><dd><p>Run the selected tests and measure exclusive test and fixture lifecycle time</p>
+</dd><dt id="karva-health--fail-on"><a href="#karva-health--fail-on"><code>--fail-on</code></a> <i>fail-on</i></dt><dd><p>Lowest finding severity that causes exit code 1</p>
 <p>&#91;default: error&#93;</p><p>Possible values:</p>
 <ul>
 <li><code>none</code></li>
