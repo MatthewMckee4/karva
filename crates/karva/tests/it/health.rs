@@ -232,3 +232,73 @@ fn health_uncertain_shadowing_has_warning_exit_policy() {
     ----- stderr -----
     ");
 }
+
+#[test]
+fn health_duplicate_literal_cases_and_explicit_ids() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r#"
+import karva
+from karva import param as case
+from karva.tags import parametrize as cases
+
+@cases("value", [{"a": [1, (2, None)]}, {'a': [0x1, (2, None)]}])
+def test_nested(value): pass
+
+@cases("value", [1, 2], ids=["same", "same"])
+def test_ids(value): pass
+
+@cases("value", [case(3, id="x"), case(4, id="x")])
+def test_explicit_ids(value): pass
+"#,
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).args(["health", "--fail-on=warning"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    test_health.py:6:41: warning[duplicate-parameter-case]: Parameter case 2 repeats literal arguments from case 1
+      test_health.py:6:18: First occurrence: case 1
+      help: Remove the repeated literal case, or suppress this rule if repetition is intentional.
+    test_health.py:9:38: warning[duplicate-parameter-id]: Parameter case 2 repeats the explicit ID from case 1
+      test_health.py:9:30: First occurrence: case 1
+      help: Give each explicit case ID a distinct name.
+    test_health.py:12:46: warning[duplicate-parameter-id]: Parameter case 2 repeats the explicit ID from case 1
+      test_health.py:12:29: First occurrence: case 1
+      help: Give each explicit case ID a distinct name.
+    3 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn health_dynamic_and_distinct_parameters_are_clean() {
+    let context = TestContext::with_file(
+        "test_health.py",
+        r#"
+import karva
+@karva.tags.parametrize("value", [dynamic(), dynamic(), [1], (1,), 1, True])
+def test_unknown(value): pass
+@karva.tags.parametrize("value", [*unknown, 1, 1])
+def test_unpacked_values(value): pass
+@karva.tags.parametrize("value", [1, 2], ids=[*unknown_ids, "same", "same"])
+def test_unpacked_ids(value): pass
+@karva.tags.parametrize("value", [1, 2], ids=make_ids)
+def test_dynamic_ids(value): pass
+@karva.tags.parametrize("value", [karva.param(1, id=dynamic()), karva.param(2, id=dynamic())], ids=["same", "same"])
+def test_dynamic_explicit_ids(value): pass
+@karva.tags.parametrize("value", [dynamic(), dynamic()], ids=["same", "same"])
+def test_dynamic_cases_with_ids(value): pass
+@karva.tags.parametrize("value", [karva.param(1), karva.param(1, tags=[karva.tags.skip])])
+def test_different_marks(value): pass
+"#,
+    );
+    assert_cmd_snapshot!(context.karva_command_in(context.root()).arg("health"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    0 health finding(s) (source-only; tests were not executed)
+
+    ----- stderr -----
+    ");
+}
