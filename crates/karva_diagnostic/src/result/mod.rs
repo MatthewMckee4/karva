@@ -29,6 +29,10 @@ pub use warnings::TestWarning;
 /// Results from one or more workers, parameterized by diagnostic representation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunResults<D> {
+    /// Stable identities and actual completion order, retained only for health probes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observations: Vec<TestObservation>,
+
     /// Opt-in observations retained independently of test-result retention.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub timings: Vec<crate::LifecycleTiming>,
@@ -71,6 +75,7 @@ fn is_zero(value: &f64) -> bool {
 impl<D> Default for RunResults<D> {
     fn default() -> Self {
         Self {
+            observations: Vec::new(),
             timings: Vec::new(),
             timing_reporting_seconds: 0.0,
             warnings: Vec::new(),
@@ -87,7 +92,43 @@ impl<D> Default for RunResults<D> {
 /// Controller-side results containing transport-safe diagnostics.
 pub type AggregatedResults = RunResults<RenderedDiagnostic>;
 
+/// One completed case and its observed outcomes, including earlier retry attempts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestObservation {
+    pub key: TestCacheKey,
+
+    pub name: String,
+
+    /// Stable status spellings; timing and exception-message changes are not outcomes.
+    pub outcomes: Vec<String>,
+}
+
 impl<D> RunResults<D> {
+    /// Records probe evidence while the dispatcher still owns the stable case key.
+    pub fn observe_case(&mut self, key: &TestCacheKey, result: &TestCaseResult<D>) {
+        let outcomes = result
+            .attempts()
+            .iter()
+            .map(TestCaseAttempt::outcome)
+            .chain(std::iter::once(result.outcome()))
+            .map(|outcome| {
+                match outcome.result_kind() {
+                    IndividualTestResultKind::Passed => "passed",
+                    IndividualTestResultKind::Failed => "failed",
+                    IndividualTestResultKind::Error => "error",
+                    IndividualTestResultKind::Skipped { .. } => "skipped",
+                    IndividualTestResultKind::ExpectedFailure { .. } => "expected-failure",
+                }
+                .to_owned()
+            })
+            .collect();
+        self.observations.push(TestObservation {
+            key: key.clone(),
+            name: result.full_name().to_owned(),
+            outcomes,
+        });
+    }
+
     /// Preallocates controller storage from measured scheduling units.
     pub fn with_capacities(duration_capacity: usize, test_case_capacity: usize) -> Self {
         Self {

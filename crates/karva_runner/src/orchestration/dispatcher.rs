@@ -120,7 +120,7 @@ impl EventDispatcher {
         result_retention: TestResultRetention,
     ) -> Self {
         let test_case_capacity = match result_retention {
-            TestResultRetention::FailuresAndRetries => 0,
+            TestResultRetention::FailuresAndRetries | TestResultRetention::Observations => 0,
             TestResultRetention::All => test_capacity,
         };
         Self {
@@ -196,6 +196,9 @@ impl EventDispatcher {
                 } else {
                     result
                 };
+                if matches!(self.result_retention, TestResultRetention::Observations) {
+                    self.results.observe_case(&cache_key, &result);
+                }
                 self.results.register_rendered_test_case(
                     cache_key,
                     *result,
@@ -289,6 +292,9 @@ impl EventDispatcher {
                 timed_out.fail_on_flaky,
                 timed_out.junit_fail_on_flaky,
             );
+            if matches!(self.result_retention, TestResultRetention::Observations) {
+                self.results.observe_case(&timed_out.cache_key, &result);
+            }
             self.results.register_rendered_test_case(
                 timed_out.cache_key.clone(),
                 result,

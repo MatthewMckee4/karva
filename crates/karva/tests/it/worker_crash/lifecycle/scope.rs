@@ -231,7 +231,7 @@ def test_recovered():
         context.command().args([
             "--num-workers=1",
             "--shuffle",
-            "--random-seed=170938",
+            "--random-seed=5",
         ]),
         @"
     success: false
