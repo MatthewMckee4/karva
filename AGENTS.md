@@ -62,6 +62,8 @@ files and lines, and distinguish blockers from improvements.
 - Prefer narrow visibility because this workspace is generally its own
   consumer; use `pub` when another workspace crate genuinely needs an item.
 - Keep Rust imports at the top of files and prefer short imports.
+- Group statements by purpose, and separate distinct blocks of logic with blank
+  lines in production code and tests.
 - Document production crates and non-obvious functions, structs, enums, traits,
   and fields with Rust doc comments. Add module docs when a module has an
   architectural role or boundary that its name and contents do not make clear.

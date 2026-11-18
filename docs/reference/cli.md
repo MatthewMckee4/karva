@@ -15,6 +15,7 @@ karva <COMMAND>
 <h3 class="cli-reference">Commands</h3>
 
 <dl class="cli-reference"><dt><a href="#karva-test"><code>karva test</code></a></dt><dd><p>Run tests</p></dd>
+<dt><a href="#karva-mutate"><code>karva mutate</code></a></dt><dd><p>Test the strength of a Python suite with source mutations</p></dd>
 <dt><a href="#karva-snapshot"><code>karva snapshot</code></a></dt><dd><p>Manage snapshots created by <code>karva.assert_snapshot()</code></p></dd>
 <dt><a href="#karva-coverage"><code>karva coverage</code></a></dt><dd><p>Read and report native Karva coverage data</p></dd>
 <dt><a href="#karva-cache"><code>karva cache</code></a></dt><dd><p>Manage the karva cache</p></dd>
@@ -218,6 +219,165 @@ karva test [OPTIONS] [PATH]...
 </dd><dt id="karva-test--warning-filter"><a href="#karva-test--warning-filter"><code>--warning-filter</code></a>, <code>-W</code> <i>warning-filters</i></dt><dd><p>Python warning filter; repeat to add ordered rules. Later rules win. CLI rules replace configured warning-filters. Test-local tags win over CLI</p>
 </dd><dt id="karva-test--watch"><a href="#karva-test--watch"><code>--watch</code></a></dt><dd><p>Re-run tests when Python source files change</p>
 </dd></dl>
+
+## karva mutate
+
+Test the strength of a Python suite with source mutations
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate [OPTIONS] <COMMAND>
+```
+
+<h3 class="cli-reference">Commands</h3>
+
+<dl class="cli-reference"><dt><a href="#karva-mutate-run"><code>karva mutate run</code></a></dt><dd><p>Verify the baseline and execute mutations, reusing valid results</p></dd>
+<dt><a href="#karva-mutate-results"><code>karva mutate results</code></a></dt><dd><p>Report stored results without running tests</p></dd>
+<dt><a href="#karva-mutate-show"><code>karva mutate show</code></a></dt><dd><p>Show a candidate's exact diff, outcome, duration, and executed tests</p></dd>
+<dt><a href="#karva-mutate-retest"><code>karva mutate retest</code></a></dt><dd><p>Rerun recorded candidates after changing tests</p></dd>
+<dt><a href="#karva-mutate-apply"><code>karva mutate apply</code></a></dt><dd><p>Apply one source-bound candidate, refusing stale or conflicting source</p></dd>
+<dt><a href="#karva-mutate-help"><code>karva mutate help</code></a></dt><dd><p>Print this message or the help of the given subcommand(s)</p></dd>
+</dl>
+
+### karva mutate run
+
+Verify the baseline and execute mutations, reusing valid results
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate run [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-run--config-file"><a href="#karva-mutate-run--config-file"><code>--config-file</code></a> <i>config-file</i></dt><dd><p>Explicit configuration file, replacing automatic discovery</p>
+</dd><dt id="karva-mutate-run--exclude"><a href="#karva-mutate-run--exclude"><code>--exclude</code></a> <i>exclude</i></dt><dd><p>Project-relative exclusion glob; repeat to exclude more paths</p>
+</dd><dt id="karva-mutate-run--full-suite"><a href="#karva-mutate-run--full-suite"><code>--full-suite</code></a></dt><dd><p>Run every test for every candidate, bypassing affected-test ordering</p>
+</dd><dt id="karva-mutate-run--help"><a href="#karva-mutate-run--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-mutate-run--json"><a href="#karva-mutate-run--json"><code>--json</code></a></dt><dd><p>Emit native, versioned JSON instead of terminal text</p>
+</dd><dt id="karva-mutate-run--no-cache"><a href="#karva-mutate-run--no-cache"><code>--no-cache</code></a></dt><dd><p>Rerun candidates even when prior results remain valid</p>
+</dd><dt id="karva-mutate-run--operator"><a href="#karva-mutate-run--operator"><code>--operator</code></a> <i>operator</i></dt><dd><p>Mutation family: literal, comparison, boolean, arithmetic, control-flow, return</p>
+</dd><dt id="karva-mutate-run--outcome"><a href="#karva-mutate-run--outcome"><code>--outcome</code></a> <i>outcome</i></dt><dd><p>Prior outcome: pending, killed, survived, uncovered, timed-out, invalid, errored</p>
+</dd><dt id="karva-mutate-run--path"><a href="#karva-mutate-run--path"><code>--path</code></a> <i>path</i></dt><dd><p>Project-relative path glob; repeat to include more paths</p>
+</dd><dt id="karva-mutate-run--profile"><a href="#karva-mutate-run--profile"><code>--profile</code></a> <i>profile</i></dt><dd><p>Configuration profile to resolve</p>
+</dd><dt id="karva-mutate-run--source"><a href="#karva-mutate-run--source"><code>--source</code></a> <i>source</i></dt><dd><p>Files or directories containing application source, relative to project root</p>
+</dd><dt id="karva-mutate-run--symbol"><a href="#karva-mutate-run--symbol"><code>--symbol</code></a> <i>symbol</i></dt><dd><p>Qualified symbol glob; repeat to include more symbols</p>
+</dd><dt id="karva-mutate-run--timeout"><a href="#karva-mutate-run--timeout"><code>--timeout</code></a> <i>timeout</i></dt><dd><p>Override the measured per-mutant budget, in seconds; must be positive and finite</p>
+</dd><dt id="karva-mutate-run--workers"><a href="#karva-mutate-run--workers"><code>--workers</code></a>, <code>-n</code> <i>workers</i></dt><dd><p>Maximum simultaneously running mutant workers</p>
+</dd></dl>
+
+### karva mutate results
+
+Report stored results without running tests
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate results [OPTIONS]
+```
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-results--config-file"><a href="#karva-mutate-results--config-file"><code>--config-file</code></a> <i>config-file</i></dt><dd><p>Explicit configuration file, replacing automatic discovery</p>
+</dd><dt id="karva-mutate-results--help"><a href="#karva-mutate-results--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-mutate-results--json"><a href="#karva-mutate-results--json"><code>--json</code></a></dt><dd><p>Emit native, versioned JSON instead of terminal text</p>
+</dd><dt id="karva-mutate-results--operator"><a href="#karva-mutate-results--operator"><code>--operator</code></a> <i>operator</i></dt><dd><p>Mutation family: literal, comparison, boolean, arithmetic, control-flow, return</p>
+</dd><dt id="karva-mutate-results--outcome"><a href="#karva-mutate-results--outcome"><code>--outcome</code></a> <i>outcome</i></dt><dd><p>Prior outcome: pending, killed, survived, uncovered, timed-out, invalid, errored</p>
+</dd><dt id="karva-mutate-results--path"><a href="#karva-mutate-results--path"><code>--path</code></a> <i>path</i></dt><dd><p>Project-relative path glob; repeat to include more paths</p>
+</dd><dt id="karva-mutate-results--profile"><a href="#karva-mutate-results--profile"><code>--profile</code></a> <i>profile</i></dt><dd><p>Configuration profile to resolve</p>
+</dd><dt id="karva-mutate-results--symbol"><a href="#karva-mutate-results--symbol"><code>--symbol</code></a> <i>symbol</i></dt><dd><p>Qualified symbol glob; repeat to include more symbols</p>
+</dd></dl>
+
+### karva mutate show
+
+Show a candidate's exact diff, outcome, duration, and executed tests
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate show [OPTIONS] <MUTANT>
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-show--mutant"><a href="#karva-mutate-show--mutant"><code>MUTANT</code></a></dt><dd><p>Full mutant ID or unique ID prefix</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-show--config-file"><a href="#karva-mutate-show--config-file"><code>--config-file</code></a> <i>config-file</i></dt><dd><p>Explicit configuration file, replacing automatic discovery</p>
+</dd><dt id="karva-mutate-show--help"><a href="#karva-mutate-show--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-mutate-show--json"><a href="#karva-mutate-show--json"><code>--json</code></a></dt><dd><p>Emit native, versioned JSON instead of terminal text</p>
+</dd><dt id="karva-mutate-show--profile"><a href="#karva-mutate-show--profile"><code>--profile</code></a> <i>profile</i></dt><dd><p>Configuration profile to resolve</p>
+</dd></dl>
+
+### karva mutate retest
+
+Rerun recorded candidates after changing tests
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate retest [OPTIONS] [MUTANT]
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-retest--mutant"><a href="#karva-mutate-retest--mutant"><code>MUTANT</code></a></dt><dd><p>Optional full mutant ID or unique ID prefix; omit to retest the filtered set</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-retest--config-file"><a href="#karva-mutate-retest--config-file"><code>--config-file</code></a> <i>config-file</i></dt><dd><p>Explicit configuration file, replacing automatic discovery</p>
+</dd><dt id="karva-mutate-retest--exclude"><a href="#karva-mutate-retest--exclude"><code>--exclude</code></a> <i>exclude</i></dt><dd><p>Project-relative exclusion glob; repeat to exclude more paths</p>
+</dd><dt id="karva-mutate-retest--full-suite"><a href="#karva-mutate-retest--full-suite"><code>--full-suite</code></a></dt><dd><p>Run every test for every candidate, bypassing affected-test ordering</p>
+</dd><dt id="karva-mutate-retest--help"><a href="#karva-mutate-retest--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-mutate-retest--json"><a href="#karva-mutate-retest--json"><code>--json</code></a></dt><dd><p>Emit native, versioned JSON instead of terminal text</p>
+</dd><dt id="karva-mutate-retest--no-cache"><a href="#karva-mutate-retest--no-cache"><code>--no-cache</code></a></dt><dd><p>Rerun candidates even when prior results remain valid</p>
+</dd><dt id="karva-mutate-retest--operator"><a href="#karva-mutate-retest--operator"><code>--operator</code></a> <i>operator</i></dt><dd><p>Mutation family: literal, comparison, boolean, arithmetic, control-flow, return</p>
+</dd><dt id="karva-mutate-retest--outcome"><a href="#karva-mutate-retest--outcome"><code>--outcome</code></a> <i>outcome</i></dt><dd><p>Prior outcome: pending, killed, survived, uncovered, timed-out, invalid, errored</p>
+</dd><dt id="karva-mutate-retest--path"><a href="#karva-mutate-retest--path"><code>--path</code></a> <i>path</i></dt><dd><p>Project-relative path glob; repeat to include more paths</p>
+</dd><dt id="karva-mutate-retest--profile"><a href="#karva-mutate-retest--profile"><code>--profile</code></a> <i>profile</i></dt><dd><p>Configuration profile to resolve</p>
+</dd><dt id="karva-mutate-retest--source"><a href="#karva-mutate-retest--source"><code>--source</code></a> <i>source</i></dt><dd><p>Files or directories containing application source, relative to project root</p>
+</dd><dt id="karva-mutate-retest--symbol"><a href="#karva-mutate-retest--symbol"><code>--symbol</code></a> <i>symbol</i></dt><dd><p>Qualified symbol glob; repeat to include more symbols</p>
+</dd><dt id="karva-mutate-retest--timeout"><a href="#karva-mutate-retest--timeout"><code>--timeout</code></a> <i>timeout</i></dt><dd><p>Override the measured per-mutant budget, in seconds; must be positive and finite</p>
+</dd><dt id="karva-mutate-retest--workers"><a href="#karva-mutate-retest--workers"><code>--workers</code></a>, <code>-n</code> <i>workers</i></dt><dd><p>Maximum simultaneously running mutant workers</p>
+</dd></dl>
+
+### karva mutate apply
+
+Apply one source-bound candidate, refusing stale or conflicting source
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate apply [OPTIONS] <MUTANT>
+```
+
+<h3 class="cli-reference">Arguments</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-apply--mutant"><a href="#karva-mutate-apply--mutant"><code>MUTANT</code></a></dt><dd><p>Full mutant ID or unique ID prefix</p>
+</dd></dl>
+
+<h3 class="cli-reference">Options</h3>
+
+<dl class="cli-reference"><dt id="karva-mutate-apply--config-file"><a href="#karva-mutate-apply--config-file"><code>--config-file</code></a> <i>config-file</i></dt><dd><p>Explicit configuration file, replacing automatic discovery</p>
+</dd><dt id="karva-mutate-apply--help"><a href="#karva-mutate-apply--help"><code>--help</code></a>, <code>-h</code></dt><dd><p>Print help</p>
+</dd><dt id="karva-mutate-apply--json"><a href="#karva-mutate-apply--json"><code>--json</code></a></dt><dd><p>Emit native, versioned JSON instead of terminal text</p>
+</dd><dt id="karva-mutate-apply--profile"><a href="#karva-mutate-apply--profile"><code>--profile</code></a> <i>profile</i></dt><dd><p>Configuration profile to resolve</p>
+</dd></dl>
+
+### karva mutate help
+
+Print this message or the help of the given subcommand(s)
+
+<h3 class="cli-reference">Usage</h3>
+
+```
+karva mutate help [COMMAND]
+```
 
 ## karva snapshot
 

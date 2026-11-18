@@ -401,6 +401,83 @@
       "format": "uint32",
       "minimum": 1
     },
+    "MutationOptions": {
+      "description": "Source, filter, and execution policy for Python mutation runs.",
+      "type": "object",
+      "properties": {
+        "exclude": {
+          "description": "Project-relative path globs excluded from mutation generation.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude-lines": {
+          "description": "Regular expressions excluding matching source lines.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude-symbols": {
+          "description": "Qualified symbol globs excluded from mutation generation.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "operators": {
+          "description": "Mutation families to generate. Empty means all supported operators.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "description": "Source files or directories relative to project root. Defaults to `src`\nwhen present, otherwise the project root with test files excluded.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout": {
+          "description": "Per-mutant wall-time budget in seconds. Must be positive and finite.\nUnset budgets are sized from the measured full-suite baseline.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestTimeoutSecs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workers": {
+          "description": "Maximum simultaneous mutant workers. Must be positive; defaults to host parallelism.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "NoTestsMode": {
       "oneOf": [
         {
@@ -452,6 +529,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/JunitOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mutation": {
+          "description": "Python mutation generation and execution overrides.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MutationOptions"
             },
             {
               "type": "null"

@@ -7,9 +7,10 @@ mod partition;
 mod shutdown;
 mod worker_args;
 
+pub use binary::find_karva_worker_binary;
 pub use orchestration::{
     FailurePriority, LastFailedSelection, ParallelTestConfig, RunOutput, TestResultRetention,
-    run_parallel_tests,
+    run_mutation_tests, run_parallel_tests,
 };
 pub use partition::TestOrdering;
 pub use shutdown::shutdown_receiver;

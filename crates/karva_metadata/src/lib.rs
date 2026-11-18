@@ -18,9 +18,9 @@ mod settings;
 pub use environment::{EnvironmentVariable, EnvironmentVariableName};
 pub use max_fail::MaxFail;
 pub use options::{
-    Config, CovReport, CoverageOptions, IncompatibleVersionError, JunitOptions, Options,
-    OutputFormat, OverrideJunitOptions, OverrideOptions, ProjectOptionsOverrides, SrcOptions,
-    TerminalOptions, TestOptions, UnknownProfile,
+    Config, CovReport, CoverageOptions, IncompatibleVersionError, JunitOptions, MutationOptions,
+    Options, OutputFormat, OverrideJunitOptions, OverrideOptions, ProjectOptionsOverrides,
+    SrcOptions, TerminalOptions, TestOptions, UnknownProfile,
 };
 pub use pyproject::PyProjectError;
 pub use settings::{

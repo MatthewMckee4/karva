@@ -18,6 +18,7 @@ use super::planning::{collect_tests, last_failed_set, previous_durations, write_
 use super::recovery::recover_crashed_workers;
 use super::spawn::{spawn_worker, spawn_workers};
 use super::supervision::WaitOutcome;
+use super::worker::Worker;
 use crate::binary::find_karva_worker_binary;
 use crate::partition::{Partition, partition_collected_tests, scheduled_test_count};
 use crate::shutdown::shutdown_receiver;
@@ -31,6 +32,27 @@ pub fn run_parallel_tests(
     printer: Printer,
 ) -> Result<RunOutput> {
     run_tests(project, config, args, printer, None, None)
+}
+
+/// Executes one candidate with an independent cancellation receiver.
+///
+/// Callers must disable historical caches and supply a measured run timeout.
+pub fn run_mutation_tests(
+    project: &Project,
+    config: &ParallelTestConfig,
+    args: &SubTestCommand,
+    printer: Printer,
+    mutation: MutationSource,
+    shutdown: &Receiver<()>,
+) -> Result<RunOutput> {
+    run_tests(
+        project,
+        config,
+        args,
+        printer,
+        Some(mutation),
+        Some(shutdown),
+    )
 }
 
 fn run_tests(
@@ -220,6 +242,11 @@ fn run_tests(
         }
     };
     let termination_grace_period = project.settings().test().termination_grace_period();
+    let timed_out_workers: Vec<_> = if matches!(outcome, WaitOutcome::TimedOut) {
+        worker_manager.workers().iter().map(Worker::id).collect()
+    } else {
+        Vec::new()
+    };
     let interrupted_tests = if matches!(outcome, WaitOutcome::Cancelled) {
         worker_manager.cancel_and_kill(printer, &mut controller, termination_grace_period)?
     } else {
@@ -233,6 +260,15 @@ fn run_tests(
     let timed_out = matches!(outcome, WaitOutcome::TimedOut);
 
     worker_manager.finish_events(&mut controller)?;
+    let mut incomplete_tests: Vec<_> = interrupted_tests
+        .iter()
+        .map(|test| test.name.clone())
+        .collect();
+    for worker in timed_out_workers {
+        if let Some(checkpoint) = controller.take_worker_checkpoint(worker)? {
+            incomplete_tests.push(checkpoint.name);
+        }
+    }
     let mut results = worker_manager.take_results();
     for test in interrupted_tests {
         results.register_interrupted_test(&test.name, test.duration);
@@ -267,6 +303,8 @@ fn run_tests(
     };
 
     Ok(RunOutput {
+        incomplete_tests,
+        cancelled: matches!(outcome, WaitOutcome::Cancelled),
         results,
         coverage_files,
         timed_out,

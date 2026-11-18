@@ -57,6 +57,7 @@ fn run(f: impl FnOnce(Vec<OsString>) -> Vec<OsString>) -> anyhow::Result<ExitSta
     let args = Args::parse_from(args);
 
     match args.command {
+        Command::Mutate(args) => commands::mutation::mutation(args),
         Command::Test(test_args) => commands::test::test(*test_args),
         Command::Snapshot(snapshot_args) => commands::snapshot::snapshot(snapshot_args),
         Command::Coverage(coverage_args) => commands::coverage::coverage(&coverage_args),

@@ -110,6 +110,12 @@ pub enum TestResultRetention {
 
 /// Aggregated outputs of a parallel test run.
 pub struct RunOutput {
+    /// Tests that entered execution but were stopped by cancellation or run timeout.
+    pub incomplete_tests: Vec<String>,
+
+    /// Whether caller cancellation stopped this run before completion.
+    pub cancelled: bool,
+
     /// Test results merged across all workers.
     pub results: AggregatedResults,
 

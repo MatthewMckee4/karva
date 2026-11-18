@@ -452,6 +452,8 @@ pub struct ProjectSettings {
     pub(super) test: TestSettings,
     pub(super) coverage: CoverageSettings,
     pub(super) junit: JunitSettings,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) mutation: Option<crate::MutationOptions>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(super) overrides: Vec<OverrideSettings>,
 }

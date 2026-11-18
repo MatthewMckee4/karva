@@ -675,6 +675,194 @@ Whether to include captured stdout and stderr for passing tests.
 
 ---
 
+### `mutation`
+
+Source, filter, and execution policy for Python mutation runs.
+
+#### `exclude`
+
+Project-relative path globs excluded from mutation generation.
+
+**Default value**: `[]`
+
+**Type**: `list[str]`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    exclude = ["**/generated/**"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    exclude = ["**/generated/**"]
+    ```
+
+---
+
+#### `exclude-lines`
+
+Regular expressions excluding matching source lines.
+
+**Default value**: `[]`
+
+**Type**: `list[str]`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    exclude-lines = ["# generated"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    exclude-lines = ["# generated"]
+    ```
+
+---
+
+#### `exclude-symbols`
+
+Qualified symbol globs excluded from mutation generation.
+
+**Default value**: `[]`
+
+**Type**: `list[str]`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    exclude-symbols = ["*.generated"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    exclude-symbols = ["*.generated"]
+    ```
+
+---
+
+#### `operators`
+
+Mutation families to generate. Empty means all supported operators.
+
+**Default value**: `[]`
+
+**Type**: `list[str]`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    operators = ["comparison", "return"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    operators = ["comparison", "return"]
+    ```
+
+---
+
+#### `sources`
+
+Source files or directories relative to project root. Defaults to `src`
+when present, otherwise the project root with test files excluded.
+
+**Default value**: `[]`
+
+**Type**: `list[str]`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    sources = ["src"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    sources = ["src"]
+    ```
+
+---
+
+#### `timeout`
+
+Per-mutant wall-time budget in seconds. Must be positive and finite.
+Unset budgets are sized from the measured full-suite baseline.
+
+**Default value**: `null`
+
+**Type**: `float (seconds)`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    timeout = 30.0
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    timeout = 30.0
+    ```
+
+---
+
+#### `workers`
+
+Maximum simultaneous mutant workers. Must be positive; defaults to host parallelism.
+
+**Default value**: `null`
+
+**Type**: `positive integer`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.mutation]
+    workers = 4
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.mutation]
+    workers = 4
+    ```
+
+---
+
 ### `src`
 
 Controls test-path discovery and whether filesystem ignore rules are honored.
