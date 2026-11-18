@@ -742,6 +742,13 @@
       "description": "Controls test selection, retries, timeouts, and failure policies.",
       "type": "object",
       "properties": {
+        "benchmark-disable": {
+          "description": "Invoke benchmark callables once without warmup, calibration, or sampling.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "doctest-modules": {
           "description": "Collect examples from module, class, function, and method docstrings.\n\nDefaults to `false`.",
           "type": [

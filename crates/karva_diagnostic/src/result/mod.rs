@@ -115,7 +115,7 @@ impl<D> RunResults<D> {
             .entry(cache_key)
             .and_modify(|existing_duration| *existing_duration += duration)
             .or_insert(duration);
-        if retain_case {
+        if retain_case || !test_case.benchmarks().is_empty() {
             self.test_cases.push(test_case);
         }
     }

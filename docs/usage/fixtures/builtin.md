@@ -2,6 +2,12 @@ Karva provides a set of built-in fixtures that can be used in your tests without
 
 We will try to add more built-in fixtures from pytest in the future.
 
+## Benchmark
+
+The `benchmark` fixture measures a synchronous callable and returns its result.
+See [Benchmarks](../benchmarks.md) for sampling controls, groups, reports, and
+correctness-only execution.
+
 ## Temporary Directory
 
 This fixture provides the user with a `pathlib.Path` object that points to a temporary directory.

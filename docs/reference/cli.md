@@ -41,7 +41,12 @@ karva test [OPTIONS] [PATH]...
 
 <h3 class="cli-reference">Options</h3>
 
-<dl class="cli-reference"><dt id="karva-test--color"><a href="#karva-test--color"><code>--color</code></a> <i>color</i></dt><dd><p>Control when colored output is used</p>
+<dl class="cli-reference"><dt id="karva-test--benchmark-disable"><a href="#karva-test--benchmark-disable"><code>--benchmark-disable</code></a> <i>benchmark-disable</i></dt><dd><p>Invoke benchmark callables once without warmup, calibration, or sampling</p>
+<p>Possible values:</p>
+<ul>
+<li><code>true</code></li>
+<li><code>false</code></li>
+</ul></dd><dt id="karva-test--color"><a href="#karva-test--color"><code>--color</code></a> <i>color</i></dt><dd><p>Control when colored output is used</p>
 <p>Possible values:</p>
 <ul>
 <li><code>auto</code>:  Display colors if the output goes to an interactive terminal</li>

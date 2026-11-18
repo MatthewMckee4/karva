@@ -27,6 +27,7 @@ pub(super) fn test_info_with_duration(
         .unwrap_or((qualified_name, None));
     TestInfo {
         identity: Arc::new(TestIdentity {
+            benchmark: false,
             module_name: Arc::from("test_module"),
             selector: function_root.into(),
             function_root: Arc::from(function_root),

@@ -20,11 +20,14 @@ import sys
 import tempfile
 import warnings
 from collections.abc import Generator
+from importlib import import_module
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple, TextIO, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
+
+    from karva._benchmark import Benchmark
 
 from karva._fixtures.monkeypatch import MockEnv
 from karva._fixtures.recwarn import WarningsRecorder
@@ -34,6 +37,7 @@ from karva._karva import fixture
 __all__ = [
     "CaptureResult",
     "MockEnv",
+    "benchmark",
     "capfd",
     "capfdbinary",
     "caplog",
@@ -48,6 +52,12 @@ __all__ = [
     "tmpdir",
     "tmpdir_factory",
 ]
+
+
+@fixture
+def benchmark() -> Benchmark:
+    """Measure a synchronous callable, or decorate one to run it immediately."""
+    return import_module("karva._benchmark").Benchmark()
 
 
 @fixture

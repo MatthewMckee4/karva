@@ -64,12 +64,12 @@ jobs:
       - name: Measure release binaries
         env:
           PYO3_PYTHON: ${{ steps.python.outputs.python-path }}
-          # Both revisions use the PR's toolchain, Python, and target directory.
-          CARGO_TARGET_DIR: ${{ runner.temp }}/binary-size-target
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/binary-size"
           for revision in base head; do
+            # Keep baseline artifacts out of the candidate's dependency graph.
+            export CARGO_TARGET_DIR="$RUNNER_TEMP/binary-size-target/$revision"
             for binary in karva karva-worker; do
               (
                 cd "$revision"

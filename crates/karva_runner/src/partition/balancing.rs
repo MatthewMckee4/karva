@@ -49,6 +49,9 @@ impl ModuleGroup {
 /// split test-by-test to limit worker skew. Seeded runs instead derive both
 /// order and worker assignment from stable test identities, independent of
 /// duration history and sibling tests.
+///
+/// With `defer_benchmarks`, the second partition contains selected benchmark
+/// modules for serial execution; their durations do not affect ordinary balancing.
 #[expect(
     clippy::too_many_arguments,
     reason = "partitioning combines independent scheduling inputs"
@@ -62,7 +65,8 @@ pub fn partition_collected_tests(
     failed_first: FailurePriority,
     partition_selection: Option<PartitionSelection>,
     test_ordering: TestOrdering,
-) -> Vec<Partition> {
+    defer_benchmarks: bool,
+) -> (Vec<Partition>, Option<Partition>) {
     let mut test_infos = Vec::new();
     collect_test_paths_recursive(package, &mut test_infos, previous_durations);
 
@@ -91,6 +95,22 @@ pub fn partition_collected_tests(
 
     order_tests_for_partitioning(&mut test_infos, test_ordering);
 
+    // Select and order the complete workload first, then keep measurement
+    // durations out of ordinary module grouping and worker weights.
+    let mut benchmarks = defer_benchmarks
+        .then(|| {
+            let mut partition = Partition::new();
+            for test in test_infos.extract_if(.., |test| test.identity.benchmark) {
+                let weight = test_weight(test.duration);
+                partition.add_test(test, weight);
+            }
+            partition
+        })
+        .filter(|partition| !partition.is_empty());
+    if prioritize_failures && let Some(partition) = &mut benchmarks {
+        partition.prioritize_failures(last_failed_cache, previous_durations);
+    }
+
     if let TestOrdering::SeededShuffle(seed) = test_ordering {
         let mut partitions = partition_shuffled_tests(test_infos, num_workers, seed);
         if prioritize_failures {
@@ -98,7 +118,7 @@ pub fn partition_collected_tests(
                 partition.prioritize_failures(last_failed_cache, previous_durations);
             }
         }
-        return partitions;
+        return (partitions, benchmarks);
     }
 
     let mut module_groups: Vec<ModuleGroup> = Vec::new();
@@ -149,7 +169,7 @@ pub fn partition_collected_tests(
         }
     }
 
-    partitions
+    (partitions, benchmarks)
 }
 
 /// Assign shuffled tests by stable identity-derived worker index.
