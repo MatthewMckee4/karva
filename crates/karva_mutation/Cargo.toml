@@ -1,0 +1,31 @@
+[package]
+name = "karva_mutation"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Python source mutation discovery for Karva."
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+camino = { workspace = true }
+globset = { workspace = true }
+regex = { workspace = true }
+ruff_python_ast = { workspace = true }
+ruff_python_parser = { workspace = true }
+ruff_text_size = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+siphasher = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+rstest = { workspace = true }
+
+[lints]
+workspace = true
