@@ -36,7 +36,7 @@ pub struct SourceSymbol {
 /// Returns collected top-level tests and accepted local fixtures in source order.
 pub fn source_symbols(analysis: &SourceAnalysis) -> Vec<SourceSymbol> {
     let mut symbols = analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
         .map(|function| SourceSymbol {
@@ -46,7 +46,7 @@ pub fn source_symbols(analysis: &SourceAnalysis) -> Vec<SourceSymbol> {
             selection_range: function.name.range,
             detail: count_parametrize_cases_with_bindings(
                 function,
-                &DecoratorBindings::before(&analysis.module.module_body, function.range.start()),
+                &DecoratorBindings::before(&analysis.module().module_body, function.range.start()),
             )
             .map(|count| {
                 if count == 1 {
@@ -58,14 +58,15 @@ pub fn source_symbols(analysis: &SourceAnalysis) -> Vec<SourceSymbol> {
         })
         .chain(
             analysis
-                .module
+                .module()
                 .fixture_function_defs
                 .iter()
                 .filter_map(|function| {
-                    let definition = analysis.fixture_model.local().iter().find(|definition| {
-                        definition.id.path.as_path() == analysis.module.path.path().as_path()
-                            && definition.id.range == function.name.range
-                    })?;
+                    let definition =
+                        analysis.fixture_model().local().iter().find(|definition| {
+                            definition.id.path.as_path() == analysis.module().path.path().as_path()
+                                && definition.id.range == function.name.range
+                        })?;
                     Some(SourceSymbol {
                         kind: SourceSymbolKind::Fixture,
                         name: definition.name.clone(),
@@ -95,14 +96,14 @@ pub struct SourceTest {
 /// Returns only collected tests, using the runtime's qualified-name formatter.
 pub fn source_tests(analysis: &SourceAnalysis) -> Vec<SourceTest> {
     analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
         .map(|function| SourceTest {
             name: function.name.to_string(),
             qualified_id: karva_python_semantic::QualifiedFunctionName::new(
                 function.name.to_string(),
-                analysis.module.path.clone(),
+                analysis.module().path.clone(),
             )
             .to_string(),
             range: function.name.range,

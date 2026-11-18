@@ -1010,8 +1010,10 @@ dependencies = [
  "indoc",
  "insta",
  "insta-cmd",
+ "karva_analysis",
  "karva_cache",
  "karva_cli",
+ "karva_collector",
  "karva_coverage",
  "karva_coverage_report",
  "karva_coverage_runtime",
@@ -1030,7 +1032,9 @@ dependencies = [
  "notify-debouncer-mini",
  "regex",
  "rstest",
+ "ruff_python_ast",
  "ruff_python_trivia",
+ "ruff_text_size",
  "serde",
  "serde_json",
  "snapbox",
@@ -1039,6 +1043,18 @@ dependencies = [
  "tracing",
  "wild",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "karva_analysis"
+version = "0.0.0"
+dependencies = [
+ "camino",
+ "indoc",
+ "karva_collector",
+ "karva_python_semantic",
+ "ruff_python_ast",
+ "ruff_text_size",
 ]
 
 [[package]]
@@ -1220,6 +1236,7 @@ version = "0.0.0"
 dependencies = [
  "camino",
  "indoc",
+ "karva_analysis",
  "karva_collector",
  "karva_python_semantic",
  "rstest",

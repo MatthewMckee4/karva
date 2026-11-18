@@ -16,6 +16,7 @@ doctest = false
 
 [dependencies]
 camino = { workspace = true }
+karva_analysis = { workspace = true }
 karva_collector = { workspace = true }
 karva_python_semantic = { workspace = true }
 ruff_python_ast = { workspace = true }

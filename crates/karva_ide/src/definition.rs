@@ -26,8 +26,8 @@ pub fn fixture_definition(
     let definition = hover
         .provider
         .as_ref()
-        .and_then(|provider| analysis.fixture_model.definition(provider))
-        .or_else(|| analysis.fixture_model.builtin_definition(&hover.name))?;
+        .and_then(|provider| analysis.fixture_model().definition(provider))
+        .or_else(|| analysis.fixture_model().builtin_definition(&hover.name))?;
     Some(FixtureDefinitionTarget {
         path: definition.id.path.clone(),
         range: definition.name_range,

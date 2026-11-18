@@ -88,7 +88,7 @@ mod tests {
             @pytest.mark.usefixtures("database")
             def test_metadata(): pass
         "#};
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 document("/project/conftest.py", provider),
@@ -102,10 +102,9 @@ mod tests {
         let analysis = index
             .analyze(Utf8Path::new("/project/tests/a_test.py"))
             .expect("test should analyze");
-        let target =
-            crate::occurrences::fixture_occurrence(&analysis, offset(parameter, "database"))
-                .expect("fixture should resolve")
-                .fixture;
+        let target = karva_analysis::fixture_occurrence(&analysis, offset(parameter, "database"))
+            .expect("fixture should resolve")
+            .fixture;
         let references = fixture_references(&index, &target, true);
         assert_eq!(
             references
@@ -147,7 +146,7 @@ mod tests {
         "};
         let root_test = "def test_root(database): pass\n";
         let nested_test = "def test_nested(database): pass\n";
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [
                 document("/project/conftest.py", root_provider),
@@ -162,12 +161,10 @@ mod tests {
         let nested_analysis = index
             .analyze(Utf8Path::new("/project/pkg/test_nested.py"))
             .expect("nested test should analyze");
-        let nested_target = crate::occurrences::fixture_occurrence(
-            &nested_analysis,
-            offset(nested_test, "database"),
-        )
-        .expect("nested fixture should resolve")
-        .fixture;
+        let nested_target =
+            karva_analysis::fixture_occurrence(&nested_analysis, offset(nested_test, "database"))
+                .expect("nested fixture should resolve")
+                .fixture;
         let nested = fixture_references(&index, &nested_target, true);
         assert_eq!(
             nested
@@ -180,7 +177,7 @@ mod tests {
         let provider_analysis = index
             .analyze(Utf8Path::new("/project/pkg/conftest.py"))
             .expect("nested provider should analyze");
-        let root_target = crate::occurrences::fixture_occurrence(
+        let root_target = karva_analysis::fixture_occurrence(
             &provider_analysis,
             offset(nested_provider, "database):"),
         )
@@ -210,7 +207,7 @@ mod tests {
             def test_example(): pass
         "#};
         let path = Utf8PathBuf::from("/project/test_example.py");
-        let index = WorkspaceSourceIndex::from_documents(
+        let index = crate::test_support::source_index(
             "/project".into(),
             [SourceDocument::new(path.clone(), source.to_owned())],
             settings(),
@@ -218,7 +215,7 @@ mod tests {
         .expect("source should index");
 
         let analysis = index.analyze(&path).expect("source should analyze");
-        let target = crate::occurrences::fixture_occurrence(
+        let target = karva_analysis::fixture_occurrence(
             &analysis,
             offset(
                 source,

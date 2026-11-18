@@ -18,6 +18,7 @@ mod exception_groups;
 mod extensions;
 mod failed_first;
 mod filterset;
+mod health;
 mod junit;
 mod last_failed;
 mod partition;

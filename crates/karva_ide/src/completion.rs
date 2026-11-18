@@ -26,14 +26,14 @@ pub fn complete_fixtures(
     analysis: &SourceAnalysis,
     offset: TextSize,
 ) -> Option<Vec<FixtureCompletion>> {
-    let source = &analysis.module.source_text;
+    let source = &analysis.module().source_text;
     let replacement =
         parameter_context(analysis, offset).or_else(|| use_fixtures_context(analysis, offset))?;
     let prefix = source.get(replacement.start().to_usize()..replacement.end().to_usize())?;
 
     let mut completions = Vec::new();
-    let mut names = analysis.fixture_model.blocked_names().clone();
-    for fixture in analysis.fixture_model.visible() {
+    let mut names = analysis.fixture_model().blocked_names().clone();
+    for fixture in analysis.fixture_model().visible() {
         if names.insert(fixture.name.clone()) && fixture.name.starts_with(prefix) {
             completions.push(completion(
                 fixture.name.clone(),
@@ -44,9 +44,9 @@ pub fn complete_fixtures(
             ));
         }
     }
-    if analysis.fixture_model.builtins_visible() {
-        for (name, scope, auto_use) in analysis.fixture_model.builtin_completions().chain(
-            crate::fixture::builtin_fixtures()
+    if analysis.fixture_model().builtins_visible() {
+        for (name, scope, auto_use) in analysis.fixture_model().builtin_completions().chain(
+            karva_analysis::builtin_fixtures()
                 .map(|(name, scope)| (name, Some(scope), Some(false))),
         ) {
             if names.insert(name.to_owned()) && name.starts_with(prefix) {
@@ -84,12 +84,12 @@ fn completion(
 }
 
 fn parameter_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<TextRange> {
-    let source = &analysis.module.source_text;
+    let source = &analysis.module().source_text;
     let functions = analysis
-        .module
+        .module()
         .test_function_defs
         .iter()
-        .chain(&analysis.module.fixture_function_defs);
+        .chain(&analysis.module().fixture_function_defs);
     for function in functions {
         let parameters = function.parameters.range;
         if !parameters.contains_inclusive(offset) {
@@ -132,8 +132,8 @@ fn parameter_slot(source: &str, parameters: TextRange, offset: TextSize) -> bool
 }
 
 fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<TextRange> {
-    let source = &analysis.module.source_text;
-    for function in &analysis.module.test_function_defs {
+    let source = &analysis.module().source_text;
+    for function in &analysis.module().test_function_defs {
         for decorator in &function.decorator_list {
             if !decorator.range().contains_inclusive(offset) {
                 continue;
@@ -142,7 +142,7 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
                 continue;
             };
             if !analysis
-                .fixture_model
+                .fixture_model()
                 .is_use_fixtures_reference(function, &call.func)
             {
                 continue;
@@ -151,7 +151,7 @@ fn use_fixtures_context(analysis: &SourceAnalysis, offset: TextSize) -> Option<T
                 let Expr::StringLiteral(literal) = argument else {
                     return None;
                 };
-                let interior = crate::fixture::single_string_content_range(literal)?;
+                let interior = karva_analysis::single_string_content_range(literal)?;
                 if interior.contains_inclusive(offset) {
                     return Some(
                         identifier_range(source, offset, interior)

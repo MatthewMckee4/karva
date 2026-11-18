@@ -27,8 +27,8 @@ pub fn fixture_implementation(
     let definition = hover
         .provider
         .as_ref()
-        .and_then(|provider| analysis.fixture_model.definition(provider))
-        .or_else(|| analysis.fixture_model.builtin_definition(&hover.name))?;
+        .and_then(|provider| analysis.fixture_model().definition(provider))
+        .or_else(|| analysis.fixture_model().builtin_definition(&hover.name))?;
     Some(FixtureImplementationTarget {
         path: definition.id.path.clone(),
         range: definition.implementation_range,
@@ -256,13 +256,13 @@ mod tests {
     fn suppresses_builtin_missing_and_rejected_targets() {
         let builtin = analysis("def test_example(tmp_path): pass\n");
         assert!(
-            fixture_implementation(&builtin, offset(&builtin.module.source_text, "tmp_path"))
+            fixture_implementation(&builtin, offset(&builtin.module().source_text, "tmp_path"))
                 .is_none()
         );
 
         let missing = analysis("def test_example(missing): pass\n");
         assert!(
-            fixture_implementation(&missing, offset(&missing.module.source_text, "missing"))
+            fixture_implementation(&missing, offset(&missing.module().source_text, "missing"))
                 .is_none()
         );
 
@@ -277,7 +277,7 @@ mod tests {
         assert!(
             fixture_implementation(
                 &rejected,
-                offset(&rejected.module.source_text, "duplicate):")
+                offset(&rejected.module().source_text, "duplicate):")
             )
             .is_none()
         );

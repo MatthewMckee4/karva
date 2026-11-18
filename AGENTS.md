@@ -46,6 +46,10 @@ selections, and runtime events use IPC; only coverage data uses run-scoped
 files, and only the worker embeds Python. A controller-side dispatcher
 linearizes worker events into run state.
 
+Only language-server code may call into `karva_ide`. Other CLI commands and
+runtime analysis must use shared lower-level APIs from `karva_analysis`.
+Keep editor-specific behavior in `karva_ide`.
+
 ## Code Review Rules
 
 Be deliberately nitpicky. Report bugs, regressions, architectural and
