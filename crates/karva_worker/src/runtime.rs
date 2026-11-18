@@ -84,7 +84,6 @@ fn run() -> anyhow::Result<ExitStatus> {
         settings.terminal().final_status_level,
     );
     let coverage = worker_coverage_config(&settings, &configuration, selection.coverage_data_file)?;
-    drop(configuration);
 
     let diagnostic_format = match settings.terminal().output_format {
         OutputFormat::Full => DiagnosticFormat::Full,
@@ -94,6 +93,28 @@ fn run() -> anyhow::Result<ExitStatus> {
         diagnostic_format,
         colored::control::SHOULD_COLORIZE.should_colorize(),
     );
+    let mutation = if let Some(source) = &configuration.mutation {
+        match crate::mutation::install(source)? {
+            crate::mutation::Installation::Installed(installed) => Some(installed),
+            crate::mutation::Installation::Invalid(message) => {
+                let diagnostic = karva_diagnostic::Diagnostic::new(
+                    "mutation-invalid",
+                    karva_diagnostic::Severity::Error,
+                    message,
+                );
+                client.send_event(WorkerEvent::RunDiagnostic(render_diagnostic(
+                    &diagnostic,
+                    &cwd,
+                    diagnostic_config,
+                )))?;
+                client.complete()?;
+                return Ok(ExitStatus::Success);
+            }
+        }
+    } else {
+        None
+    };
+    drop(configuration);
     let resume_skip = selection.resume_skip.into_iter().collect::<BTreeSet<_>>();
     let resume_attempts = selection
         .resume_attempts
@@ -123,6 +144,20 @@ fn run() -> anyhow::Result<ExitStatus> {
         coverage: coverage.as_ref(),
         verbose: !verbosity.is_default(),
     });
+    if let Some(mutation) = mutation {
+        if !mutation.used()? {
+            let diagnostic = karva_diagnostic::Diagnostic::new(
+                "mutation-uncovered",
+                karva_diagnostic::Severity::Info,
+                "mutated source was not imported by the selected tests",
+            );
+            client.send_event(WorkerEvent::RunDiagnostic(render_diagnostic(
+                &diagnostic,
+                &cwd,
+                diagnostic_config,
+            )))?;
+        }
+    }
     reporter.finish()?;
     drop(reporter);
     for diagnostic in &result {

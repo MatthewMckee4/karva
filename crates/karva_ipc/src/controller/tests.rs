@@ -668,6 +668,7 @@ fn buffered_event_reaches_controller_before_worker_completes() {
 #[test]
 fn transfers_worker_configuration_after_authentication() {
     let configuration = Arc::new(crate::WorkerConfiguration {
+        mutation: None,
         color: Some(karva_logging::TerminalColor::Never),
         verbosity: karva_logging::VerbosityLevel::Trace,
         options: serde_json::from_value(serde_json::json!({

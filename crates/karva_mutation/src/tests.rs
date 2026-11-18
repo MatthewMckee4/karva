@@ -4,8 +4,6 @@
 mod data;
 #[path = "discovery.rs"]
 mod discovery;
-#[path = "identity.rs"]
-mod identity;
 
+use crate::fingerprint;
 use data::{Mutant, Operator};
-use identity::fingerprint;
