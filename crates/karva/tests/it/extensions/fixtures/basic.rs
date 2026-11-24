@@ -1328,6 +1328,55 @@ def test_shadowed(fixture_value):
 }
 
 #[test]
+fn test_fixture_wrapped_by_callable_does_not_probe_wrapper_metadata() {
+    let context = TestContext::with_file(
+        "test_wrapped.py",
+        r#"
+import karva
+
+probes = []
+
+class Wrapper:
+    __name__ = "value"
+
+    def __init__(self, function):
+        self.function = function
+
+    def __call__(self):
+        return self.function()
+
+    def __getattribute__(self, name):
+        if name in ("__module__", "__name__", "__qualname__", "__code__"):
+            probes.append(name)
+        return super().__getattribute__(name)
+
+@karva.fixture
+@Wrapper
+def value():
+    return 42
+
+probes.clear()
+
+def test_value(value):
+    assert value == 42
+    assert probes == []
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_wrapped::test_value(value=42)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_config_try_import_fixtures() {
     let context = TestContext::with_files([
         (

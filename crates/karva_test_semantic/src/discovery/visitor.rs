@@ -135,7 +135,8 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         let name = stmt_function_def.name.as_str();
         if let Ok(Some(value)) = py_module.dict().get_item(name)
             && let Ok(function) = DiscoveredFixture::source_function(&value)
-            && self.is_other_fixture_definition(&function, &stmt_function_def)
+            && let Ok(function) = function.cast::<PyFunction>()
+            && self.is_other_fixture_definition(function, &stmt_function_def)
         {
             // Execute the replacement, but retain its declaration for duplicate diagnostics.
             let fixture = self.resolve_runtime_fixture(name, &value, is_conftest, false)?;
@@ -180,7 +181,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
     /// Detects a replacement callable while leaving duplicate fixture declarations to validation.
     fn is_other_fixture_definition(
         &self,
-        function: &Bound<'_, PyAny>,
+        function: &Bound<'_, PyFunction>,
         definition: &StmtFunctionDef,
     ) -> bool {
         let Ok(qualified_name) = function
@@ -201,7 +202,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             return true;
         }
 
-        let Some(line) = function_first_line(function) else {
+        let Some(line) = function_first_line(function.as_any()) else {
             return false;
         };
         let source_file = self.module.source_file();
@@ -448,6 +449,30 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         is_extra_binding: bool,
     ) -> Option<DiscoveredFixture> {
         let function = DiscoveredFixture::source_function(value).ok()?;
+        let function_name = || function.getattr("__name__").ok()?.extract::<String>().ok();
+        let source_name = if is_conftest {
+            Some(function_name()?)
+        } else {
+            None
+        };
+        let public_name = DiscoveredFixture::exposure_name_from_value(
+            value,
+            source_name.as_deref().unwrap_or(name),
+            (!is_conftest).then_some(name),
+        );
+        if is_extra_binding
+            && let Ok(public_name) = &public_name
+            && (self
+                .module
+                .fixtures()
+                .iter()
+                .any(|fixture| fixture.name().function_name() == public_name)
+                || self.module.rejected_fixture(public_name).is_some())
+        {
+            return None;
+        }
+
+        let func_name = source_name.or_else(function_name)?;
         let module_name = function
             .getattr("__module__")
             .ok()?
@@ -466,28 +491,6 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             // Different test modules can bind the same name to different callables.
             self.module.module_path().clone()
         };
-        let func_name = function
-            .getattr("__name__")
-            .ok()?
-            .extract::<String>()
-            .ok()?;
-
-        let public_name = DiscoveredFixture::exposure_name_from_value(
-            value,
-            &func_name,
-            (!is_conftest).then_some(name),
-        );
-        if is_extra_binding
-            && let Ok(public_name) = &public_name
-            && (self
-                .module
-                .fixtures()
-                .iter()
-                .any(|fixture| fixture.name().function_name() == public_name)
-                || self.module.rejected_fixture(public_name).is_some())
-        {
-            return None;
-        }
 
         let source_text = match fs::read_to_string(utf8_file_name) {
             Ok(source_text) => source_text,
