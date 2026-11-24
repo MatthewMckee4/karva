@@ -1399,6 +1399,7 @@ dependencies = [
  "libc",
  "rstest",
  "ruff_python_ast",
+ "ruff_source_file",
  "serde_json",
  "siphasher",
  "subc-jobobject",

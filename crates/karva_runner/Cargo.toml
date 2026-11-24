@@ -32,6 +32,7 @@ ctrlc = { workspace = true }
 fastrand = { workspace = true }
 ignore = { workspace = true }
 libc = { workspace = true }
+ruff_source_file = { workspace = true }
 serde_json = { workspace = true }
 siphasher = { workspace = true }
 tempfile = { workspace = true }

@@ -1,8 +1,92 @@
 use indoc::indoc;
 use insta_cmd::assert_cmd_snapshot;
 use karva_static::EnvVars;
+use rstest::rstest;
 
 use crate::common::TestContext;
+
+#[rstest]
+fn warns_about_skipped_test_classes_in_a_passing_run(
+    #[values(&["test_mixed.py"], &["test_mixed.py", "."])] paths: &[&str],
+) {
+    let context = TestContext::with_file(
+        "test_mixed.py",
+        indoc! {"
+            def test_function():
+                pass
+
+            class TestGroup:
+                def test_method(self):
+                    assert False
+
+            class TestOptedOut:
+                __test__ = False
+
+                def test_method(self):
+                    assert False
+
+            class TestHelper:
+                def helper(self):
+                    pass
+
+            class Helper:
+                def test_method(self):
+                    assert False
+        "},
+    );
+
+    assert_cmd_snapshot!(
+        context.command_no_parallel().arg("--output-format=concise").args(paths),
+        @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_mixed::test_function
+
+    diagnostics:
+
+    test_mixed.py:4:7: warning[unsupported-test-class] `TestGroup` has test methods, but Karva only runs top-level test functions
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    "
+    );
+}
+
+#[test]
+fn warns_about_skipped_test_classes_without_runnable_tests() {
+    let context = TestContext::with_file(
+        "tests/test_class.py",
+        indoc! {"
+            class TestGroup:
+                async def check_method(self):
+                    assert False
+
+            class TestOther:
+                def test_method(self):
+                    assert False
+        "},
+    );
+
+    assert_cmd_snapshot!(context.command().args(["--output-format=concise", "--test-prefix=check_"]), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+    diagnostics:
+
+    tests/test_class.py:1:7: warning[unsupported-test-class] `TestGroup` has test methods, but Karva only runs top-level test functions
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+    error: no tests to run
+    (hint: use `--no-tests` to customize)
+
+    ----- stderr -----
+    ");
+}
 
 #[test]
 fn test_single_file() {

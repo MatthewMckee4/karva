@@ -8,12 +8,17 @@ use anyhow::Result;
 use colored::Colorize;
 use karva_cache::{CACHE_DIR, RunArtifacts, RunHash, write_durations};
 use karva_cli::SubTestCommand;
+use karva_diagnostic::{DiagnosticFormat, DisplayDiagnosticConfig};
 use karva_ipc::ControllerServer;
 use karva_logging::Printer;
+use karva_metadata::OutputFormat;
 use karva_project::Project;
 
 use super::config::{ParallelTestConfig, RunOutput};
-use super::planning::{collect_tests, last_failed_set, previous_durations, write_last_failed};
+use super::planning::{
+    collect_tests, last_failed_set, previous_durations, unsupported_class_diagnostics,
+    write_last_failed,
+};
 use super::recovery::recover_crashed_workers;
 use super::spawn::{spawn_worker, spawn_workers};
 use super::supervision::WaitOutcome;
@@ -248,6 +253,15 @@ pub fn run_parallel_tests(
     let mut results = worker_manager.take_results();
     for test in interrupted_tests {
         results.register_interrupted_test(&test.name, test.duration);
+    }
+    let format = match project.settings().terminal().output_format {
+        OutputFormat::Full => DiagnosticFormat::Full,
+        OutputFormat::Concise => DiagnosticFormat::Concise,
+    };
+    let diagnostic_config =
+        DisplayDiagnosticConfig::new(format, colored::control::SHOULD_COLORIZE.should_colorize());
+    for diagnostic in unsupported_class_diagnostics(&collected, project.cwd(), diagnostic_config) {
+        results.add_rendered_run_diagnostic(diagnostic);
     }
     results.enforce_warning_budget(project.settings().test().max_warnings);
     let results = results.into_sorted();

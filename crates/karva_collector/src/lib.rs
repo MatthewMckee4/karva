@@ -18,7 +18,10 @@ mod models;
 mod parametrize;
 
 pub use imports::project_import_paths;
-pub use models::{CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType};
+pub use models::{
+    CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType,
+    UnsupportedTestClasses,
+};
 pub use parametrize::count_parametrize_cases_with_bindings;
 
 /// Detects measurement references before releasing scheduling-only syntax.
@@ -112,8 +115,8 @@ pub fn collect_file(
 
 /// Collects only metadata needed by controller-side test scheduling.
 ///
-/// Source text, the module tree, and test function bodies are discarded before
-/// returning. Test signatures, decorators, names, and source ranges are retained.
+/// The module tree and test function bodies are discarded before returning.
+/// Source text is kept only when needed to diagnose unsupported classes.
 /// Requested fixture definitions remain complete.
 pub fn collect_file_for_scheduling(
     path: &Utf8PathBuf,
@@ -161,6 +164,16 @@ fn collect_source_for_scheduling(
     let mut collected_module =
         CollectedModule::new(module_path, module_type, &module_body, String::new());
 
+    if module_type == ModuleType::Test && function_names.is_empty() {
+        let classes = unsupported_test_classes(&module_body, settings.test_function_prefix);
+        if !classes.is_empty() {
+            collected_module.unsupported_test_classes = Some(Box::new(UnsupportedTestClasses {
+                source_text: source_text.to_owned(),
+                classes,
+            }));
+        }
+    }
+
     for doctest in doctests {
         if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {
             collected_module.add_doctest(doctest);
@@ -179,6 +192,45 @@ fn collect_source_for_scheduling(
     }
 
     Some(collected_module)
+}
+
+/// Finds classes with directly declared test methods without importing the module.
+fn unsupported_test_classes(body: &[Stmt], test_prefix: &str) -> Vec<(String, TextRange)> {
+    body.iter()
+        .filter_map(|stmt| {
+            let Stmt::ClassDef(class) = stmt else {
+                return None;
+            };
+            if !class.name.starts_with("Test") {
+                return None;
+            }
+
+            let test_override = class.body.iter().rev().find_map(|stmt| match stmt {
+                Stmt::Assign(assign)
+                    if assign.targets.iter().any(
+                        |target| matches!(target, Expr::Name(name) if name.id.as_str() == "__test__"),
+                    ) =>
+                {
+                    Some(assign.value.as_ref())
+                }
+                Stmt::AnnAssign(assign)
+                    if matches!(assign.target.as_ref(), Expr::Name(name) if name.id.as_str() == "__test__") =>
+                {
+                    assign.value.as_deref()
+                }
+                _ => None,
+            });
+            if matches!(test_override, Some(Expr::BooleanLiteral(value)) if !value.value) {
+                return None;
+            }
+
+            class
+                .body
+                .iter()
+                .any(|stmt| matches!(stmt, Stmt::FunctionDef(method) if method.name.starts_with(test_prefix)))
+                .then(|| (class.name.to_string(), class.name.range))
+        })
+        .collect()
 }
 
 /// Collects tests and fixtures from supplied Python source.
