@@ -30,6 +30,16 @@ pub struct CollectedDoctest {
     pub range: TextRange,
 }
 
+/// Source retained to diagnose skipped test classes without loading the module again.
+#[derive(Debug, Clone)]
+pub struct UnsupportedTestClasses {
+    /// Source for the diagnostic snippets.
+    pub source_text: String,
+
+    /// Class names and the source range of each name.
+    pub classes: Vec<(String, TextRange)>,
+}
+
 /// A collected module containing raw AST definitions and doctest metadata.
 /// This is populated during the parallel collection phase.
 #[derive(Debug, Clone)]
@@ -61,8 +71,8 @@ pub struct CollectedModule {
     /// Docstrings containing doctest examples.
     pub doctests: Vec<CollectedDoctest>,
 
-    /// Names and source ranges of classes flagged by scheduling collection.
-    pub unsupported_test_classes: Vec<(String, TextRange)>,
+    /// Diagnostics input present only when scheduling collection found skipped classes.
+    pub unsupported_test_classes: Option<Box<UnsupportedTestClasses>>,
 
     /// Fixture function definitions (functions with fixture decorators)
     pub fixture_function_defs: Vec<StmtFunctionDef>,
@@ -90,7 +100,7 @@ impl CollectedModule {
             test_function_defs: Vec::new(),
             parametrize_case_counts: BTreeMap::new(),
             doctests: Vec::new(),
-            unsupported_test_classes: Vec::new(),
+            unsupported_test_classes: None,
             fixture_function_defs: Vec::new(),
         }
     }
@@ -143,7 +153,7 @@ impl CollectedModule {
         self.test_function_defs.is_empty()
             && self.doctests.is_empty()
             && self.fixture_function_defs.is_empty()
-            && self.unsupported_test_classes.is_empty()
+            && self.unsupported_test_classes.is_none()
     }
 }
 
@@ -324,11 +334,8 @@ impl CollectedModule {
         if self.path == module.path {
             self.has_module_tags |= module.has_module_tags;
             self.uses_benchmark |= module.uses_benchmark;
-            if self.unsupported_test_classes.is_empty()
-                && !module.unsupported_test_classes.is_empty()
-            {
+            if self.unsupported_test_classes.is_none() {
                 self.unsupported_test_classes = module.unsupported_test_classes;
-                self.source_text = module.source_text;
             }
             for function in module.test_function_defs {
                 if !self

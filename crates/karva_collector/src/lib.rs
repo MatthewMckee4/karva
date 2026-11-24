@@ -18,7 +18,10 @@ mod models;
 mod parametrize;
 
 pub use imports::project_import_paths;
-pub use models::{CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType};
+pub use models::{
+    CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType,
+    UnsupportedTestClasses,
+};
 pub use parametrize::count_parametrize_cases_with_bindings;
 
 /// Detects measurement references before releasing scheduling-only syntax.
@@ -162,10 +165,12 @@ fn collect_source_for_scheduling(
         CollectedModule::new(module_path, module_type, &module_body, String::new());
 
     if module_type == ModuleType::Test && function_names.is_empty() {
-        collected_module.unsupported_test_classes =
-            unsupported_test_classes(&module_body, settings.test_function_prefix);
-        if !collected_module.unsupported_test_classes.is_empty() {
-            source_text.clone_into(&mut collected_module.source_text);
+        let classes = unsupported_test_classes(&module_body, settings.test_function_prefix);
+        if !classes.is_empty() {
+            collected_module.unsupported_test_classes = Some(Box::new(UnsupportedTestClasses {
+                source_text: source_text.to_owned(),
+                classes,
+            }));
         }
     }
 

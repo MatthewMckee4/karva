@@ -52,21 +52,19 @@ pub(super) fn unsupported_class_diagnostics(
     let mut modules = Vec::new();
     while let Some(package) = packages.pop() {
         packages.extend(package.packages.values());
-        modules.extend(
-            package
-                .modules
-                .values()
-                .filter(|module| !module.unsupported_test_classes.is_empty()),
-        );
+        modules.extend(package.modules.values().filter_map(|module| {
+            module
+                .unsupported_test_classes
+                .as_deref()
+                .map(|classes| (module.path.path(), classes))
+        }));
     }
-    modules.sort_unstable_by(|left, right| left.path.path().cmp(right.path.path()));
+    modules.sort_unstable_by_key(|(path, _)| *path);
 
     let mut diagnostics = Vec::new();
-    for module in modules {
-        let source =
-            SourceFileBuilder::new(module.path.path().as_str(), module.source_text.as_str())
-                .finish();
-        for (name, range) in &module.unsupported_test_classes {
+    for (path, classes) in modules {
+        let source = SourceFileBuilder::new(path.as_str(), classes.source_text.as_str()).finish();
+        for (name, range) in &classes.classes {
             let mut diagnostic = Diagnostic::new(
                 "unsupported-test-class",
                 Severity::Warning,
