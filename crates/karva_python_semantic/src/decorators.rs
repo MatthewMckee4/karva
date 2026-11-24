@@ -58,6 +58,9 @@ pub enum KnownBinding {
 #[derive(Clone, Debug)]
 pub struct DecoratorBindings {
     names: HashMap<String, KnownBinding>,
+    // Namespace aliases share attribute writes.
+    karva_parametrize_rebound: bool,
+    pytest_parametrize_rebound: bool,
 }
 
 impl Default for DecoratorBindings {
@@ -67,7 +70,11 @@ impl Default for DecoratorBindings {
         // assignments can explicitly replace these fallback names.
         names.insert("fixture".to_owned(), KnownBinding::Fixture);
         names.insert("parametrize".to_owned(), KnownBinding::Parametrize);
-        Self { names }
+        Self {
+            names,
+            karva_parametrize_rebound: false,
+            pytest_parametrize_rebound: false,
+        }
     }
 }
 
@@ -148,7 +155,13 @@ impl DecoratorBindings {
                     let binding = (import.level == 0)
                         .then_some(module)
                         .flatten()
-                        .and_then(|module| known_from_import(module, alias.name.as_str()))
+                        .and_then(|module| match (module, alias.name.as_str()) {
+                            ("karva.tags", "parametrize") if self.karva_parametrize_rebound => None,
+                            ("pytest.mark", "parametrize") if self.pytest_parametrize_rebound => {
+                                None
+                            }
+                            _ => known_from_import(module, alias.name.as_str()),
+                        })
                         .unwrap_or(KnownBinding::Unknown);
                     self.set(name, binding);
                 }
@@ -239,16 +252,20 @@ impl DecoratorBindings {
         let Some(binding) = self.namespace_binding(attribute.value.as_ref()) else {
             return false;
         };
+        if attribute.attr.as_str() == "parametrize" {
+            return expected == KnownBinding::Parametrize
+                && match binding {
+                    KnownBinding::KarvaTags => !self.karva_parametrize_rebound,
+                    KnownBinding::PytestMark => !self.pytest_parametrize_rebound,
+                    _ => false,
+                };
+        }
         matches!(
             (binding, attribute.attr.as_str(), expected),
             (
                 KnownBinding::Karva | KnownBinding::Pytest,
                 "fixture",
                 KnownBinding::Fixture
-            ) | (
-                KnownBinding::KarvaTags | KnownBinding::PytestMark,
-                "parametrize",
-                KnownBinding::Parametrize,
             ) | (
                 KnownBinding::KarvaTags,
                 "use_fixtures",
@@ -296,6 +313,13 @@ impl DecoratorBindings {
     fn bind_target(&mut self, target: &Expr) {
         match target {
             Expr::Name(name) => self.set(&name.id, KnownBinding::Unknown),
+            Expr::Attribute(attribute) if attribute.attr.as_str() == "parametrize" => {
+                match self.namespace_binding(&attribute.value) {
+                    Some(KnownBinding::KarvaTags) => self.karva_parametrize_rebound = true,
+                    Some(KnownBinding::PytestMark) => self.pytest_parametrize_rebound = true,
+                    _ => {}
+                }
+            }
             Expr::List(list) => {
                 for element in &list.elts {
                     self.bind_target(element);

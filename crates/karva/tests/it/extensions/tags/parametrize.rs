@@ -6,6 +6,144 @@ use crate::common::TestContext;
 use crate::extensions::get_parametrize_function;
 
 #[rstest]
+fn runtime_parametrize_combines_with_literal_decorators(
+    #[values("karva", "pytest")] framework: &str,
+    #[values("SHARED", "shared()", "holder.tag", "parametrize('ignored', [None])")]
+    runtime_tag: &str,
+    #[values(true, false)] runtime_above: bool,
+) {
+    let parametrize = get_parametrize_function(framework);
+    let literal = format!("{parametrize}(\"y\", [1, 2, 3])");
+    let (above, below) = if runtime_above {
+        (runtime_tag, literal.as_str())
+    } else {
+        (literal.as_str(), runtime_tag)
+    };
+    let context = TestContext::with_file(
+        "test.py",
+        format!(
+            r#"
+import {framework}
+from types import SimpleNamespace
+
+SHARED = {parametrize}("mode", ["a", "b"])
+holder = SimpleNamespace(tag=SHARED)
+
+def shared():
+    return SHARED
+
+def parametrize(*args):
+    return SHARED
+
+@{above}
+@{below}
+def test_combined(mode, y):
+    assert mode in ["a", "b"]
+    assert y in [1, 2, 3]
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 6 tests run: 6 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[test]
+fn reassigned_parametrize_attribute_does_not_limit_runtime_cases() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+from karva import tags as kt
+import pytest
+
+shared = kt.parametrize("mode", ["a", "b"])
+
+def replacement(*args):
+    return shared
+
+kt.parametrize = replacement
+
+@kt.parametrize("ignored", [None])
+@pytest.mark.parametrize("y", [1, 2, 3])
+def test_combined(mode, y):
+    assert mode in ["a", "b"]
+    assert y in [1, 2, 3]
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+    ────────────
+         Summary [TIME] 6 tests run: 6 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn runtime_parametrize_reports_failure_in_previously_dropped_case() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+SHARED = karva.tags.parametrize("mode", ["a", "b"])
+
+@karva.tags.parametrize("y", [1, 2, 3])
+@SHARED
+def test_combined(mode, y):
+    assert (mode, y) != ("b", 3)
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel(), @r#"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_combined(mode='a', y=1)
+            PASS [TIME] test::test_combined(mode='a', y=2)
+            PASS [TIME] test::test_combined(mode='a', y=3)
+            PASS [TIME] test::test_combined(mode='b', y=1)
+            PASS [TIME] test::test_combined(mode='b', y=2)
+            FAIL [TIME] test::test_combined(mode='b', y=3)
+
+    failures:
+
+    test::test_combined(mode='b', y=3):
+
+    error[test-failure]: Test `test_combined` failed
+     --> test.py:8:5
+      |
+    8 | def test_combined(mode, y):
+      |     ^^^^^^^^^^^^^
+    info: Test ran with arguments:
+    info:   `mode`: `b`
+    info:   `y`: `3`
+    info: Test failed here
+     --> test.py:9:5
+      |
+    9 |     assert (mode, y) != ("b", 3)
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    info: Evaluated values:
+      (mode, y) = ('b', 3)
+
+    ────────────
+         Summary [TIME] 6 tests run: 5 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    "#);
+}
+
+#[rstest]
 fn test_parametrize_rejects_too_few_values_before_execution(
     #[values("pytest", "karva")] framework: &str,
 ) {
