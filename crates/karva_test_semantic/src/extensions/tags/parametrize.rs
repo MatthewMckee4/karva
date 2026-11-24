@@ -4,7 +4,7 @@ use std::sync::Arc;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyBool, PyBoolMethods, PyDict, PySequence};
 use ruff_python_ast::{Expr, StmtFunctionDef};
 use ruff_python_stdlib::identifiers::is_identifier;
 use ruff_text_size::{Ranged, TextRange};
@@ -742,6 +742,29 @@ fn extract_parametrize_args<'py>(
                 .and_then(|kwargs| kwargs.get_item("argvalues"))
         })
         .map_err(|_| PyValueError::new_err("pytest parametrize mark requires argvalues"))?;
+
+    if let Ok(indirect) = py_mark
+        .getattr("args")
+        .and_then(|args| args.get_item(2))
+        .or_else(|_| {
+            py_mark
+                .getattr("kwargs")
+                .and_then(|kwargs| kwargs.get_item("indirect"))
+        })
+    {
+        let is_direct = if let Ok(boolean) = indirect.cast::<PyBool>() {
+            !boolean.is_true()
+        } else if let Ok(sequence) = indirect.cast::<PySequence>() {
+            sequence.is_empty()?
+        } else {
+            false
+        };
+        if !is_direct {
+            return Err(PyValueError::new_err(
+                "indirect pytest parametrization is not supported",
+            ));
+        }
+    }
 
     let ids = py_mark
         .getattr("args")

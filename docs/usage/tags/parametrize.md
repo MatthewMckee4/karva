@@ -167,3 +167,6 @@ import pytest
 def test_function(a: int):
     assert a > 0
 ```
+
+Karva reports a collection error if `@pytest.mark.parametrize` uses
+`indirect=True` or a non-empty sequence of fixture names.

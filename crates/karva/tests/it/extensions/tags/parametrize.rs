@@ -1626,17 +1626,21 @@ def test_callable(value):
     }
 }
 
-#[test]
-fn test_pytest_parametrize_ids_use_pytest_positional_index() {
+#[rstest]
+fn test_pytest_parametrize_ids_use_pytest_positional_index(
+    #[values("False", "[]", "()")] indirect: &str,
+) {
     let test_context = TestContext::with_file(
         "test.py",
-        r#"
+        format!(
+            r#"
 import pytest
 
-@pytest.mark.parametrize("value", [1, 2], False, ["one", "two"])
+@pytest.mark.parametrize("value", [1, 2], {indirect}, ["one", "two"])
 def test_value(value):
     assert value > 0
 "#,
+        ),
     );
 
     assert_cmd_snapshot!(test_context.command(), @"
@@ -2484,6 +2488,43 @@ def test_invalid(x):
     diagnostics:
 
     error[failed-to-import-module]: Failed to import python module `test`: pytest parametrize mark requires argvalues
+
+    ────────────
+         Summary [TIME] 0 tests run: 0 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[rstest]
+fn test_pytest_parametrize_rejects_indirect(
+    #[values("indirect=True", r#"indirect=["client"]"#, "True", r#"("client",)"#)] indirect: &str,
+) {
+    let context = TestContext::with_file(
+        "test.py",
+        format!(
+            r#"
+import pytest
+
+@pytest.fixture
+def client():
+    return "built-by-fixture"
+
+@pytest.mark.parametrize("client", ["raw"], {indirect})
+def test_client(client):
+    assert client == "built-by-fixture"
+"#,
+        ),
+    );
+
+    assert_cmd_snapshot!(context.command(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 1 test across 1 worker
+    diagnostics:
+
+    error[failed-to-import-module]: Failed to import python module `test`: indirect pytest parametrization is not supported
 
     ────────────
          Summary [TIME] 0 tests run: 0 passed, 0 skipped
