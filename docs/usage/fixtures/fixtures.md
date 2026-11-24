@@ -122,6 +122,75 @@ def adaptive_fixture():
 
 The callable receives `fixture_name` as a string and `config` (currently `None`).
 
+## The request fixture
+
+Add a `request` argument to a test or fixture to receive a
+`karva.FixtureRequest`. Each fixture gets a request for its own lifetime.
+A test receives a function-scoped request with `fixturename` set to `None`.
+
+```py title="test.py"
+import karva
+
+
+@karva.fixture
+def log_path(request: karva.FixtureRequest):
+    directory = request.getfixturevalue("tmp_path")
+    path = directory / "events.log"
+    request.addfinalizer(lambda: path.unlink(missing_ok=True))
+    return path
+
+
+def test_log(log_path):
+    log_path.write_text("ok")
+    assert log_path.read_text() == "ok"
+```
+
+`getfixturevalue(name)` uses the same scope and cache rules as a fixture
+argument. During teardown, it can retrieve fixtures that are still active.
+Karva raises `karva.FixtureLookupError` when lookup fails. Use
+`request.raiseerror(message)` to raise the same exception with your own message.
+
+`addfinalizer(callback)` runs callbacks in reverse registration order when
+the fixture or test ends. Registered callbacks run even if setup fails.
+For a generator fixture, Karva first resumes the generator after its yield.
+
+`request.node` refers to the current test, module, package, or session.
+`request.applymarker(marker)` adds a marker to that node. Pass a marker name or
+a `pytest.mark` decorator. Use `node.get_closest_marker(name)` to look up a marker
+on the node or its parents.
+
+| Property | Value |
+| --- | --- |
+| `fixturename`, `fixturenames` | The current fixture name and the active fixture names. |
+| `scope` | `"function"`, `"module"`, `"package"`, or `"session"`. |
+| `node`, `keywords` | The node for the current scope and its keyword mapping. |
+| `config`, `session` | Karva's worker configuration and session node. The config exposes `rootpath`, `settings`, and `getoption(name, default)`. |
+| `function`, `cls`, `instance` | The test callable in function scope. `cls` is `None` in function scope, and `instance` is always `None`. |
+| `module`, `path` | The test's Python module in function or module scope, and its file path in function, module, or package scope. |
+| `param` | The value supplied by fixture or indirect parametrization. The attribute exists only when a value was supplied. |
+
+### Parametrized fixtures
+
+Pass `params` to the fixture decorator and read each value through
+`request.param`. Karva runs every test that uses the fixture for each value.
+Use `ids` to give the cases readable names.
+
+```py title="test.py"
+import karva
+
+
+@karva.fixture(params=["utf-8", "ascii"])
+def encoding(request: karva.FixtureRequest):
+    return request.param
+
+
+def test_encode(encoding):
+    assert "hello".encode(encoding) == b"hello"
+```
+
+Use [indirect parametrization](../tags/parametrize.md#indirect-parametrization)
+to choose the fixture's values for one test.
+
 ## Dependent Fixtures
 
 Fixtures request other fixtures by argument name:
@@ -274,4 +343,4 @@ def test_admin_user(username):
 
 ## Limitations
 
-Karva does not support pytest's [`request` fixture](../non-goals.md#pytest-request-internals).
+See [the request fixture](#the-request-fixture) for contextual properties and methods.

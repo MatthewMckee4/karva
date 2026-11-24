@@ -3,7 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
+use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 
 use crate::discovery::models::definition::{
@@ -11,8 +12,9 @@ use crate::discovery::models::definition::{
 };
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
-    DiscoveredFixture, FixtureDependency, FixtureId, FixtureIdentity, FixtureLookup, FixturePlan,
-    FixtureScope, HasFixtures, NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
+    DiscoveredFixture, DynamicFixture, DynamicFixtures, FixtureContext, FixtureDependency,
+    FixtureId, FixtureIdentity, FixtureLookup, FixturePlan, FixtureScope, HasFixtures,
+    NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
 };
 
 /// Compiles fixture lookup results into an arena for one request context.
@@ -41,12 +43,21 @@ pub(super) struct FixturePlanCompiler<'a> {
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
+    dynamic: bool,
+    dynamic_parameters: HashMap<QualifiedFunctionName, FixtureParameterNames>,
+    indirect_fixtures: &'a HashSet<QualifiedFunctionName>,
 }
 
 #[derive(Default)]
 struct FixtureRequest {
-    parameter_names: HashSet<String>,
+    names: FixtureParameterNames,
     fixture_ids: HashMap<FixtureIdentity, FixtureId>,
+}
+
+#[derive(Clone, Default)]
+struct FixtureParameterNames {
+    direct: HashSet<String>,
+    indirect: HashSet<String>,
 }
 
 /// Source-backed fixture metadata retained for resolution diagnostics.
@@ -182,6 +193,7 @@ impl<'a> FixturePlanCompiler<'a> {
         parents: &'a [&'a DiscoveredPackage],
         current: &'a (dyn HasFixtures<'a> + 'a),
         current_package: &'a Utf8Path,
+        indirect_fixtures: &'a HashSet<QualifiedFunctionName>,
     ) -> Self {
         Self {
             parents,
@@ -191,6 +203,9 @@ impl<'a> FixturePlanCompiler<'a> {
             request: FixtureRequest::default(),
             root_fixture_lookups: HashMap::new(),
             fixtures: Vec::new(),
+            dynamic: false,
+            dynamic_parameters: HashMap::new(),
+            indirect_fixtures,
         }
     }
 
@@ -200,17 +215,13 @@ impl<'a> FixturePlanCompiler<'a> {
     /// can have different edges depending on which names the test supplies.
     pub(super) fn with_parameters<T>(
         &mut self,
-        parameter_names: HashSet<String>,
+        direct: HashSet<String>,
+        indirect: HashSet<String>,
         resolve: impl FnOnce(&mut Self) -> T,
     ) -> T {
-        if parameter_names.is_empty() {
-            return resolve(self);
-        }
-
-        self.request.parameter_names = parameter_names;
+        self.request.names = FixtureParameterNames { direct, indirect };
         let result = resolve(self);
-        self.request.parameter_names.clear();
-        self.request.fixture_ids.clear();
+        self.request = FixtureRequest::default();
         result
     }
 
@@ -223,6 +234,13 @@ impl<'a> FixturePlanCompiler<'a> {
         let lookup = lookup_fixture(None, name, self.parents, self.current);
         self.root_fixture_lookups.insert(name.to_owned(), lookup);
         lookup
+    }
+
+    pub(super) fn root_fixture_scope(&mut self, name: &str) -> Option<FixtureScope> {
+        match self.lookup_root_fixture(name) {
+            FixtureLookup::Found(fixture) => Some(fixture.scope()),
+            _ => None,
+        }
     }
 
     /// Finds the package whose provider contributed `fixture`.
@@ -248,8 +266,81 @@ impl<'a> FixturePlanCompiler<'a> {
     }
 
     /// Finishes the immutable arena after all requested root groups are compiled.
-    pub(super) fn finish(self) -> FixturePlan {
-        FixturePlan::new(self.fixtures)
+    pub(super) fn finish(mut self, py: Python<'_>) -> FixturePlan {
+        let selected_len = self.fixtures.len();
+        let dynamic = if self.dynamic {
+            self.dynamic_fixtures(py)
+        } else {
+            DynamicFixtures::default()
+        };
+
+        // A request retained by a session fixture can be called from another
+        // module even when the active test never asked for a request itself.
+        let parametrized_dynamic = std::mem::take(&mut self.dynamic_parameters)
+            .into_iter()
+            .map(|(test, parameters)| {
+                let overlay =
+                    self.with_parameters(parameters.direct, parameters.indirect, |compiler| {
+                        compiler.dynamic_fixtures(py)
+                    });
+                (test, overlay)
+            })
+            .collect();
+        FixturePlan::new(self.fixtures, dynamic, parametrized_dynamic, selected_len)
+    }
+
+    fn dynamic_fixtures(&mut self, py: Python<'_>) -> DynamicFixtures {
+        let mut dynamic = DynamicFixtures::default();
+        let mut names = HashSet::new();
+        self.current.fixture_names(&mut names);
+        for parent in self.parents {
+            parent.fixture_names(&mut names);
+        }
+        for name in names {
+            let FixtureLookup::Found(fixture) = self.lookup_root_fixture(name) else {
+                continue;
+            };
+            dynamic
+                .roots
+                .insert(name.to_owned(), self.compile_dynamic(py, fixture));
+
+            let mut active = fixture;
+            while let FixtureLookup::Found(parent) =
+                lookup_fixture(Some(active), name, self.parents, self.current)
+            {
+                dynamic
+                    .overrides
+                    .insert(active.name().clone(), self.compile_dynamic(py, parent));
+                active = parent;
+            }
+        }
+        dynamic
+    }
+
+    fn compile_dynamic(
+        &mut self,
+        py: Python<'_>,
+        fixture: &'a DiscoveredFixture,
+    ) -> DynamicFixture {
+        DynamicFixture {
+            name: fixture.name().clone(),
+            resolution: self
+                .normalize_fixture(py, fixture, &mut FixturePath::default())
+                .map_err(crate::diagnostic::fixture_resolution_diagnostic),
+        }
+    }
+
+    /// Retains dynamic lookup results only for a context that injects a request.
+    pub(super) fn require_request(&mut self) {
+        self.dynamic = true;
+    }
+
+    /// Captures the active test's direct parameter names for lazy lookup.
+    pub(super) fn retain_dynamic_parameters(&mut self, test: &QualifiedFunctionName) {
+        if !self.request.names.direct.is_empty() {
+            self.dynamic_parameters
+                .insert(test.clone(), self.request.names.clone());
+        }
     }
 
     /// Normalizes a fixture and its dependencies recursively.
@@ -262,7 +353,7 @@ impl<'a> FixturePlanCompiler<'a> {
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<FixtureId> {
-        let parametrized = !self.request.parameter_names.is_empty();
+        let parametrized = !self.request.names.direct.is_empty();
         let cached = if parametrized {
             self.request.fixture_ids.get(fixture.identity())
         } else {
@@ -272,9 +363,11 @@ impl<'a> FixturePlanCompiler<'a> {
             return Ok(*cached);
         }
 
+        let required_fixtures =
+            required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
+        let takes_request = required_fixtures.contains(&"request");
+        self.dynamic |= takes_request || fixture.parameters.is_some();
         let dependent_fixtures = path.enter(fixture, |path| {
-            let required_fixtures =
-                required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
             self.get_dependent_fixtures(py, fixture, &required_fixtures, path)
         })?;
 
@@ -302,18 +395,28 @@ impl<'a> FixturePlanCompiler<'a> {
                 FixtureDependency::Parameter(_) => None,
             })
             .fold(fixture.scope(), FixtureScope::max);
+        let context = if takes_request {
+            FixtureContext::Request
+        } else if fixture.parameters.is_some()
+            || self.indirect_fixtures.contains(fixture.name())
+            || dependent_fixtures
+                .iter()
+                .filter_map(FixtureDependency::fixture_id)
+                .any(|id| self.fixture(id).needs_test_context())
+        {
+            FixtureContext::Test
+        } else {
+            FixtureContext::Independent
+        };
         let result = NormalizedFixture {
             identity: fixture.identity().clone(),
+            context,
+            parameters: fixture.parameters.clone(),
+            broadest_scope,
             dependencies: dependent_fixtures,
             uses_parameters,
             scope: fixture.scope(),
-            broadest_scope,
-            package_owner: match fixture.scope() {
-                FixtureScope::Package => self.package_owner(fixture).to_path_buf(),
-                FixtureScope::Function | FixtureScope::Module | FixtureScope::Session => {
-                    Utf8PathBuf::new()
-                }
-            },
+            package_owner: self.package_owner(fixture).to_path_buf(),
             is_generator: fixture.is_generator(),
             py_function: fixture.function().clone_ref(py),
         };
@@ -349,6 +452,8 @@ impl<'a> FixturePlanCompiler<'a> {
             .required_fixtures()
             .into_iter()
             .chain(test.tags.use_fixture_names())
+            .chain(test.tags.indirect_fixture_names())
+            .filter(|name| *name != "request")
         {
             if let Some(&parameter) = parameters.get(name) {
                 used.insert(parameter);
@@ -371,7 +476,7 @@ impl<'a> FixturePlanCompiler<'a> {
             }
             let names =
                 required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
-            for name in names {
+            for name in names.into_iter().filter(|name| *name != "request") {
                 if let Some(&parameter) = parameters.get(name) {
                     used.insert(parameter);
                 } else if let FixtureLookup::Found(dependency) =
@@ -394,7 +499,8 @@ impl<'a> FixturePlanCompiler<'a> {
         auto_use_fixtures.retain(|fixture| {
             !self
                 .request
-                .parameter_names
+                .names
+                .direct
                 .contains(fixture.name().function_name())
         });
         let mut path = FixturePath::default();
@@ -414,7 +520,7 @@ impl<'a> FixturePlanCompiler<'a> {
         let fixture_names = test.required_fixtures();
         let regular_fixture_names: Vec<&str> = fixture_names
             .iter()
-            .filter(|name| !self.request.parameter_names.contains(**name))
+            .filter(|name| **name != "request" && !self.request.names.direct.contains(**name))
             .copied()
             .collect();
 
@@ -441,6 +547,32 @@ impl<'a> FixturePlanCompiler<'a> {
         self.resolve_root_fixtures(py, &regular_fixture_names)
     }
 
+    pub(super) fn resolve_indirect_fixtures(
+        &mut self,
+        py: Python<'_>,
+        test: &DiscoveredTestFunction,
+        names: &HashSet<String>,
+    ) -> FixtureResolutionResult<Vec<FixtureId>> {
+        let mut names = names.iter().map(String::as_str).collect::<Vec<_>>();
+        names.sort_unstable();
+        let missing_fixtures = names
+            .iter()
+            .filter(|name| !self.lookup_root_fixture(name).is_found())
+            .map(|name| (*name).to_owned())
+            .collect::<Vec<_>>();
+        if !missing_fixtures.is_empty() {
+            return Err(FixtureResolutionError::MissingTestFixtures {
+                definition: Rc::clone(test.definition()),
+                missing_fixtures,
+            });
+        }
+        self.resolve_root_fixtures(py, &names)
+    }
+
+    pub(super) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
+        &self.fixtures[id.index()]
+    }
+
     /// Resolves fixture roots after excluding names supplied by parametrization.
     pub(super) fn resolve_root_fixtures<N: AsRef<str>>(
         &mut self,
@@ -451,13 +583,23 @@ impl<'a> FixturePlanCompiler<'a> {
         let mut fixtures = Vec::with_capacity(fixture_names.len());
         for name in fixture_names {
             let name = name.as_ref();
-            if !self.request.parameter_names.contains(name)
+            if !self.request.names.direct.contains(name)
                 && let FixtureLookup::Found(fixture) = self.lookup_root_fixture(name)
             {
                 fixtures.push(self.normalize_fixture(py, fixture, &mut path)?);
             }
         }
         Ok(fixtures)
+    }
+
+    /// Only the selected definition can receive the case's scope override.
+    fn has_indirect_case_for(&mut self, fixture: &DiscoveredFixture) -> bool {
+        let name = fixture.name().function_name();
+        self.request.names.indirect.contains(name)
+            && matches!(
+                self.lookup_root_fixture(name),
+                FixtureLookup::Found(root) if root.identity() == fixture.identity()
+            )
     }
 
     /// Resolves a list of names and validates every dependency scope edge.
@@ -473,8 +615,13 @@ impl<'a> FixturePlanCompiler<'a> {
         let mut rejected_fixtures = Vec::new();
 
         for &dep_name in fixture_names {
-            if self.request.parameter_names.contains(dep_name) {
-                if !current_fixture.scope().can_use(FixtureScope::Function) {
+            if dep_name == "request" {
+                continue;
+            }
+            if self.request.names.direct.contains(dep_name) {
+                if !(current_fixture.scope().can_use(FixtureScope::Function)
+                    || self.has_indirect_case_for(current_fixture))
+                {
                     return Err(FixtureResolutionError::ParameterScopeMismatch {
                         fixture: FixtureResolutionEntry::new(current_fixture),
                         parameter: dep_name.to_owned(),
@@ -494,7 +641,9 @@ impl<'a> FixturePlanCompiler<'a> {
 
             match lookup {
                 FixtureLookup::Found(fixture) => {
-                    if !current_fixture.scope().can_use(fixture.scope()) {
+                    if !current_fixture.scope().can_use(fixture.scope())
+                        && !self.indirect_fixtures.contains(current_fixture.name())
+                    {
                         let dependency_path = path
                             .fixtures
                             .split_last()
@@ -527,6 +676,17 @@ impl<'a> FixturePlanCompiler<'a> {
         }
 
         Ok(normalized_fixtures)
+    }
+}
+
+pub(super) fn indirect_fixture_definition<'a>(
+    parents: &'a [&'a DiscoveredPackage],
+    current: &'a (dyn HasFixtures<'a> + 'a),
+    name: &str,
+) -> Option<&'a QualifiedFunctionName> {
+    match lookup_fixture(None, name, parents, current) {
+        FixtureLookup::Found(fixture) => Some(fixture.name()),
+        _ => None,
     }
 }
 

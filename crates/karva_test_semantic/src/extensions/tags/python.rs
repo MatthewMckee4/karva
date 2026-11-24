@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -13,6 +15,8 @@ pub enum PyTag {
     Parametrize {
         arg_names: Vec<String>,
         arg_values: Vec<Param>,
+        indirect: HashSet<String>,
+        scope: Option<String>,
     },
 
     #[pyo3(name = "use_fixtures")]
@@ -55,9 +59,13 @@ impl PyTag {
             Self::Parametrize {
                 arg_names,
                 arg_values,
+                indirect,
+                scope,
             } => Self::Parametrize {
                 arg_names: arg_names.clone(),
                 arg_values: arg_values.clone(),
+                indirect: indirect.clone(),
+                scope: scope.clone(),
             },
             Self::UseFixtures { fixture_names } => Self::UseFixtures {
                 fixture_names: fixture_names.clone(),
@@ -143,8 +151,11 @@ pub mod tags {
     use pyo3::types::PyTuple;
 
     use super::{CustomTagBuilder, PyTag, PyTags};
+    use crate::extensions::fixtures::FixtureScope;
     use crate::extensions::functions::python::Param;
-    use crate::extensions::tags::parametrize::{apply_parametrize_ids, parse_parametrize_args};
+    use crate::extensions::tags::parametrize::{
+        apply_parametrize_ids, indirect_names, parse_parametrize_args,
+    };
     use crate::extensions::tags::python::PyTestFunction;
 
     /// Handle dynamic attribute access for custom tags.
@@ -156,11 +167,13 @@ pub mod tags {
     }
 
     #[pyfunction]
-    #[pyo3(signature = (arg_names, arg_values, ids = None))]
+    #[pyo3(signature = (arg_names, arg_values, ids = None, *, indirect = None, scope = None))]
     fn parametrize(
         arg_names: &Bound<'_, PyAny>,
         arg_values: &Bound<'_, PyAny>,
         ids: Option<&Bound<'_, PyAny>>,
+        indirect: Option<&Bound<'_, PyAny>>,
+        scope: Option<String>,
     ) -> PyResult<PyTags> {
         const PARAMETRIZE_TYPE_ERROR: &str = "Expected a string or a list of strings for the arg_names, and a list of lists of objects for the arg_values";
 
@@ -169,8 +182,14 @@ pub mod tags {
         apply_parametrize_ids(ids, &mut parametrization)
             .map_err(|error| PyErr::new::<PyTypeError, _>(error.to_string()))?;
 
+        if let Some(scope) = &scope {
+            FixtureScope::try_from(scope.clone()).map_err(PyTypeError::new_err)?;
+        }
+
         Ok(PyTags {
             inner: vec![PyTag::Parametrize {
+                indirect: indirect_names(indirect, &names)?,
+                scope,
                 arg_names: names,
                 arg_values: parametrization
                     .into_iter()

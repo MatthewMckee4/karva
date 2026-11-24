@@ -17,6 +17,9 @@ def parametrize(
     arg_names: Sequence[str] | str,
     arg_values: Sequence[Sequence[object]] | Sequence[object],
     ids: Sequence[str | None] | Callable[[object], object | None] | None = ...,
+    *,
+    indirect: bool | Sequence[str] = ...,
+    scope: str | None = ...,
 ) -> Tags:
     """Parametrize the current test with the given arguments."""
 

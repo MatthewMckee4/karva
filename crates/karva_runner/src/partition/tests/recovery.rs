@@ -275,3 +275,33 @@ fn recovery_progress_excludes_parameter_cases_owned_by_other_workers() {
         }
     ));
 }
+
+#[test]
+fn crash_recovery_resumes_fixture_cases_inside_a_static_selector() {
+    let mut partition = Partition::new();
+    for name in [
+        "test_module::test_case[0]",
+        "test_module::test_case[1]",
+        "test_module::test_case[2]",
+    ] {
+        partition.add_test(test_info(name), 1);
+    }
+    let completed = HashSet::from([
+        TestCacheKey::function_name("test_module::test_case[0]"),
+        TestCacheKey::function_name("test_module::test_case[1:0]"),
+    ]);
+    let crashed = TestCacheKey::function_name("test_module::test_case[1:1]");
+    let pending = pending_after_test_crash(&partition, &completed, &crashed);
+
+    assert_eq!(
+        pending.test_paths().collect::<Vec<_>>(),
+        ["test_module::test_case[1]", "test_module::test_case[2]"]
+    );
+    assert_eq!(
+        pending.resume_skip(),
+        &[
+            TestCacheKey::function_name("test_module::test_case[1:0]"),
+            crashed
+        ]
+    );
+}

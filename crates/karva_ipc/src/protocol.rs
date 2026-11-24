@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use karva_diagnostic::{RenderedDiagnostic, TestCaseResult};
 use karva_logging::{TerminalColor, VerbosityLevel};
 use karva_metadata::{Options, RunIgnoredMode};
-use karva_python_semantic::TestCacheKey;
+use karva_python_semantic::{ParameterCase, TestCacheKey};
 use serde::{Deserialize, Serialize};
 
 /// One runtime state change sent from a worker to the controller.
@@ -89,7 +89,7 @@ pub enum WireMessage {
 
         /// Stable parameter expansion index, absent for function-level identity.
         #[serde(rename = "i", default, skip_serializing_if = "Option::is_none")]
-        case_index: Option<usize>,
+        case_index: Option<ParameterCase>,
     },
 
     /// Ordinary passing result without repeated display identity or empty payloads.

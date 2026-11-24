@@ -234,17 +234,25 @@ fn find_lightest_partition(partitions: &[Partition]) -> usize {
 fn is_cached_failure<'a>(
     test: &TestInfo,
     last_failed: &'a HashSet<TestCacheKey>,
-    failed_function_roots: &OnceCell<HashSet<&'a str>>,
+    failed_function_roots: &OnceCell<HashSet<(&'a str, Option<usize>)>>,
 ) -> bool {
     last_failed.contains(test.qualified_name.as_str())
         || last_failed.contains(test.identity.function_root.as_ref())
-        || (test.qualified_name == test.identity.function_root.as_ref()
-            && failed_function_roots
-                .get_or_init(|| {
-                    last_failed
-                        .iter()
-                        .map(TestCacheKey::test_function_name)
-                        .collect()
-                })
-                .contains(test.identity.function_root.as_ref()))
+        || failed_function_roots
+            .get_or_init(|| {
+                last_failed
+                    .iter()
+                    .flat_map(|key| {
+                        let function = key.test_function_name();
+                        [
+                            Some((function, None)),
+                            key.fixture_case_group()
+                                .map(|group| (function, Some(group))),
+                        ]
+                        .into_iter()
+                        .flatten()
+                    })
+                    .collect()
+            })
+            .contains(&(test.identity.function_root.as_ref(), test.case_index))
 }

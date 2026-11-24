@@ -326,9 +326,15 @@ impl Tag {
             PyTag::Parametrize {
                 arg_names,
                 arg_values,
+                indirect,
+                scope,
             } => Self::Parametrize(ParametrizeTag::from_karva(
                 arg_names.clone(),
                 arg_values.clone(),
+                indirect.clone(),
+                scope
+                    .as_ref()
+                    .and_then(|scope| scope.clone().try_into().ok()),
             )),
             PyTag::UseFixtures { fixture_names } => {
                 Self::UseFixtures(UseFixturesTag::new(fixture_names.clone()))
@@ -372,6 +378,7 @@ impl Tag {
 pub struct Tags {
     /// The list of tags applied to a test function.
     inner: Vec<Tag>,
+    pytest_marks: Vec<Arc<Py<PyAny>>>,
 }
 
 /// Runtime tag policy compiled from decorators and parameter-specific marks.
@@ -467,6 +474,7 @@ impl RuntimeTags {
 /// Static tag metadata and lazy parameter matrix compiled for one test.
 pub struct CompiledTags {
     parameter_names: HashSet<String>,
+    indirect_names: HashSet<String>,
     required_fixtures: Vec<String>,
     parameters: ParameterPlan,
     runtime: RuntimeTags,
@@ -475,13 +483,21 @@ pub struct CompiledTags {
 impl CompiledTags {
     pub(crate) fn new(tags: &Tags) -> Self {
         let mut parameter_names = HashSet::new();
+        let mut indirect_names = HashSet::new();
         let mut required_fixtures = Vec::new();
         let mut dimensions = Vec::new();
 
         for tag in &tags.inner {
             match tag {
                 Tag::Parametrize(parametrize) => {
-                    parameter_names.extend(parametrize.names().iter().cloned());
+                    parameter_names.extend(
+                        parametrize
+                            .names()
+                            .iter()
+                            .filter(|name| !parametrize.indirect().contains(*name))
+                            .cloned(),
+                    );
+                    indirect_names.extend(parametrize.indirect().iter().cloned());
                     dimensions.push(parametrize.each_arg_value());
                 }
                 Tag::UseFixtures(use_fixtures) => {
@@ -493,6 +509,7 @@ impl CompiledTags {
 
         Self {
             parameter_names,
+            indirect_names,
             required_fixtures,
             parameters: ParameterPlan::new(dimensions),
             runtime: RuntimeTags::from_tags(tags),
@@ -501,6 +518,10 @@ impl CompiledTags {
 
     pub(crate) fn take_parameter_names(&mut self) -> HashSet<String> {
         std::mem::take(&mut self.parameter_names)
+    }
+
+    pub(crate) fn indirect_names(&self) -> &HashSet<String> {
+        &self.indirect_names
     }
 
     pub(crate) fn required_fixtures(&self) -> &[String] {
@@ -514,7 +535,10 @@ impl CompiledTags {
 
 impl Tags {
     pub(super) fn new(tags: Vec<Tag>) -> Self {
-        Self { inner: tags }
+        Self {
+            inner: tags,
+            pytest_marks: Vec::new(),
+        }
     }
 
     /// Retains pytest policies on the original callable beneath Karva decorators.
@@ -532,6 +556,7 @@ impl Tags {
 
     pub(crate) fn extend(&mut self, other: &Self) {
         self.inner.extend(other.inner.iter().cloned());
+        self.pytest_marks.extend(other.pytest_marks.iter().cloned());
     }
 
     /// Inherits module policy without overriding function-local warning filters.
@@ -617,22 +642,85 @@ impl Tags {
         Ok(Self::default())
     }
 
+    pub(crate) fn runtime_skip(&self) -> (bool, Option<String>) {
+        self.inner
+            .iter()
+            .find_map(|tag| {
+                if let Tag::Skip(skip) = tag
+                    && skip.should_skip()
+                {
+                    Some((true, skip.reason()))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn runtime_expect_fail(&self) -> Option<ExpectFailTag> {
+        self.inner.iter().find_map(|tag| match tag {
+            Tag::ExpectFail(tag) => Some(tag.clone()),
+            _ => None,
+        })
+    }
+
+    pub(crate) fn from_request_marks(
+        marks: &Bound<'_, PyAny>,
+        globals: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        let mut tags = Vec::new();
+        for marker in marks.try_iter()? {
+            let marker = marker?;
+            if let Ok(name) = marker.extract::<String>() {
+                if name == "skip" {
+                    tags.push(Tag::Skip(SkipTag::new(Vec::new(), None)));
+                } else {
+                    tags.push(Tag::Custom(CustomTag::new(name, Vec::new(), Vec::new())));
+                }
+            } else {
+                let mark = marker.getattr("mark").unwrap_or(marker);
+                if let Some(tag) = Tag::try_from_pytest_mark(&mark, globals)? {
+                    tags.push(tag);
+                }
+            }
+        }
+        Ok(Self {
+            inner: tags,
+            pytest_marks: Vec::new(),
+        })
+    }
+
     pub(crate) fn from_pytest_marks(
         py: Python<'_>,
         marks: &Py<PyAny>,
         globals: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<Self>> {
-        let mut tags = Vec::new();
-        if let Ok(marks_list) = marks.extract::<Vec<Bound<'_, PyAny>>>(py) {
-            for mark in marks_list {
-                if let Some(tag) = Tag::try_from_pytest_mark(&mark, globals)? {
-                    tags.push(tag);
-                }
+        let marks = marks
+            .extract::<Vec<Bound<'_, PyAny>>>(py)
+            .unwrap_or_else(|_| vec![marks.bind(py).clone()]);
+        let mut tags = Self::default();
+        for mark in marks {
+            if let Some(tag) = Tag::try_from_pytest_mark(&mark, globals)? {
+                tags.inner.push(tag);
             }
-        } else if let Some(tag) = Tag::try_from_pytest_mark(marks.bind(py), globals)? {
-            tags.push(tag);
+            tags.pytest_marks.push(Arc::new(mark.unbind()));
         }
-        Ok(Some(Self { inner: tags }))
+        Ok(Some(tags))
+    }
+
+    pub(crate) fn into_pytest_marks(self) -> Vec<Arc<Py<PyAny>>> {
+        self.pytest_marks
+    }
+
+    pub(crate) fn indirect_fixture_names(&self) -> impl Iterator<Item = &str> {
+        self.inner
+            .iter()
+            .filter_map(|tag| match tag {
+                Tag::Parametrize(tag) => Some(tag.indirect()),
+                _ => None,
+            })
+            .flatten()
+            .map(String::as_str)
     }
 
     pub(crate) fn from_karva_module_value(
@@ -654,7 +742,12 @@ impl Tags {
         self.inner
             .iter()
             .filter_map(|tag| match tag {
-                Tag::Parametrize(parametrize) => Some(parametrize.names()),
+                Tag::Parametrize(parametrize) => Some(
+                    parametrize
+                        .names()
+                        .iter()
+                        .filter(|name| !parametrize.indirect().contains(*name)),
+                ),
                 _ => None,
             })
             .flatten()

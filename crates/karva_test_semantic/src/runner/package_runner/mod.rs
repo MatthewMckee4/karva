@@ -5,26 +5,29 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use karva_coverage_runtime::CoverageSession;
-use karva_python_semantic::QualifiedTestName;
+use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName};
 use pyo3::prelude::*;
 
 use crate::diagnostic::invalid_parametrize_diagnostic;
 use crate::discovery::{DiscoveredModule, DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::FixtureScope;
 use crate::output_capture::{PythonStdinCapture, StdinCapture};
-use crate::runner::fixture_resolver::FixturePlanCompiler;
+use crate::runner::fixture_resolver::{FixturePlanCompiler, indirect_fixture_definition};
 use crate::runner::scoped_storage::ScopeKey;
 use crate::runner::test_iterator::{CompiledTestPlan, PendingTestPlan, TestVariantIterator};
-use crate::runner::{FinalizerCache, FixtureCache};
 use crate::unhandled_exceptions::UnhandledExceptionCapture;
 use crate::{Context, RunState};
+use fixture::FixtureRuntime;
 
 mod failure;
 mod fixture;
 mod outcome;
+mod request;
 mod variant;
 
+pub(super) use fixture::FixtureInstance;
 pub use fixture::{FixtureCallError, FixtureChainEntry};
+pub use request::FixtureRequestState;
 
 use failure::TestError;
 
@@ -88,10 +91,8 @@ pub struct PackageRunner<'context, 'settings> {
     context: &'context Context<'settings>,
     /// Result accumulator exclusively owned by this runner during execution.
     state: &'context mut RunState,
-    /// Fixture values retained until their declared scope completes.
-    fixture_cache: FixtureCache,
-    /// Fixture finalizers retained until their declared scope completes.
-    finalizer_cache: FinalizerCache,
+    /// Fixture values and finalizers retained until their declared scope completes.
+    fixtures: Rc<FixtureRuntime>,
     /// Active coverage session for this worker, when coverage is enabled.
     coverage: Option<&'context CoverageSession>,
     /// Worker-wide capture whose attempt attribution follows this runner.
@@ -103,6 +104,8 @@ pub struct PackageRunner<'context, 'settings> {
 
     /// Module whose scoped fixtures are currently being prepared or executed.
     active_module: Option<Utf8PathBuf>,
+    active_packages: Vec<Utf8PathBuf>,
+    indirect_fixtures: HashSet<QualifiedFunctionName>,
     /// Process stdin guard shared by all captured test attempts in this worker.
     stdin_capture: Option<StdinCapture>,
     /// Python stdin guard shared by all captured test attempts in this worker.
@@ -120,13 +123,14 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         Self {
             context,
             state,
-            fixture_cache: FixtureCache::default(),
-            finalizer_cache: FinalizerCache::default(),
+            fixtures: Rc::default(),
             coverage,
             exception_capture,
             failed_count: 0,
             reported_fixture_errors: HashSet::new(),
             active_module: None,
+            active_packages: Vec::new(),
+            indirect_fixtures: HashSet::new(),
             stdin_capture: None,
             python_stdin_capture: None,
         }
@@ -198,8 +202,14 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let mut child_parents = parents.to_vec();
         child_parents.push(package);
 
+        let indirect_fixtures = HashSet::new();
         for module in package.modules().values() {
-            let mut compiler = FixturePlanCompiler::new(&child_parents, module, package.path());
+            let mut compiler = FixturePlanCompiler::new(
+                &child_parents,
+                module,
+                package.path(),
+                &indirect_fixtures,
+            );
             for test in module.test_functions() {
                 let Some(statement) = test.function_statement() else {
                     continue;
@@ -234,18 +244,43 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         valid
     }
 
+    fn collect_indirect_fixtures(
+        package: &DiscoveredPackage,
+        parents: &[&DiscoveredPackage],
+        fixtures: &mut HashSet<QualifiedFunctionName>,
+    ) {
+        let mut chain = parents.to_vec();
+        chain.push(package);
+        for module in package.modules().values() {
+            let names = module
+                .test_functions()
+                .iter()
+                .flat_map(|test| test.tags.indirect_fixture_names());
+            fixtures.extend(
+                names
+                    .filter_map(|name| indirect_fixture_definition(&chain, module, name))
+                    .cloned(),
+            );
+        }
+        for package in package.packages().values() {
+            Self::collect_indirect_fixtures(package, &chain, fixtures);
+        }
+    }
+
     /// Compiles every test fixture graph before any fixture code executes.
     fn compile_test_plans(
         py: Python<'_>,
         package: &DiscoveredPackage,
         parents: &[&DiscoveredPackage],
         plans: &mut CompiledTestPlans,
+        indirect_fixtures: &HashSet<QualifiedFunctionName>,
     ) {
         let mut child_parents = parents.to_vec();
         child_parents.push(package);
 
         for module in package.modules().values() {
-            let mut compiler = FixturePlanCompiler::new(&child_parents, module, package.path());
+            let mut compiler =
+                FixturePlanCompiler::new(&child_parents, module, package.path(), indirect_fixtures);
             let mut module_plans = Vec::with_capacity(module.test_functions().len());
 
             for test in module.test_functions() {
@@ -255,7 +290,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
                 ));
             }
 
-            let fixture_plan = Rc::new(compiler.finish());
+            let fixture_plan = Rc::new(compiler.finish(py));
             for (name, plan) in module_plans {
                 plans.insert(
                     (module.path().clone(), name),
@@ -265,7 +300,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         }
 
         for child_package in package.packages().values() {
-            Self::compile_test_plans(py, child_package, &child_parents, plans);
+            Self::compile_test_plans(py, child_package, &child_parents, plans, indirect_fixtures);
         }
     }
 
@@ -276,7 +311,8 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         }
 
         let mut test_plans = HashMap::new();
-        Self::compile_test_plans(py, session, &[], &mut test_plans);
+        Self::collect_indirect_fixtures(session, &[], &mut self.indirect_fixtures);
+        Self::compile_test_plans(py, session, &[], &mut test_plans, &self.indirect_fixtures);
 
         if let Err(error) =
             self.run_auto_use_fixtures(py, &[], session, session.path(), FixtureScope::Session)
@@ -413,19 +449,29 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         let Some(iterator) = variant_iterators.get_mut(&key) else {
             return false;
         };
-        let variant = if let Some(index) = case_index {
-            iterator.next_case(index)
-        } else {
-            iterator.next()
-        };
+        if let Some(index) = case_index {
+            let mut passed = true;
+            let mut ran = false;
+            for index in iterator.case_range(index) {
+                let Some(variant) = iterator.next_case(index) else {
+                    break;
+                };
+                ran = true;
+                let variant_passed = self.execute_test_variant(py, variant);
+                self.record_outcome(variant_passed);
+                passed &= variant_passed;
+                if self.max_fail_reached() {
+                    break;
+                }
+            }
+            return ran && passed;
+        }
+        let variant = iterator.next();
         let Some(variant) = variant else {
             return false;
         };
         let mut passed = self.execute_test_variant(py, variant);
         self.record_outcome(passed);
-        if case_index.is_some() {
-            return passed;
-        }
 
         for variant in iterator {
             let variant_passed = self.execute_test_variant(py, variant);
@@ -505,6 +551,10 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
             let mut package_error = None;
             let mut package_chain = context.parents.clone();
             package_chain.push(context.package);
+            self.active_packages = package_chain
+                .iter()
+                .map(|package| package.path().to_path_buf())
+                .collect();
             for (index, package) in package_chain.iter().enumerate() {
                 if let Some(error) = failed_packages.get(package.path()) {
                     package_error = Some(error.clone());

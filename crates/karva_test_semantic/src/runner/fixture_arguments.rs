@@ -24,6 +24,16 @@ impl FixtureArguments {
         }
     }
 
+    pub(super) fn clone_ref(&self, py: Python<'_>) -> Self {
+        Self {
+            inner: self
+                .inner
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone_ref(py)))
+                .collect(),
+        }
+    }
+
     /// Inserts one named Python argument.
     pub fn insert(&mut self, name: String, value: Py<PyAny>) -> Option<Py<PyAny>> {
         self.inner.insert(name, value)

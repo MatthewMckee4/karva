@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use camino::{Utf8Path, Utf8PathBuf};
+use karva_diagnostic::Diagnostic;
 use karva_python_semantic::QualifiedFunctionName;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -8,6 +10,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{FixtureIdentity, FixtureScope};
+use crate::extensions::tags::parametrize::ParametrizationArgs;
 use crate::utils::run_coroutine;
 
 /// Stable index into one compiled [`FixturePlan`].
@@ -34,35 +37,101 @@ pub enum FixtureDependency {
     Parameter(Box<str>),
 }
 
+impl FixtureDependency {
+    pub(crate) fn fixture_id(&self) -> Option<FixtureId> {
+        match self {
+            Self::Fixture(id) => Some(*id),
+            Self::Parameter(_) => None,
+        }
+    }
+
+    pub(crate) fn scope(&self, plan: &FixturePlan) -> FixtureScope {
+        match self {
+            Self::Fixture(id) => plan.fixture(*id).scope(),
+            Self::Parameter(_) => FixtureScope::Function,
+        }
+    }
+}
+
 /// Arena containing every fixture definition needed by one resolution context.
-#[derive(Debug)]
 pub struct FixturePlan {
     fixtures: Vec<NormalizedFixture>,
+    dynamic: DynamicFixtures,
+    parametrized_dynamic: HashMap<QualifiedFunctionName, DynamicFixtures>,
 
     /// Cached once per graph so parametrized variants do not rescan fixtures.
     uses_benchmark: bool,
 }
 
+/// Dynamic fixture resolutions, including overrides of a fixture's own name.
+#[derive(Default)]
+pub struct DynamicFixtures {
+    pub(crate) roots: HashMap<String, DynamicFixture>,
+    pub(crate) overrides: HashMap<QualifiedFunctionName, DynamicFixture>,
+}
+
+/// The selected fixture definition is available even when its graph is invalid.
+pub struct DynamicFixture {
+    pub(crate) name: QualifiedFunctionName,
+    pub(crate) resolution: Result<FixtureId, Diagnostic>,
+}
+
 impl FixturePlan {
+    pub(crate) fn has_dynamic_parameters(&self, test: &QualifiedFunctionName) -> bool {
+        self.parametrized_dynamic.contains_key(test)
+    }
+
     /// Whether the selected fixture graph contains the built-in benchmark.
     pub(crate) fn uses_benchmark(&self) -> bool {
         self.uses_benchmark
     }
 
-    pub(crate) fn new(fixtures: Vec<NormalizedFixture>) -> Self {
-        let uses_benchmark = fixtures.iter().any(|fixture| {
+    pub(crate) fn new(
+        fixtures: Vec<NormalizedFixture>,
+        dynamic: DynamicFixtures,
+        parametrized_dynamic: HashMap<QualifiedFunctionName, DynamicFixtures>,
+        selected_len: usize,
+    ) -> Self {
+        let uses_benchmark = fixtures[..selected_len].iter().any(|fixture| {
             fixture.function_name() == "benchmark"
                 && fixture.name().module_path().module_name() == "karva._builtins"
         });
         Self {
             fixtures,
+            dynamic,
+            parametrized_dynamic,
             uses_benchmark,
+        }
+    }
+
+    pub(crate) fn dynamic_fixture(
+        &self,
+        test: &QualifiedFunctionName,
+        name: &str,
+        origin: Option<&FixtureIdentity>,
+    ) -> Option<&DynamicFixture> {
+        let dynamic = self.parametrized_dynamic.get(test).unwrap_or(&self.dynamic);
+        if let Some(origin) = origin.filter(|origin| origin.name().function_name() == name) {
+            dynamic.overrides.get(origin.name())
+        } else {
+            dynamic.roots.get(name)
         }
     }
 
     pub(crate) fn fixture(&self, id: FixtureId) -> &NormalizedFixture {
         &self.fixtures[id.0]
     }
+}
+
+/// Test context needed to initialize a fixture.
+#[derive(Debug)]
+pub enum FixtureContext {
+    /// Setup can run before a test invocation is selected.
+    Independent,
+    /// Setup needs the invocation for a parameter or a dependency's request.
+    Test,
+    /// The fixture itself accepts a request object.
+    Request,
 }
 
 /// A normalized fixture represents a concrete instance of a fixture ready for execution.
@@ -81,6 +150,12 @@ pub struct NormalizedFixture {
     /// Whether any dependency in this graph reads a value from a test case.
     pub(crate) uses_parameters: bool,
 
+    /// Invocation context needed for setup.
+    pub(crate) context: FixtureContext,
+
+    /// Cases supplied by the fixture decorator.
+    pub(crate) parameters: Option<Rc<[ParametrizationArgs]>>,
+
     /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
 
@@ -98,6 +173,14 @@ pub struct NormalizedFixture {
 }
 
 impl NormalizedFixture {
+    pub(crate) fn takes_request(&self) -> bool {
+        matches!(self.context, FixtureContext::Request)
+    }
+
+    pub(crate) fn needs_test_context(&self) -> bool {
+        !matches!(self.context, FixtureContext::Independent)
+    }
+
     /// Returns the fixture's unqualified function name.
     pub(crate) fn function_name(&self) -> &str {
         self.identity.name().function_name()

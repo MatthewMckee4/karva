@@ -329,6 +329,12 @@ pub(super) struct BuiltinFixture {
 
 const BUILTIN_FIXTURES: &[BuiltinFixture] = &[
     BuiltinFixture {
+        name: "request",
+        scope: FixtureScope::Function,
+        signature: "request() -> FixtureRequest",
+        docstring: "Provides fixture lookup, test context, and teardown callbacks.",
+    },
+    BuiltinFixture {
         name: "monkeypatch",
         scope: FixtureScope::Function,
         signature: "monkeypatch() -> Generator[MockEnv, None, None]",
@@ -1078,6 +1084,9 @@ fn resolve_reference(
     active: Option<&FixtureDefinition>,
     name: &str,
 ) -> FixtureResolution {
+    if name == "request" {
+        return FixtureResolution::Builtin;
+    }
     let mut skip_override = active.filter(|fixture| fixture.name == name);
     for provider in providers {
         if let Some(fixture) = skip_override {
@@ -1159,6 +1168,9 @@ fn scope_diagnostics(fixtures: &[&FixtureDefinition]) -> Vec<SourceDiagnostic> {
             continue;
         };
         for reference in &fixture.dependencies {
+            if reference.name == "request" {
+                continue;
+            }
             let dependency = match &reference.resolution {
                 FixtureResolution::Resolved(id) => by_id.get(id).and_then(|fixture| {
                     fixture

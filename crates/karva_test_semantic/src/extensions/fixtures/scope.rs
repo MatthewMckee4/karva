@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-/// Fixture lifetime, ordered from narrowest to broadest.
+/// A scope for a fixture.
 #[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum FixtureScope {
     /// Recreated for every test attempt.

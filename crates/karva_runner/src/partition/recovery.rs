@@ -38,6 +38,7 @@ pub struct CompletedTestIndex<'a> {
 
     /// Committed keys grouped by their schedulable function identity.
     by_function: HashMap<&'a str, CompletedFunctionResults<'a>>,
+    by_group: HashMap<(&'a str, usize), CompletedFunctionResults<'a>>,
 }
 
 /// Completed keys for one function without allocating for the common single result.
@@ -74,13 +75,24 @@ impl<'a> CompletedTestIndex<'a> {
     /// Builds linear-time membership for every failed assignment in a batch.
     pub fn new(exact: &'a HashSet<TestCacheKey>) -> Self {
         let mut by_function: HashMap<&str, CompletedFunctionResults<'_>> = HashMap::new();
+        let mut by_group = HashMap::<_, CompletedFunctionResults>::new();
         for cache_key in exact {
             by_function
                 .entry(cache_key.test_function_name())
                 .and_modify(|results| results.additional.push(cache_key))
                 .or_insert_with(|| CompletedFunctionResults::new(cache_key));
+            if let Some(group) = cache_key.fixture_case_group() {
+                by_group
+                    .entry((cache_key.test_function_name(), group))
+                    .and_modify(|results| results.additional.push(cache_key))
+                    .or_insert_with(|| CompletedFunctionResults::new(cache_key));
+            }
         }
-        Self { exact, by_function }
+        Self {
+            exact,
+            by_function,
+            by_group,
+        }
     }
 
     /// Whether this exact static selector or plain function has completed.
@@ -154,24 +166,31 @@ impl Partition {
             let cache_key = test.cache_key();
             let completed_function =
                 completed.function_results(test.identity.function_root.as_ref());
-            let contains_crashed_dynamic_case = crashed.is_some_and(|crashed| {
+            let expanded_results = match test.case_index {
+                Some(group) => completed
+                    .by_group
+                    .get(&(test.identity.function_root.as_ref(), group)),
+                None => completed_function,
+            };
+            let crashed_case = crashed.filter(|crashed| {
                 crashed.is_parameter_case()
-                    && test.case_index.is_none()
+                    && test
+                        .case_index
+                        .is_none_or(|group| Some(group) == crashed.fixture_case_group())
                     && test.identity.function_root.as_ref() == crashed.test_function_name()
             });
-            let contains_completed_dynamic_case = crashed.is_none()
-                && test.case_index.is_none()
-                && !completed.contains(&cache_key)
-                && completed_function.is_some();
-            // A function-level selector with case-level progress was expanded
-            // at runtime. Retry the active function, or every possibly active
-            // function after an unattributed crash, and skip handled cases.
-            if contains_crashed_dynamic_case || contains_completed_dynamic_case {
+            // A selector with case-level progress may expand again in a
+            // replacement worker. Replay the selector and skip handled cases.
+            if crashed_case.is_some()
+                || (!completed.contains(&cache_key)
+                    && expanded_results.is_some()
+                    && (crashed.is_none() || test.case_index.is_some()))
+            {
                 pending.tests.push(test.clone());
-                if let Some(completed_function) = completed_function {
-                    completed_function.append_to(&mut pending.resume_skip);
+                if let Some(results) = expanded_results {
+                    results.append_to(&mut pending.resume_skip);
                 }
-                if let Some(crashed) = crashed {
+                if let Some(crashed) = crashed_case {
                     pending.resume_skip.push(crashed.clone());
                 }
                 continue;
@@ -194,8 +213,14 @@ impl Partition {
         self.tests
             .iter()
             .map(|test| {
-                if test.case_index.is_some() {
-                    usize::from(completed.contains(&test.cache_key()))
+                if let Some(group) = test.case_index {
+                    completed
+                        .by_group
+                        .get(&(test.identity.function_root.as_ref(), group))
+                        .map_or_else(
+                            || usize::from(completed.contains(&test.cache_key())),
+                            CompletedFunctionResults::len,
+                        )
                 } else if counted_functions.insert(test.identity.function_root.as_ref()) {
                     completed
                         .function_results(test.identity.function_root.as_ref())

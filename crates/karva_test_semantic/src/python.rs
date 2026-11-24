@@ -13,6 +13,7 @@ use crate::extensions::functions::{
     SnapshotSettings, fail, param, skip,
 };
 use crate::extensions::tags::python::{PyTags, PyTestFunction, tags};
+use crate::runner::FixtureRequestState;
 
 /// Populates the native `karva` Python module with its functions, classes, and exceptions.
 pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -26,6 +27,7 @@ pub fn init_module(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(assert_cmd_snapshot, m)?)?;
     m.add_function(wrap_pyfunction!(snapshot_settings, m)?)?;
 
+    m.add_class::<FixtureRequestState>()?;
     m.add_class::<FixtureFunctionMarker>()?;
     m.add_class::<FixtureFunctionDefinition>()?;
     m.add_class::<PyTags>()?;

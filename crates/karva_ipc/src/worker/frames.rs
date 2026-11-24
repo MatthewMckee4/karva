@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 use karva_diagnostic::{TestCaseOutcome, TestCaseResult};
-use karva_python_semantic::{QualifiedFunctionName, QualifiedTestName, TestCacheKey};
+use karva_python_semantic::{
+    ParameterCase, QualifiedFunctionName, QualifiedTestName, TestCacheKey,
+};
 use serde::Serialize;
 
 /// Borrows one checkpoint identity without constructing its cache-key string.
@@ -14,7 +16,7 @@ pub(super) fn checkpoint(
     BorrowedCheckpointFrame::TestCheckpoint {
         parameters: test_name.parameters(),
         function_name: include_function.then(|| test_name.function_name()),
-        case_index: test_name.case_index(),
+        case_index: test_name.case(),
     }
 }
 
@@ -56,7 +58,7 @@ enum BorrowedCheckpointFrame<'a> {
 
         /// Stable parameter expansion index.
         #[serde(rename = "i", skip_serializing_if = "Option::is_none")]
-        case_index: Option<usize>,
+        case_index: Option<ParameterCase>,
     },
 }
 
@@ -126,7 +128,7 @@ mod tests {
         let owned = WireMessage::TestCheckpoint {
             parameters: test_name.parameters().map(str::to_owned),
             function_name: include_function.then(|| test_name.function_name().to_string()),
-            case_index: test_name.case_index(),
+            case_index: test_name.case(),
         };
 
         assert_eq!(

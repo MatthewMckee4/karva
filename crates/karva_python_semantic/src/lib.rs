@@ -8,7 +8,7 @@ mod name;
 
 pub use decorators::{DecoratorBindings, KnownBinding, is_fixture_function_with_bindings};
 pub use function_kind::FunctionKind;
-pub use name::{ModulePath, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
+pub use name::{ModulePath, ParameterCase, QualifiedFunctionName, QualifiedTestName, TestCacheKey};
 #[cfg(feature = "python-runtime")]
 use pyo3::types::PyAnyMethods;
 #[cfg(feature = "python-runtime")]

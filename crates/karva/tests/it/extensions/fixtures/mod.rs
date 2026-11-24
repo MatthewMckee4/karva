@@ -8,5 +8,6 @@ pub mod generators;
 pub mod invalid;
 pub mod more_builtins;
 pub mod pytest_monkeypatch;
+pub mod request;
 pub mod retries;
 pub mod scopes;
