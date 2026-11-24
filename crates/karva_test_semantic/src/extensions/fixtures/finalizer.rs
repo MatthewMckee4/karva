@@ -63,7 +63,7 @@ impl Finalizer {
             };
             invalid_fixture_finalizer_diagnostic(
                 py,
-                self.definition.source_file().clone(),
+                self.definition.source_file(),
                 self.definition.statement(),
                 &reason,
                 error,

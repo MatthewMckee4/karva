@@ -759,7 +759,7 @@ const MAX_DEPTH: usize = 8;
 const MAX_NODES: usize = MAX_ITEMS * MAX_ITEMS;
 
 /// Render bounded built-in values without invoking user representation hooks.
-pub(crate) fn safe_repr(value: &Bound<'_, PyAny>) -> String {
+pub fn safe_repr(value: &Bound<'_, PyAny>) -> String {
     safe_repr_inner(value, 0, &mut MAX_NODES.clone())
 }
 
@@ -1391,7 +1391,7 @@ fn focused_diff_inner(
 }
 
 /// Locate a difference in safely comparable built-in values, skipping opaque values.
-pub(crate) fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
+pub fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
     focused_diff_inner(left, right, "", 0, &mut MAX_NODES.clone()).unwrap_or_default()
 }
 

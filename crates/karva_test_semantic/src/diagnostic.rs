@@ -530,7 +530,7 @@ pub fn invalid_fixture_diagnostic(
 /// Preserves teardown groups before formatting ordinary Python failures as text.
 pub fn invalid_fixture_finalizer_diagnostic(
     py: Python<'_>,
-    source_file: SourceFile,
+    source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
     reason: &str,
     error: Option<&PyErr>,
@@ -549,7 +549,7 @@ pub fn invalid_fixture_finalizer_diagnostic(
             let mock_failure = mocks::assertion_failure(py, error);
             if let Some(failure) = &mock_failure
                 && let Some(Traceback { frames }) =
-                    Traceback::from_error_with_source(py, error, &source_file)
+                    Traceback::from_error_with_source(py, error, source_file)
                 && let Some(frame) = frames.iter().rev().nth(failure.hidden_frames)
                 && let Some(source) = &frame.source
             {
