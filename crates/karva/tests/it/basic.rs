@@ -2470,6 +2470,9 @@ def test_2(): pass
     [DATETIME] DEBUG Trying to parse `benchmark` as a fixture
     [DATETIME] DEBUG Trying to parse `monkeypatch` as a fixture
     [DATETIME] DEBUG Trying to parse `mocker` as a fixture
+    [DATETIME] DEBUG Trying to parse `module_mocker` as a fixture
+    [DATETIME] DEBUG Trying to parse `package_mocker` as a fixture
+    [DATETIME] DEBUG Trying to parse `session_mocker` as a fixture
     [DATETIME] DEBUG Trying to parse `capsys` as a fixture
     [DATETIME] DEBUG Trying to parse `capfd` as a fixture
     [DATETIME] DEBUG Trying to parse `capsysbinary` as a fixture
@@ -2596,6 +2599,9 @@ def test_1(): pass
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `benchmark` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `monkeypatch` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `mocker` as a fixture
+    1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `module_mocker` as a fixture
+    1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `package_mocker` as a fixture
+    1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `session_mocker` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `capsys` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `capfd` as a fixture
     1   [TIME] DEBUG karva_test_semantic::extensions::fixtures Trying to parse `capsysbinary` as a fixture
