@@ -1199,10 +1199,22 @@ def named_value():
 from shared import fixture_value, named_value as renamed
 
 same_fixture = renamed
+probes = []
+
+class Helper:
+    def __call__(self):
+        pass
+
+    def __getattr__(self, name):
+        probes.append(name)
+        raise AttributeError(name)
+
+helper = Helper()
 
 def test_direct(fixture_value, explicit):
     assert fixture_value == 42
     assert explicit == 7
+    assert probes == []
 "
             .to_string(),
         ),

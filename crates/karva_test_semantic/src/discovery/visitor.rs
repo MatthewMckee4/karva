@@ -7,7 +7,7 @@ use fs_err as fs;
 use karva_collector::{CollectedDoctest, DoctestTarget};
 use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
+use pyo3::types::{PyDict, PyFunction, PyModule};
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, PythonVersion, Stmt, StmtFunctionDef};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
@@ -380,14 +380,34 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             return;
         };
 
-        // Inspecting a fixture can execute Python, including scope callbacks.
-        let bindings: Vec<_> = py_module.dict().iter().collect();
+        let scan_all_callables = is_conftest || self.context.settings().test().try_import_fixtures;
+        let pytest_fixture_type = if scan_all_callables {
+            None
+        } else {
+            loaded_pytest_fixture_type(self.py)
+        };
+
+        // Snapshot candidates before inspecting markers or evaluating fixture scopes.
+        let bindings: Vec<_> = py_module
+            .dict()
+            .iter()
+            .filter(|(_, value)| {
+                if scan_all_callables {
+                    value.is_callable()
+                } else {
+                    value.is_exact_instance_of::<FixtureFunctionDefinition>()
+                        || value.is_exact_instance_of::<PyFunction>()
+                        || pytest_fixture_type
+                            .as_ref()
+                            .is_some_and(|fixture_type| value.is_exact_instance(fixture_type))
+                }
+            })
+            .collect();
         for (name_obj, value) in bindings {
             let Ok(name) = name_obj.extract::<String>() else {
                 continue;
             };
-            if value.is_callable()
-                && is_fixture_value(&value)
+            if is_fixture_value(&value)
                 && let Some(fixture) = self.resolve_extra_fixture(&name, &value, is_conftest)
             {
                 self.module.add_fixture(fixture);
@@ -707,6 +727,23 @@ fn function_first_line(function: &Bound<'_, PyAny>) -> Option<usize> {
         .and_then(|code| code.getattr("co_firstlineno"))
         .and_then(|line| line.extract())
         .ok()
+}
+
+/// Recent pytest versions wrap fixtures in a dedicated class. Earlier versions use functions.
+fn loaded_pytest_fixture_type(py: Python<'_>) -> Option<Bound<'_, PyAny>> {
+    let modules = py
+        .import("sys")
+        .ok()?
+        .getattr("modules")
+        .ok()?
+        .cast_into::<PyDict>()
+        .ok()?;
+    let module = modules
+        .get_item("_pytest.fixtures")
+        .ok()??
+        .cast_into::<PyModule>()
+        .ok()?;
+    module.dict().get_item("FixtureFunctionDefinition").ok()?
 }
 
 /// Returns `true` if `value` is a fixture — either a pytest-decorated function
