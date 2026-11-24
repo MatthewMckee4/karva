@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.0.1-alpha.14
+
+Karva now requires Python 3.11 or newer. This release adds a `benchmark` fixture,
+Python warning summaries and filters, and coverage for Python child processes.
+Zed can now download and run the Karva language server automatically.
+
+### Bug Fixes
+
+- Discover fixtures imported or rebound in test modules ([#1679](https://github.com/MatthewMckee4/karva/pull/1679))
+- Preserve cases from runtime parametrize decorators ([#1670](https://github.com/MatthewMckee4/karva/pull/1670))
+- Allow monkeypatching captured stdin methods ([#1662](https://github.com/MatthewMckee4/karva/pull/1662))
+- Avoid undo entries for rejected monkeypatch assignments ([#1660](https://github.com/MatthewMckee4/karva/pull/1660))
+- Skip excluded tests before reporting fixture resolution errors ([#1661](https://github.com/MatthewMckee4/karva/pull/1661))
+- Prevent command snapshots from deadlocking on stdin ([#1605](https://github.com/MatthewMckee4/karva/pull/1605))
+- Escape snapshot names consistently across platforms ([#1606](https://github.com/MatthewMckee4/karva/pull/1606))
+- Validate raises exception classes before entering the body ([#1602](https://github.com/MatthewMckee4/karva/pull/1602))
+- Preserve unmatched warnings when warns bodies raise ([#1600](https://github.com/MatthewMckee4/karva/pull/1600))
+- Report unhandled thread and unraisable exceptions ([#1582](https://github.com/MatthewMckee4/karva/pull/1582))
+- Expand coverage integration tests and fix coverage gaps ([#1585](https://github.com/MatthewMckee4/karva/pull/1585))
+- Correct decorated exits and loop else branch coverage ([#1580](https://github.com/MatthewMckee4/karva/pull/1580))
+- Preserve traceback frames for quoted filenames ([#1576](https://github.com/MatthewMckee4/karva/pull/1576))
+
+### Configuration
+
+- Honor pytest's `filterwarnings` project setting ([#1622](https://github.com/MatthewMckee4/karva/pull/1622))
+
+### Coverage
+
+- Collect native coverage from Python child processes ([#1624](https://github.com/MatthewMckee4/karva/pull/1624))
+
+### Diagnostics
+
+- Explain pytest-generated assertion message incompatibility ([#1626](https://github.com/MatthewMckee4/karva/pull/1626))
+- Render nested exception group failures ([#1625](https://github.com/MatthewMckee4/karva/pull/1625))
+- Capture and enforce Python warnings ([#1583](https://github.com/MatthewMckee4/karva/pull/1583))
+
+### Editor Support
+
+- Install and start the Karva language server automatically in Zed ([#1639](https://github.com/MatthewMckee4/karva/pull/1639))
+- Bound language-server scheduling and reserve measured stacks ([#1635](https://github.com/MatthewMckee4/karva/pull/1635))
+- Resolve nested fixture overrides in editor navigation and hover ([#1601](https://github.com/MatthewMckee4/karva/pull/1601))
+
+### Fixtures
+
+- Propagate parametrized values through fixture dependencies ([#1681](https://github.com/MatthewMckee4/karva/pull/1681))
+- Set up autouse fixtures before same-scope requests ([#1680](https://github.com/MatthewMckee4/karva/pull/1680))
+- Measure code with the `benchmark` fixture and report the results ([#1628](https://github.com/MatthewMckee4/karva/pull/1628))
+
+### Performance
+
+- Balance tests across workers when only some tests have prior timings ([#1684](https://github.com/MatthewMckee4/karva/pull/1684))
+- Preserve scheduling durations across focused test runs ([#1611](https://github.com/MatthewMckee4/karva/pull/1611))
+- Run shorter cached failures first ([#1610](https://github.com/MatthewMckee4/karva/pull/1610))
+- Reuse interned names in Python output capture ([#1596](https://github.com/MatthewMckee4/karva/pull/1596))
+- Enable ThinLTO for release builds ([#1597](https://github.com/MatthewMckee4/karva/pull/1597))
+- Borrow variant parameters during fixture preparation ([#1595](https://github.com/MatthewMckee4/karva/pull/1595))
+- Reduce warning setup and test transport overhead ([#1594](https://github.com/MatthewMckee4/karva/pull/1594))
+- Reduce per-test warning-capture overhead ([#1591](https://github.com/MatthewMckee4/karva/pull/1591))
+- Reuse source snapshots within each traceback ([#1581](https://github.com/MatthewMckee4/karva/pull/1581))
+
+### Python Support
+
+- Require Python 3.11 or newer ([#1609](https://github.com/MatthewMckee4/karva/pull/1609))
+
+### Security
+
+- Update dependencies and tooling to address security advisories ([#1617](https://github.com/MatthewMckee4/karva/pull/1617))
+
+### Test Running
+
+- Support `fileno()` on captured `sys.stdout` and `sys.stderr` ([#1676](https://github.com/MatthewMckee4/karva/pull/1676))
+
+### Contributors
+
+- [@MatthewMckee4](https://github.com/MatthewMckee4)
+
 ## 0.0.1-alpha.13
 
 Karva now supports Python 3.15 ([#1572](https://github.com/MatthewMckee4/karva/pull/1572)).
