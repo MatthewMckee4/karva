@@ -24,6 +24,16 @@ impl FixtureId {
     }
 }
 
+/// Source of a required keyword argument to a fixture.
+#[derive(Debug)]
+pub enum FixtureDependency {
+    /// A fixture to initialize and cache at its declared scope.
+    Fixture(FixtureId),
+
+    /// A direct parameter supplied by the current case.
+    Parameter(Box<str>),
+}
+
 /// Arena containing every fixture definition needed by one resolution context.
 #[derive(Debug)]
 pub struct FixturePlan {
@@ -66,7 +76,10 @@ pub struct NormalizedFixture {
     pub(crate) identity: FixtureIdentity,
 
     /// Resolved fixture dependencies this fixture requires.
-    pub(crate) dependencies: Vec<FixtureId>,
+    pub(crate) dependencies: Vec<FixtureDependency>,
+
+    /// Whether any dependency in this graph reads a value from a test case.
+    pub(crate) uses_parameters: bool,
 
     /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
@@ -108,7 +121,7 @@ impl NormalizedFixture {
     }
 
     /// Returns the fixture dependencies.
-    pub(crate) fn dependencies(&self) -> &[FixtureId] {
+    pub(crate) fn dependencies(&self) -> &[FixtureDependency] {
         &self.dependencies
     }
 

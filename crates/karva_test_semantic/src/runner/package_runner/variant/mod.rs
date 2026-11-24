@@ -213,14 +213,23 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         });
         let setup_start = Instant::now();
         let fixtures = if benchmark_setup.as_ref().is_none_or(Result::is_ok) {
-            self.package_runner.prepare_test_fixtures(
+            let mut fixtures = self.package_runner.prepare_test_fixtures(
                 self.py,
                 &self.input.fixtures.plan,
                 &self.input.fixtures.dependencies,
                 &self.input.fixtures.use_dependencies,
                 &self.input.fixtures.auto_use,
                 &self.input.params,
-            )
+            );
+            let parameters = self.input.test.parameters();
+            for (name, value) in &self.input.params {
+                if parameters.is_none_or(|parameters| parameters.index(name).is_some()) {
+                    fixtures
+                        .function_arguments
+                        .insert(name.clone(), value.clone_ref(self.py));
+                }
+            }
+            fixtures
         } else {
             super::fixture::PreparedFixtures {
                 function_arguments: crate::runner::FixtureArguments::default(),

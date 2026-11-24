@@ -813,7 +813,7 @@ impl ParametrizeTag {
 
     pub(super) fn validate<'a>(
         &'a self,
-        function_parameter_names: &HashSet<&str>,
+        mut accepts_name: impl FnMut(&str) -> bool,
         seen_names: &mut HashSet<&'a str>,
     ) -> Result<(), InvalidParametrizeError> {
         for name in &self.names {
@@ -849,7 +849,7 @@ impl ParametrizeTag {
         }
 
         for name in &self.names {
-            if !function_parameter_names.contains(name.as_str()) {
+            if !accepts_name(name) {
                 return Err(InvalidParametrizeError::UnknownName { name: name.clone() });
             }
         }

@@ -130,19 +130,18 @@ impl PendingTestPlan {
         test: &DiscoveredTestFunction,
         compiler: &mut FixturePlanCompiler<'_>,
     ) -> Self {
-        let tags = CompiledTags::new(&test.tags);
-        let parametrize_param_names = tags.parameter_names();
+        let mut tags = CompiledTags::new(&test.tags);
+        let parameter_names = tags.take_parameter_names();
 
-        let fixtures = (|| {
+        let fixtures = compiler.with_parameters(parameter_names, |compiler| {
             let auto_use = compiler.get_normalized_auto_use_fixtures(
                 py,
                 crate::extensions::fixtures::FixtureScope::Function,
             )?;
-            let dependencies =
-                compiler.resolve_test_fixtures(py, test, &parametrize_param_names)?;
-            let use_dependencies = compiler.resolve_use_fixtures(py, tags.required_fixtures())?;
+            let dependencies = compiler.resolve_test_fixtures(py, test)?;
+            let use_dependencies = compiler.resolve_root_fixtures(py, tags.required_fixtures())?;
             Ok((dependencies, use_dependencies, auto_use))
-        })();
+        });
         let (fixture_dependencies, use_fixture_dependencies, auto_use_fixtures, fixture_error) =
             match fixtures {
                 Ok((dependencies, use_dependencies, auto_use)) => {
