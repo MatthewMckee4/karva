@@ -32,6 +32,7 @@ __version__ = "0.0.1-alpha.13"
 
 if TYPE_CHECKING:
     from karva._benchmark import Benchmark
+    from karva._fixtures.mocker import MockerFixture
 
 
 def __getattr__(name: str) -> object:
@@ -39,12 +40,16 @@ def __getattr__(name: str) -> object:
         benchmark = import_module("karva._benchmark").Benchmark
         globals()[name] = benchmark
         return benchmark
+    if name == "MockerFixture":
+        mocker_fixture = import_module("karva._fixtures.mocker").MockerFixture
+        globals()[name] = mocker_fixture
+        return mocker_fixture
     raise AttributeError(f"module 'karva' has no attribute {name!r}")
 
 
 def __dir__() -> list[str]:
     """Include lazy exports without importing their implementation."""
-    return sorted({*globals(), "Benchmark"})
+    return sorted({*globals(), "Benchmark", "MockerFixture"})
 
 
 __all__: list[str] = [
@@ -53,6 +58,7 @@ __all__: list[str] = [
     "ExceptionInfo",
     "FailError",
     "MockEnv",
+    "MockerFixture",
     "RaisesContext",
     "SkipError",
     "SnapshotMismatchError",
