@@ -41,14 +41,14 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     test_finalizers,
                 },
             setup_duration,
-            mut output_capture,
+            output_capture,
             warning_capture,
             benchmark_setup,
         } = prepared;
         let shared_output =
             if !settings.execution.is_async && settings.execution.timeout_seconds.is_some() {
                 output_capture
-                    .as_mut()
+                    .as_ref()
                     .and_then(|capture| match capture.watchdog_output(self.py) {
                         Ok(output) => Some(output),
                         Err(error) => {

@@ -694,6 +694,104 @@ fn test_failed_output_is_captured() {
 }
 
 #[test]
+fn test_captured_output_exposes_file_descriptors() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import faulthandler
+import os
+import subprocess
+import sys
+
+import karva
+
+def write_output():
+    print("before stdout")
+    print("before stderr", file=sys.stderr)
+    faulthandler.dump_traceback_later(30)
+    faulthandler.cancel_dump_traceback_later()
+    os.write(sys.stdout.fileno(), b"descriptor stdout\n")
+    with subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys; sys.stdin.buffer.read(); sys.stderr.buffer.write(b'child stderr\\n')"],
+        stdin=subprocess.PIPE,
+        stderr=sys.stderr,
+    ) as child:
+        # A snapshot taken while the child owns the descriptor must leave its offset alone.
+        writer = sys.stderr.buffer
+        seek = writer.seek
+
+        def write_at_rewound_offset(*args):
+            position = seek(*args)
+            child.communicate()
+            return position
+
+        writer.seek = write_at_rewound_offset
+        try:
+            assert sys.stderr.getvalue() == "before stderr\n"
+        finally:
+            writer.seek = seek
+        child.communicate()
+        assert child.returncode == 0
+    print("after stdout")
+    print("after stderr", file=sys.stderr)
+
+@karva.tags.timeout(60)
+def test_timed():
+    sys.stdout.write("éx")
+    sys.stdout.seek(1)
+    sys.stdout.write("y")
+    assert sys.stdout.getvalue() == "éy"
+    sys.stdout.seek(0)
+    sys.stdout.truncate()
+    write_output()
+
+def test_failure():
+    write_output()
+    assert False
+        "#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+            PASS [TIME] test::test_timed
+            FAIL [TIME] test::test_failure
+
+    failures:
+
+    test::test_failure:
+
+    error[test-failure]: Test `test_failure` failed
+      --> test.py:50:5
+       |
+    50 | def test_failure():
+       |     ^^^^^^^^^^^^
+    info: Test failed here
+      --> test.py:52:5
+       |
+    52 |     assert False
+       |     ^^^^^^^^^^^^
+
+    captured stdout:
+    before stdout
+    descriptor stdout
+    after stdout
+    captured stderr:
+    before stderr
+    child stderr
+    after stderr
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 failed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_multiple_fixtures_not_found() {
     let context = TestContext::with_file(
         "test_multiple_fixtures_not_found.py",
