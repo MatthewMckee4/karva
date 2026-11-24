@@ -83,6 +83,42 @@ fn literal_parametrize_cases_split_across_workers() {
 }
 
 #[test]
+fn pytest_marks_do_not_prevent_literal_cases_from_splitting() {
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import pytest
+
+        @pytest.mark.parametrize('value', [1, 2, 3, 4])
+        @pytest.mark.skipif(False, reason='example')
+        @pytest.mark.dev_server
+        def test_value(value): pass
+    "});
+
+    let partitions = partition_collected_tests(
+        &package,
+        2,
+        &HashMap::new(),
+        &HashSet::new(),
+        LastFailedSelection::All,
+        FailurePriority::Normal,
+        None,
+        TestOrdering::Stable,
+    );
+
+    let mut selectors: Vec<_> = partitions.iter().flat_map(Partition::test_paths).collect();
+    selectors.sort();
+    assert!(partitions.iter().all(|partition| !partition.is_empty()));
+    assert_eq!(
+        selectors,
+        [
+            format!("{test_path}::test_value[0]"),
+            format!("{test_path}::test_value[1]"),
+            format!("{test_path}::test_value[2]"),
+            format!("{test_path}::test_value[3]"),
+        ]
+    );
+}
+
+#[test]
 fn failed_first_places_cached_parametrize_case_first() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
         import karva

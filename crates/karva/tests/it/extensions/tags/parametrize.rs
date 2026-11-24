@@ -56,6 +56,47 @@ def test_combined(mode, y):
     }
 }
 
+#[rstest]
+fn runtime_decorator_can_come_from_a_pytest_mark(
+    #[values("pytest.mark.custom(add_cases)", "pytest.mark.custom")] decorator: &str,
+) {
+    let replacement = if decorator == "pytest.mark.custom" {
+        "pytest.mark.custom = add_cases"
+    } else {
+        ""
+    };
+    let context = TestContext::with_file(
+        "test.py",
+        format!(
+            r#"
+import pytest
+
+def add_cases(function):
+    return pytest.mark.parametrize("mode", ["a", "b"])(function)
+
+{replacement}
+
+@{decorator}
+@pytest.mark.parametrize("y", [1, 2, 3])
+def test_combined(mode, y):
+    assert mode in ["a", "b"]
+    assert y in [1, 2, 3]
+"#
+        ),
+    );
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+        ────────────
+             Summary [TIME] 6 tests run: 6 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
 #[test]
 fn reassigned_parametrize_attribute_does_not_limit_runtime_cases() {
     let context = TestContext::with_file(

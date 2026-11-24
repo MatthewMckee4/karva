@@ -4,8 +4,9 @@ use ruff_python_ast::{Alias, Expr, Stmt, StmtFunctionDef};
 
 /// Statically counts test cases using the bindings visible at the definition.
 ///
-/// Returns `Some(n)` when every decorator is a recognized parametrize call and
-/// every `argvalues` expression is a literal list or tuple without unpacking.
+/// Returns `Some(n)` when there is at least one recognized parametrize call,
+/// all other decorators are known marks, and every `argvalues` expression is
+/// a literal list or tuple without unpacking.
 /// Unknown decorators may add runtime parameter dimensions, so they return
 /// `None`, as do missing decorators or dynamic values. Callers should treat
 /// the function as one opaque scheduling unit in these cases.
@@ -13,12 +14,13 @@ pub fn count_parametrize_cases_with_bindings(
     stmt: &StmtFunctionDef,
     bindings: &DecoratorBindings,
 ) -> Option<usize> {
-    if stmt.decorator_list.is_empty() {
-        return None;
-    }
     let mut total: usize = 1;
+    let mut found = false;
 
     for decorator in &stmt.decorator_list {
+        if bindings.is_non_parametrize_pytest_mark(&decorator.expression) {
+            continue;
+        }
         let Expr::Call(call) = &decorator.expression else {
             return None;
         };
@@ -31,9 +33,10 @@ pub fn count_parametrize_cases_with_bindings(
         let count = literal_sequence_len(argvalues)?;
 
         total = total.checked_mul(count)?;
+        found = true;
     }
 
-    Some(total)
+    found.then_some(total)
 }
 
 /// Extract `argvalues` when positional unpacking cannot shift its position.

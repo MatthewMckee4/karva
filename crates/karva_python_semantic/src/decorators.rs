@@ -60,7 +60,7 @@ pub struct DecoratorBindings {
     names: HashMap<String, KnownBinding>,
     // Namespace aliases share attribute writes.
     karva_parametrize_rebound: bool,
-    pytest_parametrize_rebound: bool,
+    pytest_mark_rebound: bool,
 }
 
 impl Default for DecoratorBindings {
@@ -73,7 +73,7 @@ impl Default for DecoratorBindings {
         Self {
             names,
             karva_parametrize_rebound: false,
-            pytest_parametrize_rebound: false,
+            pytest_mark_rebound: false,
         }
     }
 }
@@ -157,9 +157,7 @@ impl DecoratorBindings {
                         .flatten()
                         .and_then(|module| match (module, alias.name.as_str()) {
                             ("karva.tags", "parametrize") if self.karva_parametrize_rebound => None,
-                            ("pytest.mark", "parametrize") if self.pytest_parametrize_rebound => {
-                                None
-                            }
+                            ("pytest.mark", "parametrize") if self.pytest_mark_rebound => None,
                             _ => known_from_import(module, alias.name.as_str()),
                         })
                         .unwrap_or(KnownBinding::Unknown);
@@ -233,6 +231,30 @@ impl DecoratorBindings {
         self.is_decorator(expression, KnownBinding::Parametrize)
     }
 
+    /// Recognizes direct pytest marks that cannot add parameter cases.
+    pub fn is_non_parametrize_pytest_mark(&self, expression: &Expr) -> bool {
+        if self.pytest_mark_rebound {
+            return false;
+        }
+        let mark = if let Expr::Call(call) = expression {
+            // A mark called with one callable and no keywords returns that callable.
+            let args = &call.arguments.args;
+            let explicit_keyword = call.arguments.keywords.iter().any(|kw| kw.arg.is_some());
+            if !explicit_keyword
+                && (args.len() == 1 || args.iter().any(|arg| matches!(arg, Expr::Starred(_))))
+            {
+                return false;
+            }
+            call.func.as_ref()
+        } else {
+            expression
+        };
+        matches!(mark, Expr::Attribute(attribute)
+            if self.namespace_binding(&attribute.value) == Some(KnownBinding::PytestMark)
+                && attribute.attr.as_str() != "parametrize"
+                && !attribute.attr.as_str().starts_with('_'))
+    }
+
     /// Returns whether an expression is a known `usefixtures` decorator.
     pub fn is_use_fixtures(&self, expression: &Expr) -> bool {
         self.is_decorator(expression, KnownBinding::UseFixtures)
@@ -256,7 +278,7 @@ impl DecoratorBindings {
             return expected == KnownBinding::Parametrize
                 && match binding {
                     KnownBinding::KarvaTags => !self.karva_parametrize_rebound,
-                    KnownBinding::PytestMark => !self.pytest_parametrize_rebound,
+                    KnownBinding::PytestMark => !self.pytest_mark_rebound,
                     _ => false,
                 };
         }
@@ -313,13 +335,13 @@ impl DecoratorBindings {
     fn bind_target(&mut self, target: &Expr) {
         match target {
             Expr::Name(name) => self.set(&name.id, KnownBinding::Unknown),
-            Expr::Attribute(attribute) if attribute.attr.as_str() == "parametrize" => {
-                match self.namespace_binding(&attribute.value) {
-                    Some(KnownBinding::KarvaTags) => self.karva_parametrize_rebound = true,
-                    Some(KnownBinding::PytestMark) => self.pytest_parametrize_rebound = true,
-                    _ => {}
+            Expr::Attribute(attribute) => match self.namespace_binding(&attribute.value) {
+                Some(KnownBinding::KarvaTags) if attribute.attr.as_str() == "parametrize" => {
+                    self.karva_parametrize_rebound = true;
                 }
-            }
+                Some(KnownBinding::PytestMark) => self.pytest_mark_rebound = true,
+                _ => {}
+            },
             Expr::List(list) => {
                 for element in &list.elts {
                     self.bind_target(element);
