@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
 use ruff_python_ast::{Stmt, StmtFunctionDef};
-use ruff_text_size::TextRange;
+use ruff_text_size::{TextRange, TextSize};
 
 use crate::parametrize::has_module_tags;
 
@@ -55,8 +55,8 @@ pub struct CollectedModule {
     /// Test definitions; scheduling-only collection discards their bodies.
     pub test_function_defs: Vec<StmtFunctionDef>,
 
-    /// Statically known case counts keyed by each definition's source range.
-    parametrize_case_counts: HashMap<TextRange, usize>,
+    /// Statically known case counts keyed by each definition's start offset.
+    parametrize_case_counts: BTreeMap<TextSize, usize>,
 
     /// Docstrings containing doctest examples.
     pub doctests: Vec<CollectedDoctest>,
@@ -85,7 +85,7 @@ impl CollectedModule {
             uses_benchmark: crate::uses_benchmark(module_body),
             module_body: Box::default(),
             test_function_defs: Vec::new(),
-            parametrize_case_counts: HashMap::new(),
+            parametrize_case_counts: BTreeMap::new(),
             doctests: Vec::new(),
             fixture_function_defs: Vec::new(),
         }
@@ -98,7 +98,9 @@ impl CollectedModule {
         if self.has_module_tags {
             None
         } else {
-            self.parametrize_case_counts.get(&function.range).copied()
+            self.parametrize_case_counts
+                .get(&function.range.start())
+                .copied()
         }
     }
 
@@ -111,7 +113,7 @@ impl CollectedModule {
             && let Some(case_count) = case_count
         {
             self.parametrize_case_counts
-                .insert(function_def.range, case_count);
+                .insert(function_def.range.start(), case_count);
         }
         self.test_function_defs.push(function_def);
     }
@@ -323,7 +325,10 @@ impl CollectedModule {
                     .iter()
                     .any(|existing| existing.range == function.range)
                 {
-                    let count = module.parametrize_case_counts.get(&function.range).copied();
+                    let count = module
+                        .parametrize_case_counts
+                        .get(&function.range.start())
+                        .copied();
                     self.add_test_function_def(function, count);
                 }
             }
