@@ -53,6 +53,7 @@ impl FixtureFunctionMarker {
         let fixture_def = FixtureFunctionDefinition {
             function,
             name: func_name,
+            has_explicit_name: self.name.is_some(),
             scope: self.scope.clone_ref(py),
             auto_use: self.auto_use,
         };
@@ -71,6 +72,9 @@ pub struct FixtureFunctionDefinition {
     /// The fixture's name (either custom or derived from function name).
     #[pyo3(get)]
     pub name: String,
+
+    /// Whether the decorator supplied a name that takes precedence over a module binding.
+    pub(super) has_explicit_name: bool,
 
     /// The scope at which the fixture value should be cached.
     #[pyo3(get)]

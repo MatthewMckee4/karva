@@ -217,19 +217,27 @@ impl DiscoveredFixture {
             return fallback.to_string();
         };
 
-        if let Ok(marker) = get_fixture_function_marker(&function)
-            && let Ok(name) = pytest_fixture_name(&marker, fallback)
-        {
-            return name;
+        Self::exposure_name_from_value(&function, fallback, None)
+            .unwrap_or_else(|_| fallback.to_string())
+    }
+
+    /// An explicit decorator name takes precedence over the provider's Python binding.
+    pub(crate) fn exposure_name_from_value(
+        value: &Bound<'_, PyAny>,
+        definition_name: &str,
+        binding: Option<&str>,
+    ) -> PyResult<String> {
+        if let Ok(marker) = get_fixture_function_marker(value) {
+            return pytest_fixture_name(&marker, binding.unwrap_or(definition_name));
         }
 
-        if let Ok(function) = function.cast::<python::FixtureFunctionDefinition>()
-            && let Ok(function) = function.try_borrow()
-        {
-            return function.name.clone();
-        }
-
-        fallback.to_string()
+        let fixture = value
+            .cast::<python::FixtureFunctionDefinition>()?
+            .try_borrow()?;
+        Ok(match binding {
+            Some(name) if !fixture.has_explicit_name => name.to_owned(),
+            _ => fixture.name.clone(),
+        })
     }
 
     pub(crate) fn try_from_function(
@@ -242,89 +250,65 @@ impl DiscoveredFixture {
     ) -> PyResult<Self> {
         tracing::debug!("Trying to parse `{}` as a fixture", stmt_function_def.name);
 
-        let function = py_module.getattr(stmt_function_def.name.to_string())?;
+        let function = py_module.getattr(stmt_function_def.name.as_str())?;
+        let name =
+            Self::exposure_name_from_value(&function, stmt_function_def.name.as_str(), None)?;
 
-        if get_fixture_function_marker(&function).is_ok() {
-            return Self::try_from_pytest_function(
-                py,
-                stmt_function_def,
-                &function,
-                module_path.clone(),
-                source_file,
-                is_generator_function,
-            );
-        }
-
-        Self::try_from_karva_function(
+        Self::try_from_value(
             py,
             stmt_function_def,
             &function,
-            module_path.clone(),
+            module_path,
             source_file,
             is_generator_function,
+            name,
         )
     }
 
-    fn try_from_pytest_function(
-        py: Python<'_>,
-        stmt_function_def: Rc<StmtFunctionDef>,
-        function: &Bound<'_, PyAny>,
-        module_name: ModulePath,
-        source_file: SourceFile,
-        is_generator_function: bool,
-    ) -> PyResult<Self> {
-        let fixture_function_marker = get_fixture_function_marker(function)?;
-
-        let scope = fixture_function_marker.getattr("scope")?;
-
-        let auto_use = fixture_function_marker.getattr("autouse")?;
-
-        let fixture_function = get_fixture_function(function)?;
-
-        let name = pytest_fixture_name(&fixture_function_marker, stmt_function_def.name.as_str())?;
-
-        let fixture_scope =
-            fixture_scope(py, &scope, &name).map_err(InvalidFixtureError::new_err)?;
-
-        Ok(Self::new(
-            QualifiedFunctionName::new(name, module_name),
-            stmt_function_def,
-            source_file,
-            fixture_scope,
-            auto_use.extract::<bool>()?,
-            fixture_function.into(),
-            is_generator_function,
-        ))
+    /// Gets the Python function whose definition supplies the fixture's signature.
+    pub(crate) fn source_function<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        if let Ok(fixture) = value.cast::<python::FixtureFunctionDefinition>() {
+            Ok(fixture.try_borrow()?.function.bind(value.py()).clone())
+        } else {
+            get_fixture_function(value)
+        }
     }
 
-    fn try_from_karva_function(
+    /// Builds a fixture from its runtime value and evaluates its scope once per registration.
+    pub(crate) fn try_from_value(
         py: Python<'_>,
         stmt_function_def: Rc<StmtFunctionDef>,
-        function: &Bound<'_, PyAny>,
-        module_path: ModulePath,
+        value: &Bound<'_, PyAny>,
+        provider_path: &ModulePath,
         source_file: SourceFile,
         is_generator_function: bool,
+        name: String,
     ) -> PyResult<Self> {
-        let py_function = function
-            .clone()
-            .cast_into::<python::FixtureFunctionDefinition>()?;
+        let (scope, auto_use, function) = if let Ok(marker) = get_fixture_function_marker(value) {
+            (
+                marker.getattr("scope")?,
+                marker.getattr("autouse")?.extract::<bool>()?,
+                get_fixture_function(value)?,
+            )
+        } else {
+            let fixture = value
+                .cast::<python::FixtureFunctionDefinition>()?
+                .try_borrow()?;
+            (
+                fixture.scope.bind(py).clone(),
+                fixture.auto_use,
+                value.clone(),
+            )
+        };
 
-        let py_function_borrow = py_function.try_borrow_mut()?;
-
-        let scope_obj = py_function_borrow.scope.clone_ref(py);
-        let name = py_function_borrow.name.clone();
-        let auto_use = py_function_borrow.auto_use;
-
-        let fixture_scope =
-            fixture_scope(py, scope_obj.bind(py), &name).map_err(InvalidFixtureError::new_err)?;
-
+        let scope = fixture_scope(py, &scope, &name).map_err(InvalidFixtureError::new_err)?;
         Ok(Self::new(
-            QualifiedFunctionName::new(name, module_path),
+            QualifiedFunctionName::new(name, provider_path.clone()),
             stmt_function_def,
             source_file,
-            fixture_scope,
+            scope,
             auto_use,
-            py_function.into(),
+            function.unbind(),
             is_generator_function,
         ))
     }
