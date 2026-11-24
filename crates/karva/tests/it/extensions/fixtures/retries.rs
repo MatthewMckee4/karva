@@ -46,7 +46,7 @@ def test_retry(values, shared, case):
     assert current_auto == []
     assert current_used == []
     if os.environ["KARVA_ATTEMPT"] == "2":
-        assert teardowns == ["values", "automatic", "used"]
+        assert teardowns == ["values", "used", "automatic"]
         assert shared == [1]
     values.append(case)
     current_auto.append(case)

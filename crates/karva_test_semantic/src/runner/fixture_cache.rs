@@ -25,6 +25,13 @@ impl FixtureCache {
             .unwrap_or(false)
     }
 
+    /// Whether this fixture has already completed setup in the given lifetime.
+    pub(super) fn contains(&self, identity: &FixtureIdentity, scope: ScopeKey<'_>) -> bool {
+        self.storage
+            .with(scope, |values| values.contains_key(identity))
+            .unwrap_or(false)
+    }
+
     /// Returns a new Python reference to a cached fixture value.
     pub(super) fn get(
         &self,

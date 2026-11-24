@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
-/// A scope for a fixture.
-#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, Default)]
+/// Fixture lifetime, ordered from narrowest to broadest.
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum FixtureScope {
     /// Recreated for every test attempt.
     #[default]
@@ -19,7 +19,7 @@ pub enum FixtureScope {
 
 impl FixtureScope {
     /// Returns a list of scopes above the current scope.
-    pub(super) fn scopes_above(self) -> &'static [Self] {
+    pub(crate) fn scopes_above(self) -> &'static [Self] {
         use FixtureScope::{Function, Module, Package, Session};
 
         match self {

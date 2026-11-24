@@ -1,6 +1,7 @@
 //! Fixture setup, caching, and teardown for package-runner scopes.
 
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -67,18 +68,8 @@ impl PackageRunner<'_, '_> {
     }
 
     /// Runs function-scoped finalizers and clears their cached fixture values.
-    pub(super) fn clean_up_test_attempt(
-        &mut self,
-        py: Python<'_>,
-        finalizers: Vec<Finalizer>,
-    ) -> Vec<Diagnostic> {
-        let mut diagnostics = finalizers
-            .into_iter()
-            .rev()
-            .filter_map(|finalizer| finalizer.run(py).err())
-            .collect::<Vec<_>>();
-        diagnostics.extend(self.clean_up_scope(py, ScopeKey::Function));
-        diagnostics
+    pub(super) fn clean_up_test_attempt(&mut self, py: Python<'_>) -> Vec<Diagnostic> {
+        self.clean_up_scope(py, ScopeKey::Function)
     }
 
     /// Clears cached fixture values and runs finalizers for one completed scope.
@@ -102,10 +93,7 @@ impl PackageRunner<'_, '_> {
         }
     }
 
-    /// Builds test-call arguments and runs every function-scoped fixture group.
-    ///
-    /// Returned finalizers belong directly to the test attempt. Broader-scoped
-    /// finalizers are retained in the runner cache until their scope ends.
+    /// Gives auto-use requests priority without moving them ahead of broader dependencies.
     pub(super) fn prepare_test_fixtures(
         &mut self,
         py: Python<'_>,
@@ -115,40 +103,58 @@ impl PackageRunner<'_, '_> {
         auto_use_fixtures: &[FixtureId],
         params: &HashMap<String, Arc<Py<PyAny>>>,
     ) -> PreparedFixtures {
-        let mut test_finalizers = Vec::new();
-        let mut fixture_call_errors = self.run_fixtures(
-            py,
-            fixture_plan,
-            use_fixture_dependencies,
-            FixtureUsage::UseFixtures,
-        );
+        let mut requests: Vec<_> = auto_use_fixtures
+            .iter()
+            .map(|&id| (id, FixtureUsage::AutoUse))
+            .chain(
+                use_fixture_dependencies
+                    .iter()
+                    .map(|&id| (id, FixtureUsage::UseFixtures)),
+            )
+            .chain(
+                fixture_dependencies
+                    .iter()
+                    .map(|&id| (id, FixtureUsage::Required)),
+            )
+            .collect();
+        let mut fixture_call_errors = Vec::new();
         let mut function_arguments = FixtureArguments::default();
 
-        for fixture_id in fixture_dependencies {
-            let fixture = fixture_plan.fixture(*fixture_id);
-            match self.run_fixture(py, fixture_plan, *fixture_id) {
-                Ok((value, finalizer)) => {
-                    function_arguments
-                        .insert(fixture.function_name().to_string(), value.clone_ref(py));
-
-                    if let Some(finalizer) = finalizer {
-                        test_finalizers.push(finalizer);
-                    }
+        // Scoped autouse fixtures also appear in the request list, even when
+        // there is no function-scoped autouse fixture to order against.
+        let has_function_auto_use = auto_use_fixtures
+            .iter()
+            .any(|&id| fixture_plan.fixture(id).scope() == FixtureScope::Function);
+        let setup_scopes = if has_function_auto_use {
+            FixtureScope::Function.scopes_above()
+        } else {
+            &[FixtureScope::Function]
+        };
+        for &scope in setup_scopes.iter().rev() {
+            let mut visited = HashSet::new();
+            requests.retain(|&(id, usage)| {
+                let fixture = fixture_plan.fixture(id);
+                let run_request = scope == FixtureScope::Function || fixture.scope() == scope;
+                let result = if run_request {
+                    self.run_fixture(py, fixture_plan, id).map(|value| {
+                        if usage == FixtureUsage::Required {
+                            function_arguments.insert(fixture.function_name().to_string(), value);
+                        }
+                    })
+                } else {
+                    self.prepare_dependencies_at_scope(py, fixture_plan, id, scope, &mut visited)
+                };
+                if let Err(error) = result {
+                    fixture_call_errors.push(PreparedFixtureFailure::new(
+                        fixture.function_name(),
+                        usage,
+                        error,
+                    ));
+                    return false;
                 }
-                Err(error) => fixture_call_errors.push(PreparedFixtureFailure::new(
-                    fixture.function_name(),
-                    FixtureUsage::Required,
-                    error,
-                )),
-            }
+                !run_request
+            });
         }
-
-        fixture_call_errors.extend(self.run_fixtures(
-            py,
-            fixture_plan,
-            auto_use_fixtures,
-            FixtureUsage::AutoUse,
-        ));
 
         for (key, value) in params {
             function_arguments.insert(key.clone(), value.clone_ref(py));
@@ -157,18 +163,52 @@ impl PackageRunner<'_, '_> {
         PreparedFixtures {
             function_arguments,
             setup_result: FixtureSetupError::from_vec(fixture_call_errors).map_or(Ok(()), Err),
-            test_finalizers,
         }
     }
 
-    /// Runs one fixture, recursively preparing dependencies first.
+    /// Prepares only the dependencies in the current scope of a narrower request.
+    #[expect(clippy::result_large_err)]
+    fn prepare_dependencies_at_scope(
+        &mut self,
+        py: Python<'_>,
+        fixture_plan: &FixturePlan,
+        id: FixtureId,
+        scope: FixtureScope,
+        visited: &mut HashSet<FixtureId>,
+    ) -> Result<(), FixtureCallError> {
+        let fixture = fixture_plan.fixture(id);
+        match fixture.scope().cmp(&scope) {
+            Ordering::Equal => return self.run_fixture(py, fixture_plan, id).map(drop),
+            Ordering::Greater => return Ok(()),
+            Ordering::Less => {}
+        }
+        let cache_scope = scope_key(
+            fixture.scope(),
+            fixture.package_owner(),
+            self.active_module.as_deref(),
+        );
+        if fixture.broadest_scope < scope
+            || visited.contains(&id)
+            || self.fixture_cache.contains(fixture.identity(), cache_scope)
+        {
+            return Ok(());
+        }
+        for &dependency in fixture.dependencies() {
+            self.prepare_dependencies_at_scope(py, fixture_plan, dependency, scope, visited)
+                .map_err(|error| error.with_dependent(fixture))?;
+        }
+        visited.insert(id);
+        Ok(())
+    }
+
+    /// Runs a fixture after its dependencies and registers teardown in setup order.
     #[expect(clippy::result_large_err)]
     fn run_fixture(
         &mut self,
         py: Python<'_>,
         fixture_plan: &FixturePlan,
         fixture_id: FixtureId,
-    ) -> Result<(Py<PyAny>, Option<Finalizer>), FixtureCallError> {
+    ) -> Result<Py<PyAny>, FixtureCallError> {
         let fixture = fixture_plan.fixture(fixture_id);
         let module_owner = self.active_module.clone();
         let scope = scope_key(
@@ -177,7 +217,7 @@ impl PackageRunner<'_, '_> {
             module_owner.as_deref(),
         );
         if let Some(cached) = self.fixture_cache.get(py, fixture.identity(), scope) {
-            return Ok((cached, None));
+            return Ok(cached);
         }
 
         let mut function_arguments = Vec::new();
@@ -185,18 +225,13 @@ impl PackageRunner<'_, '_> {
         for dependency_id in fixture.dependencies() {
             let dependency = fixture_plan.fixture(*dependency_id);
             match self.run_fixture(py, fixture_plan, *dependency_id) {
-                Ok((value, finalizer)) => {
+                Ok(value) => {
                     if function_arguments.is_empty() {
                         // Delay allocation until recursion unwinds so deep chains do not
                         // retain empty argument buffers for every active fixture call.
                         function_arguments.reserve_exact(fixture.dependencies().len());
                     }
                     function_arguments.push((dependency.function_name(), value));
-
-                    if let Some(finalizer) = finalizer {
-                        self.finalizer_cache
-                            .add_finalizer(finalizer, module_owner.as_deref());
-                    }
                 }
                 Err(error) => return Err(error.with_dependent(fixture)),
             }
@@ -225,17 +260,11 @@ impl PackageRunner<'_, '_> {
         self.fixture_cache
             .insert(fixture.identity().clone(), value.clone_ref(py), scope);
 
-        let function_finalizer = finalizer.and_then(|finalizer| {
-            if finalizer.scope == FixtureScope::Function {
-                Some(finalizer)
-            } else {
-                self.finalizer_cache
-                    .add_finalizer(finalizer, module_owner.as_deref());
-                None
-            }
-        });
+        if let Some(finalizer) = finalizer {
+            self.finalizer_cache.add_finalizer(scope, finalizer);
+        }
 
-        Ok((value, function_finalizer))
+        Ok(value)
     }
 
     /// Runs fixtures whose values are not passed to the test call.
@@ -249,16 +278,12 @@ impl PackageRunner<'_, '_> {
         let mut errors = Vec::new();
         for fixture_id in fixture_ids {
             let fixture = fixture_plan.fixture(*fixture_id);
-            match self.run_fixture(py, fixture_plan, *fixture_id) {
-                Ok((_, Some(finalizer))) => self
-                    .finalizer_cache
-                    .add_finalizer(finalizer, self.active_module.as_deref()),
-                Ok((_, None)) => {}
-                Err(error) => errors.push(PreparedFixtureFailure::new(
+            if let Err(error) = self.run_fixture(py, fixture_plan, *fixture_id) {
+                errors.push(PreparedFixtureFailure::new(
                     fixture.function_name(),
                     usage,
                     error,
-                )),
+                ));
             }
         }
         errors
@@ -284,8 +309,6 @@ pub(super) struct PreparedFixtures {
     pub(super) function_arguments: FixtureArguments,
     /// Whether fixture setup completed or blocked the test call.
     pub(super) setup_result: Result<(), FixtureSetupError>,
-    /// Function-scoped finalizers run after this attempt.
-    pub(super) test_finalizers: Vec<Finalizer>,
 }
 
 /// Raw fixture call error paired with its relationship to the blocked test.
@@ -439,8 +462,6 @@ fn get_value_and_finalizer(
         let finalizer = Finalizer {
             fixture_return: fixture_call_result,
             is_async: true,
-            scope: fixture.scope(),
-            package_owner: fixture.package_owner().to_path_buf(),
             definition: Rc::clone(fixture.definition()),
         };
 
@@ -460,8 +481,6 @@ fn get_value_and_finalizer(
                 let finalizer = Finalizer {
                     fixture_return: bound_iterator.clone().unbind().into_any(),
                     is_async: false,
-                    scope: fixture.scope(),
-                    package_owner: fixture.package_owner().to_path_buf(),
                     definition: Rc::clone(fixture.definition()),
                 };
 

@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use camino::Utf8PathBuf;
 use karva_diagnostic::Diagnostic;
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
@@ -8,7 +7,6 @@ use thiserror::Error;
 
 use crate::diagnostic::invalid_fixture_finalizer_diagnostic;
 use crate::discovery::models::definition::FunctionDefinition;
-use crate::extensions::fixtures::FixtureScope;
 use crate::utils::run_coroutine;
 
 /// Invalid state observed while resuming a generator fixture for teardown.
@@ -42,12 +40,6 @@ pub struct Finalizer {
 
     /// Whether this finalizer wraps an async generator (requires `asyncio.run()`).
     pub(crate) is_async: bool,
-
-    /// The scope determines when this finalizer runs.
-    pub(crate) scope: FixtureScope,
-
-    /// Defining package for package-scoped teardown.
-    pub(crate) package_owner: Utf8PathBuf,
 
     /// Immutable fixture identity, syntax, and source.
     pub(crate) definition: Rc<FunctionDefinition>,
