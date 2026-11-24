@@ -251,12 +251,17 @@ fn cancels_inlay_hints_without_leaving_a_request_pending() {
         Range::new(Position::new(0, 0), Position::new(1, 0)),
     ));
     server.cancel(&id);
-    let error = server
-        .receive_response(&id)
-        .response_result
-        .expect_err("cancelled hint request should fail");
-    assert_eq!(error.code, lsp_server::ErrorCode::RequestCanceled as i32);
-    assert_eq!(hints(&mut server, uri, source).len(), 1);
+    let response = server.receive_response(&id);
+    let expected = hints(&mut server, uri, source);
+    assert_eq!(expected.len(), 1);
+    // Background work may complete before the cancellation notification is handled.
+    match response.response_result {
+        Ok(result) => assert_eq!(
+            serde_json::from_value::<Option<Vec<InlayHint>>>(result).expect("valid hints response"),
+            Some(expected)
+        ),
+        Err(error) => assert_eq!(error.code, lsp_server::ErrorCode::RequestCanceled as i32),
+    }
 }
 
 #[test]
