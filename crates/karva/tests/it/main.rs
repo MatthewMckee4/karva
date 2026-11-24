@@ -3,6 +3,7 @@ pub(crate) mod common;
 mod assertions;
 mod r#async;
 mod basic;
+mod benchmarks;
 mod cache;
 mod cancel;
 mod capture;

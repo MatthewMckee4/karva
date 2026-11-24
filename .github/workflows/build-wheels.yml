@@ -41,6 +41,9 @@ jobs:
         platform:
           - target: x86_64
           - target: x86
+            # Keep the manylinux2014 i686 sysroot on an Ubuntu build host,
+            # avoiding the native 32-bit image's CentOS 7 package setup.
+            container: ghcr.io/rust-cross/manylinux2014-cross:i686
           - target: aarch64
           - target: armv7
 
@@ -59,6 +62,7 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.platform.target }}
+          container: ${{ matrix.platform.container }}
           args: --release --locked --out dist --compatibility pypi
           manylinux: auto
 

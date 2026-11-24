@@ -33,6 +33,10 @@ pub struct TestCaseAttempt<D = RenderedDiagnostic> {
     /// Output captured during this attempt, when non-empty.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     captured_output: Option<CapturedTestOutput>,
+
+    /// Callable measurements produced during this attempt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    benchmarks: Vec<crate::BenchmarkResult>,
 }
 
 impl<D> TestCaseAttempt<D> {
@@ -48,6 +52,7 @@ impl<D> TestCaseAttempt<D> {
             outcome,
             duration,
             captured_output,
+            benchmarks: Vec::new(),
         }
     }
 
@@ -71,6 +76,18 @@ impl<D> TestCaseAttempt<D> {
         self.captured_output.as_ref()
     }
 
+    /// Attaches measurements to this individual retry attempt.
+    #[must_use]
+    pub fn with_benchmarks(mut self, benchmarks: Vec<crate::BenchmarkResult>) -> Self {
+        self.benchmarks = benchmarks;
+        self
+    }
+
+    /// Returns callable measurements for this attempt.
+    pub fn benchmarks(&self) -> &[crate::BenchmarkResult] {
+        &self.benchmarks
+    }
+
     /// Adds stderr recovered after terminating the interpreter to this attempt.
     pub(super) fn append_captured_stderr(&mut self, stderr: &str) {
         let previous = self.captured_output.take();
@@ -92,6 +109,7 @@ impl<D> TestCaseAttempt<D> {
             outcome: self.outcome.map_diagnostic(&mut map),
             duration: self.duration,
             captured_output: self.captured_output,
+            benchmarks: self.benchmarks,
         }
     }
 }

@@ -870,6 +870,32 @@ Defaults to `pass`.
 
 Controls test selection, retries, timeouts, and failure policies.
 
+#### `benchmark-disable`
+
+Invoke benchmark callables once without warmup, calibration, or sampling.
+
+**Default value**: `false`
+
+**Type**: `bool`
+
+**Example usage**:
+
+=== "karva.toml"
+
+    ```toml
+    [profile.default.test]
+    benchmark-disable = true
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.karva.profile.default.test]
+    benchmark-disable = true
+    ```
+
+---
+
 #### `doctest-modules`
 
 Collect examples from module, class, function, and method docstrings.

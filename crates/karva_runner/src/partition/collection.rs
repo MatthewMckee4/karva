@@ -25,6 +25,9 @@ pub(super) struct TestInfo {
 /// Scheduling identity shared by every case collected from one function.
 #[derive(Debug)]
 pub(super) struct TestIdentity {
+    /// Whether this module must run in the isolated benchmark phase.
+    pub(super) benchmark: bool,
+
     /// Importable module name shared by all tests in a module for load balancing.
     pub(super) module_name: Arc<str>,
 
@@ -41,13 +44,30 @@ pub(super) fn collect_test_paths_recursive(
     test_infos: &mut Vec<TestInfo>,
     previous_durations: &HashMap<TestCacheKey, Duration>,
 ) {
+    collect_with_benchmark_policy(package, test_infos, previous_durations, false);
+}
+
+/// Inherits benchmark isolation from package configuration modules.
+fn collect_with_benchmark_policy(
+    package: &karva_collector::CollectedPackage,
+    test_infos: &mut Vec<TestInfo>,
+    previous_durations: &HashMap<TestCacheKey, Duration>,
+    inherited_benchmark: bool,
+) {
+    let inherited_benchmark = inherited_benchmark
+        || package
+            .configuration_module
+            .as_ref()
+            .is_some_and(karva_collector::CollectedModule::uses_benchmark);
     for module in package.modules.values() {
+        let benchmark = inherited_benchmark || module.uses_benchmark();
         let module_name: Arc<str> = module.path.module_name().into();
         let module_path = module.path.path();
         for test_fn_def in &module.test_function_defs {
             let function_name = test_fn_def.name.as_str();
             let qualified_function: Arc<str> = format!("{module_name}::{function_name}").into();
             let identity = Arc::new(TestIdentity {
+                benchmark,
                 module_name: Arc::clone(&module_name),
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
@@ -92,6 +112,7 @@ pub(super) fn collect_test_paths_recursive(
             let function_name = doctest.name.as_str();
             let qualified_function: Arc<str> = format!("{module_name}::{function_name}").into();
             let identity = Arc::new(TestIdentity {
+                benchmark,
                 module_name: Arc::clone(&module_name),
                 selector: format!("{module_path}::{function_name}").into(),
                 function_root: qualified_function,
@@ -108,6 +129,11 @@ pub(super) fn collect_test_paths_recursive(
     }
 
     for subpackage in package.packages.values() {
-        collect_test_paths_recursive(subpackage, test_infos, previous_durations);
+        collect_with_benchmark_policy(
+            subpackage,
+            test_infos,
+            previous_durations,
+            inherited_benchmark,
+        );
     }
 }

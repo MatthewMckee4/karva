@@ -74,3 +74,16 @@ def filter_warnings(*filters: str) -> Tags:
     Later filters win over earlier filters, including project and CLI policy.
     Invalid actions, categories, regexes, and line numbers fail collection.
     """
+
+def benchmark(
+    *,
+    group: str | None = ...,
+    min_rounds: int = ...,
+    min_time: float = ...,
+    max_time: float = ...,
+    warmup: int = ...,
+    rounds: int | None = ...,
+    iterations: int | None = ...,
+    disable_gc: bool = ...,
+) -> Tags:
+    """Configure callable-only measurements made through the benchmark fixture."""
