@@ -93,7 +93,7 @@ fn pytest_marks_do_not_prevent_literal_cases_from_splitting() {
         def test_value(value): pass
     "});
 
-    let partitions = partition_collected_tests(
+    let (partitions, _) = partition_collected_tests(
         &package,
         2,
         &HashMap::new(),
@@ -102,6 +102,7 @@ fn pytest_marks_do_not_prevent_literal_cases_from_splitting() {
         FailurePriority::Normal,
         None,
         TestOrdering::Stable,
+        false,
     );
 
     let mut selectors: Vec<_> = partitions.iter().flat_map(Partition::test_paths).collect();

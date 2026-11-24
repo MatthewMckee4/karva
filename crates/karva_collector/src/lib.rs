@@ -158,7 +158,8 @@ fn collect_source_for_scheduling(
     } else {
         Vec::new()
     };
-    let mut collected_module = CollectedModule::new(module_path, module_type, &module_body, String::new());
+    let mut collected_module =
+        CollectedModule::new(module_path, module_type, &module_body, String::new());
 
     for doctest in doctests {
         if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {
@@ -230,7 +231,8 @@ fn collect_source_with_module_path(
 
     let function_names: HashSet<&str> = function_names.iter().map(String::as_str).collect();
     let module_body = parsed.into_suite();
-    let mut collected_module = CollectedModule::new(module_path, module_type, &module_body, source_text);
+    let mut collected_module =
+        CollectedModule::new(module_path, module_type, &module_body, source_text);
 
     if settings.collect_doctests && module_type == ModuleType::Test {
         for doctest in collect_doctests(&module_body, &collected_module.source_text) {

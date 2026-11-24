@@ -74,7 +74,7 @@ fn benchmark_deferral_preserves_selected_cases(
         ),
         (
             "test_measure.py",
-            "@karva.tags.parametrize('value', [0, 1])\ndef test_micro(benchmark, value): pass\n",
+            "import karva\n\n@karva.tags.parametrize('value', [0, 1])\ndef test_micro(benchmark, value): pass\n",
         ),
     ]);
     let partition = |defer| {
