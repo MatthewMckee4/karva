@@ -43,6 +43,51 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
 }
 
 #[test]
+fn partial_duration_history_spreads_unmeasured_modules_across_workers() {
+    let (_temp_dir, _test_paths, package) = collected_package_with_files([
+        ("test_a.py", "def test_measured(): pass\n"),
+        ("test_b.py", "def test_measured(): pass\n"),
+        ("test_c.py", "def test_measured(): pass\n"),
+        ("test_d.py", "def test_measured(): pass\n"),
+        ("test_e.py", "def test_measured(): pass\n"),
+        ("test_f.py", "def test_unmeasured(): pass\n"),
+        ("test_g.py", "def test_unmeasured(): pass\n"),
+        ("test_h.py", "def test_unmeasured(): pass\n"),
+        ("test_i.py", "def test_unmeasured(): pass\n"),
+        ("test_j.py", "def test_unmeasured(): pass\n"),
+    ]);
+    let durations = ['a', 'b', 'c', 'd', 'e']
+        .into_iter()
+        .map(|module| {
+            (
+                TestCacheKey::function_name(&format!("test_{module}::test_measured")),
+                Duration::from_millis(10),
+            )
+        })
+        .collect();
+
+    let (partitions, _) = partition_collected_tests(
+        &package,
+        2,
+        &durations,
+        &HashSet::new(),
+        LastFailedSelection::All,
+        FailurePriority::Normal,
+        None,
+        TestOrdering::Stable,
+        false,
+    );
+
+    assert_eq!(
+        partitions
+            .iter()
+            .map(Partition::test_count)
+            .collect::<Vec<_>>(),
+        [5, 5]
+    );
+}
+
+#[test]
 fn literal_parametrize_cases_split_across_workers() {
     let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
         import karva

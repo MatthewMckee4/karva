@@ -44,7 +44,7 @@ pub struct Partition {
     /// Next attempt numbers for cases retried after terminating their interpreter.
     resume_attempts: Vec<(TestCacheKey, u32)>,
 
-    /// Cumulative historical microseconds, using one per unknown test.
+    /// Cumulative scheduling weight, in microseconds for duration-based balancing.
     weight: u128,
 
     /// Completed cases in this assignment when its recovery worker was spawned.
