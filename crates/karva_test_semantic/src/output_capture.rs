@@ -326,14 +326,20 @@ fn capture_stream_class(py: Python<'_>) -> PyResult<&Py<PyAny>> {
 import io
 import os
 import tempfile
-from threading import RLock
+from _thread import RLock
+from operator import index
 
-class CapturedOutput(io.TextIOBase):
+class CapturedOutput:
+    _reader = None
+    _record = None
+
     def __init__(self):
         self._stream = io.StringIO()
-        self._reader = None
-        self._record = None
         self._lock = RLock()
+
+    def __del__(self):
+        if self._reader is not None:
+            self.close()
 
     def fileno(self):
         with self._lock:
@@ -382,22 +388,6 @@ class CapturedOutput(io.TextIOBase):
     def __getattr__(self, name):
         return getattr(self._stream, name)
 
-    @property
-    def closed(self):
-        return self._stream.closed
-
-    @property
-    def encoding(self):
-        return self._stream.encoding
-
-    @property
-    def errors(self):
-        return self._stream.errors
-
-    @property
-    def newlines(self):
-        return self._stream.newlines
-
     def close(self):
         with self._lock:
             try:
@@ -408,16 +398,7 @@ class CapturedOutput(io.TextIOBase):
 
     def flush(self):
         with self._lock:
-            self._stream.flush()
-
-    def readable(self):
-        return self._stream.readable()
-
-    def writable(self):
-        return self._stream.writable()
-
-    def seekable(self):
-        return self._stream.seekable()
+            return self._stream.flush()
 
     def seek(self, offset, whence=0):
         with self._lock:
@@ -434,6 +415,35 @@ class CapturedOutput(io.TextIOBase):
     def readline(self, size=-1):
         with self._lock:
             return self._stream.readline(size)
+
+    def readlines(self, hint=-1):
+        hint = -1 if hint is None else index(hint)
+        with self._lock:
+            return self._stream.readlines(hint)
+
+    def writelines(self, lines):
+        if self._stream.closed:
+            raise ValueError('I/O operation on closed file')
+        for line in lines:
+            self.write(line)
+
+    def __iter__(self):
+        iter(self._stream)
+        return self
+
+    def __next__(self):
+        with self._lock:
+            return next(self._stream)
+
+    def __enter__(self):
+        self._stream.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def detach(self):
+        raise io.UnsupportedOperation('detach')
 
     def getvalue(self):
         with self._lock:
@@ -474,6 +484,8 @@ class CapturedOutput(io.TextIOBase):
             if self._record is not None:
                 self._record_all()
             return result
+
+io.TextIOBase.register(CapturedOutput)
 ";
         let module = PyModule::from_code(
             py,
