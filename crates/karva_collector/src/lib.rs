@@ -165,7 +165,7 @@ fn collect_source_for_scheduling(
         collected_module.unsupported_test_classes =
             unsupported_test_classes(&module_body, settings.test_function_prefix);
         if !collected_module.unsupported_test_classes.is_empty() {
-            collected_module.source_text = source_text.to_owned();
+            source_text.clone_into(&mut collected_module.source_text);
         }
     }
 
