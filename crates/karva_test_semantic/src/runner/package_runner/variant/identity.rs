@@ -14,7 +14,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         } else {
             QualifiedTestName::new(self.input.test.name().clone())
         }
-        .with_case_index(self.input.identity.case_index)
+        .with_case(self.input.identity.case)
     }
 
     /// Returns exact identity before fixture setup when possible.

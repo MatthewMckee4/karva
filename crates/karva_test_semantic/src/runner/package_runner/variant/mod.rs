@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 use karva_coverage_runtime::CoveragePhase;
-use karva_diagnostic::TestExecutionOutcome;
+use karva_diagnostic::{Diagnostic, Severity, TestExecutionOutcome};
 use karva_metadata::RunIgnoredMode;
 use karva_metadata::filter::EvalContext;
 use karva_python_semantic::QualifiedTestName;
@@ -25,7 +25,7 @@ mod settings;
 mod timeout;
 
 use attempt::{PreparedTestAttempt, TestLifecycleAttempt};
-use input::VariantInput;
+pub(super) use input::VariantInput;
 use settings::VariantSettings;
 
 impl PackageRunner<'_, '_> {
@@ -213,27 +213,15 @@ impl<'runner, 'context, 'settings, 'test, 'py>
         });
         let setup_start = Instant::now();
         let fixtures = if benchmark_setup.as_ref().is_none_or(Result::is_ok) {
-            let mut fixtures = self.package_runner.prepare_test_fixtures(
-                self.py,
-                &self.input.fixtures.plan,
-                &self.input.fixtures.dependencies,
-                &self.input.fixtures.use_dependencies,
-                &self.input.fixtures.auto_use,
-                &self.input.params,
-            );
-            let parameters = self.input.test.parameters();
-            for (name, value) in &self.input.params {
-                if parameters.is_none_or(|parameters| parameters.index(name).is_some()) {
-                    fixtures
-                        .function_arguments
-                        .insert(name.clone(), value.clone_ref(self.py));
-                }
-            }
-            fixtures
+            self.package_runner
+                .prepare_test_fixtures(self.py, &self.input)
         } else {
             super::fixture::PreparedFixtures {
                 function_arguments: crate::runner::FixtureArguments::default(),
                 setup_result: Ok(()),
+                skipped_setup: None,
+                request: None,
+                test_callbacks: None,
             }
         };
         PreparedTestAttempt {
@@ -275,12 +263,34 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             }
         }
 
-        let skipped = match run_ignored {
-            RunIgnoredMode::Default => self.input.tags.should_skip(),
-            RunIgnoredMode::Only => {
-                let (should_skip, _) = self.input.tags.should_skip();
-                (!should_skip, None)
+        let inherited = match self
+            .package_runner
+            .inherited_request_tags(self.py, &self.input)
+        {
+            Ok(inherited) => inherited,
+            Err(error) => {
+                return Some(self.package_runner.context.register_test_case_result(
+                    qualified,
+                    TestExecutionOutcome::error(Diagnostic::new(
+                        "fixture-marker",
+                        Severity::Error,
+                        error.to_string(),
+                    )),
+                    Duration::ZERO,
+                    None,
+                ));
             }
+        };
+        let static_skip = self.input.tags.should_skip();
+        let inherited_skip = inherited.runtime_skip();
+        let (should_skip, reason) = if static_skip.0 {
+            static_skip
+        } else {
+            inherited_skip
+        };
+        let skipped = match run_ignored {
+            RunIgnoredMode::Default => (should_skip, reason),
+            RunIgnoredMode::Only => (!should_skip, None),
             RunIgnoredMode::All => (false, None),
         };
         let (true, reason) = skipped else {

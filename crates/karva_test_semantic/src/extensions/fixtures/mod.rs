@@ -17,8 +17,11 @@ mod scope;
 mod traits;
 mod utils;
 
-pub use finalizer::Finalizer;
-pub use normalized_fixture::{FixtureDependency, FixtureId, FixturePlan, NormalizedFixture};
+pub use finalizer::{Finalizer, FinalizerCallbacks};
+pub use normalized_fixture::{
+    DynamicFixture, DynamicFixtures, FixtureContext, FixtureDependency, FixtureId, FixturePlan,
+    NormalizedFixture,
+};
 pub use scope::FixtureScope;
 pub use traits::{FixtureLookup, HasFixtures};
 pub use utils::missing_arguments_from_error;
@@ -27,6 +30,7 @@ use crate::discovery::DiscoveredPackage;
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::python::InvalidFixtureError;
 use crate::extensions::fixtures::scope::fixture_scope;
+use crate::extensions::tags::parametrize::{ParametrizationArgs, fixture_parameters};
 
 /// Cheap run-local key for one qualified fixture definition.
 ///
@@ -57,7 +61,7 @@ impl FixtureIdentity {
         &self.definition
     }
 
-    fn name(&self) -> &QualifiedFunctionName {
+    pub(crate) fn name(&self) -> &QualifiedFunctionName {
         self.definition.name()
     }
 }
@@ -99,6 +103,9 @@ pub struct DiscoveredFixture {
 
     /// Whether this fixture is a generator (uses yield for teardown).
     is_generator: bool,
+
+    /// Fixture-controlled case dimension, evaluated during discovery.
+    pub(crate) parameters: Option<Rc<[ParametrizationArgs]>>,
 }
 
 /// Fixture definition rejected during discovery.
@@ -172,6 +179,7 @@ impl DiscoveredFixture {
             auto_use,
             function: Rc::new(function),
             is_generator,
+            parameters: None,
         }
     }
 
@@ -284,25 +292,39 @@ impl DiscoveredFixture {
         is_generator_function: bool,
         name: String,
     ) -> PyResult<Self> {
-        let (scope, auto_use, function) = if let Ok(marker) = get_fixture_function_marker(value) {
-            (
-                marker.getattr("scope")?,
-                marker.getattr("autouse")?.extract::<bool>()?,
-                get_fixture_function(value)?,
-            )
-        } else {
-            let fixture = value
-                .cast::<python::FixtureFunctionDefinition>()?
-                .try_borrow()?;
-            (
-                fixture.scope.bind(py).clone(),
-                fixture.auto_use,
-                value.clone(),
-            )
-        };
-
+        let source = Self::source_function(value)?;
+        let (scope, auto_use, function, params, ids) =
+            if let Ok(marker) = get_fixture_function_marker(value) {
+                (
+                    marker.getattr("scope")?,
+                    marker.getattr("autouse")?.extract::<bool>()?,
+                    source.clone(),
+                    Some(marker.getattr("params")?),
+                    Some(marker.getattr("ids")?),
+                )
+            } else {
+                let fixture = value
+                    .cast::<python::FixtureFunctionDefinition>()?
+                    .try_borrow()?;
+                (
+                    fixture.scope.bind(py).clone(),
+                    fixture.auto_use,
+                    value.clone(),
+                    fixture
+                        .params
+                        .as_ref()
+                        .map(|params| params.bind(py).as_any().clone()),
+                    fixture.ids.as_ref().map(|ids| ids.bind(py).clone()),
+                )
+            };
         let scope = fixture_scope(py, &scope, &name).map_err(InvalidFixtureError::new_err)?;
-        Ok(Self::new(
+        let globals = source
+            .getattr("__globals__")
+            .ok()
+            .and_then(|value| value.cast_into::<pyo3::types::PyDict>().ok());
+        let parameters =
+            fixture_parameters(&name, params.as_ref(), ids.as_ref(), globals.as_ref())?;
+        let mut fixture = Self::new(
             QualifiedFunctionName::new(name, provider_path.clone()),
             stmt_function_def,
             source_file,
@@ -310,7 +332,9 @@ impl DiscoveredFixture {
             auto_use,
             function.unbind(),
             is_generator_function,
-        ))
+        );
+        fixture.parameters = parameters.map(Rc::from);
+        Ok(fixture)
     }
 }
 

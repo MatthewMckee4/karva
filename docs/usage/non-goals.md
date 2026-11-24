@@ -34,38 +34,8 @@ def test_service_handles_empty_input(service):
 Classes are still fine as application code or local helpers inside tests. Only
 classes as the test structure are out of scope.
 
-## Pytest Request Internals
-
-Karva will not expose pytest's `request` fixture or the `FixtureRequest` API.
-
-Unsupported patterns include:
-
-- `request.param`
-- `request.getfixturevalue(...)`
-- `request.addfinalizer(...)`
-- `request.node`, `request.config`, and other pytest collection internals
-- `pytestconfig`
-- `pytest_generate_tests`
-
-Use explicit fixture dependencies, generator fixtures, and normal configuration
-inputs instead:
-
-```py title="test_database.py"
-import karva
-
-
-@karva.fixture
-def database():
-    db = connect()
-    yield db
-    db.close()
-
-
-def test_query(database):
-    assert database.query("select 1") == 1
-```
-
 ## Pytest Plugin Compatibility
 
 Karva does not support pytest plugins or hooks. Common plugin features may
-be built into Karva directly.
+be built into Karva directly. The [request fixture](fixtures/fixtures.md#the-request-fixture)
+exposes Karva's collection nodes, configuration, and session.

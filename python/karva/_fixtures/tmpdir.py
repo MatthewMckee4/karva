@@ -3,8 +3,7 @@
 Adapted from pytest's ``_pytest/tmpdir.py`` (commit 8ecf49ec2). Only
 ``TempPathFactory`` and the ``get_user`` helper are included; pytest's
 ``Config`` integration, ``pytest_configure``/``pytest_sessionfinish`` hooks,
-and the per-test ``tmp_path`` fixture are intentionally omitted because
-karva does not yet expose a ``FixtureRequest`` object.
+and the per-test ``tmp_path`` fixture are implemented independently in Karva.
 
 The following adaptations were made:
 

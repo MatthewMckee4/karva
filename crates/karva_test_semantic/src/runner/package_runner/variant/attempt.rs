@@ -8,6 +8,7 @@ use pyo3::prelude::*;
 
 use crate::diagnostic::unhandled_exception_diagnostic;
 use crate::extensions::functions::snapshot::set_snapshot_context;
+use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::utils::{run_async_test_with_timeout, run_coroutine};
 use crate::warnings::{WarningCapture, warning_capture_error};
 
@@ -20,6 +21,12 @@ use crate::runner::package_runner::outcome::{
     OutcomeContext, PhaseDurations, apply_fail_slow_budget, attach_related_diagnostics,
     classify_test_result, reject_non_none_return,
 };
+use crate::runner::package_runner::request::RequestContext;
+
+struct Expectation<'a> {
+    tag: Option<ExpectFailTag>,
+    request: Option<&'a RequestContext>,
+}
 
 impl VariantRunner<'_, '_, '_, '_, '_> {
     /// Runs one setup/call/teardown lifecycle and decides retry eligibility.
@@ -38,6 +45,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 PreparedFixtures {
                     function_arguments,
                     setup_result,
+                    skipped_setup,
+                    request,
+                    test_callbacks,
                 },
             setup_duration,
             output_capture,
@@ -60,13 +70,34 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             };
 
         let benchmark_active = benchmark_setup.is_some();
-        let body = match setup_result {
-            Ok(()) => self.execute_test_body(
+        let runtime_tags = request.as_ref().map_or_else(
+            || {
+                self.package_runner
+                    .inherited_request_tags(self.py, &self.input)
+            },
+            |request| request.runtime_tags(self.py),
+        );
+        let body = match (setup_result, runtime_tags) {
+            (Ok(()), Ok(tags)) => self.execute_test_body(
                 settings,
                 function,
-                test_name_env_result,
-                attempt_env_result.and(benchmark_setup.unwrap_or(Ok(()))),
+                attempt_env_result
+                    .and(benchmark_setup.unwrap_or(Ok(())))
+                    .and_then(|()| {
+                        test_name_env_result
+                            .as_ref()
+                            .copied()
+                            .map_err(|error| error.clone_ref(self.py))
+                    }),
                 &function_arguments,
+                Expectation {
+                    tag: self
+                        .input
+                        .tags
+                        .expect_fail_tag()
+                        .or_else(|| tags.runtime_expect_fail()),
+                    request: request.as_deref(),
+                },
                 super::timeout::TimeoutAttempt {
                     attempt_number,
                     setup_duration,
@@ -74,12 +105,17 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     shared_output,
                 },
             ),
-            Err(error) => {
-                let outcome = error.skip_outcome(self.py).unwrap_or_else(|| {
-                    error
-                        .into_test_error(self.py, self.package_runner.context.is_verbose())
-                        .into_outcome()
-                });
+            (Ok(()), Err(error)) => AttemptBody {
+                retryable: true,
+                outcome: TestExecutionOutcome::error(karva_diagnostic::Diagnostic::new(
+                    "fixture-marker",
+                    karva_diagnostic::Severity::Error,
+                    error.to_string(),
+                )),
+                call_duration: Duration::ZERO,
+            },
+            (Err(error), _) => {
+                let outcome = skipped_setup.unwrap_or_else(|| error.into_outcome());
                 AttemptBody {
                     retryable: !outcome.is_skipped(),
                     outcome,
@@ -91,7 +127,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
-        let mut finalizer_diagnostics = self.package_runner.clean_up_test_attempt(self.py);
+        let mut finalizer_diagnostics = self
+            .package_runner
+            .clean_up_test_attempt(self.py, test_callbacks);
         // Argument references can keep fixture values alive after cache cleanup.
         // Include their destruction in teardown attribution and timing.
         drop(function_arguments);
@@ -187,16 +225,13 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         &self,
         settings: &VariantSettings,
         function: &Py<PyAny>,
-        test_name_env_result: &PyResult<()>,
         attempt_env_result: PyResult<()>,
         function_arguments: &crate::runner::FixtureArguments,
+        expectation: Expectation<'_>,
         timeout_attempt: super::timeout::TimeoutAttempt<'_>,
     ) -> AttemptBody {
         set_snapshot_context(settings.identity.snapshot_context.clone());
         let prepared_call = attempt_env_result.and_then(|()| {
-            if let Err(error) = test_name_env_result {
-                return Err(error.clone_ref(self.py));
-            }
             if let Err(error) = &settings.execution.async_patch_result {
                 return Err(error.clone_ref(self.py));
             }
@@ -246,15 +281,23 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             }
             Err(error) => (Err(error), Duration::ZERO),
         };
+        let expect_fail_tag = if eligible_for_expect_fail {
+            expectation.tag.or_else(|| {
+                expectation
+                    .request
+                    .and_then(|request| request.runtime_tags(self.py).ok())
+                    .and_then(|tags| tags.runtime_expect_fail())
+            })
+        } else {
+            None
+        };
         let result = classify_test_result(
             self.py,
             test_result,
             &OutcomeContext {
                 definition: self.input.test.definition(),
                 function_arguments,
-                expect_fail_tag: eligible_for_expect_fail
-                    .then_some(settings.execution.expect_fail_tag.as_ref())
-                    .flatten(),
+                expect_fail_tag: expect_fail_tag.as_ref(),
                 verbose: self.package_runner.context.is_verbose(),
             },
         );
@@ -283,7 +326,7 @@ struct AttemptBody {
 pub(super) struct PreparedTestAttempt {
     /// Validation of the benchmark session before fixture setup.
     pub(super) benchmark_setup: Option<PyResult<()>>,
-    /// Arguments and setup failures.
+    /// Arguments, setup failures, and function-scoped finalizers.
     pub(super) fixtures: PreparedFixtures,
     /// Duration of fixture and parameter preparation.
     pub(super) setup_duration: Duration,

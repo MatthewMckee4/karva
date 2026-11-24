@@ -18,6 +18,10 @@ pub struct FixtureFunctionMarker {
     /// Whether this fixture should be automatically used.
     #[pyo3(get)]
     pub auto_use: bool,
+
+    /// Optional values and IDs used to generate test cases.
+    pub params: Option<Py<PyTuple>>,
+    pub ids: Option<Py<PyAny>>,
 }
 
 impl FixtureFunctionMarker {
@@ -26,6 +30,8 @@ impl FixtureFunctionMarker {
         scope: Option<Py<PyAny>>,
         name: Option<String>,
         auto_use: bool,
+        params: Option<Py<PyTuple>>,
+        ids: Option<Py<PyAny>>,
     ) -> Self {
         let scope = scope.unwrap_or_else(|| PyString::new(py, "function").into_any().unbind());
 
@@ -33,6 +39,8 @@ impl FixtureFunctionMarker {
             scope,
             name,
             auto_use,
+            params,
+            ids,
         }
     }
 }
@@ -50,12 +58,20 @@ impl FixtureFunctionMarker {
             function.getattr(py, "__name__")?.extract::<String>(py)?
         };
 
+        if func_name == "request" {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "'request' is reserved for the built-in fixture request",
+            ));
+        }
+
         let fixture_def = FixtureFunctionDefinition {
             function,
             name: func_name,
             has_explicit_name: self.name.is_some(),
             scope: self.scope.clone_ref(py),
             auto_use: self.auto_use,
+            params: self.params.as_ref().map(|params| params.clone_ref(py)),
+            ids: self.ids.as_ref().map(|ids| ids.clone_ref(py)),
         };
 
         Ok(fixture_def)
@@ -84,6 +100,10 @@ pub struct FixtureFunctionDefinition {
     #[pyo3(get)]
     pub auto_use: bool,
 
+    /// Optional values and IDs used to generate test cases.
+    pub params: Option<Py<PyTuple>>,
+    pub ids: Option<Py<PyAny>>,
+
     /// The underlying Python function that produces the fixture value.
     #[pyo3(get)]
     pub function: Py<PyAny>,
@@ -103,7 +123,7 @@ impl FixtureFunctionDefinition {
 }
 
 #[pyfunction(name = "fixture")]
-#[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false))]
+#[pyo3(signature = (func=None, *, scope=None, name=None, auto_use=false, params=None, ids=None))]
 /// Supports both `@fixture` and configured `@fixture(...)` decorator forms.
 pub fn fixture_decorator(
     py: Python<'_>,
@@ -111,8 +131,17 @@ pub fn fixture_decorator(
     scope: Option<Py<PyAny>>,
     name: Option<&str>,
     auto_use: bool,
+    params: Option<&Bound<'_, PyAny>>,
+    ids: Option<Py<PyAny>>,
 ) -> PyResult<Py<PyAny>> {
-    let marker = FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use);
+    let params = params
+        .map(|params| {
+            let items = params.try_iter()?.collect::<PyResult<Vec<_>>>()?;
+            PyTuple::new(py, items).map(Bound::unbind)
+        })
+        .transpose()?;
+    let marker =
+        FixtureFunctionMarker::new(py, scope, name.map(String::from), auto_use, params, ids);
     if let Some(f) = func {
         let fixture_def = marker.__call__(py, f)?;
         Ok(Py::new(py, fixture_def)?.into_any())

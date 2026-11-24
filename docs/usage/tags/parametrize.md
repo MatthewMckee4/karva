@@ -59,6 +59,29 @@ def test_function(a: int, b: int):
 
 Each parametrized variant receives the fixture value alongside the parametrized arguments.
 
+## Indirect parametrization
+
+Use `indirect=True` to pass all parameter values to fixtures through
+`request.param`. To pass only some values to fixtures, list their names in
+`indirect`.
+
+```py title="test.py"
+import karva
+
+
+@karva.fixture
+def port(request: karva.FixtureRequest):
+    return int(request.param)
+
+
+@karva.tags.parametrize("port,expected", [("8080", 8080)], indirect=["port"])
+def test_port(port, expected):
+    assert port == expected
+```
+
+If a fixture also declares `params`, the test's indirect values take
+precedence. Use `scope` to set the lifetime of an indirect parameter case.
+
 ## Multiple Parametrize Tags
 
 Stack decorators to run every combination of their values.

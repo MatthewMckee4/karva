@@ -1,65 +1,63 @@
-//! Scope-aware cache for initialized Python fixture values.
+//! Scoped ownership and setup order for fixture instances.
 
 use std::collections::HashMap;
-
-use pyo3::prelude::*;
+use std::rc::{Rc, Weak};
 
 use crate::extensions::fixtures::FixtureIdentity;
+use crate::runner::package_runner::FixtureInstance;
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
-/// Caches fixture values at different scope levels.
-///
-/// Fixtures are cached based on their declared scope to avoid redundant
-/// setup when the same fixture is used multiple times within a scope.
-#[derive(Debug, Default)]
+#[derive(Default)]
+struct ScopeFixtures {
+    instances: HashMap<FixtureIdentity, Rc<FixtureInstance>>,
+    setup_order: Vec<Weak<FixtureInstance>>,
+}
+
+/// Holds initialized fixtures in scope and preserves their teardown order.
+#[derive(Default)]
 pub(super) struct FixtureCache {
-    /// Fixture values isolated by their declared lifetime scope.
-    storage: ScopedStorage<HashMap<FixtureIdentity, Py<PyAny>>>,
+    storage: ScopedStorage<ScopeFixtures>,
 }
 
 impl FixtureCache {
-    /// Whether one scope owns values whose destruction may execute Python code.
     pub(super) fn has_values(&self, scope: ScopeKey<'_>) -> bool {
         self.storage
-            .with(scope, |values| !values.is_empty())
+            .with(scope, |values| !values.instances.is_empty())
             .unwrap_or(false)
     }
 
-    /// Whether this fixture has already completed setup in the given lifetime.
-    pub(super) fn contains(&self, identity: &FixtureIdentity, scope: ScopeKey<'_>) -> bool {
-        self.storage
-            .with(scope, |values| values.contains_key(identity))
-            .unwrap_or(false)
-    }
-
-    /// Returns a new Python reference to a cached fixture value.
     pub(super) fn get(
         &self,
-        py: Python<'_>,
         identity: &FixtureIdentity,
         scope: ScopeKey<'_>,
-    ) -> Option<Py<PyAny>> {
+    ) -> Option<Rc<FixtureInstance>> {
         self.storage
-            .with(scope, |values| {
-                values.get(identity).map(|value| value.clone_ref(py))
-            })
+            .with(scope, |values| values.instances.get(identity).cloned())
             .flatten()
     }
 
-    /// Caches a fixture value until its declared scope completes.
-    pub(super) fn insert(
-        &mut self,
-        identity: FixtureIdentity,
-        value: Py<PyAny>,
-        scope: ScopeKey<'_>,
-    ) {
-        self.storage.with_mut(scope, |values| {
-            values.insert(identity, value);
+    pub(super) fn insert(&mut self, instance: &Rc<FixtureInstance>) {
+        self.storage.with_mut(instance.scope_key(), |values| {
+            values.setup_order.push(Rc::downgrade(instance));
+            values
+                .instances
+                .insert(instance.identity().clone(), Rc::clone(instance));
         });
     }
 
-    /// Drops every cached value owned by one completed scope.
-    pub(super) fn clear_scope(&mut self, scope: ScopeKey<'_>) {
-        drop(self.storage.take(scope));
+    pub(super) fn remove(&mut self, instance: &FixtureInstance) {
+        self.storage.with_mut(instance.scope_key(), |values| {
+            values.instances.remove(instance.identity());
+        });
+    }
+
+    /// Takes teardown order while keeping fixture values available to callbacks.
+    pub(super) fn take_order(&mut self, scope: ScopeKey<'_>) -> Vec<Weak<FixtureInstance>> {
+        self.storage
+            .with_mut(scope, |values| std::mem::take(&mut values.setup_order))
+    }
+
+    pub(super) fn clear(&mut self, scope: ScopeKey<'_>) {
+        self.storage.take(scope);
     }
 }

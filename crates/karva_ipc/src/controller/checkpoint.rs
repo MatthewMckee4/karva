@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use anyhow::{Result, bail};
-use karva_python_semantic::TestCacheKey;
+use karva_python_semantic::{ParameterCase, TestCacheKey};
 
 /// Latest test lifecycle state read from one worker connection.
 #[derive(Clone, Debug)]
@@ -51,7 +51,7 @@ impl CheckpointState {
         &mut self,
         worker_id: usize,
         function_name: Option<String>,
-        case_index: Option<usize>,
+        case_index: Option<ParameterCase>,
         parameters: Option<String>,
     ) -> Result<()> {
         if let Some(function_name) = function_name {
@@ -62,7 +62,7 @@ impl CheckpointState {
         };
         let cache_key = case_index.map_or_else(
             || TestCacheKey::function_name(function_name),
-            |index| TestCacheKey::parameter_case_name(function_name, index),
+            |case| case.cache_key(function_name),
         );
         self.record(worker_id, parameters, cache_key)
     }
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn rejects_undeclared_function_identity() {
         let error = CheckpointState::default()
-            .record_case(7, None, Some(0), None)
+            .record_case(7, None, Some(ParameterCase::Index(0)), None)
             .expect_err("first checkpoint must declare its function");
         assert!(error.to_string().contains("without a function identity"));
     }

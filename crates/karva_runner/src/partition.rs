@@ -126,9 +126,10 @@ impl Partition {
 
     /// Whether this assignment contains a cached failure eligible for priority scheduling.
     pub(super) fn has_cached_failure(&self, last_failed: &HashSet<TestCacheKey>) -> bool {
+        let groups = failed_fixture_groups(last_failed);
         self.tests
             .iter()
-            .any(|test| is_scheduled_failure(test, last_failed))
+            .any(|test| is_scheduled_failure(test, last_failed, &groups))
     }
 
     /// Whether this assignment has any worker selectors.
@@ -144,8 +145,9 @@ impl Partition {
         last_failed: &HashSet<TestCacheKey>,
         previous_durations: &HashMap<TestCacheKey, Duration>,
     ) {
+        let groups = failed_fixture_groups(last_failed);
         self.tests.sort_by_cached_key(|test| {
-            let failed = is_scheduled_failure(test, last_failed);
+            let failed = is_scheduled_failure(test, last_failed, &groups);
             let duration = scheduled_duration(test, previous_durations);
             if failed {
                 (Reverse(failed), duration, None)
@@ -173,10 +175,24 @@ impl Partition {
     }
 }
 
-fn is_scheduled_failure(test: &ScheduledTest, last_failed: &HashSet<TestCacheKey>) -> bool {
+fn failed_fixture_groups(last_failed: &HashSet<TestCacheKey>) -> HashSet<(&str, usize)> {
+    last_failed
+        .iter()
+        .filter_map(|key| Some((key.test_function_name(), key.fixture_case_group()?)))
+        .collect()
+}
+
+fn is_scheduled_failure(
+    test: &ScheduledTest,
+    last_failed: &HashSet<TestCacheKey>,
+    groups: &HashSet<(&str, usize)>,
+) -> bool {
     let key = test.cache_key();
     last_failed.contains(&key)
         || last_failed.contains(&TestCacheKey::function_name(key.test_function_name()))
+        || test
+            .case_index
+            .is_some_and(|case| groups.contains(&(key.test_function_name(), case)))
 }
 
 fn scheduled_duration(

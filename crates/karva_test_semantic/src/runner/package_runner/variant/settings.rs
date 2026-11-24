@@ -9,7 +9,6 @@ use pyo3::prelude::*;
 
 use crate::extensions::fixtures::NormalizedFixture;
 use crate::extensions::functions::snapshot::SnapshotContext;
-use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::runner::fixture_arguments::FixtureArguments;
@@ -39,8 +38,6 @@ pub(super) struct VariantIdentitySettings {
 
 /// Python invocation behavior derived from test metadata and settings.
 pub(super) struct VariantExecutionSettings {
-    /// Expected-failure tag needed for result classification.
-    pub(super) expect_fail_tag: Option<ExpectFailTag>,
     /// Result of patching pytest-style async wrappers.
     pub(super) async_patch_result: PyResult<bool>,
     /// Whether Karva must await the returned coroutine.
@@ -102,7 +99,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                     .function_name()
             })
             .collect::<Vec<_>>();
-        let framework_fixture_names = self
+        let mut framework_fixture_names = self
             .input
             .fixtures
             .dependencies
@@ -111,6 +108,9 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             .filter(|fixture| fixture.name().module_path().module_name() == "karva._builtins")
             .map(NormalizedFixture::function_name)
             .collect::<Vec<_>>();
+        if !self.input.params.contains_key("request") {
+            framework_fixture_names.push("request");
+        }
         let qualified_test_name = known_test_name.unwrap_or_else(|| {
             let parameters = if let Some(id) = &self.input.identity.id {
                 Some(id.clone())
@@ -122,7 +122,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             } else {
                 QualifiedTestName::new(name.clone())
             }
-            .with_case_index(self.input.identity.case_index)
+            .with_case(self.input.identity.case)
         });
         let qualified_name = qualified_test_name.to_string();
         let tag_names = self.input.tags.tag_names();
@@ -175,7 +175,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             .context
             .settings()
             .junit_flaky_fail_status_for(&evaluation_context);
-        let expect_fail_tag = self.input.tags.expect_fail_tag();
         let async_patch_result = if self.input.test.is_async() {
             crate::utils::patch_async_test_function(self.py, &self.input.test.py_function)
         } else {
@@ -204,7 +203,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 snapshot_context,
             },
             execution: VariantExecutionSettings {
-                expect_fail_tag,
                 async_patch_result,
                 is_async,
                 timeout_seconds,

@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING
 from karva._approx import approx
 from karva._builtins import MockEnv
 from karva._fixtures.recwarn import deprecated_call, warns
+from karva._fixtures.request import (
+    FixtureLookupError,
+    FixtureRequest,
+    RequestConfig,
+    RequestNode,
+)
 from karva._importorskip import importorskip
 from karva._karva import (
     Command,
@@ -52,8 +58,12 @@ __all__: list[str] = [
     "Command",
     "ExceptionInfo",
     "FailError",
+    "FixtureLookupError",
+    "FixtureRequest",
     "MockEnv",
     "RaisesContext",
+    "RequestConfig",
+    "RequestNode",
     "SkipError",
     "SnapshotMismatchError",
     "SnapshotSettings",

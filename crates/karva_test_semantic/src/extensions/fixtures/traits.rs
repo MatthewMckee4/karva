@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 use crate::discovery::{DiscoveredModule, DiscoveredPackage};
@@ -29,6 +30,9 @@ pub trait HasFixtures<'a>: Debug {
     /// Resolves one public name while preserving rejected definitions as shadowing results.
     fn lookup_fixture(&'a self, fixture_name: &str) -> FixtureLookup<'a>;
 
+    /// Collects names that can be looked up through this provider.
+    fn fixture_names(&'a self, names: &mut HashSet<&'a str>);
+
     /// Get all autouse fixtures
     ///
     /// If this returns a non-empty list, it means that the module or package has a configuration module.
@@ -36,6 +40,14 @@ pub trait HasFixtures<'a>: Debug {
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredModule {
+    fn fixture_names(&'a self, names: &mut HashSet<&'a str>) {
+        names.extend(
+            self.fixtures()
+                .iter()
+                .map(|fixture| fixture.name().function_name()),
+        );
+    }
+
     fn lookup_fixture(&'a self, fixture_name: &str) -> FixtureLookup<'a> {
         if let Some(fixture) = self
             .fixtures()
@@ -58,6 +70,15 @@ impl<'a> HasFixtures<'a> for DiscoveredModule {
 }
 
 impl<'a> HasFixtures<'a> for DiscoveredPackage {
+    fn fixture_names(&'a self, names: &mut HashSet<&'a str>) {
+        if let Some(module) = self.configuration_module_impl() {
+            module.fixture_names(names);
+        }
+        if let Some(module) = self.framework_module_impl() {
+            module.fixture_names(names);
+        }
+    }
+
     fn lookup_fixture(&'a self, fixture_name: &str) -> FixtureLookup<'a> {
         if let Some(module) = self.configuration_module_impl() {
             match module.lookup_fixture(fixture_name) {
@@ -100,6 +121,10 @@ impl<'a> HasFixtures<'a> for DiscoveredPackage {
 }
 
 impl<'a> HasFixtures<'a> for &'a DiscoveredPackage {
+    fn fixture_names(&'a self, names: &mut HashSet<&'a str>) {
+        (*self).fixture_names(names);
+    }
+
     fn lookup_fixture(&'a self, fixture_name: &str) -> FixtureLookup<'a> {
         (*self).lookup_fixture(fixture_name)
     }

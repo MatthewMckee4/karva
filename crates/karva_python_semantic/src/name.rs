@@ -50,6 +50,24 @@ impl Serialize for QualifiedFunctionName {
     }
 }
 
+/// A worker case index, with its controller selector when a fixture adds dimensions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ParameterCase {
+    Index(usize),
+    Fixture([usize; 2]),
+}
+
+impl ParameterCase {
+    /// Forms the cache identity shared by worker results and crash checkpoints.
+    pub fn cache_key(self, function: impl std::fmt::Display) -> TestCacheKey {
+        match self {
+            Self::Index(index) => TestCacheKey(format!("{function}[{index}]")),
+            Self::Fixture([group, index]) => TestCacheKey(format!("{function}[{group}:{index}]")),
+        }
+    }
+}
+
 /// Stable duration and last-failed identity for a function or parameter case.
 #[derive(Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct TestCacheKey(String);
@@ -75,19 +93,28 @@ impl TestCacheKey {
         Self(format!("{function}[{index}]"))
     }
 
-    /// Returns the qualified function portion without a case index.
+    /// Returns the qualified function portion without a case suffix.
     pub fn test_function_name(&self) -> &str {
-        let Some((function, suffix)) = self.0.rsplit_once('[') else {
-            return &self.0;
-        };
-        let Some(index) = suffix.strip_suffix(']') else {
-            return &self.0;
-        };
-        if !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()) {
-            function
-        } else {
-            &self.0
-        }
+        self.case_suffix()
+            .map_or(self.0.as_str(), |(function, _)| function)
+    }
+
+    /// The statically scheduled case that owns this fixture-expanded result.
+    pub fn fixture_case_group(&self) -> Option<usize> {
+        let (_, case) = self.case_suffix()?;
+        case.split_once(':')?.0.parse().ok()
+    }
+
+    fn case_suffix(&self) -> Option<(&str, &str)> {
+        let (function, suffix) = self.0.rsplit_once('[')?;
+        let case = suffix.strip_suffix(']')?;
+        let is_index =
+            |index: &str| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit());
+        let valid = case.split_once(':').map_or_else(
+            || is_index(case),
+            |(group, index)| is_index(group) && is_index(index),
+        );
+        valid.then_some((function, case))
     }
 
     /// Whether this key identifies one statically indexed parameter case.
@@ -128,7 +155,7 @@ impl Serialize for TestCacheKey {
 pub struct QualifiedTestName {
     function_name: QualifiedFunctionName,
     parameters: Option<String>,
-    case_index: Option<usize>,
+    case: Option<ParameterCase>,
 }
 
 impl QualifiedTestName {
@@ -137,7 +164,7 @@ impl QualifiedTestName {
         Self {
             function_name,
             parameters: None,
-            case_index: None,
+            case: None,
         }
     }
 
@@ -146,7 +173,7 @@ impl QualifiedTestName {
         Self {
             function_name,
             parameters: Some(parameters),
-            case_index: None,
+            case: None,
         }
     }
 
@@ -161,7 +188,7 @@ impl QualifiedTestName {
     /// that survive renaming of parameter values across runs.
     #[must_use]
     pub fn with_case_index(mut self, case_index: Option<usize>) -> Self {
-        self.case_index = case_index;
+        self.case = case_index.map(ParameterCase::Index);
         self
     }
 
@@ -175,21 +202,24 @@ impl QualifiedTestName {
         self.parameters.as_deref()
     }
 
-    /// Returns the stable expansion index for a parameter case, when known.
-    pub fn case_index(&self) -> Option<usize> {
-        self.case_index
+    /// Attaches the full worker case identity.
+    #[must_use]
+    pub fn with_case(mut self, case: Option<ParameterCase>) -> Self {
+        self.case = case;
+        self
     }
 
-    /// Stable string identifier for cache and partitioning, of the form
-    /// `module::test_name` (no parametrize) or `module::test_name[idx]`.
-    ///
-    /// Distinct from `Display`, which renders the human-facing name with
-    /// parameter values.
+    /// Returns the stable worker case identity, when known.
+    pub fn case(&self) -> Option<ParameterCase> {
+        self.case
+    }
+
+    /// Returns the worker's cache key independently of its rendered case name.
     pub fn cache_key(&self) -> TestCacheKey {
-        match self.case_index {
-            Some(index) => TestCacheKey::parameter_case(&self.function_name, index),
-            None => TestCacheKey::function(&self.function_name),
-        }
+        self.case.map_or_else(
+            || TestCacheKey::function(&self.function_name),
+            |case| case.cache_key(&self.function_name),
+        )
     }
 }
 
