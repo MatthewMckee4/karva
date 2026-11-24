@@ -7,6 +7,131 @@ use crate::common::TestContext;
 use crate::extensions::get_auto_use_kw;
 
 #[rstest]
+fn autouse_fixtures_wrap_requested_fixtures(#[values("pytest", "karva")] framework: &str) {
+    let auto_use_kw = get_auto_use_kw(framework);
+    let conftest = format!(
+        r#"
+import {framework}
+
+events = []
+
+@{framework}.fixture({auto_use_kw}=True)
+def guard():
+    events.append("guard setup")
+    yield
+    events.append("guard teardown")
+"#
+    );
+    let tests = format!(
+        r#"
+import {framework}
+from .conftest import events
+
+@{framework}.fixture
+def first():
+    events.append("first setup")
+    yield
+    events.append("first teardown")
+
+@{framework}.fixture
+def inner():
+    events.append("inner setup")
+    yield
+    events.append("inner teardown")
+
+@{framework}.fixture
+def outer(inner):
+    events.append("outer setup")
+    yield
+    events.append("outer teardown")
+
+def test_fixtures(first, outer):
+    events.append("test")
+
+def test_fixture_order():
+    assert events[:-1] == [
+        "guard setup", "first setup", "inner setup", "outer setup", "test",
+        "outer teardown", "inner teardown", "first teardown", "guard teardown",
+    ], events
+"#
+    );
+    let context = TestContext::with_files([
+        ("suite/conftest.py", conftest.as_str()),
+        ("suite/test_order.py", tests.as_str()),
+    ]);
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                PASS [TIME] suite.test_order::test_fixtures(first=None, outer=None)
+                PASS [TIME] suite.test_order::test_fixture_order
+        ────────────
+             Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
+fn function_autouse_reuses_package_autouse_with_shadowed_dependency(
+    #[values("pytest", "karva")] framework: &str,
+) {
+    let auto_use_kw = get_auto_use_kw(framework);
+    let conftest = format!(
+        r#"
+import {framework}
+
+@{framework}.fixture(scope="session")
+def session_value():
+    return "package"
+
+@{framework}.fixture(scope="package", {auto_use_kw}=True)
+def package_value(session_value):
+    return session_value
+"#
+    );
+    let tests = format!(
+        r#"
+import {framework}
+
+@{framework}.fixture(scope="session")
+def session_value():
+    raise AssertionError("the package fixture is already cached")
+
+@{framework}.fixture({auto_use_kw}=True)
+def function_value():
+    return "function"
+
+def test_cached_package_fixture(package_value, function_value):
+    assert package_value == "package"
+    assert function_value == "function"
+"#
+    );
+    let context = TestContext::with_files([
+        ("suite/conftest.py", conftest.as_str()),
+        ("suite/test_cached.py", tests.as_str()),
+    ]);
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 1 test across 1 worker
+                PASS [TIME] suite.test_cached::test_cached_package_fixture(package_value='package', function_value='function')
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[rstest]
 fn test_function_scope_auto_use_fixture(#[values("pytest", "karva")] framework: &str) {
     let auto_use_kw = get_auto_use_kw(framework);
     let context = TestContext::with_file(

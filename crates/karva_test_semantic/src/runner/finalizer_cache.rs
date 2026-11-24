@@ -3,7 +3,7 @@
 use karva_diagnostic::Diagnostic;
 use pyo3::prelude::*;
 
-use crate::extensions::fixtures::{Finalizer, FixtureScope};
+use crate::extensions::fixtures::Finalizer;
 use crate::runner::scoped_storage::{ScopeKey, ScopedStorage};
 
 /// Manages fixture teardown callbacks at different scope levels.
@@ -24,21 +24,8 @@ impl FinalizerCache {
             .unwrap_or(false)
     }
 
-    /// Adds a finalizer to its declared scope's LIFO stack.
-    pub(super) fn add_finalizer(
-        &mut self,
-        finalizer: Finalizer,
-        module_owner: Option<&camino::Utf8Path>,
-    ) {
-        let package_owner = finalizer.package_owner.clone();
-        let scope = match finalizer.scope {
-            FixtureScope::Session => ScopeKey::Session,
-            FixtureScope::Package => ScopeKey::Package(&package_owner),
-            FixtureScope::Module => {
-                ScopeKey::Module(module_owner.map_or(&package_owner, |path| path))
-            }
-            FixtureScope::Function => ScopeKey::Function,
-        };
+    /// Adds a finalizer to the LIFO stack for the same lifetime as its value.
+    pub(super) fn add_finalizer(&mut self, scope: ScopeKey<'_>, finalizer: Finalizer) {
         self.storage.with_mut(scope, |finalizers| {
             finalizers.push(finalizer);
         });

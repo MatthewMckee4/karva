@@ -233,10 +233,15 @@ impl<'a> FixturePlanCompiler<'a> {
             self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
         })?;
 
+        let broadest_scope = dependent_fixtures
+            .iter()
+            .map(|id| self.fixtures[id.index()].broadest_scope)
+            .fold(fixture.scope(), FixtureScope::max);
         let result = NormalizedFixture {
             identity: fixture.identity().clone(),
             dependencies: dependent_fixtures,
             scope: fixture.scope(),
+            broadest_scope,
             package_owner: match fixture.scope() {
                 FixtureScope::Package => self.package_owner(fixture).to_path_buf(),
                 FixtureScope::Function | FixtureScope::Module | FixtureScope::Session => {

@@ -972,18 +972,29 @@ fn test_nested_generator_fixture(#[values("pytest", "karva")] framework: &str) {
 }
 
 #[rstest]
-fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &str) {
+fn test_fixture_order_respects_scope(
+    #[values("pytest", "karva")] framework: &str,
+    #[values(false, true)] indirect: bool,
+) {
     let auto_use_kw = get_auto_use_kw(framework);
+    let (reset_fixture, function_fixture) = if indirect {
+        (
+            "reset_data",
+            "\n@fixture\ndef clean_data(reset_data):\n    return reset_data\n",
+        )
+    } else {
+        ("clean_data", "")
+    };
     let context = TestContext::with_file(
         "test.py",
-        format!(
+        formatdoc!(
             r"
                 from {framework} import fixture
 
                 data = {{}}
 
                 @fixture(scope='module')
-                def clean_data():
+                def {reset_fixture}():
                     data.clear()
 
                 @fixture({auto_use_kw}=True)
@@ -992,6 +1003,7 @@ fn test_fixture_order_respects_scope(#[values("pytest", "karva")] framework: &st
 
                 def test_value(clean_data):
                     assert data.get('value')
+                {function_fixture}
                 "
         ),
     );

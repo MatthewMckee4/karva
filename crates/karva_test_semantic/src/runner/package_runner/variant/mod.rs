@@ -225,7 +225,6 @@ impl<'runner, 'context, 'settings, 'test, 'py>
             super::fixture::PreparedFixtures {
                 function_arguments: crate::runner::FixtureArguments::default(),
                 setup_result: Ok(()),
-                test_finalizers: Vec::new(),
             }
         };
         PreparedTestAttempt {

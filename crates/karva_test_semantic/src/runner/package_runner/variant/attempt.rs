@@ -38,7 +38,6 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 PreparedFixtures {
                     function_arguments,
                     setup_result,
-                    test_finalizers,
                 },
             setup_duration,
             output_capture,
@@ -92,9 +91,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         let skipped = body.outcome.is_skipped();
         self.set_coverage_context(&settings.identity.qualified_name, CoveragePhase::Teardown);
         let teardown_start = Instant::now();
-        let mut finalizer_diagnostics = self
-            .package_runner
-            .clean_up_test_attempt(self.py, test_finalizers);
+        let mut finalizer_diagnostics = self.package_runner.clean_up_test_attempt(self.py);
         // Argument references can keep fixture values alive after cache cleanup.
         // Include their destruction in teardown attribution and timing.
         drop(function_arguments);
@@ -286,7 +283,7 @@ struct AttemptBody {
 pub(super) struct PreparedTestAttempt {
     /// Validation of the benchmark session before fixture setup.
     pub(super) benchmark_setup: Option<PyResult<()>>,
-    /// Arguments, setup failures, and function-scoped finalizers.
+    /// Arguments and setup failures.
     pub(super) fixtures: PreparedFixtures,
     /// Duration of fixture and parameter preparation.
     pub(super) setup_duration: Duration,

@@ -18,6 +18,10 @@ impl FixtureId {
     pub(crate) fn new(index: usize) -> Self {
         Self(index)
     }
+
+    pub(crate) fn index(self) -> usize {
+        self.0
+    }
 }
 
 /// Arena containing every fixture definition needed by one resolution context.
@@ -66,6 +70,9 @@ pub struct NormalizedFixture {
 
     /// The scope at which this fixture's value is cached.
     pub(crate) scope: FixtureScope,
+
+    /// Broadest lifetime reached by this fixture or any of its dependencies.
+    pub(crate) broadest_scope: FixtureScope,
 
     /// Package whose lifetime owns package-scoped values and finalizers; empty for other scopes.
     pub(crate) package_owner: Utf8PathBuf,
