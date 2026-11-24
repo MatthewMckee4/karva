@@ -2,6 +2,10 @@
 
 ## 0.0.1-alpha.14
 
+Karva now requires Python 3.11 or newer. This release adds a `benchmark` fixture,
+Python warning summaries and filters, and coverage for Python child processes.
+Zed can now download and run the Karva language server automatically.
+
 ### Bug Fixes
 
 - Discover fixtures imported or rebound in test modules ([#1679](https://github.com/MatthewMckee4/karva/pull/1679))
@@ -20,7 +24,7 @@
 
 ### Configuration
 
-- Honor pytest filterwarnings project configuration ([#1622](https://github.com/MatthewMckee4/karva/pull/1622))
+- Honor pytest's `filterwarnings` project setting ([#1622](https://github.com/MatthewMckee4/karva/pull/1622))
 
 ### Coverage
 
@@ -34,17 +38,19 @@
 
 ### Editor Support
 
-- Start Karva in Zed with managed native releases ([#1639](https://github.com/MatthewMckee4/karva/pull/1639))
+- Install and start the Karva language server automatically in Zed ([#1639](https://github.com/MatthewMckee4/karva/pull/1639))
 - Bound language-server scheduling and reserve measured stacks ([#1635](https://github.com/MatthewMckee4/karva/pull/1635))
+- Resolve nested fixture overrides in editor navigation and hover ([#1601](https://github.com/MatthewMckee4/karva/pull/1601))
 
 ### Fixtures
 
 - Propagate parametrized values through fixture dependencies ([#1681](https://github.com/MatthewMckee4/karva/pull/1681))
 - Set up autouse fixtures before same-scope requests ([#1680](https://github.com/MatthewMckee4/karva/pull/1680))
-- Add native benchmark fixtures and statistical reports ([#1628](https://github.com/MatthewMckee4/karva/pull/1628))
+- Measure code with the `benchmark` fixture and report the results ([#1628](https://github.com/MatthewMckee4/karva/pull/1628))
 
 ### Performance
 
+- Balance tests across workers when only some tests have prior timings ([#1684](https://github.com/MatthewMckee4/karva/pull/1684))
 - Preserve scheduling durations across focused test runs ([#1611](https://github.com/MatthewMckee4/karva/pull/1611))
 - Run shorter cached failures first ([#1610](https://github.com/MatthewMckee4/karva/pull/1610))
 - Reuse interned names in Python output capture ([#1596](https://github.com/MatthewMckee4/karva/pull/1596))
@@ -56,11 +62,15 @@
 
 ### Python Support
 
-- Raise minimum Python to 3.11 and refresh tooling ([#1609](https://github.com/MatthewMckee4/karva/pull/1609))
+- Require Python 3.11 or newer ([#1609](https://github.com/MatthewMckee4/karva/pull/1609))
+
+### Security
+
+- Update dependencies and tooling to address security advisories ([#1617](https://github.com/MatthewMckee4/karva/pull/1617))
 
 ### Test Running
 
-- Support fileno on captured stdout and stderr ([#1676](https://github.com/MatthewMckee4/karva/pull/1676))
+- Support `fileno()` on captured `sys.stdout` and `sys.stderr` ([#1676](https://github.com/MatthewMckee4/karva/pull/1676))
 
 ### Contributors
 
