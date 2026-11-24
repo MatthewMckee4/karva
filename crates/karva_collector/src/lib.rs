@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use camino::{Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use ruff_python_ast::visitor::{Visitor, walk_expr};
-use ruff_python_ast::{Expr, Parameter, PythonVersion, Stmt};
+use ruff_python_ast::{Expr, Parameter, PythonVersion, Stmt, StmtFunctionDef};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 use ruff_text_size::{Ranged, TextRange, TextSize};
 use thiserror::Error;
@@ -20,9 +20,6 @@ mod parametrize;
 pub use imports::project_import_paths;
 pub use models::{CollectedDoctest, CollectedModule, CollectedPackage, DoctestTarget, ModuleType};
 pub use parametrize::count_parametrize_cases_with_bindings;
-
-#[cfg(test)]
-use parametrize::count_parametrize_cases;
 
 /// Detects measurement references before releasing scheduling-only syntax.
 fn uses_benchmark(body: &[Stmt]) -> bool {
@@ -162,9 +159,7 @@ fn collect_source_for_scheduling(
         Vec::new()
     };
     let mut collected_module =
-        CollectedModule::new(module_path, module_type, Box::default(), String::new());
-    collected_module.has_module_tags = parametrize::has_module_tags(&module_body);
-    collected_module.uses_benchmark = uses_benchmark(&module_body);
+        CollectedModule::new(module_path, module_type, &module_body, String::new());
 
     for doctest in doctests {
         if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {
@@ -174,25 +169,12 @@ fn collect_source_for_scheduling(
 
     let mut bindings = DecoratorBindings::default();
     for statement in module_body {
-        let is_fixture = matches!(
-            &statement,
-            Stmt::FunctionDef(function)
-                if settings.collect_fixtures
-                    && is_fixture_function_with_bindings(function, &bindings)
-        );
-        bindings.update(&statement);
-        let Stmt::FunctionDef(mut function_def) = statement else {
-            continue;
-        };
-        if is_fixture {
-            collected_module.add_fixture_function_def(function_def);
-        } else if is_test_function_to_collect(
-            &function_def.name,
-            &function_names,
-            settings.test_function_prefix,
-        ) {
-            function_def.body = Vec::new();
-            collected_module.add_test_function_def(function_def);
+        let selection = select_function(&statement, settings, &function_names, &mut bindings);
+        if let (Some(selection), Stmt::FunctionDef(mut function)) = (selection, statement) {
+            if matches!(selection, CollectedFunction::Test(_)) {
+                function.body = Vec::new();
+            }
+            selection.add_to(&mut collected_module, function);
         }
     }
 
@@ -249,56 +231,69 @@ fn collect_source_with_module_path(
 
     let function_names: HashSet<&str> = function_names.iter().map(String::as_str).collect();
     let module_body = parsed.into_suite();
-    let mut bindings = DecoratorBindings::default();
-    let function_defs = module_body
-        .iter()
-        .filter_map(|stmt| {
-            let Stmt::FunctionDef(function_def) = stmt else {
-                bindings.update(stmt);
-                return None;
-            };
-            let is_fixture = settings.collect_fixtures
-                && is_fixture_function_with_bindings(function_def, &bindings);
-            bindings.update(stmt);
-            if is_fixture {
-                Some((function_def.clone(), true))
-            } else {
-                is_test_function_to_collect(
-                    &function_def.name,
-                    &function_names,
-                    settings.test_function_prefix,
-                )
-                .then(|| (function_def.clone(), false))
-            }
-        })
-        .collect::<Vec<_>>();
-    let mut collected_module = CollectedModule::new(
-        module_path,
-        module_type,
-        module_body.into_boxed_slice(),
-        source_text,
-    );
+    let mut collected_module =
+        CollectedModule::new(module_path, module_type, &module_body, source_text);
 
     if settings.collect_doctests && module_type == ModuleType::Test {
-        for doctest in
-            collect_doctests(&collected_module.module_body, &collected_module.source_text)
-        {
+        for doctest in collect_doctests(&module_body, &collected_module.source_text) {
             if function_names.is_empty() || function_names.contains(doctest.name.as_str()) {
                 collected_module.add_doctest(doctest);
             }
         }
     }
 
-    for (function_def, is_fixture) in function_defs {
-        if is_fixture {
-            collected_module.add_fixture_function_def(function_def);
-            continue;
+    let mut bindings = DecoratorBindings::default();
+    for statement in &module_body {
+        if let (Some(selection), Stmt::FunctionDef(function)) = (
+            select_function(statement, settings, &function_names, &mut bindings),
+            statement,
+        ) {
+            selection.add_to(&mut collected_module, function.clone());
         }
-
-        collected_module.add_test_function_def(function_def);
     }
-
+    collected_module.module_body = module_body.into_boxed_slice();
     Some(collected_module)
+}
+
+enum CollectedFunction {
+    Fixture,
+    Test(Option<usize>),
+}
+
+impl CollectedFunction {
+    fn add_to(self, module: &mut CollectedModule, function: StmtFunctionDef) {
+        match self {
+            Self::Fixture => module.add_fixture_function_def(function),
+            Self::Test(count) => module.add_test_function_def(function, count),
+        }
+    }
+}
+
+fn select_function(
+    statement: &Stmt,
+    settings: &CollectionSettings,
+    function_names: &HashSet<&str>,
+    bindings: &mut DecoratorBindings,
+) -> Option<CollectedFunction> {
+    let selected = if let Stmt::FunctionDef(function) = statement {
+        if settings.collect_fixtures && is_fixture_function_with_bindings(function, bindings) {
+            Some(CollectedFunction::Fixture)
+        } else if is_test_function_to_collect(
+            &function.name,
+            function_names,
+            settings.test_function_prefix,
+        ) {
+            Some(CollectedFunction::Test(
+                count_parametrize_cases_with_bindings(function, bindings),
+            ))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    bindings.update(statement);
+    selected
 }
 
 fn collect_doctests(module_body: &[Stmt], source_text: &str) -> Vec<CollectedDoctest> {
@@ -538,6 +533,8 @@ mod tests {
         let (_temp_dir, root, path) = python_file(
             "test_sample.py",
             r#"
+import karva
+
 @fixture
 def db():
     return 1
@@ -574,7 +571,8 @@ async def test_metadata(a: int, b: int) -> None:
         assert_eq!(scheduled_test.parameters, full_test.parameters);
         assert_eq!(scheduled_test.returns, full_test.returns);
         assert_eq!(scheduled_test.decorator_list, full_test.decorator_list);
-        assert_eq!(count_parametrize_cases(scheduled_test), Some(6));
+        assert_eq!(scheduled.count_parametrize_cases(scheduled_test), Some(6));
+        assert_eq!(full.count_parametrize_cases(full_test), Some(6));
         assert_eq!(scheduled.doctests.len(), 1);
         assert_eq!(scheduled.doctests[0].name, "doctest:test_metadata");
         assert_eq!(scheduled.doctests[0].range, full.doctests[0].range);

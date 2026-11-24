@@ -2,20 +2,14 @@ use karva_python_semantic::DecoratorBindings;
 use ruff_python_ast::visitor::{Visitor, walk_expr};
 use ruff_python_ast::{Alias, Expr, Stmt, StmtFunctionDef};
 
-/// Statically count the number of test cases a function will expand to once
-/// its `@parametrize` decorators are applied.
+/// Statically counts test cases using the bindings visible at the definition.
 ///
-/// Returns `Some(n)` when at least one recognized decorator exists and every
-/// `argvalues` expression is a literal list or tuple without unpacking. Returns
-/// `None` when no parametrize decorator exists or any `argvalues` is dynamic;
-/// callers should treat the function as one opaque scheduling unit.
-pub fn count_parametrize_cases(stmt: &StmtFunctionDef) -> Option<usize> {
-    count_parametrize_cases_with_bindings(stmt, &DecoratorBindings::legacy())
-}
-
-/// Counts parametrization cases using the module bindings visible at the
-/// function definition. This keeps aliases and shadowing consistent with
-/// fixture and `usefixtures` recognition.
+/// Returns `Some(n)` when there is at least one recognized parametrize call,
+/// all other decorators are known marks, and every `argvalues` expression is
+/// a literal list or tuple without unpacking.
+/// Unknown decorators may add runtime parameter dimensions, so they return
+/// `None`, as do missing decorators or dynamic values. Callers should treat
+/// the function as one opaque scheduling unit in these cases.
 pub fn count_parametrize_cases_with_bindings(
     stmt: &StmtFunctionDef,
     bindings: &DecoratorBindings,
@@ -24,29 +18,41 @@ pub fn count_parametrize_cases_with_bindings(
     let mut found = false;
 
     for decorator in &stmt.decorator_list {
-        let Expr::Call(call) = &decorator.expression else {
-            continue;
-        };
-
-        if !bindings.is_parametrize(call.func.as_ref()) {
+        if bindings.is_non_parametrize_pytest_mark(&decorator.expression) {
             continue;
         }
-        found = true;
+        let Expr::Call(call) = &decorator.expression else {
+            return None;
+        };
+
+        if !bindings.is_parametrize(&decorator.expression) {
+            return None;
+        }
 
         let argvalues = argvalues_arg(call)?;
         let count = literal_sequence_len(argvalues)?;
 
         total = total.checked_mul(count)?;
+        found = true;
     }
 
     found.then_some(total)
 }
 
-/// Extract the `argvalues` argument from a parametrize call.
+/// Extract `argvalues` when positional unpacking cannot shift its position.
 ///
 /// Accepts both `parametrize("x", [1, 2])` (positional) and
 /// `parametrize(argnames="x", argvalues=[1, 2])` (keyword).
 fn argvalues_arg(call: &ruff_python_ast::ExprCall) -> Option<&Expr> {
+    if call
+        .arguments
+        .args
+        .iter()
+        .take(2)
+        .any(|argument| matches!(argument, Expr::Starred(_)))
+    {
+        return None;
+    }
     if let Some(expr) = call.arguments.args.get(1) {
         return Some(expr);
     }
@@ -116,6 +122,10 @@ mod tests {
     use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
 
     use super::*;
+
+    fn count_parametrize_cases(stmt: &StmtFunctionDef) -> Option<usize> {
+        count_parametrize_cases_with_bindings(stmt, &DecoratorBindings::legacy())
+    }
 
     fn parse_function(source: &str) -> StmtFunctionDef {
         let parsed = parse_unchecked(source, ParseOptions::from(Mode::Module))

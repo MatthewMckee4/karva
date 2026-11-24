@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use camino::Utf8PathBuf;
 use karva_python_semantic::ModulePath;
 use ruff_python_ast::{Stmt, StmtFunctionDef};
-use ruff_text_size::TextRange;
+use ruff_text_size::{TextRange, TextSize};
 
-use crate::parametrize::{count_parametrize_cases, has_module_tags};
+use crate::parametrize::has_module_tags;
 
 /// The Python object whose docstring defines a doctest case.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,13 +47,16 @@ pub struct CollectedModule {
     pub module_body: Box<[Stmt]>,
 
     /// Runtime module marks may add parameter cases beyond function decorators.
-    pub(super) has_module_tags: bool,
+    has_module_tags: bool,
 
     /// Evidence retained before scheduling collection discards function bodies.
-    pub(super) uses_benchmark: bool,
+    uses_benchmark: bool,
 
     /// Test definitions; scheduling-only collection discards their bodies.
     pub test_function_defs: Vec<StmtFunctionDef>,
+
+    /// Statically known case counts keyed by each definition's start offset.
+    parametrize_case_counts: BTreeMap<TextSize, usize>,
 
     /// Docstrings containing doctest examples.
     pub doctests: Vec<CollectedDoctest>,
@@ -71,34 +74,47 @@ impl CollectedModule {
     pub(super) fn new(
         path: ModulePath,
         module_type: ModuleType,
-        module_body: Box<[Stmt]>,
+        module_body: &[Stmt],
         source_text: String,
     ) -> Self {
         Self {
             path,
             module_type,
             source_text,
-            has_module_tags: has_module_tags(&module_body),
-            uses_benchmark: crate::uses_benchmark(&module_body),
-            module_body,
+            has_module_tags: has_module_tags(module_body),
+            uses_benchmark: crate::uses_benchmark(module_body),
+            module_body: Box::default(),
             test_function_defs: Vec::new(),
+            parametrize_case_counts: BTreeMap::new(),
             doctests: Vec::new(),
             fixture_function_defs: Vec::new(),
         }
     }
 
-    /// Counts cases only when module marks cannot add runtime parameter dimensions.
+    /// Returns the case count determined at collection time.
     ///
     /// Unknown counts keep the whole function in one worker assignment.
     pub fn count_parametrize_cases(&self, function: &StmtFunctionDef) -> Option<usize> {
         if self.has_module_tags {
             None
         } else {
-            count_parametrize_cases(function)
+            self.parametrize_case_counts
+                .get(&function.range.start())
+                .copied()
         }
     }
 
-    pub(super) fn add_test_function_def(&mut self, function_def: StmtFunctionDef) {
+    pub(super) fn add_test_function_def(
+        &mut self,
+        function_def: StmtFunctionDef,
+        case_count: Option<usize>,
+    ) {
+        if !self.has_module_tags
+            && let Some(case_count) = case_count
+        {
+            self.parametrize_case_counts
+                .insert(function_def.range.start(), case_count);
+        }
         self.test_function_defs.push(function_def);
     }
 
@@ -303,7 +319,19 @@ impl CollectedModule {
         if self.path == module.path {
             self.has_module_tags |= module.has_module_tags;
             self.uses_benchmark |= module.uses_benchmark;
-            add_new_definitions(&mut self.test_function_defs, module.test_function_defs);
+            for function in module.test_function_defs {
+                if !self
+                    .test_function_defs
+                    .iter()
+                    .any(|existing| existing.range == function.range)
+                {
+                    let count = module
+                        .parametrize_case_counts
+                        .get(&function.range.start())
+                        .copied();
+                    self.add_test_function_def(function, count);
+                }
+            }
             for doctest in module.doctests {
                 if !self
                     .doctests

@@ -45,6 +45,8 @@ fn stable_partitioning_preserves_module_order_after_grouping() {
 #[test]
 fn literal_parametrize_cases_split_across_workers() {
     let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])
         def test_value(value): pass
     "});
@@ -81,8 +83,47 @@ fn literal_parametrize_cases_split_across_workers() {
 }
 
 #[test]
+fn pytest_marks_do_not_prevent_literal_cases_from_splitting() {
+    let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import pytest
+
+        @pytest.mark.parametrize('value', [1, 2, 3, 4])
+        @pytest.mark.skipif(False, reason='example')
+        @pytest.mark.dev_server
+        def test_value(value): pass
+    "});
+
+    let (partitions, _) = partition_collected_tests(
+        &package,
+        2,
+        &HashMap::new(),
+        &HashSet::new(),
+        LastFailedSelection::All,
+        FailurePriority::Normal,
+        None,
+        TestOrdering::Stable,
+        false,
+    );
+
+    let mut selectors: Vec<_> = partitions.iter().flat_map(Partition::test_paths).collect();
+    selectors.sort();
+    assert!(partitions.iter().all(|partition| !partition.is_empty()));
+    assert_eq!(
+        selectors,
+        [
+            format!("{test_path}::test_value[0]"),
+            format!("{test_path}::test_value[1]"),
+            format!("{test_path}::test_value[2]"),
+            format!("{test_path}::test_value[3]"),
+        ]
+    );
+}
+
+#[test]
 fn failed_first_places_cached_parametrize_case_first() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', [0, 1, 2])
         def test_value(value): pass
     "});
@@ -113,6 +154,8 @@ fn failed_first_places_cached_parametrize_case_first() {
 #[test]
 fn dynamic_parametrize_cases_remain_one_unit() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', range(6))
         def test_value(value): pass
     "});
@@ -142,6 +185,8 @@ fn dynamic_parametrize_cases_remain_one_unit() {
 #[test]
 fn last_failed_case_selects_opaque_dynamic_parameter_function() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', range(6))
         def test_value(value): pass
     "});
@@ -171,6 +216,8 @@ fn last_failed_case_selects_opaque_dynamic_parameter_function() {
 #[test]
 fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', [1])
         def test_value(value): pass
     "});
@@ -201,6 +248,8 @@ fn one_literal_parametrize_case_uses_indexed_selector_and_legacy_duration() {
 #[test]
 fn literal_parametrize_cases_share_legacy_function_duration() {
     let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', [0, 1, 2, 3, 4, 5])
         def test_value(value): pass
     "});
@@ -379,6 +428,8 @@ fn failed_first_reorders_across_module_groups() {
 #[test]
 fn exact_case_duration_overrides_legacy_fallback() {
     let (_temp_dir, _test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', [0, 1, 2])
         def test_value(value): pass
     "});
@@ -416,7 +467,10 @@ fn exact_case_duration_overrides_legacy_fallback() {
 #[test]
 fn module_marks_keep_function_parametrize_atomic() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import karva
+
         pytestmark = marks
+
         @karva.tags.parametrize('value', [0, 1, 2])
         def test_value(value): pass
     "});

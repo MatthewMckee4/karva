@@ -401,18 +401,25 @@ def test_value(value):
 
 #[rstest]
 fn unpacked_parametrize_cases_are_not_dropped(
-    #[values("'value', [*values]", "'value', (*values,)", "*names, [*values]")] arguments: &str,
+    #[values(
+        "'value', [*values]",
+        "'value', (*values,)",
+        "*names, [*values]",
+        "*(), names, values",
+        "*(), ['value'], [1, 2, 3]"
+    )]
+    arguments: &str,
 ) {
     let context = TestContext::with_file(
         "test_mod.py",
         format!(
             r#"
-import karva
+from karva import tags as kt
 
 values = [1, 2, 3]
 names = ["value"]
 
-@karva.tags.parametrize({arguments})
+@kt.parametrize({arguments})
 def test_value(value):
     assert value in values
 "#,
@@ -431,6 +438,43 @@ def test_value(value):
     ----- stderr -----
     "
     );
+}
+
+#[rstest]
+fn partitioning_combines_case_counts_for_selectors_from_one_file(
+    #[values(
+        ["test_mod.py::test_a", "test_mod.py::test_b"],
+        ["test_mod.py::test_b", "test_mod.py::test_a"]
+    )]
+    selectors: [&str; 2],
+) {
+    let context = TestContext::with_file(
+        "test_mod.py",
+        indoc! {r"
+            import karva
+
+            @karva.tags.parametrize('value', [1, 2, 3])
+            def test_a(value): pass
+
+            @karva.tags.parametrize('value', [4, 5, 6])
+            def test_b(value): pass
+        "},
+    );
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().arg("--partition=slice:1/2").args(selectors), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 2 tests across 1 worker
+                PASS [TIME] test_mod::test_a(value=1)
+                PASS [TIME] test_mod::test_a(value=3)
+                PASS [TIME] test_mod::test_b(value=5)
+        ────────────
+             Summary [TIME] 3 tests run: 3 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
 }
 
 #[rstest]

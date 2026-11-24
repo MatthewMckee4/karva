@@ -74,7 +74,7 @@ fn benchmark_deferral_preserves_selected_cases(
         ),
         (
             "test_measure.py",
-            "@karva.tags.parametrize('value', [0, 1])\ndef test_micro(benchmark, value): pass\n",
+            "import karva\n\n@karva.tags.parametrize('value', [0, 1])\ndef test_micro(benchmark, value): pass\n",
         ),
     ]);
     let partition = |defer| {
@@ -186,8 +186,11 @@ fn last_failed_filters_before_explicit_partition_selection() {
 #[test]
 fn cached_case_roots_select_opaque_functions_without_selecting_siblings() {
     let (_temp_dir, test_path, package) = collected_package(indoc! {r"
+        import karva
+
         @karva.tags.parametrize('value', [0, 1])
         def test_value(value): pass
+
         @karva.tags.parametrize('value', range(3))
         def test_dynamic(value): pass
         def test_value_extra(): pass
