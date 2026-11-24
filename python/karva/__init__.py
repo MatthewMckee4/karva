@@ -28,7 +28,7 @@ from karva._karva import (
     tags,
 )
 
-__version__ = "0.0.1-alpha.13"
+__version__ = "0.0.1-alpha.14"
 
 if TYPE_CHECKING:
     from karva._benchmark import Benchmark
