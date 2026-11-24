@@ -71,7 +71,7 @@ impl CapturedStdin {
 
 /// Process-global Python stream redirection for one test attempt.
 ///
-/// `start` replaces `sys.stdout` and `sys.stderr` with `StringIO` objects.
+/// Captured streams allocate a temporary file only when a descriptor is requested.
 /// Callers must consume the value with [`Self::finish`] to restore both streams.
 pub struct PythonOutputCapture {
     sys: Py<PyModule>,
@@ -192,14 +192,12 @@ impl PythonOutputCapture {
     pub fn start(py: Python<'_>) -> PyResult<Self> {
         let sys = py.import(intern!(py, "sys"))?.unbind();
         let sys_bound = sys.bind(py);
-        let string_io = py
-            .import(intern!(py, "io"))?
-            .getattr(intern!(py, "StringIO"))?;
+        let capture_stream = capture_stream_class(py)?.bind(py);
 
         let old_stdout = sys_bound.getattr(intern!(py, "stdout"))?.unbind();
         let old_stderr = sys_bound.getattr(intern!(py, "stderr"))?.unbind();
-        let stdout = string_io.call0()?.unbind();
-        let stderr = string_io.call0()?.unbind();
+        let stdout = capture_stream.call0()?.unbind();
+        let stderr = capture_stream.call0()?.unbind();
 
         sys_bound.setattr(intern!(py, "stdout"), stdout.bind(py))?;
         if let Err(err) = sys_bound.setattr(intern!(py, "stderr"), stderr.bind(py)) {
@@ -221,11 +219,9 @@ impl PythonOutputCapture {
     }
 
     /// Mirrors timed synchronous output in Rust so a watchdog can read it without the GIL.
-    /// Ordinary captures retain the existing `StringIO` path and its allocation behavior.
-    pub(super) fn watchdog_output(&mut self, py: Python<'_>) -> PyResult<SharedCapturedOutput> {
-        let sys = self.sys.bind(py);
-        let stdout = mirror_stream(py, sys, "stdout", &mut self.stdout)?;
-        let stderr = mirror_stream(py, sys, "stderr", &mut self.stderr)?;
+    pub(super) fn watchdog_output(&self, py: Python<'_>) -> PyResult<SharedCapturedOutput> {
+        let stdout = mirror_stream(self.stdout.bind(py))?;
+        let stderr = mirror_stream(self.stderr.bind(py))?;
         Ok(SharedCapturedOutput { stdout, stderr })
     }
 
@@ -323,51 +319,175 @@ impl SharedCapturedOutput {
     }
 }
 
-/// `StringIO` semantics are preserved; only timed calls pay for a native text mirror.
-fn mirror_stream(
-    py: Python<'_>,
-    sys: &Bound<'_, PyModule>,
-    name: &str,
-    stream: &mut Py<PyAny>,
-) -> PyResult<Arc<Mutex<String>>> {
+fn capture_stream_class(py: Python<'_>) -> PyResult<&Py<PyAny>> {
     static CLASS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-    let class = CLASS.get_or_try_init(py, || {
+    CLASS.get_or_try_init(py, || {
         let code = cr"
 import io
+import os
+import tempfile
+from threading import RLock
 
-class TimeoutCapture(io.StringIO):
-    def __init__(self, initial, record):
-        super().__init__(initial)
-        self.seek(0, 2)
-        self._length = len(initial)
-        self._record = record
+class CapturedOutput(io.TextIOBase):
+    def __init__(self):
+        self._stream = io.StringIO()
+        self._reader = None
+        self._record = None
+        self._lock = RLock()
+
+    def fileno(self):
+        with self._lock:
+            if self._reader is None:
+                self._rollover()
+            return self._stream.fileno()
+
+    def _rollover(self):
+        text = self._stream.getvalue()
+        position = self._stream.tell()
+        delete_on_close = os.name == 'nt'
+        output = tempfile.NamedTemporaryFile(buffering=0, delete=delete_on_close)
+        try:
+            try:
+                # Open separately so snapshots cannot move an inherited writer's offset.
+                reader = open(
+                    output.name,
+                    'rb',
+                    buffering=0,
+                    opener=lambda path, flags: os.open(path, flags | getattr(os, 'O_TEMPORARY', 0)),
+                )
+            finally:
+                if not delete_on_close:
+                    os.unlink(output.name)
+        except BaseException:
+            output.close()
+            raise
+        try:
+            stream = io.TextIOWrapper(
+                io.BufferedRandom(output), encoding='utf-8', errors='replace', newline='',
+            )
+            stream.write(text)
+            stream.flush()
+            end = stream.tell()
+            if position != len(text):
+                prefix = text[:position].encode('utf-8', 'replace')
+                stream.seek(len(prefix) + max(0, position - len(text)))
+        except BaseException:
+            reader.close()
+            output.close()
+            raise
+        self._stream = stream
+        self._reader = reader
+        self._end = end
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+    @property
+    def closed(self):
+        return self._stream.closed
+
+    @property
+    def encoding(self):
+        return self._stream.encoding
+
+    @property
+    def errors(self):
+        return self._stream.errors
+
+    @property
+    def newlines(self):
+        return self._stream.newlines
+
+    def close(self):
+        with self._lock:
+            try:
+                self._stream.close()
+            finally:
+                if self._reader is not None:
+                    self._reader.close()
+
+    def flush(self):
+        with self._lock:
+            self._stream.flush()
+
+    def readable(self):
+        return self._stream.readable()
+
+    def writable(self):
+        return self._stream.writable()
+
+    def seekable(self):
+        return self._stream.seekable()
+
+    def seek(self, offset, whence=0):
+        with self._lock:
+            return self._stream.seek(offset, whence)
+
+    def tell(self):
+        with self._lock:
+            return self._stream.tell()
+
+    def read(self, size=-1):
+        with self._lock:
+            return self._stream.read(size)
+
+    def readline(self, size=-1):
+        with self._lock:
+            return self._stream.readline(size)
+
+    def getvalue(self):
+        with self._lock:
+            if self._reader is None:
+                return self._stream.getvalue()
+            self._stream.flush()
+            self._reader.seek(0)
+            return self._reader.read().decode('utf-8', 'replace')
+
+    def mirror(self, record):
+        with self._lock:
+            self._record = record
+            self._record_all()
+
+    def _record_all(self):
+        text = self.getvalue()
+        self._end = len(text) if self._reader is None else self._reader.tell()
+        self._record(text, True)
 
     def write(self, text):
-        append = self.tell() == self._length
-        written = super().write(text)
-        self._length = max(self._length, self.tell())
-        self._record(text if append else self.getvalue(), not append)
-        return written
+        with self._lock:
+            append = self._record is not None and self._stream.tell() == self._end
+            written = self._stream.write(text)
+            if self._reader is not None:
+                # Flush before descriptor writes can overtake buffered text.
+                self._stream.flush()
+            if self._record is not None:
+                if append:
+                    self._end = self._stream.tell()
+                    self._record(text, False)
+                else:
+                    self._record_all()
+            return written
 
     def truncate(self, size=None):
-        result = super().truncate(size)
-        self._length = len(self.getvalue())
-        self._record(self.getvalue(), True)
-        return result
+        with self._lock:
+            result = self._stream.truncate(size)
+            if self._record is not None:
+                self._record_all()
+            return result
 ";
         let module = PyModule::from_code(
             py,
             code,
-            c"karva_timeout_capture.py",
-            c"karva_timeout_capture",
+            c"karva_output_capture.py",
+            c"karva_output_capture",
         )?;
-        Ok::<_, PyErr>(module.getattr("TimeoutCapture")?.unbind())
-    })?;
-    let initial = stream
-        .bind(py)
-        .call_method0("getvalue")?
-        .extract::<String>()?;
-    let shared = Arc::new(Mutex::new(initial.clone()));
+        Ok(module.getattr("CapturedOutput")?.unbind())
+    })
+}
+
+fn mirror_stream(stream: &Bound<'_, PyAny>) -> PyResult<Arc<Mutex<String>>> {
+    let py = stream.py();
+    let shared = Arc::new(Mutex::new(String::new()));
     let captured = Arc::clone(&shared);
     let callback = PyCFunction::new_closure(
         py,
@@ -387,10 +507,6 @@ class TimeoutCapture(io.StringIO):
             Ok(())
         },
     )?;
-    let mirrored = class.bind(py).call1((initial, callback))?.unbind();
-    if sys.getattr(name)?.is(stream.bind(py)) {
-        sys.setattr(name, mirrored.bind(py))?;
-    }
-    *stream = mirrored;
+    stream.call_method1(intern!(py, "mirror"), (callback,))?;
     Ok(shared)
 }
