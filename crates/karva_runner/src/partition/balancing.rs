@@ -1,6 +1,7 @@
 //! Module-aware worker load balancing.
 
 use std::cell::OnceCell;
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +20,7 @@ struct ModuleGroup {
     /// Tests collected from this module.
     tests: Vec<TestInfo>,
 
-    /// Sum of historical microseconds, using one for each unknown duration.
+    /// Sum of measured or estimated test durations in microseconds.
     total_weight: u128,
 }
 
@@ -49,6 +50,9 @@ impl ModuleGroup {
 /// split test-by-test to limit worker skew. Seeded runs instead derive both
 /// order and worker assignment from stable test identities, independent of
 /// duration history and sibling tests.
+///
+/// Unmeasured tests use the mean duration of measured tests in the selected
+/// workload, with a one-microsecond minimum to balance runs with no history.
 ///
 /// With `defer_benchmarks`, the second partition contains selected benchmark
 /// modules for serial execution; their durations do not affect ordinary balancing.
@@ -101,7 +105,7 @@ pub fn partition_collected_tests(
         .then(|| {
             let mut partition = Partition::new();
             for test in test_infos.extract_if(.., |test| test.identity.benchmark) {
-                let weight = test_weight(test.duration);
+                let weight = test.duration.map_or(1, |duration| duration.as_micros());
                 partition.add_test(test, weight);
             }
             partition
@@ -121,10 +125,15 @@ pub fn partition_collected_tests(
         return (partitions, benchmarks);
     }
 
+    let unmeasured_weight = estimate_unmeasured_weight(&test_infos);
+    let test_weight = |test: &TestInfo| {
+        test.duration
+            .map_or(unmeasured_weight, |duration| duration.as_micros())
+    };
     let mut module_groups: Vec<ModuleGroup> = Vec::new();
     let mut module_indices: HashMap<Arc<str>, usize> = HashMap::new();
     for test_info in test_infos {
-        let weight = test_weight(test_info.duration);
+        let weight = test_weight(&test_info);
         if let Some(&index) = module_indices.get(&test_info.identity.module_name) {
             module_groups[index].add_test(test_info, weight);
         } else {
@@ -143,21 +152,23 @@ pub fn partition_collected_tests(
         .into_iter()
         .partition(|module| module.weight() < split_threshold);
 
-    small_modules.sort_by_key(|module| std::cmp::Reverse(module.weight()));
+    small_modules.sort_by_key(|module| Reverse(module.weight()));
     let mut partitions: Vec<Partition> = (0..num_workers).map(|_| Partition::new()).collect();
 
     for module_group in small_modules {
         let min_partition_idx = find_lightest_partition(&partitions);
         for test_info in module_group.tests {
-            let weight = test_weight(test_info.duration);
+            let weight = test_weight(&test_info);
             partitions[min_partition_idx].add_test(test_info, weight);
         }
     }
 
     for module_group in &mut large_modules {
-        module_group.tests.sort_by(compare_test_weights);
+        module_group
+            .tests
+            .sort_by_key(|test| Reverse((test_weight(test), test.duration)));
         for test_info in module_group.tests.drain(..) {
-            let weight = test_weight(test_info.duration);
+            let weight = test_weight(&test_info);
             let min_partition_idx = find_lightest_partition(&partitions);
             partitions[min_partition_idx].add_test(test_info, weight);
         }
@@ -191,8 +202,14 @@ pub(super) fn partition_shuffled_tests(
     partitions
 }
 
-fn test_weight(duration: Option<Duration>) -> u128 {
-    duration.map_or(1, |duration| duration.as_micros())
+fn estimate_unmeasured_weight(tests: &[TestInfo]) -> u128 {
+    let (total, count) = tests
+        .iter()
+        .filter_map(|test| test.duration)
+        .fold((0u128, 0u128), |(total, count), duration| {
+            (total + duration.as_micros(), count + 1)
+        });
+    total.checked_div(count).unwrap_or(1).max(1)
 }
 
 #[expect(
@@ -209,15 +226,6 @@ fn find_lightest_partition(partitions: &[Partition]) -> usize {
         .enumerate()
         .min_by_key(|(_, partition)| partition.weight())
         .map_or(0, |(index, _)| index)
-}
-
-fn compare_test_weights(a: &TestInfo, b: &TestInfo) -> std::cmp::Ordering {
-    match (&a.duration, &b.duration) {
-        (Some(duration_a), Some(duration_b)) => duration_b.cmp(duration_a),
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, _) => std::cmp::Ordering::Greater,
-        (_, None) => std::cmp::Ordering::Less,
-    }
 }
 
 /// Matches exact cases and legacy function keys, including runtime-expanded
