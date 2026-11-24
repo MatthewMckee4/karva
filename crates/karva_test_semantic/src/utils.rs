@@ -11,8 +11,6 @@ use pyo3::types::{
 use pyo3::{PyResult, Python};
 use ruff_python_ast::Parameters;
 
-use crate::runner::FixtureArguments;
-
 /// Drives a coroutine with `asyncio.run()` while watching the event loop for
 /// exceptions that never reached the awaiting code.
 ///
@@ -393,21 +391,6 @@ pub fn add_to_sys_path(py: Python<'_>, path: &Utf8Path, index: isize) -> PyResul
     let sys_path = sys_module.getattr("path")?;
     sys_path.call_method1("insert", (index, path.to_string()))?;
     Ok(())
-}
-
-/// Renders parameter-list contents in Python signature order.
-pub fn test_parameters(
-    py: Python,
-    kwargs: &FixtureArguments,
-    parameters: Option<&Parameters>,
-    name_only_arguments: &[&str],
-) -> Option<String> {
-    render_test_parameters(
-        py,
-        kwargs.iter().map(|(name, value)| (name.as_str(), value)),
-        parameters,
-        name_only_arguments,
-    )
 }
 
 /// Renders borrowed Python arguments in signature order without cloning values.

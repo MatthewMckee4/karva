@@ -189,15 +189,27 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
     ///
     /// Validation is deliberately a separate tree pass: once session setup
     /// begins, invalid parametrization must not leave partially run fixtures.
-    fn validate_parametrization(&mut self, package: &DiscoveredPackage) -> bool {
+    fn validate_parametrization(
+        &mut self,
+        package: &DiscoveredPackage,
+        parents: &[&DiscoveredPackage],
+    ) -> bool {
         let mut valid = true;
+        let mut child_parents = parents.to_vec();
+        child_parents.push(package);
 
         for module in package.modules().values() {
+            let mut compiler = FixturePlanCompiler::new(&child_parents, module, package.path());
             for test in module.test_functions() {
                 let Some(statement) = test.function_statement() else {
                     continue;
                 };
-                if let Err(error) = test.tags.validate_parametrize(statement) {
+                let mut fixture_parameters = None;
+                if let Err(error) = test.tags.validate_parametrize(statement, |name| {
+                    fixture_parameters
+                        .get_or_insert_with(|| compiler.fixture_parameter_names(test))
+                        .contains(name)
+                }) {
                     let diagnostic = invalid_parametrize_diagnostic(
                         test.source_file().clone(),
                         statement,
@@ -213,7 +225,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
         }
 
         for child_package in package.packages().values() {
-            valid &= self.validate_parametrization(child_package);
+            valid &= self.validate_parametrization(child_package, &child_parents);
             if self.max_fail_reached() {
                 return false;
             }
@@ -259,7 +271,7 @@ impl<'context, 'settings> PackageRunner<'context, 'settings> {
 
     /// Executes all discovered tests and session-scoped fixture teardown.
     pub(crate) fn execute(&mut self, py: Python<'_>, session: &DiscoveredPackage) {
-        if !self.validate_parametrization(session) {
+        if !self.validate_parametrization(session, &[]) {
             return;
         }
 

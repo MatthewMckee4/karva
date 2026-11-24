@@ -13,7 +13,7 @@ use crate::extensions::tags::expect_fail::ExpectFailTag;
 use crate::extensions::tags::fail_slow::FailSlowTag;
 use crate::extensions::tags::timeout::TimeoutTag;
 use crate::runner::fixture_arguments::FixtureArguments;
-use crate::utils::test_parameters;
+use crate::utils::render_test_parameters;
 
 use super::VariantRunner;
 
@@ -71,6 +71,24 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
         known_test_name: Option<QualifiedTestName>,
     ) -> VariantSettings {
         let name = self.input.test.name();
+        let signature = self.input.test.parameters();
+        // Fixture-only parameters still distinguish cases in reports and snapshots.
+        let render_parameters = |name_only: &[&str]| {
+            let call_arguments = function_arguments
+                .iter()
+                .map(|(name, value)| (name.as_str(), value));
+            let fixture_only_arguments = self.input.params.iter().filter_map(|(name, value)| {
+                signature
+                    .is_some_and(|signature| signature.index(name).is_none())
+                    .then_some((name.as_str(), value.as_ref()))
+            });
+            render_test_parameters(
+                self.py,
+                call_arguments.chain(fixture_only_arguments),
+                signature,
+                name_only,
+            )
+        };
         let fixture_names = self
             .input
             .fixtures
@@ -97,12 +115,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
             let parameters = if let Some(id) = &self.input.identity.id {
                 Some(id.clone())
             } else {
-                test_parameters(
-                    self.py,
-                    function_arguments,
-                    self.input.test.parameters(),
-                    &framework_fixture_names,
-                )
+                render_parameters(&framework_fixture_names)
             };
             if let Some(parameters) = parameters {
                 QualifiedTestName::with_parameters(name.clone(), parameters)
@@ -176,12 +189,7 @@ impl VariantRunner<'_, '_, '_, '_, '_> {
                 snapshot_test_name.push_str(parameters);
                 snapshot_test_name.push(')');
             }
-        } else if let Some(parameters) = test_parameters(
-            self.py,
-            function_arguments,
-            self.input.test.parameters(),
-            &fixture_names,
-        ) {
+        } else if let Some(parameters) = render_parameters(&fixture_names) {
             snapshot_test_name.push('(');
             snapshot_test_name.push_str(&parameters);
             snapshot_test_name.push(')');

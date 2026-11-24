@@ -13,7 +13,8 @@ use pyo3::types::PyIterator;
 use crate::diagnostic::fixture_resolution_diagnostic;
 use crate::discovery::models::definition::FunctionDefinition;
 use crate::extensions::fixtures::{
-    Finalizer, FixtureId, FixturePlan, FixtureScope, HasFixtures, NormalizedFixture,
+    Finalizer, FixtureDependency, FixtureId, FixturePlan, FixtureScope, HasFixtures,
+    NormalizedFixture,
 };
 use crate::extensions::tags::skip::{extract_skip_reason, is_skip_exception};
 use crate::runner::FixtureArguments;
@@ -136,13 +137,20 @@ impl PackageRunner<'_, '_> {
                 let fixture = fixture_plan.fixture(id);
                 let run_request = scope == FixtureScope::Function || fixture.scope() == scope;
                 let result = if run_request {
-                    self.run_fixture(py, fixture_plan, id).map(|value| {
+                    self.run_fixture(py, fixture_plan, id, params).map(|value| {
                         if usage == FixtureUsage::Required {
                             function_arguments.insert(fixture.function_name().to_string(), value);
                         }
                     })
                 } else {
-                    self.prepare_dependencies_at_scope(py, fixture_plan, id, scope, &mut visited)
+                    self.prepare_dependencies_at_scope(
+                        py,
+                        fixture_plan,
+                        id,
+                        scope,
+                        &mut visited,
+                        params,
+                    )
                 };
                 if let Err(error) = result {
                     fixture_call_errors.push(PreparedFixtureFailure::new(
@@ -154,10 +162,6 @@ impl PackageRunner<'_, '_> {
                 }
                 !run_request
             });
-        }
-
-        for (key, value) in params {
-            function_arguments.insert(key.clone(), value.clone_ref(py));
         }
 
         PreparedFixtures {
@@ -175,10 +179,11 @@ impl PackageRunner<'_, '_> {
         id: FixtureId,
         scope: FixtureScope,
         visited: &mut HashSet<FixtureId>,
+        params: &HashMap<String, Arc<Py<PyAny>>>,
     ) -> Result<(), FixtureCallError> {
         let fixture = fixture_plan.fixture(id);
         match fixture.scope().cmp(&scope) {
-            Ordering::Equal => return self.run_fixture(py, fixture_plan, id).map(drop),
+            Ordering::Equal => return self.run_fixture(py, fixture_plan, id, params).map(drop),
             Ordering::Greater => return Ok(()),
             Ordering::Less => {}
         }
@@ -193,9 +198,11 @@ impl PackageRunner<'_, '_> {
         {
             return Ok(());
         }
-        for &dependency in fixture.dependencies() {
-            self.prepare_dependencies_at_scope(py, fixture_plan, dependency, scope, visited)
-                .map_err(|error| error.with_dependent(fixture))?;
+        for dependency in fixture.dependencies() {
+            if let FixtureDependency::Fixture(id) = dependency {
+                self.prepare_dependencies_at_scope(py, fixture_plan, *id, scope, visited, params)
+                    .map_err(|error| error.with_dependent(fixture))?;
+            }
         }
         visited.insert(id);
         Ok(())
@@ -208,6 +215,7 @@ impl PackageRunner<'_, '_> {
         py: Python<'_>,
         fixture_plan: &FixturePlan,
         fixture_id: FixtureId,
+        params: &HashMap<String, Arc<Py<PyAny>>>,
     ) -> Result<Py<PyAny>, FixtureCallError> {
         let fixture = fixture_plan.fixture(fixture_id);
         let module_owner = self.active_module.clone();
@@ -222,19 +230,28 @@ impl PackageRunner<'_, '_> {
 
         let mut function_arguments = Vec::new();
 
-        for dependency_id in fixture.dependencies() {
-            let dependency = fixture_plan.fixture(*dependency_id);
-            match self.run_fixture(py, fixture_plan, *dependency_id) {
-                Ok(value) => {
-                    if function_arguments.is_empty() {
-                        // Delay allocation until recursion unwinds so deep chains do not
-                        // retain empty argument buffers for every active fixture call.
-                        function_arguments.reserve_exact(fixture.dependencies().len());
-                    }
-                    function_arguments.push((dependency.function_name(), value));
+        for dependency in fixture.dependencies() {
+            let (name, value) = match dependency {
+                FixtureDependency::Fixture(id) => {
+                    let value = self
+                        .run_fixture(py, fixture_plan, *id, params)
+                        .map_err(|error| error.with_dependent(fixture))?;
+                    (fixture_plan.fixture(*id).function_name(), value)
                 }
-                Err(error) => return Err(error.with_dependent(fixture)),
+                FixtureDependency::Parameter(name) => {
+                    // The parameter plan supplies every compiled name in each case.
+                    let Some(value) = params.get(name.as_ref()) else {
+                        continue;
+                    };
+                    (name.as_ref(), value.clone_ref(py))
+                }
+            };
+            if function_arguments.is_empty() {
+                // Delay allocation until recursion unwinds so deep chains do not
+                // retain empty argument buffers for every active fixture call.
+                function_arguments.reserve_exact(fixture.dependencies().len());
             }
+            function_arguments.push((name, value));
         }
 
         let fixture_call_result = match fixture.call(py, &function_arguments) {
@@ -276,9 +293,10 @@ impl PackageRunner<'_, '_> {
         usage: FixtureUsage,
     ) -> Vec<PreparedFixtureFailure> {
         let mut errors = Vec::new();
+        let params = HashMap::new();
         for fixture_id in fixture_ids {
             let fixture = fixture_plan.fixture(*fixture_id);
-            if let Err(error) = self.run_fixture(py, fixture_plan, *fixture_id) {
+            if let Err(error) = self.run_fixture(py, fixture_plan, *fixture_id, &params) {
                 errors.push(PreparedFixtureFailure::new(
                     fixture.function_name(),
                     usage,

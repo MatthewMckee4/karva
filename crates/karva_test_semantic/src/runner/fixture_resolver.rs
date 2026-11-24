@@ -11,8 +11,8 @@ use crate::discovery::models::definition::{
 };
 use crate::discovery::{DiscoveredPackage, DiscoveredTestFunction};
 use crate::extensions::fixtures::{
-    DiscoveredFixture, FixtureId, FixtureIdentity, FixtureLookup, FixturePlan, FixtureScope,
-    HasFixtures, NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
+    DiscoveredFixture, FixtureDependency, FixtureId, FixtureIdentity, FixtureLookup, FixturePlan,
+    FixtureScope, HasFixtures, NormalizedFixture, RejectedFixture, get_auto_use_fixtures,
 };
 
 /// Compiles fixture lookup results into an arena for one request context.
@@ -30,13 +30,23 @@ pub(super) struct FixturePlanCompiler<'a> {
     current: &'a (dyn HasFixtures<'a> + 'a),
     /// Package owning fixtures provided by `current`.
     current_package: &'a Utf8Path,
-    /// Definition IDs reused within this compilation pass.
+    /// IDs shared by fixtures whose dependencies are unchanged by parametrization.
     fixture_ids: HashMap<FixtureIdentity, FixtureId>,
+
+    /// Parameter names and memoized resolutions for the current test.
+    request: FixtureRequest,
+
     /// Root fixture lookup outcomes reused across validation and resolution.
     root_fixture_lookups: HashMap<String, FixtureLookup<'a>>,
 
     /// Arena under construction.
     fixtures: Vec<NormalizedFixture>,
+}
+
+#[derive(Default)]
+struct FixtureRequest {
+    parameter_names: HashSet<String>,
+    fixture_ids: HashMap<FixtureIdentity, FixtureId>,
 }
 
 /// Source-backed fixture metadata retained for resolution diagnostics.
@@ -64,6 +74,14 @@ pub enum FixtureResolutionError {
         fixture: FixtureResolutionEntry,
         /// Dependency whose scope cannot satisfy its consumer.
         dependency: FixtureResolutionEntry,
+    },
+    /// A broader fixture depends on a value that changes per test case.
+    ParameterScopeMismatch {
+        /// Fixture declaring the incompatible dependency.
+        fixture: FixtureResolutionEntry,
+
+        /// Directly parametrized argument name.
+        parameter: String,
     },
     /// Fixture requires names that cannot be resolved.
     MissingFixtures {
@@ -170,9 +188,30 @@ impl<'a> FixturePlanCompiler<'a> {
             current,
             current_package,
             fixture_ids: HashMap::new(),
+            request: FixtureRequest::default(),
             root_fixture_lookups: HashMap::new(),
             fixtures: Vec::new(),
         }
+    }
+
+    /// Resolves one test's roots with its parameters shadowing fixture names.
+    ///
+    /// Parametrized tests need their own definition IDs because the same fixture
+    /// can have different edges depending on which names the test supplies.
+    pub(super) fn with_parameters<T>(
+        &mut self,
+        parameter_names: HashSet<String>,
+        resolve: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        if parameter_names.is_empty() {
+            return resolve(self);
+        }
+
+        self.request.parameter_names = parameter_names;
+        let result = resolve(self);
+        self.request.parameter_names.clear();
+        self.request.fixture_ids.clear();
+        result
     }
 
     /// Looks up a fixture without a current fixture dependency context.
@@ -223,23 +262,50 @@ impl<'a> FixturePlanCompiler<'a> {
         fixture: &'a DiscoveredFixture,
         path: &mut FixturePath<'a>,
     ) -> FixtureResolutionResult<FixtureId> {
-        if let Some(cached) = self.fixture_ids.get(fixture.identity()) {
+        let parametrized = !self.request.parameter_names.is_empty();
+        let cached = if parametrized {
+            self.request.fixture_ids.get(fixture.identity())
+        } else {
+            self.fixture_ids.get(fixture.identity())
+        };
+        if let Some(cached) = cached {
             return Ok(*cached);
         }
 
         let dependent_fixtures = path.enter(fixture, |path| {
             let required_fixtures =
                 required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
-            self.get_dependent_fixtures(py, Some(fixture), &required_fixtures, path)
+            self.get_dependent_fixtures(py, fixture, &required_fixtures, path)
         })?;
+
+        let uses_parameters = parametrized
+            && dependent_fixtures
+                .iter()
+                .any(|dependency| match dependency {
+                    FixtureDependency::Fixture(id) => self.fixtures[id.index()].uses_parameters,
+                    FixtureDependency::Parameter(_) => true,
+                });
+        if parametrized
+            && !uses_parameters
+            && let Some(&id) = self.fixture_ids.get(fixture.identity())
+        {
+            self.request
+                .fixture_ids
+                .insert(fixture.identity().clone(), id);
+            return Ok(id);
+        }
 
         let broadest_scope = dependent_fixtures
             .iter()
-            .map(|id| self.fixtures[id.index()].broadest_scope)
+            .filter_map(|dependency| match dependency {
+                FixtureDependency::Fixture(id) => Some(self.fixtures[id.index()].broadest_scope),
+                FixtureDependency::Parameter(_) => None,
+            })
             .fold(fixture.scope(), FixtureScope::max);
         let result = NormalizedFixture {
             identity: fixture.identity().clone(),
             dependencies: dependent_fixtures,
+            uses_parameters,
             scope: fixture.scope(),
             broadest_scope,
             package_owner: match fixture.scope() {
@@ -254,10 +320,68 @@ impl<'a> FixturePlanCompiler<'a> {
 
         let fixture_id = FixtureId::new(self.fixtures.len());
         self.fixtures.push(result);
-        self.fixture_ids
-            .insert(fixture.identity().clone(), fixture_id);
+        if !uses_parameters {
+            self.fixture_ids
+                .insert(fixture.identity().clone(), fixture_id);
+        }
+        if parametrized {
+            self.request
+                .fixture_ids
+                .insert(fixture.identity().clone(), fixture_id);
+        }
 
         Ok(fixture_id)
+    }
+
+    /// Finds fixture-only parameters before validation runs any fixture code.
+    ///
+    /// A direct parameter stops traversal at its name, even if a fixture with
+    /// that name would have introduced further dependencies.
+    pub(super) fn fixture_parameter_names<'test>(
+        &mut self,
+        test: &'test DiscoveredTestFunction,
+    ) -> HashSet<&'test str> {
+        let parameters: HashSet<_> = test.tags.parametrize_names().collect();
+        let mut used = HashSet::new();
+        let mut fixtures = Vec::new();
+
+        for name in test
+            .required_fixtures()
+            .into_iter()
+            .chain(test.tags.use_fixture_names())
+        {
+            if let Some(&parameter) = parameters.get(name) {
+                used.insert(parameter);
+            } else if let FixtureLookup::Found(fixture) = self.lookup_root_fixture(name) {
+                fixtures.push(fixture);
+            }
+        }
+        for fixture in get_auto_use_fixtures(self.parents, self.current, FixtureScope::Function) {
+            if let Some(&parameter) = parameters.get(fixture.name().function_name()) {
+                used.insert(parameter);
+            } else {
+                fixtures.push(fixture);
+            }
+        }
+
+        let mut visited = HashSet::new();
+        while let Some(fixture) = fixtures.pop() {
+            if !visited.insert(std::ptr::from_ref(fixture)) {
+                continue;
+            }
+            let names =
+                required_keyword_parameter_names(fixture.stmt_function_def().parameters.as_ref());
+            for name in names {
+                if let Some(&parameter) = parameters.get(name) {
+                    used.insert(parameter);
+                } else if let FixtureLookup::Found(dependency) =
+                    lookup_fixture(Some(fixture), name, self.parents, self.current)
+                {
+                    fixtures.push(dependency);
+                }
+            }
+        }
+        used
     }
 
     /// Returns normalized auto-use fixtures for a given scope.
@@ -266,7 +390,13 @@ impl<'a> FixturePlanCompiler<'a> {
         py: Python,
         scope: FixtureScope,
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
-        let auto_use_fixtures = get_auto_use_fixtures(self.parents, self.current, scope);
+        let mut auto_use_fixtures = get_auto_use_fixtures(self.parents, self.current, scope);
+        auto_use_fixtures.retain(|fixture| {
+            !self
+                .request
+                .parameter_names
+                .contains(fixture.name().function_name())
+        });
         let mut path = FixturePath::default();
 
         auto_use_fixtures
@@ -280,12 +410,11 @@ impl<'a> FixturePlanCompiler<'a> {
         &mut self,
         py: Python,
         test: &DiscoveredTestFunction,
-        parametrize_param_names: &HashSet<&str>,
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let fixture_names = test.required_fixtures();
         let regular_fixture_names: Vec<&str> = fixture_names
             .iter()
-            .filter(|name| !parametrize_param_names.contains(*name))
+            .filter(|name| !self.request.parameter_names.contains(**name))
             .copied()
             .collect();
 
@@ -309,53 +438,63 @@ impl<'a> FixturePlanCompiler<'a> {
             });
         }
 
-        let mut path = FixturePath::default();
-        self.get_dependent_fixtures(py, None, &regular_fixture_names, &mut path)
+        self.resolve_root_fixtures(py, &regular_fixture_names)
     }
 
-    /// Resolves fixtures requested only for their side effects.
-    pub(super) fn resolve_use_fixtures(
+    /// Resolves fixture roots after excluding names supplied by parametrization.
+    pub(super) fn resolve_root_fixtures<N: AsRef<str>>(
         &mut self,
         py: Python,
-        fixture_names: &[String],
+        fixture_names: &[N],
     ) -> FixtureResolutionResult<Vec<FixtureId>> {
         let mut path = FixturePath::default();
-        self.get_dependent_fixtures(py, None, fixture_names, &mut path)
+        let mut fixtures = Vec::with_capacity(fixture_names.len());
+        for name in fixture_names {
+            let name = name.as_ref();
+            if !self.request.parameter_names.contains(name)
+                && let FixtureLookup::Found(fixture) = self.lookup_root_fixture(name)
+            {
+                fixtures.push(self.normalize_fixture(py, fixture, &mut path)?);
+            }
+        }
+        Ok(fixtures)
     }
 
     /// Resolves a list of names and validates every dependency scope edge.
-    fn get_dependent_fixtures<N: AsRef<str>>(
+    fn get_dependent_fixtures(
         &mut self,
         py: Python,
-        current_fixture: Option<&'a DiscoveredFixture>,
-        fixture_names: &[N],
+        current_fixture: &'a DiscoveredFixture,
+        fixture_names: &[&str],
         path: &mut FixturePath<'a>,
-    ) -> FixtureResolutionResult<Vec<FixtureId>> {
+    ) -> FixtureResolutionResult<Vec<FixtureDependency>> {
         let mut normalized_fixtures = Vec::with_capacity(fixture_names.len());
         let mut missing_fixtures = Vec::new();
         let mut rejected_fixtures = Vec::new();
 
-        for dep_name in fixture_names {
-            let dep_name = dep_name.as_ref();
-            let lookup = if let Some(current_fixture) = current_fixture {
-                lookup_fixture(Some(current_fixture), dep_name, self.parents, self.current)
-            } else {
-                self.lookup_root_fixture(dep_name)
-            };
-            if let Some(fixture) = current_fixture
-                && fixture.name().function_name() == dep_name
-                && !lookup.is_found()
-            {
-                let normalized = self.normalize_fixture(py, fixture, path)?;
-                normalized_fixtures.push(normalized);
+        for &dep_name in fixture_names {
+            if self.request.parameter_names.contains(dep_name) {
+                if !current_fixture.scope().can_use(FixtureScope::Function) {
+                    return Err(FixtureResolutionError::ParameterScopeMismatch {
+                        fixture: FixtureResolutionEntry::new(current_fixture),
+                        parameter: dep_name.to_owned(),
+                    });
+                }
+                normalized_fixtures.push(FixtureDependency::Parameter(dep_name.into()));
+                continue;
+            }
+
+            let lookup =
+                lookup_fixture(Some(current_fixture), dep_name, self.parents, self.current);
+            if current_fixture.name().function_name() == dep_name && !lookup.is_found() {
+                let normalized = self.normalize_fixture(py, current_fixture, path)?;
+                normalized_fixtures.push(FixtureDependency::Fixture(normalized));
                 continue;
             }
 
             match lookup {
                 FixtureLookup::Found(fixture) => {
-                    if let Some(current_fixture) = current_fixture
-                        && !current_fixture.scope().can_use(fixture.scope())
-                    {
+                    if !current_fixture.scope().can_use(fixture.scope()) {
                         let dependency_path = path
                             .fixtures
                             .split_last()
@@ -367,27 +506,21 @@ impl<'a> FixturePlanCompiler<'a> {
                         ));
                     }
                     let normalized = self.normalize_fixture(py, fixture, path)?;
-                    normalized_fixtures.push(normalized);
+                    normalized_fixtures.push(FixtureDependency::Fixture(normalized));
                 }
                 FixtureLookup::Rejected(rejected_fixture) => {
-                    if current_fixture.is_some() {
-                        rejected_fixtures.push(rejected_fixture.clone());
-                        missing_fixtures.push(dep_name.to_owned());
-                    }
+                    rejected_fixtures.push(rejected_fixture.clone());
+                    missing_fixtures.push(dep_name.to_owned());
                 }
                 FixtureLookup::Missing => {
-                    if current_fixture.is_some() {
-                        missing_fixtures.push(dep_name.to_owned());
-                    }
+                    missing_fixtures.push(dep_name.to_owned());
                 }
             }
         }
 
-        if let Some(fixture) = current_fixture
-            && !missing_fixtures.is_empty()
-        {
+        if !missing_fixtures.is_empty() {
             return Err(FixtureResolutionError::MissingFixtures {
-                fixture: FixtureResolutionEntry::new(fixture),
+                fixture: FixtureResolutionEntry::new(current_fixture),
                 missing_fixtures,
                 rejected_fixtures,
             });

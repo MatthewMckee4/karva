@@ -611,6 +611,56 @@ def test_param(x):
 }
 
 #[test]
+fn test_snapshots_distinguish_fixture_only_parameters() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+import pytest
+
+values = []
+
+@pytest.fixture
+def backend():
+    return "default"
+
+@pytest.fixture(autouse=True)
+def select_backend(backend):
+    values.append(backend)
+
+@pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
+def test_backend():
+    karva.assert_snapshot(values[-1])
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--snapshot-update"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_backend(backend='sqlite')
+            PASS [TIME] test::test_backend(backend='postgresql')
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test::test_backend(backend='sqlite')
+            PASS [TIME] test::test_backend(backend='postgresql')
+    ────────────
+         Summary [TIME] 2 tests run: 2 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_snapshot_update_overwrites_existing() {
     let context = TestContext::with_file(
         "test.py",

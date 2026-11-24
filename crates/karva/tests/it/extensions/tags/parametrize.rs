@@ -3,7 +3,7 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 
 use crate::common::TestContext;
-use crate::extensions::get_parametrize_function;
+use crate::extensions::{get_auto_use_kw, get_parametrize_function};
 
 #[rstest]
 fn runtime_parametrize_combines_with_literal_decorators(
@@ -2756,4 +2756,171 @@ def test_value(value):
     ----- stderr -----
     ");
     assert!(context.root().join("test-ran").exists());
+}
+
+#[rstest]
+fn test_parametrize_overrides_fixture_dependencies(#[values("pytest", "karva")] framework: &str) {
+    let parametrize = get_parametrize_function(framework);
+    let auto_use_kw = get_auto_use_kw(framework);
+    let context = TestContext::with_file(
+        "test.py",
+        format!(
+            r#"
+import {framework}
+
+backend_setups = []
+
+@{framework}.fixture({auto_use_kw}=True)
+def backend():
+    backend_setups.append("postgresql")
+    return "postgresql"
+
+@{framework}.fixture
+def engine(backend):
+    return f"engine:{{backend}}"
+
+@{framework}.fixture
+def client(engine):
+    return f"client({{engine}})"
+
+def test_default_engine(engine):
+    assert engine == "engine:postgresql"
+
+@{parametrize}("backend", ["sqlite", "postgresql"])
+def test_override(backend, engine, client):
+    assert engine == f"engine:{{backend}}"
+    assert client == f"client(engine:{{backend}})"
+    assert backend_setups == ["postgresql"]
+
+def test_default_client(client):
+    assert client == "client(engine:postgresql)"
+    assert backend_setups == ["postgresql", "postgresql"]
+"#
+        ),
+    );
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel(), @"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+            Starting 3 tests across 1 worker
+                PASS [TIME] test::test_default_engine(engine='engine:postgresql')
+                PASS [TIME] test::test_override(backend='sqlite', engine='engine:sqlite', client='client(engine:sqlite)')
+                PASS [TIME] test::test_override(backend='postgresql', engine='engine:postgresql', client='client(engine:postgresql)')
+                PASS [TIME] test::test_default_client(client='client(engine:postgresql)')
+        ────────────
+             Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[test]
+fn test_parametrize_rejects_broad_fixture_dependency() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+@pytest.fixture(scope="module")
+def backend():
+    return "postgresql"
+
+@pytest.fixture(scope="module")
+def engine(backend):
+    return f"engine:{backend}"
+
+@pytest.mark.parametrize("backend", ["sqlite"])
+def test_override(backend, engine):
+    assert engine == f"engine:{backend}"
+
+def test_default(engine):
+    assert engine == "engine:postgresql"
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+           ERROR [TIME] test::test_override
+            PASS [TIME] test::test_default(engine='engine:postgresql')
+
+    failures:
+
+    test::test_override:
+
+    error[fixture-scope-mismatch]: Fixture `engine` with `module` scope cannot depend on parametrized argument `backend` with `function` scope
+     --> test.py:9:5
+      |
+    9 | def engine(backend):
+      |     ^^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 1 passed, 1 error, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
+fn test_parametrize_supplies_fixture_only_arguments() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import pytest
+
+engines = []
+themes = []
+
+@pytest.fixture
+def backend():
+    return "postgresql"
+
+@pytest.fixture
+def engine(backend):
+    assert len(themes) > len(engines)
+    engines.append(backend)
+    return backend
+
+@pytest.fixture
+def scheme():
+    return "light"
+
+@pytest.fixture(autouse=True)
+def apply_theme(scheme):
+    themes.append(scheme)
+
+@pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
+def test_dependency(engine):
+    assert engine == engines[-1]
+
+@pytest.mark.usefixtures("engine")
+@pytest.mark.parametrize("backend", ["sqlite"])
+def test_usefixtures():
+    assert engines == ["sqlite", "postgresql", "sqlite"]
+
+@pytest.mark.parametrize("scheme", ["dark"])
+def test_autouse():
+    assert themes == ["light", "light", "light", "dark"]
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 3 tests across 1 worker
+            PASS [TIME] test::test_dependency(engine='sqlite', backend='sqlite')
+            PASS [TIME] test::test_dependency(engine='postgresql', backend='postgresql')
+            PASS [TIME] test::test_usefixtures(backend='sqlite')
+            PASS [TIME] test::test_autouse(scheme='dark')
+    ────────────
+         Summary [TIME] 4 tests run: 4 passed, 0 skipped
+
+    ----- stderr -----
+    ");
 }

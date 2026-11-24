@@ -499,8 +499,8 @@ impl CompiledTags {
         }
     }
 
-    pub(crate) fn parameter_names(&self) -> HashSet<&str> {
-        self.parameter_names.iter().map(String::as_str).collect()
+    pub(crate) fn take_parameter_names(&mut self) -> HashSet<String> {
+        std::mem::take(&mut self.parameter_names)
     }
 
     pub(crate) fn required_fixtures(&self) -> &[String] {
@@ -649,20 +649,42 @@ impl Tags {
             .any(|tag| matches!(tag, Tag::Parametrize(_)))
     }
 
+    /// Names supplied by the test's direct parametrization.
+    pub(crate) fn parametrize_names(&self) -> impl Iterator<Item = &str> {
+        self.inner
+            .iter()
+            .filter_map(|tag| match tag {
+                Tag::Parametrize(parametrize) => Some(parametrize.names()),
+                _ => None,
+            })
+            .flatten()
+            .map(String::as_str)
+    }
+
+    /// Fixture roots requested by usefixtures marks and tags.
+    pub(crate) fn use_fixture_names(&self) -> impl Iterator<Item = &str> {
+        self.inner
+            .iter()
+            .filter_map(|tag| match tag {
+                Tag::UseFixtures(use_fixtures) => Some(use_fixtures.fixture_names()),
+                _ => None,
+            })
+            .flatten()
+            .map(String::as_str)
+    }
+
     pub(crate) fn validate_parametrize(
         &self,
         function: &StmtFunctionDef,
+        mut is_fixture_parameter: impl FnMut(&str) -> bool,
     ) -> Result<(), InvalidParametrizeError> {
-        let function_parameter_names = function
-            .parameters
-            .iter_non_variadic_params()
-            .map(|parameter| parameter.parameter.name.as_str())
-            .collect();
+        let mut accepts_name =
+            |name: &str| function.parameters.index(name).is_some() || is_fixture_parameter(name);
         let mut seen_names = HashSet::new();
 
         for tag in &self.inner {
             if let Tag::Parametrize(parametrize) = tag {
-                parametrize.validate(&function_parameter_names, &mut seen_names)?;
+                parametrize.validate(&mut accepts_name, &mut seen_names)?;
             }
         }
 

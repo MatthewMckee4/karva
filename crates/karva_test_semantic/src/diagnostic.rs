@@ -593,6 +593,19 @@ pub fn fixture_resolution_diagnostic(error: FixtureResolutionError) -> Diagnosti
             fixture,
             dependency,
         } => fixture_scope_mismatch_diagnostic(&dependency_path, &fixture, &dependency),
+        FixtureResolutionError::ParameterScopeMismatch { fixture, parameter } => {
+            let mut diagnostic = FIXTURE_SCOPE_MISMATCH.diagnostic(format!(
+                "Fixture `{}` with `{}` scope cannot depend on parametrized argument `{parameter}` with `function` scope",
+                fixture.name,
+                fixture.scope.name(),
+            ));
+            annotate_function_name(
+                &mut diagnostic,
+                fixture.definition.source_file().clone(),
+                fixture.definition.statement(),
+            );
+            diagnostic
+        }
         FixtureResolutionError::MissingFixtures {
             fixture,
             missing_fixtures,
