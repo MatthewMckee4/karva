@@ -6,6 +6,82 @@ use serde_json::Value;
 use crate::common::TestContext;
 
 #[test]
+fn verbose_output_expands_partial_and_disabled_measurements() {
+    let context = TestContext::with_file(
+        "test_modes.py",
+        r#"
+import karva
+import karva._benchmark as sampling
+
+@karva.tags.benchmark(rounds=3, iterations=1, warmup=0)
+def test_measure(benchmark, monkeypatch):
+    monkeypatch.setattr(sampling.time, "perf_counter_ns", lambda: 0)
+    calls = []
+    def operation():
+        if calls:
+            raise ValueError("second measurement failed")
+        calls.append(1)
+    try:
+        benchmark(operation)
+    except ValueError:
+        assert benchmark.stats["stop_reason"] == "exception"
+    else:
+        assert benchmark.stats["disabled"]
+"#,
+    );
+    assert_cmd_snapshot!(context.command_no_parallel().args(["-v", "--status-level=none"]), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    benchmarks (median per call):
+
+      ungrouped
+         PARTIAL [      0ns] test_modes::test_measure(benchmark, monkeypatch)
+                 min=0ns mean=0ns stddev=- rounds=1 iterations=1
+                 warmup=0 calibration=0 measured=2 total=2
+                 elapsed=0ns stop=exception
+                 options: {"disable_gc":false,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Spawning 1 workers
+    INFO Worker 0 spawned with 1 tests
+    INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+    INFO Worker 0 completed successfully in [TIME]
+    INFO All workers completed
+    "#);
+    assert_cmd_snapshot!(context.command_no_parallel().args(["-v", "--status-level=none", "--benchmark-disable"]), @r#"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    benchmarks (median per call):
+
+      ungrouped
+        DISABLED [        -] test_modes::test_measure(benchmark, monkeypatch)
+                 min=- mean=- stddev=- rounds=0 iterations=1
+                 warmup=0 calibration=0 measured=1 total=1
+                 elapsed=0ns stop=disabled
+                 options: {"disable_gc":false,"group":null,"iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    INFO Collected all tests in [TIME]
+    INFO Spawning 1 workers
+    INFO Worker 0 spawned with 1 tests
+    INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+    INFO Worker 0 completed successfully in [TIME]
+    INFO All workers completed
+    "#);
+}
+
+#[test]
 fn verbose_output_keeps_sampling_details() {
     let context = TestContext::with_file(
         "test_verbose.py",
@@ -20,20 +96,34 @@ def test_parse(benchmark, monkeypatch):
     assert benchmark(int, "42") == 42
 "#,
     );
+    assert_cmd_snapshot!(context.command_no_parallel().arg("--status-level=none"), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+
+    benchmarks (median per call):
+
+      parser
+           BENCH [   1.50µs] test_verbose::test_parse(benchmark, monkeypatch)
+
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
     assert_cmd_snapshot!(context.command_no_parallel().args(["-v", "--status-level=none"]), @r#"
     success: true
     exit_code: 0
     ----- stdout -----
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       parser
-        Test                                                 Min  Median    Mean  Stddev  Rounds  Iters    Status
-        test_verbose::test_parse(benchmark, monkeypatch)  1.50µs  1.50µs  1.50µs     0ns       1      1  complete
-
-        test_verbose::test_parse(benchmark, monkeypatch)
-          warmup=0 calibration=0 measured=1 total=1 elapsed=2.00µs stop=rounds
-          options: {"disable_gc":false,"group":"parser","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
+           BENCH [   1.50µs] test_verbose::test_parse(benchmark, monkeypatch)
+                 min=1.50µs mean=1.50µs stddev=- rounds=1 iterations=1
+                 warmup=0 calibration=0 measured=1 total=1
+                 elapsed=2.00µs stop=rounds
+                 options: {"disable_gc":false,"group":"parser","iterations":1,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":1,"warmup":0}
 
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
@@ -90,11 +180,10 @@ def test_async_rejected(benchmark):
     exit_code: 0
     ----- stdout -----
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       ungrouped
-        Test                                                    Min  Median  Mean  Stddev  Rounds  Iters    Status
-        test_contract::test_single_use(benchmark, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
+           BENCH [      0ns] test_contract::test_single_use(benchmark, monkeypatch)
 
     ────────────
          Summary [TIME] 10 tests run: 10 passed, 0 skipped
@@ -144,15 +233,13 @@ def test_local(measure, monkeypatch):
             PASS [TIME] test_group::test_inherited(measure=<Benchmark>, monkeypatch)
             PASS [TIME] test_group::test_local(measure=<Benchmark>, monkeypatch)
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       local
-        Test                                                      Min  Median  Mean  Stddev  Rounds  Iters    Status
-        test_group::test_local(measure=<Benchmark>, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
+           BENCH [      0ns] test_group::test_local(measure=<Benchmark>, monkeypatch)
 
       module
-        Test                                                          Min  Median  Mean  Stddev  Rounds  Iters    Status
-        test_group::test_inherited(measure=<Benchmark>, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
+           BENCH [      0ns] test_group::test_inherited(measure=<Benchmark>, monkeypatch)
 
     ────────────
          Summary [TIME] 2 tests run: 2 passed, 0 skipped
@@ -217,11 +304,10 @@ def test_failure(benchmark, monkeypatch):
     info: benchmark callable failed
 
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       ungrouped
-        Test                                                Min  Median  Mean  Stddev  Rounds  Iters   Status
-        test_failure::test_failure(benchmark, monkeypatch)  0ns     0ns   0ns     0ns       1      1  partial
+         PARTIAL [      0ns] test_failure::test_failure(benchmark, monkeypatch)
 
     ────────────
          Summary [TIME] 1 test run: 0 passed, 1 failed, 0 skipped
@@ -278,17 +364,43 @@ def test_parse(benchmark, monkeypatch):
             Starting 1 test across 1 worker
                 PASS [TIME] test_bench::test_parse(benchmark, monkeypatch)
 
-        benchmarks (per call):
+        benchmarks (median per call):
 
           parser
-            Test                                             Min  Median  Mean  Stddev  Rounds  Iters    Status
-            test_bench::test_parse(benchmark, monkeypatch)  10ns    20ns  20ns    10ns       3      2  complete
+               BENCH [     20ns] test_bench::test_parse(benchmark, monkeypatch)
 
         ────────────
              Summary [TIME] 1 test run: 1 passed, 0 skipped
 
         ----- stderr -----
         ");
+    }
+    insta::allow_duplicates! {
+        assert_cmd_snapshot!(context.command_no_parallel().args(["-v", "--status-level=none"]), @r#"
+        success: true
+        exit_code: 0
+        ----- stdout -----
+
+        benchmarks (median per call):
+
+          parser
+               BENCH [     20ns] test_bench::test_parse(benchmark, monkeypatch)
+                     min=10ns mean=20ns stddev=10ns rounds=3 iterations=2
+                     warmup=0 calibration=0 measured=6 total=6
+                     elapsed=200ns stop=rounds
+                     options: {"disable_gc":false,"group":"parser","iterations":2,"max_time":0.1,"min_rounds":5,"min_time":0.001,"rounds":3,"warmup":0}
+
+        ────────────
+             Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+        ----- stderr -----
+        INFO Collected all tests in [TIME]
+        INFO Spawning 1 workers
+        INFO Worker 0 spawned with 1 tests
+        INFO Waiting for 1 workers to complete (Ctrl+C to cancel)
+        INFO Worker 0 completed successfully in [TIME]
+        INFO All workers completed
+        "#);
     }
     let report: Value =
         serde_json::from_str(&context.read_file("results.json")).expect("JSON report");
@@ -373,11 +485,10 @@ def test_normal():
         exit_code: 0
         ----- stdout -----
 
-        benchmarks (per call):
+        benchmarks (median per call):
 
           ungrouped
-            Test                                     Min  Median  Mean  Stddev  Rounds  Iters    Status
-            test_bench::test_correctness(benchmark)    -       -     -       -       0      1  disabled
+            DISABLED [        -] test_bench::test_correctness(benchmark)
 
         ────────────
              Summary [TIME] 2 tests run: 2 passed, 0 skipped
@@ -451,11 +562,10 @@ def test_adaptive(benchmark, clock):
         Starting 1 test across 1 worker
             PASS [TIME] test_bench::test_adaptive(benchmark, clock=<test_bench.clock.<locals>....)
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       ungrouped
-        Test                                                                             Min    Median      Mean  Stddev  Rounds  Iters    Status
-        test_bench::test_adaptive(benchmark, clock=<test_bench.clock.<locals>....)  500.00µs  500.00µs  500.00µs     0ns       8      2  complete
+           BENCH [ 500.00µs] test_bench::test_adaptive(benchmark, clock=<test_bench.clock.<locals>....)
 
     ────────────
          Summary [TIME] 1 test run: 1 passed, 0 skipped
@@ -589,11 +699,10 @@ def test_retry(benchmark, monkeypatch):
       TRY 1 FAIL [TIME] test_bench::test_retry(benchmark, monkeypatch)
       TRY 2 PASS [TIME] test_bench::test_retry(benchmark, monkeypatch)
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       ungrouped
-        Test                                             Min  Median  Mean  Stddev  Rounds  Iters    Status
-        test_bench::test_retry(benchmark, monkeypatch)  10ns    10ns  10ns     0ns       3      1  complete
+           BENCH [     10ns] test_bench::test_retry(benchmark, monkeypatch)
 
     ────────────
          Summary [TIME] 1 test run: 1 passed (1 flaky), 0 skipped
@@ -759,12 +868,11 @@ def test_teardown(measured, fail):
     info: Failed to reset fixture: teardown benchmark failed
 
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       teardown
-        Test                                                    Min  Median  Mean  Stddev  Rounds  Iters    Status
-        test_teardown::test_teardown(measured={}, fail=False)  10ns    10ns  10ns     0ns       3      1  complete
-        test_teardown::test_teardown(measured={}, fail=True)   10ns    10ns  10ns     0ns       1      1   partial
+           BENCH [     10ns] test_teardown::test_teardown(measured={}, fail=False)
+         PARTIAL [     10ns] test_teardown::test_teardown(measured={}, fail=True)
 
     ────────────
          Summary [TIME] 2 tests run: 1 passed, 1 error, 0 skipped
@@ -857,11 +965,10 @@ def test_measure(benchmark, monkeypatch):
     exit_code: 0
     ----- stdout -----
 
-    benchmarks (per call):
+    benchmarks (median per call):
 
       ungrouped
-        Test                                                Min  Median  Mean  Stddev  Rounds  Iters    Status
-        test_measure::test_measure(benchmark, monkeypatch)  0ns     0ns   0ns     0ns       1      1  complete
+           BENCH [      0ns] test_measure::test_measure(benchmark, monkeypatch)
 
     ────────────
          Summary [TIME] 3 tests run: 3 passed, 0 skipped

@@ -5,6 +5,7 @@ use std::io::Write;
 use std::time::Duration;
 
 use anyhow::Result;
+use colored::Colorize;
 use karva_diagnostic::{AggregatedResults, BenchmarkResult};
 
 /// Groups measurements without hiding test parameters or incomplete sampling.
@@ -26,50 +27,24 @@ pub(super) fn write_benchmarks(
         return Ok(());
     }
 
-    writeln!(stdout, "\nbenchmarks (per call):")?;
+    writeln!(stdout, "\nbenchmarks (median per call):")?;
     for (group, mut benchmarks) in groups {
         benchmarks.sort_by_key(|(name, _)| *name);
-        writeln!(stdout, "\n  {}", group.unwrap_or("ungrouped"))?;
-        let mut rows = vec![
-            [
-                "Test", "Min", "Median", "Mean", "Stddev", "Rounds", "Iters", "Status",
-            ]
-            .map(str::to_owned),
-        ];
-        for (name, benchmark) in &benchmarks {
-            rows.push([
-                (*name).to_owned(),
-                format_time(benchmark.min_ns),
-                format_time(benchmark.median_ns),
-                format_time(benchmark.mean_ns),
-                format_time(benchmark.stddev_ns),
-                benchmark.rounds.to_string(),
-                benchmark.iterations.to_string(),
-                match benchmark.stop_reason.as_str() {
-                    "disabled" => "disabled",
-                    "exception" => "partial",
-                    "rounds" | "max_time" => "complete",
-                    reason => reason,
-                }
-                .to_owned(),
-            ]);
-        }
-        let widths = rows.iter().fold([0; 8], |mut widths, row| {
-            for (width, cell) in widths.iter_mut().zip(row) {
-                *width = (*width).max(cell.chars().count());
-            }
-            widths
-        });
-        for row in rows {
-            write!(stdout, "    {:<width$}", row[0], width = widths[0])?;
-            for (cell, width) in row.iter().zip(widths).skip(1) {
-                write!(stdout, "  {cell:>width$}")?;
-            }
-            writeln!(stdout)?;
-        }
-        if verbose {
-            for (name, benchmark) in benchmarks {
-                write_details(stdout, name, benchmark)?;
+        writeln!(stdout, "\n  {}", group.unwrap_or("ungrouped").bold())?;
+        for (name, benchmark) in benchmarks {
+            let label = match benchmark.stop_reason.as_str() {
+                "rounds" | "max_time" => format!("{:>12}", "BENCH").green().bold(),
+                "exception" => format!("{:>12}", "PARTIAL").yellow().bold(),
+                "disabled" => format!("{:>12}", "DISABLED").dimmed(),
+                reason => format!("{reason:>12}").normal(),
+            };
+            writeln!(
+                stdout,
+                "{label} [{:>9}] {name}",
+                format_time(benchmark.median_ns)
+            )?;
+            if verbose {
+                write_details(stdout, benchmark)?;
             }
         }
     }
@@ -86,21 +61,42 @@ fn format_time(nanoseconds: Option<u64>) -> String {
     }
 }
 
-fn write_details(stdout: &mut impl Write, name: &str, benchmark: &BenchmarkResult) -> Result<()> {
-    writeln!(stdout, "\n    {name}")?;
+/// Aligns details after the same 12-character status column as result lines.
+const DETAIL_INDENT: &str = "             ";
+
+/// Adds sampling details directly below their result line.
+fn write_details(stdout: &mut impl Write, benchmark: &BenchmarkResult) -> Result<()> {
+    let stddev = if benchmark.rounds > 1 {
+        benchmark.stddev_ns
+    } else {
+        None
+    };
     writeln!(
         stdout,
-        "      warmup={} calibration={} measured={} total={} elapsed={} stop={}",
+        "{DETAIL_INDENT}min={} mean={} stddev={} rounds={} iterations={}",
+        format_time(benchmark.min_ns),
+        format_time(benchmark.mean_ns),
+        format_time(stddev),
+        benchmark.rounds,
+        benchmark.iterations,
+    )?;
+    writeln!(
+        stdout,
+        "{DETAIL_INDENT}warmup={} calibration={} measured={} total={}",
         benchmark.warmup_calls,
         benchmark.calibration_calls,
         benchmark.measurement_calls,
         benchmark.total_calls,
-        format_time(Some(benchmark.elapsed_ns)),
-        benchmark.stop_reason
     )?;
     writeln!(
         stdout,
-        "      options: {}",
+        "{DETAIL_INDENT}elapsed={} stop={}",
+        format_time(Some(benchmark.elapsed_ns)),
+        benchmark.stop_reason,
+    )?;
+    writeln!(
+        stdout,
+        "{DETAIL_INDENT}options: {}",
         serde_json::to_string(&benchmark.options)?
     )?;
     Ok(())
