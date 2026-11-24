@@ -758,7 +758,8 @@ const MAX_ITEMS: usize = 8;
 const MAX_DEPTH: usize = 8;
 const MAX_NODES: usize = MAX_ITEMS * MAX_ITEMS;
 
-fn safe_repr(value: &Bound<'_, PyAny>) -> String {
+/// Render bounded built-in values without invoking user representation hooks.
+pub fn safe_repr(value: &Bound<'_, PyAny>) -> String {
     safe_repr_inner(value, 0, &mut MAX_NODES.clone())
 }
 
@@ -987,6 +988,9 @@ fn known_equal(
         return None;
     }
     *budget -= 1;
+    if depth > 0 && left.is(right) {
+        return Some(true);
+    }
     let left_numeric = left.is_exact_instance_of::<PyBool>()
         || left.is_exact_instance_of::<PyInt>()
         || left.is_exact_instance_of::<PyFloat>();
@@ -1023,7 +1027,7 @@ fn known_equal(
     {
         return Some(safe_equal(left, right));
     }
-    if let (Ok(left), Ok(right)) = (left.cast::<PyList>(), right.cast::<PyList>()) {
+    if let (Ok(left), Ok(right)) = (left.cast_exact::<PyList>(), right.cast_exact::<PyList>()) {
         if left.len() != right.len() {
             return Some(false);
         }
@@ -1040,7 +1044,7 @@ fn known_equal(
         }
         return Some(true);
     }
-    if let (Ok(left), Ok(right)) = (left.cast::<PyTuple>(), right.cast::<PyTuple>()) {
+    if let (Ok(left), Ok(right)) = (left.cast_exact::<PyTuple>(), right.cast_exact::<PyTuple>()) {
         if left.len() != right.len() {
             return Some(false);
         }
@@ -1053,6 +1057,23 @@ fn known_equal(
                 Some(false) => return Some(false),
                 Some(true) => {}
                 None => return None,
+            }
+        }
+        return Some(true);
+    }
+    if let (Ok(left), Ok(right)) = (left.cast_exact::<PyDict>(), right.cast_exact::<PyDict>()) {
+        if left.len() != right.len() {
+            return Some(false);
+        }
+        if left.len() > *budget || !exact_builtin_dict(left) || !exact_builtin_dict(right) {
+            return None;
+        }
+        for (key, left_item) in left.iter() {
+            let Some(right_item) = right.get_item(&key).ok()? else {
+                return Some(false);
+            };
+            if !known_equal(&left_item, &right_item, depth + 1, budget)? {
+                return Some(false);
             }
         }
         return Some(true);
@@ -1129,11 +1150,13 @@ fn focused_diff_inner(
     right: &Bound<'_, PyAny>,
     path: &str,
     depth: usize,
+    budget: &mut usize,
 ) -> Option<Vec<String>> {
-    if depth > MAX_DEPTH {
+    if depth > MAX_DEPTH || *budget == 0 || left.is(right) {
         return None;
     }
-    if let (Ok(left), Ok(right)) = (left.cast::<PyDict>(), right.cast::<PyDict>()) {
+    *budget -= 1;
+    if let (Ok(left), Ok(right)) = (left.cast_exact::<PyDict>(), right.cast_exact::<PyDict>()) {
         // Looking up a key can call arbitrary equality methods.  Only use the
         // focused mapping view when every key on both sides is an exact scalar
         // whose hash/equality is builtin and bounded.
@@ -1141,6 +1164,9 @@ fn focused_diff_inner(
             return None;
         }
         for (left_key, left_value) in left.iter() {
+            if *budget == 0 {
+                return None;
+            }
             let key_path = path_key(path, &left_key);
             let Ok(Some(right_value)) = right.get_item(&left_key) else {
                 return Some(difference_at(
@@ -1149,11 +1175,15 @@ fn focused_diff_inner(
                     "<missing>",
                 ));
             };
+            *budget -= 1;
+            if left_value.is(&right_value) {
+                continue;
+            }
             let nested_container = same_builtin_container(&left_value, &right_value);
             let known = known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone());
-            if known == Some(false) || nested_container {
+            if known == Some(false) || (known.is_none() && nested_container) {
                 if let Some(diff) =
-                    focused_diff_inner(&left_value, &right_value, &key_path, depth + 1)
+                    focused_diff_inner(&left_value, &right_value, &key_path, depth + 1, budget)
                 {
                     return Some(diff);
                 }
@@ -1181,21 +1211,28 @@ fn focused_diff_inner(
             return Some(different_lengths(path, left.len(), right.len()));
         }
     }
-    if let (Ok(left), Ok(right)) = (left.cast::<PyList>(), right.cast::<PyList>()) {
+    if let (Ok(left), Ok(right)) = (left.cast_exact::<PyList>(), right.cast_exact::<PyList>()) {
         if left.len() != right.len() {
             return Some(different_lengths(path, left.len(), right.len()));
         }
         for index in 0..left.len() {
+            if *budget == 0 {
+                return None;
+            }
             let (Ok(left_value), Ok(right_value)) = (left.get_item(index), right.get_item(index))
             else {
                 continue;
             };
+            *budget -= 1;
+            if left_value.is(&right_value) {
+                continue;
+            }
             let nested_container = same_builtin_container(&left_value, &right_value);
             let known = known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone());
-            if known == Some(false) || nested_container {
+            if known == Some(false) || (known.is_none() && nested_container) {
                 let item_path = path_index(path, index);
                 if let Some(diff) =
-                    focused_diff_inner(&left_value, &right_value, &item_path, depth + 1)
+                    focused_diff_inner(&left_value, &right_value, &item_path, depth + 1, budget)
                 {
                     return Some(diff);
                 }
@@ -1209,21 +1246,28 @@ fn focused_diff_inner(
             }
         }
     }
-    if let (Ok(left), Ok(right)) = (left.cast::<PyTuple>(), right.cast::<PyTuple>()) {
+    if let (Ok(left), Ok(right)) = (left.cast_exact::<PyTuple>(), right.cast_exact::<PyTuple>()) {
         if left.len() != right.len() {
             return Some(different_lengths(path, left.len(), right.len()));
         }
         for index in 0..left.len() {
+            if *budget == 0 {
+                return None;
+            }
             let (Ok(left_value), Ok(right_value)) = (left.get_item(index), right.get_item(index))
             else {
                 continue;
             };
+            *budget -= 1;
+            if left_value.is(&right_value) {
+                continue;
+            }
             let nested_container = same_builtin_container(&left_value, &right_value);
             let known = known_equal(&left_value, &right_value, 0, &mut MAX_NODES.clone());
-            if known == Some(false) || nested_container {
+            if known == Some(false) || (known.is_none() && nested_container) {
                 let item_path = path_index(path, index);
                 if let Some(diff) =
-                    focused_diff_inner(&left_value, &right_value, &item_path, depth + 1)
+                    focused_diff_inner(&left_value, &right_value, &item_path, depth + 1, budget)
                 {
                     return Some(diff);
                 }
@@ -1346,8 +1390,9 @@ fn focused_diff_inner(
     None
 }
 
-fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
-    focused_diff_inner(left, right, "", 0).unwrap_or_default()
+/// Locate a difference in safely comparable built-in values, skipping opaque values.
+pub fn focused_diff(left: &Bound<'_, PyAny>, right: &Bound<'_, PyAny>) -> Vec<String> {
+    focused_diff_inner(left, right, "", 0, &mut MAX_NODES.clone()).unwrap_or_default()
 }
 
 fn render_explanation(

@@ -16,6 +16,7 @@ use ruff_text_size::{TextRange, TextSize};
 
 mod exception_group;
 mod metadata;
+mod mocks;
 
 use crate::declare_diagnostic_type;
 use crate::discovery::models::definition::TestDefinition;
@@ -529,7 +530,7 @@ pub fn invalid_fixture_diagnostic(
 /// Preserves teardown groups before formatting ordinary Python failures as text.
 pub fn invalid_fixture_finalizer_diagnostic(
     py: Python<'_>,
-    source_file: SourceFile,
+    source_file: &SourceFile,
     stmt_function_def: &StmtFunctionDef,
     reason: &str,
     error: Option<&PyErr>,
@@ -539,13 +540,34 @@ pub fn invalid_fixture_finalizer_diagnostic(
         stmt_function_def.name
     ));
 
-    annotate_function_name(&mut diagnostic, source_file, stmt_function_def);
+    annotate_function_name(&mut diagnostic, source_file.clone(), stmt_function_def);
 
     if let Some(error) = error {
         if let Some(exception) = exception_group::extract(py, error) {
             diagnostic.set_exception(exception);
         } else {
-            diagnostic.info(format!("{reason}: {}", error.value(py)));
+            let mock_failure = mocks::assertion_failure(py, error);
+            if let Some(failure) = &mock_failure
+                && let Some(Traceback { frames }) =
+                    Traceback::from_error_with_source(py, error, source_file)
+                && let Some(frame) = frames.iter().rev().nth(failure.hidden_frames)
+                && let Some(source) = &frame.source
+            {
+                let mut sub = SubDiagnostic::new(Severity::Info, "Fixture teardown failed here");
+                sub.annotate(Annotation::primary(
+                    Span::from(source.source_file.clone()).with_range(source.location),
+                ));
+                diagnostic.sub(sub);
+            }
+            let message = format!("{reason}: {}", error.value(py));
+            if mock_failure.is_some() {
+                diagnostic.info(indent_continuation_lines(&message));
+            } else {
+                diagnostic.info(message);
+            }
+            if let Some(explanation) = mock_failure.and_then(|failure| failure.explanation) {
+                add_assertion_explanation(&mut diagnostic, &explanation);
+            }
         }
     } else {
         diagnostic.info(reason);
@@ -926,7 +948,13 @@ fn handle_failed_function_call(
         return;
     }
 
-    if let Some(Traceback { frames }) = Traceback::from_error_with_source(py, error, source_file) {
+    let mock_failure = mocks::assertion_failure(py, error);
+    if let Some(Traceback { mut frames }) =
+        Traceback::from_error_with_source(py, error, source_file)
+    {
+        if let Some(failure) = &mock_failure {
+            frames.truncate(frames.len().saturating_sub(failure.hidden_frames));
+        }
         if verbose {
             for pair in frames.windows(2) {
                 if let [caller, callee] = pair {
@@ -1006,16 +1034,22 @@ fn handle_failed_function_call(
     }
 
     if error.is_instance_of::<PyAssertionError>(py)
-        && let Some(explanation) = crate::assertions::explain(py, error)
+        && let Some(explanation) = mock_failure
+            .and_then(|failure| failure.explanation)
+            .or_else(|| crate::assertions::explain(py, error))
         && !explanation.is_empty()
     {
-        let (message, body) = explanation.split_once('\n').unwrap_or((&explanation, ""));
-        let mut assertion = SubDiagnostic::new(Severity::Info, message);
-        if !body.is_empty() {
-            assertion.body(body);
-        }
-        diagnostic.sub(assertion);
+        add_assertion_explanation(diagnostic, &explanation);
     }
+}
+
+fn add_assertion_explanation(diagnostic: &mut Diagnostic, explanation: &str) {
+    let (message, body) = explanation.split_once('\n').unwrap_or((explanation, ""));
+    let mut assertion = SubDiagnostic::new(Severity::Info, message);
+    if !body.is_empty() {
+        assertion.body(body);
+    }
+    diagnostic.sub(assertion);
 }
 
 fn doctest_failure_range(py: Python, error: &PyErr, source_file: &SourceFile) -> Option<TextRange> {
