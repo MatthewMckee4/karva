@@ -164,6 +164,106 @@ def test_ok():
 }
 
 #[test]
+fn test_fixture_replacement_does_not_hide_duplicate_declarations() {
+    let context = TestContext::with_file(
+        "test.py",
+        r#"
+import karva
+
+@karva.fixture
+def value():
+    return 0
+
+@karva.fixture
+def value():
+    return 1
+
+def value():
+    yield 8
+
+value = karva.fixture(value)
+
+@karva.fixture(name="shared")
+def first():
+    return 0
+
+@karva.fixture(name="shared")
+def second():
+    return 1
+
+def replacement():
+    yield 8
+
+first = karva.fixture(replacement, name="shared")
+
+def test_value(value):
+    assert value == 8
+
+def test_shared(shared):
+    assert shared == 8
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: false
+    exit_code: 1
+    ----- stdout -----
+        Starting 2 tests across 1 worker
+           ERROR [TIME] test::test_value
+           ERROR [TIME] test::test_shared
+
+    failures:
+
+    test::test_shared:
+
+    error[missing-fixtures]: Test `test_shared` has missing fixtures
+      --> test.py:33:5
+       |
+    33 | def test_shared(shared):
+       |     ^^^^^^^^^^^
+    info: Missing fixtures: `shared`
+
+    test::test_value:
+
+    error[missing-fixtures]: Test `test_value` has missing fixtures
+      --> test.py:30:5
+       |
+    30 | def test_value(value):
+       |     ^^^^^^^^^^
+    info: Missing fixtures: `value`
+
+    diagnostics:
+
+    error[duplicate-fixture]: Fixture `value` is defined more than once
+     --> test.py:9:5
+      |
+    9 | def value():
+      |     ^^^^^
+    info: First definition of `value` is here
+     --> test.py:5:5
+      |
+    5 | def value():
+      |     ^^^^^
+
+    error[duplicate-fixture]: Fixture `shared` is defined more than once
+      --> test.py:22:5
+       |
+    22 | def second():
+       |     ^^^^^^
+    info: First definition of `shared` is here
+      --> test.py:18:5
+       |
+    18 | def first():
+       |     ^^^^^
+
+    ────────────
+         Summary [TIME] 2 tests run: 0 passed, 2 errors, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
+#[test]
 fn test_duplicate_nested_fixture_blocks_valid_outer_fixture() {
     let context = TestContext::with_files([
         (

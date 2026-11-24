@@ -7,11 +7,11 @@ use fs_err as fs;
 use karva_collector::{CollectedDoctest, DoctestTarget};
 use karva_python_semantic::ModulePath;
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
+use pyo3::types::{PyDict, PyFunction, PyModule};
 use ruff_python_ast::visitor::source_order::{self, SourceOrderVisitor};
 use ruff_python_ast::{Expr, PythonVersion, Stmt, StmtFunctionDef};
 use ruff_python_parser::{Mode, ParseOptions, parse_unchecked};
-use ruff_source_file::SourceFileBuilder;
+use ruff_source_file::{LineIndex, SourceFileBuilder};
 use ruff_text_size::TextRange;
 
 use crate::Context;
@@ -126,10 +126,22 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
     fn process_fixture_function(
         &mut self,
         stmt_function_def: StmtFunctionDef,
-    ) -> Option<DiscoveredFixture> {
+        is_conftest: bool,
+    ) -> Option<(DiscoveredFixture, Rc<StmtFunctionDef>)> {
         self.try_import_module();
 
         let py_module = self.py_module.as_ref()?;
+
+        let name = stmt_function_def.name.as_str();
+        if let Ok(Some(value)) = py_module.dict().get_item(name)
+            && let Ok(function) = DiscoveredFixture::source_function(&value)
+            && let Ok(function) = function.cast::<PyFunction>()
+            && self.is_other_fixture_definition(function, &stmt_function_def)
+        {
+            // Execute the replacement, but retain its declaration for duplicate diagnostics.
+            let fixture = self.resolve_runtime_fixture(name, &value, is_conftest, false)?;
+            return Some((fixture, Rc::new(stmt_function_def)));
+        }
 
         let is_generator_function = is_generator(&stmt_function_def);
 
@@ -143,7 +155,7 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             self.module.source_file(),
             is_generator_function,
         ) {
-            Ok(fixture_def) => Some(fixture_def),
+            Ok(fixture_def) => Some((fixture_def, stmt_function_def)),
             Err(error) => {
                 let source_file = self.module.source_file();
                 let exposure_name =
@@ -164,6 +176,44 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                 None
             }
         }
+    }
+
+    /// Detects a replacement callable while leaving duplicate fixture declarations to validation.
+    fn is_other_fixture_definition(
+        &self,
+        function: &Bound<'_, PyFunction>,
+        definition: &StmtFunctionDef,
+    ) -> bool {
+        let Ok(qualified_name) = function
+            .getattr("__qualname__")
+            .and_then(|value| value.extract::<String>())
+        else {
+            return false;
+        };
+        if qualified_name.contains('.') {
+            return false;
+        }
+        if qualified_name != definition.name.as_str()
+            || function
+                .getattr("__module__")
+                .and_then(|value| value.extract::<String>())
+                .is_ok_and(|module| module != self.module.name())
+        {
+            return true;
+        }
+
+        let Some(line) = function_first_line(function.as_any()) else {
+            return false;
+        };
+        let source_file = self.module.source_file();
+        let source = source_file.to_source_code();
+        if source.line_index(definition.range.start()).get() == line {
+            return false;
+        }
+
+        matching_module_functions(&self.module_body, &qualified_name)
+            .into_iter()
+            .any(|candidate| source.line_index(candidate.range.start()).get() == line)
     }
 
     fn process_test_function(
@@ -326,51 +376,52 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
         }
     }
 
-    fn find_extra_fixtures(&mut self) {
-        self.try_import_module();
-
+    fn find_extra_fixtures(&mut self, is_conftest: bool) {
         let Some(py_module) = self.py_module.clone() else {
             return;
         };
 
-        for (name_obj, value) in py_module.dict().iter() {
+        let scan_all_callables = is_conftest || self.context.settings().test().try_import_fixtures;
+        let pytest_fixture_type = if scan_all_callables {
+            None
+        } else {
+            loaded_pytest_fixture_type(self.py)
+        };
+
+        // Snapshot candidates before inspecting markers or evaluating fixture scopes.
+        let bindings: Vec<_> = py_module
+            .dict()
+            .iter()
+            .filter(|(_, value)| {
+                if scan_all_callables {
+                    value.is_callable()
+                } else {
+                    value.is_exact_instance_of::<FixtureFunctionDefinition>()
+                        || value.is_exact_instance_of::<PyFunction>()
+                        || pytest_fixture_type
+                            .as_ref()
+                            .is_some_and(|fixture_type| value.is_exact_instance(fixture_type))
+                }
+            })
+            .collect();
+        for (name_obj, value) in bindings {
             let Ok(name) = name_obj.extract::<String>() else {
                 continue;
             };
-            if value.is_callable() && is_fixture_value(&value) {
-                self.try_process_imported_symbol(&py_module, &name);
+            if is_fixture_value(&value)
+                && let Some(fixture) = self.resolve_extra_fixture(&name, &value, is_conftest)
+            {
+                self.module.add_fixture(fixture);
             }
         }
     }
 
-    fn try_process_imported_symbol(&mut self, py_module: &Bound<'_, PyModule>, name: &str) {
-        let _ = self.resolve_imported_fixture(py_module, name);
-    }
-
-    /// Attempt to resolve an imported symbol as a fixture.
-    ///
-    /// Returns `None` at any step that fails — the symbol simply won't be
-    /// discovered as a fixture.
-    fn resolve_imported_fixture(
+    fn resolve_extra_fixture(
         &mut self,
-        py_module: &Bound<'_, PyModule>,
         name: &str,
-    ) -> Option<()> {
-        let value = py_module.getattr(name).ok()?;
-
-        if !value.is_callable() {
-            return None;
-        }
-
-        if self
-            .module
-            .fixtures()
-            .iter()
-            .any(|f| f.name().function_name() == name)
-        {
-            return None;
-        }
-
+        value: &Bound<'_, PyAny>,
+        is_conftest: bool,
+    ) -> Option<DiscoveredFixture> {
         if self
             .module
             .test_functions()
@@ -384,18 +435,49 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             return None;
         }
 
-        let mut module_name = value.getattr("__module__").ok()?.extract::<String>().ok()?;
+        self.resolve_runtime_fixture(name, value, is_conftest, true)
+    }
 
-        if module_name == "builtins" {
-            module_name = value
-                .getattr("function")
-                .ok()?
-                .getattr("__module__")
-                .ok()?
-                .extract::<String>()
-                .ok()?;
+    /// Resolves a runtime binding against the callable's source definition.
+    /// Additional bindings share the provider's public namespace, while declared fixtures
+    /// enter duplicate validation with their original definition sites.
+    fn resolve_runtime_fixture(
+        &mut self,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+        is_conftest: bool,
+        is_extra_binding: bool,
+    ) -> Option<DiscoveredFixture> {
+        let function = DiscoveredFixture::source_function(value).ok()?;
+        let function_name = || function.getattr("__name__").ok()?.extract::<String>().ok();
+        let source_name = if is_conftest {
+            Some(function_name()?)
+        } else {
+            None
+        };
+        let public_name = DiscoveredFixture::exposure_name_from_value(
+            value,
+            source_name.as_deref().unwrap_or(name),
+            (!is_conftest).then_some(name),
+        );
+        if is_extra_binding
+            && let Ok(public_name) = &public_name
+            && (self
+                .module
+                .fixtures()
+                .iter()
+                .any(|fixture| fixture.name().function_name() == public_name)
+                || self.module.rejected_fixture(public_name).is_some())
+        {
+            return None;
         }
 
+        let func_name = source_name.or_else(function_name)?;
+        let module_name = function
+            .getattr("__module__")
+            .ok()?
+            .extract::<String>()
+            .ok()?;
         let imported_module = self.py.import(&module_name).ok()?;
         let file_name = imported_module
             .getattr("__file__")
@@ -403,15 +485,12 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             .extract::<String>()
             .ok()?;
         let utf8_file_name = Utf8Path::from_path(Path::new(&file_name))?;
-        let module_path = ModulePath::new(utf8_file_name, self.context.cwd())?;
-
-        // Use the function's own __name__ to find its definition in the source, since the
-        // conftest symbol name may differ when the fixture is imported under an alias.
-        let func_name = value
-            .getattr("__name__")
-            .ok()
-            .and_then(|n| n.extract::<String>().ok())
-            .unwrap_or_else(|| name.to_string());
+        let provider_path = if is_conftest {
+            ModulePath::new(utf8_file_name, self.context.cwd())?
+        } else {
+            // Different test modules can bind the same name to different callables.
+            self.module.module_path().clone()
+        };
 
         let source_text = match fs::read_to_string(utf8_file_name) {
             Ok(source_text) => source_text,
@@ -426,29 +505,41 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
             }
         };
 
-        let stmt_function_def =
-            find_function_statement(&func_name, &source_text, self.context.python_version())?;
+        let stmt_function_def = find_function_statement(
+            &func_name,
+            function_first_line(&function),
+            &source_text,
+            self.context.python_version(),
+        )?;
 
         let is_generator_function = is_generator(&stmt_function_def);
         let source_file = SourceFileBuilder::new(utf8_file_name.as_str(), source_text).finish();
+        let rejected_name = if is_conftest {
+            name
+        } else {
+            public_name.as_deref().unwrap_or(name)
+        }
+        .to_owned();
 
-        match DiscoveredFixture::try_from_function(
-            self.py,
-            stmt_function_def.clone(),
-            &imported_module,
-            &module_path,
-            source_file.clone(),
-            is_generator_function,
-        ) {
-            Ok(fixture_def) => self.module.add_fixture(fixture_def),
+        match public_name.and_then(|name| {
+            DiscoveredFixture::try_from_value(
+                self.py,
+                stmt_function_def.clone(),
+                value,
+                &provider_path,
+                source_file.clone(),
+                is_generator_function,
+                name,
+            )
+        }) {
+            Ok(fixture_def) => Some(fixture_def),
             Err(error) => {
-                // Imported fixtures are exposed under their conftest binding.
                 self.module.add_rejected_fixture(RejectedFixture::new(
-                    name.to_string(),
+                    rejected_name,
                     error.value(self.py).to_string(),
                     Rc::clone(&stmt_function_def),
                     source_file.clone(),
-                    module_path.clone(),
+                    provider_path,
                 ));
                 self.issues
                     .push(DiscoveryIssue::Error(DiscoveryError::InvalidFixture {
@@ -456,18 +547,17 @@ impl FunctionDefinitionVisitor<'_, '_, '_, '_> {
                         definition: stmt_function_def,
                         reason: error.value(self.py).to_string(),
                     }));
+                None
             }
         }
-
-        Some(())
     }
 }
 
 /// Binds collected AST definitions to imported Python callables.
 ///
-/// Duplicate or invalid definitions emit diagnostics and are excluded. Imported fixtures
-/// are scanned only for `conftest.py` or when `try_import_fixtures` is enabled. The complete
-/// module body provides source ranges for marks inherited by each test at runtime.
+/// Duplicate or invalid definitions emit diagnostics and are excluded. The runtime namespace
+/// supplies imported and assigned fixtures once the module has been loaded. The module body
+/// provides source ranges for marks inherited by each test at runtime.
 pub fn discover(
     context: &Context,
     py: Python,
@@ -522,28 +612,28 @@ pub fn discover(
 
     let mut fixtures = Vec::with_capacity(fixture_function_defs.len());
     for fixture_function_def in fixture_function_defs {
-        if let Some(fixture) = visitor.process_fixture_function(fixture_function_def) {
+        if let Some(fixture) = visitor.process_fixture_function(fixture_function_def, is_conftest) {
             fixtures.push(fixture);
         }
     }
 
     let duplicate_fixture_indices = duplicate_definition_indices(
         &fixtures,
-        |fixture| fixture.name().function_name().to_string(),
-        |fixture| fixture.stmt_function_def().range,
-        |name, first_definition, duplicate_definition| {
+        |(fixture, _)| fixture.name().function_name().to_string(),
+        |(_, declaration)| declaration.range,
+        |name, (_, first_declaration), (_, duplicate_declaration)| {
             visitor
                 .issues
                 .push(DiscoveryIssue::Error(DiscoveryError::DuplicateFixture {
                     source_file: visitor.module.source_file(),
                     fixture_name: name.to_string(),
-                    first_definition: Rc::clone(first_definition.stmt_function_def()),
-                    duplicate_definition: Rc::clone(duplicate_definition.stmt_function_def()),
+                    first_definition: Rc::clone(first_declaration),
+                    duplicate_definition: Rc::clone(duplicate_declaration),
                 }));
         },
     );
 
-    for (index, fixture) in fixtures.into_iter().enumerate() {
+    for (index, (fixture, declaration)) in fixtures.into_iter().enumerate() {
         if duplicate_fixture_indices.contains(&index) {
             let name = fixture.name().function_name().to_owned();
             let source_file = visitor.module.source_file();
@@ -551,7 +641,7 @@ pub fn discover(
             visitor.module.add_rejected_fixture(RejectedFixture::new(
                 name.clone(),
                 format!("Fixture `{name}` is defined more than once"),
-                Rc::clone(fixture.stmt_function_def()),
+                declaration,
                 source_file,
                 module_path,
             ));
@@ -562,8 +652,9 @@ pub fn discover(
     }
 
     if is_conftest || context.settings().test().try_import_fixtures {
-        visitor.find_extra_fixtures();
+        visitor.try_import_module();
     }
+    visitor.find_extra_fixtures(is_conftest);
 
     visitor.issues
 }
@@ -632,6 +723,32 @@ impl SourceOrderVisitor<'_> for GeneratorFunctionVisitor {
     }
 }
 
+/// `CPython` uses the first decorator's line, or the function's first line when undecorated.
+fn function_first_line(function: &Bound<'_, PyAny>) -> Option<usize> {
+    function
+        .getattr("__code__")
+        .and_then(|code| code.getattr("co_firstlineno"))
+        .and_then(|line| line.extract())
+        .ok()
+}
+
+/// Recent pytest versions wrap fixtures in a dedicated class. Earlier versions use functions.
+fn loaded_pytest_fixture_type(py: Python<'_>) -> Option<Bound<'_, PyAny>> {
+    let modules = py
+        .import("sys")
+        .ok()?
+        .getattr("modules")
+        .ok()?
+        .cast_into::<PyDict>()
+        .ok()?;
+    let module = modules
+        .get_item("_pytest.fixtures")
+        .ok()??
+        .cast_into::<PyModule>()
+        .ok()?;
+    module.dict().get_item("FixtureFunctionDefinition").ok()?
+}
+
 /// Returns `true` if `value` is a fixture — either a pytest-decorated function
 /// (detected via `_fixture_function_marker` / `_pytestfixturefunction`) or a
 /// Karva `FixtureFunctionDefinition` object.
@@ -641,9 +758,10 @@ fn is_fixture_value(value: &Bound<'_, PyAny>) -> bool {
         || value.cast::<FixtureFunctionDefinition>().is_ok()
 }
 
-/// Finds only top-level functions; nested definitions cannot be imported module fixtures.
+/// Matches repeated definitions by the callable's source line.
 fn find_function_statement(
     name: &str,
+    first_line: Option<usize>,
     source_text: &str,
     python_version: PythonVersion,
 ) -> Option<Rc<StmtFunctionDef>> {
@@ -653,13 +771,47 @@ fn find_function_statement(
 
     let parsed = parse_unchecked(source_text, parse_options).try_into_module()?;
 
-    for stmt in parsed.into_syntax().body {
-        if let Stmt::FunctionDef(function_def) = stmt {
-            if function_def.name.as_str() == name {
-                return Some(Rc::new(function_def));
-            }
-        }
+    let module = parsed.into_syntax();
+    let definitions = matching_module_functions(&module.body, name);
+    let definition = if let [definition] = definitions.as_slice() {
+        *definition
+    } else {
+        let first_line = first_line?;
+        let lines = LineIndex::from_source_text(source_text);
+        definitions
+            .into_iter()
+            .find(|definition| lines.line_index(definition.range.start()).get() == first_line)?
+    };
+    Some(Rc::new(definition.clone()))
+}
+
+/// Finds definitions in the module's namespace, including control-flow blocks.
+fn matching_module_functions<'ast>(body: &'ast [Stmt], name: &str) -> Vec<&'ast StmtFunctionDef> {
+    struct MatchingFunctions<'ast, 'name> {
+        name: &'name str,
+        definitions: Vec<&'ast StmtFunctionDef>,
     }
 
-    None
+    impl<'ast> SourceOrderVisitor<'ast> for MatchingFunctions<'ast, '_> {
+        fn visit_stmt(&mut self, stmt: &'ast Stmt) {
+            match stmt {
+                Stmt::FunctionDef(definition) => {
+                    if definition.name.as_str() == self.name {
+                        self.definitions.push(definition);
+                    }
+                }
+                Stmt::ClassDef(_) => {}
+                _ => source_order::walk_stmt(self, stmt),
+            }
+        }
+
+        fn visit_expr(&mut self, _expr: &Expr) {}
+    }
+
+    let mut finder = MatchingFunctions {
+        name,
+        definitions: Vec::new(),
+    };
+    source_order::walk_body(&mut finder, body);
+    finder.definitions
 }

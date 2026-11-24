@@ -1163,6 +1163,219 @@ def invoke():
     ");
 }
 
+#[rstest]
+fn test_module_fixture_bindings(#[values("pytest", "karva")] framework: &str) {
+    let context = TestContext::with_files([
+        (
+            "suite/shared.py",
+            format!(
+                r#"
+import {framework}
+
+def fixture_value():
+    return 0
+
+@{framework}.fixture
+def fixture_value():
+    yield 42
+
+scope_calls = 0
+
+def named_scope(*, fixture_name, config):
+    global scope_calls
+    scope_calls += 1
+    assert scope_calls == 1
+    return "function"
+
+@{framework}.fixture(name="explicit", scope=named_scope)
+def named_value():
+    return 7
+"#
+            ),
+        ),
+        (
+            "suite/test_direct.py",
+            "
+from shared import fixture_value, named_value as renamed
+
+same_fixture = renamed
+probes = []
+
+class Helper:
+    def __call__(self):
+        pass
+
+    def __getattr__(self, name):
+        probes.append(name)
+        raise AttributeError(name)
+
+helper = Helper()
+
+def test_direct(fixture_value, explicit):
+    assert fixture_value == 42
+    assert explicit == 7
+    assert probes == []
+"
+            .to_string(),
+        ),
+        (
+            "suite/test_assignment.py",
+            format!(
+                "
+import {framework}
+from shared import fixture_value as imported
+
+@{framework}.fixture
+def fixture_value():
+    return 0
+
+fixture_value = imported
+alias = imported
+
+@{framework}.fixture
+def local():
+    return 0
+
+if True:
+    def local():
+        yield 8
+
+local = {framework}.fixture(local)
+
+def test_assignment(fixture_value, alias, local):
+    assert fixture_value == alias == 42
+    assert local == 8
+"
+            ),
+        ),
+        (
+            "external.py",
+            format!(
+                r#"
+import sys
+import {framework}
+
+def scope(*, fixture_name, config):
+    sys.modules["test_attribute"].scope_seen = True
+    return "function"
+
+@{framework}.fixture(scope=scope)
+def external_value():
+    return 42
+"#
+            ),
+        ),
+        (
+            "suite/test_attribute.py",
+            "
+import external
+
+alias = external.external_value
+
+def test_attribute(alias):
+    assert scope_seen
+    assert alias == 42
+"
+            .to_string(),
+        ),
+        (
+            "suite/test_shadowed.py",
+            "
+from shared import fixture_value
+
+fixture_value = 42
+
+def test_shadowed(fixture_value):
+    pass
+"
+            .to_string(),
+        ),
+    ]);
+
+    let mut command = context.command_no_parallel();
+    command
+        .current_dir(context.root().join("suite"))
+        .env("PYTHONPATH", context.root());
+
+    allow_duplicates! {
+        assert_cmd_snapshot!(command, @"
+        success: false
+        exit_code: 1
+        ----- stdout -----
+            Starting 4 tests across 1 worker
+                PASS [TIME] test_assignment::test_assignment(fixture_value=42, alias=42, local=8)
+                PASS [TIME] test_attribute::test_attribute(alias=42)
+                PASS [TIME] test_direct::test_direct(fixture_value=42, explicit=7)
+               ERROR [TIME] test_shadowed::test_shadowed
+
+        failures:
+
+        test_shadowed::test_shadowed:
+
+        error[missing-fixtures]: Test `test_shadowed` has missing fixtures
+         --> test_shadowed.py:6:5
+          |
+        6 | def test_shadowed(fixture_value):
+          |     ^^^^^^^^^^^^^
+        info: Missing fixtures: `fixture_value`
+
+        ────────────
+             Summary [TIME] 4 tests run: 3 passed, 1 error, 0 skipped
+
+        ----- stderr -----
+        ");
+    }
+}
+
+#[test]
+fn test_fixture_wrapped_by_callable_does_not_probe_wrapper_metadata() {
+    let context = TestContext::with_file(
+        "test_wrapped.py",
+        r#"
+import karva
+
+probes = []
+
+class Wrapper:
+    __name__ = "value"
+
+    def __init__(self, function):
+        self.function = function
+
+    def __call__(self):
+        return self.function()
+
+    def __getattribute__(self, name):
+        if name in ("__module__", "__name__", "__qualname__", "__code__"):
+            probes.append(name)
+        return super().__getattribute__(name)
+
+@karva.fixture
+@Wrapper
+def value():
+    return 42
+
+probes.clear()
+
+def test_value(value):
+    assert value == 42
+    assert probes == []
+"#,
+    );
+
+    assert_cmd_snapshot!(context.command_no_parallel(), @"
+    success: true
+    exit_code: 0
+    ----- stdout -----
+        Starting 1 test across 1 worker
+            PASS [TIME] test_wrapped::test_value(value=42)
+    ────────────
+         Summary [TIME] 1 test run: 1 passed, 0 skipped
+
+    ----- stderr -----
+    ");
+}
+
 #[test]
 fn test_config_try_import_fixtures() {
     let context = TestContext::with_files([
