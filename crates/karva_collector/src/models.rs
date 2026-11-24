@@ -61,6 +61,9 @@ pub struct CollectedModule {
     /// Docstrings containing doctest examples.
     pub doctests: Vec<CollectedDoctest>,
 
+    /// Names and source ranges of classes flagged by scheduling collection.
+    pub unsupported_test_classes: Vec<(String, TextRange)>,
+
     /// Fixture function definitions (functions with fixture decorators)
     pub fixture_function_defs: Vec<StmtFunctionDef>,
 }
@@ -87,6 +90,7 @@ impl CollectedModule {
             test_function_defs: Vec::new(),
             parametrize_case_counts: BTreeMap::new(),
             doctests: Vec::new(),
+            unsupported_test_classes: Vec::new(),
             fixture_function_defs: Vec::new(),
         }
     }
@@ -139,6 +143,7 @@ impl CollectedModule {
         self.test_function_defs.is_empty()
             && self.doctests.is_empty()
             && self.fixture_function_defs.is_empty()
+            && self.unsupported_test_classes.is_empty()
     }
 }
 
@@ -319,6 +324,12 @@ impl CollectedModule {
         if self.path == module.path {
             self.has_module_tags |= module.has_module_tags;
             self.uses_benchmark |= module.uses_benchmark;
+            if self.unsupported_test_classes.is_empty()
+                && !module.unsupported_test_classes.is_empty()
+            {
+                self.unsupported_test_classes = module.unsupported_test_classes;
+                self.source_text = module.source_text;
+            }
             for function in module.test_function_defs {
                 if !self
                     .test_function_defs

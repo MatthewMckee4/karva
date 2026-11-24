@@ -7,8 +7,13 @@ use anyhow::Result;
 use camino::Utf8Path;
 use karva_cache::{read_last_failed, read_recent_durations};
 use karva_collector::{CollectedPackage, CollectionSettings};
+use karva_diagnostic::{
+    Annotation, Diagnostic, DisplayDiagnosticConfig, RenderedDiagnostic, Severity, Span,
+    render_diagnostic,
+};
 use karva_project::Project;
 use karva_python_semantic::TestCacheKey;
+use ruff_source_file::SourceFileBuilder;
 
 use crate::collection::ParallelCollector;
 
@@ -35,6 +40,45 @@ pub(super) fn collect_tests(project: &Project) -> Result<CollectedPackage> {
         karva_logging::time::format_duration(collection_start_time.elapsed())
     );
     Ok(collected)
+}
+
+/// Renders collection warnings once on the controller, including for files with no runnable tests.
+pub(super) fn unsupported_class_diagnostics(
+    collected: &CollectedPackage,
+    cwd: &Utf8Path,
+    config: DisplayDiagnosticConfig,
+) -> Vec<RenderedDiagnostic> {
+    let mut packages = vec![collected];
+    let mut modules = Vec::new();
+    while let Some(package) = packages.pop() {
+        packages.extend(package.packages.values());
+        modules.extend(
+            package
+                .modules
+                .values()
+                .filter(|module| !module.unsupported_test_classes.is_empty()),
+        );
+    }
+    modules.sort_unstable_by(|left, right| left.path.path().cmp(right.path.path()));
+
+    let mut diagnostics = Vec::new();
+    for module in modules {
+        let source =
+            SourceFileBuilder::new(module.path.path().as_str(), module.source_text.as_str())
+                .finish();
+        for (name, range) in &module.unsupported_test_classes {
+            let mut diagnostic = Diagnostic::new(
+                "unsupported-test-class",
+                Severity::Warning,
+                format!("`{name}` has test methods, but Karva only runs top-level test functions"),
+            );
+            diagnostic.annotate(Annotation::primary(
+                Span::from(source.clone()).with_range(*range),
+            ));
+            diagnostics.push(render_diagnostic(&diagnostic, cwd, config));
+        }
+    }
+    diagnostics
 }
 
 pub(super) fn previous_durations(
