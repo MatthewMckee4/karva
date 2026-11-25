@@ -1,0 +1,125 @@
+{
+  "platform": "macOS-26.6-arm64-arm-64bit-Mach-O",
+  "python": "3.15.0",
+  "workload": {
+    "modules": 50,
+    "tests_per_module": 20,
+    "source_bytes": 44566,
+    "source_sha256": "58d0c734e5554fbe5309cffb0ebe3828421cf81f36090c4ec5679338949c1a7b",
+    "edits_per_process": 10
+  },
+  "cache_policy": "fresh process; OS filesystem cache uncontrolled",
+  "memory_policy": "resident bytes sampled at milestones, not peak RSS",
+  "median_latency": {
+    "initialize_seconds": 0.005511583003681153,
+    "open_diagnostics_seconds": 0.0016658329986967146,
+    "first_completion_seconds": 0.026842207997106016,
+    "first_definition_seconds": 0.00020725000649690628,
+    "first_workspace_symbols_seconds": 0.04607833300542552,
+    "warm_completion_seconds": 0.00024212501011788845,
+    "warm_definition_seconds": 0.0001717080012895167,
+    "warm_workspace_symbols_seconds": 0.0114131250011269,
+    "edit_diagnostics_seconds": 0.0012421875071595423
+  },
+  "samples": [
+    {
+      "server": {
+        "name": "karva",
+        "version": "0.0.1-alpha.13"
+      },
+      "latency": {
+        "initialize_seconds": 0.0297589169931598,
+        "open_diagnostics_seconds": 0.012073749996488914,
+        "first_completion_seconds": 0.02725345799990464,
+        "first_definition_seconds": 0.0002795000036712736,
+        "first_workspace_symbols_seconds": 0.04607833300542552,
+        "warm_completion_seconds": 0.00024212501011788845,
+        "warm_definition_seconds": 0.0001717080012895167,
+        "warm_workspace_symbols_seconds": 0.011540082996361889,
+        "edit_diagnostics_seconds": [
+          0.0015111249958863482,
+          0.001286166996578686,
+          0.001259665994439274,
+          0.0012270000006537884,
+          0.0012465830077417195,
+          0.001363250004942529,
+          0.0012454590032575652,
+          0.0012125829962315038,
+          0.001213207986438647,
+          0.0012467500055208802
+        ]
+      },
+      "rss": {
+        "after_open_bytes": 19841024,
+        "after_workspace_index_bytes": 27688960,
+        "after_edits_bytes": 27803648
+      }
+    },
+    {
+      "server": {
+        "name": "karva",
+        "version": "0.0.1-alpha.13"
+      },
+      "latency": {
+        "initialize_seconds": 0.005511583003681153,
+        "open_diagnostics_seconds": 0.0016658329986967146,
+        "first_completion_seconds": 0.02670975000364706,
+        "first_definition_seconds": 0.00020599999697878957,
+        "first_workspace_symbols_seconds": 0.04651749999902677,
+        "warm_completion_seconds": 0.00026020800578407943,
+        "warm_definition_seconds": 0.00016775001131463796,
+        "warm_workspace_symbols_seconds": 0.01135633300873451,
+        "edit_diagnostics_seconds": [
+          0.0016279170085908845,
+          0.0013005000073462725,
+          0.0012412080104695633,
+          0.0012431670038495213,
+          0.001225708008860238,
+          0.0012229590065544471,
+          0.001218374993186444,
+          0.0012219160125823691,
+          0.0012262079981155694,
+          0.001197333011077717
+        ]
+      },
+      "rss": {
+        "after_open_bytes": 19841024,
+        "after_workspace_index_bytes": 27688960,
+        "after_edits_bytes": 27803648
+      }
+    },
+    {
+      "server": {
+        "name": "karva",
+        "version": "0.0.1-alpha.13"
+      },
+      "latency": {
+        "initialize_seconds": 0.005496625002706423,
+        "open_diagnostics_seconds": 0.001646874996367842,
+        "first_completion_seconds": 0.026842207997106016,
+        "first_definition_seconds": 0.00020725000649690628,
+        "first_workspace_symbols_seconds": 0.04581766699266154,
+        "warm_completion_seconds": 0.00021549999655690044,
+        "warm_definition_seconds": 0.00018958300643134862,
+        "warm_workspace_symbols_seconds": 0.0114131250011269,
+        "edit_diagnostics_seconds": [
+          0.0014885420096106827,
+          0.001304249992244877,
+          0.0012531249958556145,
+          0.0012386250018607825,
+          0.001251833004062064,
+          0.0012279590009711683,
+          0.0012373339995974675,
+          0.0013024999934714288,
+          0.0012222079967614263,
+          0.001211875001899898
+        ]
+      },
+      "rss": {
+        "after_open_bytes": 19759104,
+        "after_workspace_index_bytes": 27705344,
+        "after_edits_bytes": 27803648
+      }
+    }
+  ]
+}
